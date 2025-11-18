@@ -9,6 +9,10 @@
   ],
   "license": "MIT",
   "description": "Effect-based ontology framework monorepo",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mepuka/effect-ontology.git"
+  },
   "scripts": {
     "dev": "cd packages/ui && bun run dev",
     "codegen": "build-utils prepare-v2",
