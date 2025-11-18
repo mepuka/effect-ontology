@@ -1,0 +1,39 @@
+@prefix : <http://example.org/zoo#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+### Classes
+
+:Animal a owl:Class ;
+    rdfs:label "Animal" .
+
+:Mammal a owl:Class ;
+    rdfs:subClassOf :Animal ;
+    rdfs:label "Mammal" .
+
+:Pet a owl:Class ;
+    rdfs:label "Pet" .
+
+# Poly-hierarchy: Dog is both a Mammal and a Pet
+:Dog a owl:Class ;
+    rdfs:subClassOf :Mammal, :Pet ;
+    rdfs:label "Dog" .
+
+:Cat a owl:Class ;
+    rdfs:subClassOf :Mammal, :Pet ;
+    rdfs:label "Cat" .
+
+### Properties
+
+# Simple attribute (Datatype Property)
+:hasName a owl:DatatypeProperty ;
+    rdfs:domain :Animal ;
+    rdfs:range xsd:string ;
+    rdfs:label "has name" .
+
+# Relationship (Object Property) - Points to another class
+:ownedBy a owl:ObjectProperty ;
+    rdfs:domain :Pet ;
+    rdfs:range :Person ;
+    rdfs:label "owned by" .

@@ -5,7 +5,7 @@ node_modules/
 tmp/
 dist/
 build/
-docs/
+docs/effect-source/*
 scratchpad/*
 !scratchpad/tsconfig.json
 .direnv/

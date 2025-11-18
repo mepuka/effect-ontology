@@ -1,0 +1,57 @@
+@prefix : <http://example.org/pets#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Ontology declaration
+: a owl:Ontology ;
+    rdfs:label "Pet Ontology" ;
+    rdfs:comment "A simple ontology for testing ontology population" .
+
+# Classes
+:Pet a owl:Class ;
+    rdfs:label "Pet" ;
+    rdfs:comment "An animal kept as a companion" .
+
+:Dog a owl:Class ;
+    rdfs:subClassOf :Pet ;
+    rdfs:label "Dog" ;
+    rdfs:comment "A domesticated canine" .
+
+:Cat a owl:Class ;
+    rdfs:subClassOf :Pet ;
+    rdfs:label "Cat" ;
+    rdfs:comment "A domesticated feline" .
+
+:Person a owl:Class ;
+    rdfs:label "Person" ;
+    rdfs:comment "A human being" ;
+    owl:disjointWith :Pet .
+
+# Properties
+:hasName a owl:DatatypeProperty ;
+    rdfs:label "has name" ;
+    rdfs:comment "The name of a pet or person" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Pet :Person ) ] ;
+    rdfs:range xsd:string .
+
+:hasOwner a owl:ObjectProperty ;
+    rdfs:label "has owner" ;
+    rdfs:comment "The person who owns a pet" ;
+    rdfs:domain :Pet ;
+    rdfs:range :Person ;
+    owl:inverseOf :ownsPet .
+
+:ownsPet a owl:ObjectProperty ;
+    rdfs:label "owns pet" ;
+    rdfs:comment "The pet owned by a person" ;
+    rdfs:domain :Person ;
+    rdfs:range :Pet ;
+    owl:inverseOf :hasOwner .
+
+:hasAge a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:label "has age" ;
+    rdfs:comment "The age of a pet in years" ;
+    rdfs:domain :Pet ;
+    rdfs:range xsd:integer .
