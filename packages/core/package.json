@@ -5,7 +5,8 @@
   "private": true,
   "exports": {
     "./Graph/Builder": "./src/Graph/Builder.ts",
-    "./Graph/Types": "./src/Graph/Types.ts"
+    "./Graph/Types": "./src/Graph/Types.ts",
+    "./Prompt": "./src/Prompt/index.ts"
   },
   "scripts": {
     "test": "vitest",

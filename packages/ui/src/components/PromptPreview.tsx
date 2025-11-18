@@ -1,7 +1,8 @@
 import { useAtomValue } from "@effect-atom/atom-react"
 import { HashMap, Option } from "effect"
 import type { ParsedOntologyGraph } from "@effect-ontology/core/Graph/Builder"
-import { ontologyGraphAtom, selectedNodeAtom } from "../state/store"
+import type { StructuredPrompt } from "@effect-ontology/core/Prompt"
+import { generatedPromptsAtom, ontologyGraphAtom, selectedNodeAtom } from "../state/store"
 import { Result } from "@effect-atom/atom-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Sparkles, Code2, FileText, Layers } from "lucide-react"
@@ -17,9 +18,45 @@ import { Sparkles, Code2, FileText, Layers } from "lucide-react"
  */
 export const PromptPreview = (): React.ReactElement => {
   const graphResult = useAtomValue(ontologyGraphAtom) as Result.Result<ParsedOntologyGraph, any>
+  const promptsResult = useAtomValue(generatedPromptsAtom) as Result.Result<any, any>
   const selectedNode = useAtomValue(selectedNodeAtom)
 
-  return Result.match(graphResult, {
+  // Show loading if either graph or prompts are loading
+  if (Result.isInitial(graphResult) || Result.isInitial(promptsResult)) {
+    return (
+      <div className="flex items-center justify-center h-full bg-gradient-to-br from-slate-50 to-slate-100">
+        <div className="text-center">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+            className="inline-block mb-4"
+          >
+            <Sparkles className="w-8 h-8 text-slate-400" />
+          </motion.div>
+          <div className="text-sm text-slate-500">Generating prompts...</div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error if either failed
+  if (Result.isFailure(graphResult) || Result.isFailure(promptsResult)) {
+    const failure = Result.isFailure(graphResult) ? graphResult : promptsResult
+    return (
+      <div className="flex items-center justify-center h-full bg-red-50">
+        <div className="text-center max-w-md p-6">
+          <div className="text-4xl mb-2">⚠️</div>
+          <div className="text-sm font-semibold text-red-700 mb-2">Prompt Generation Failed</div>
+          <div className="text-xs text-red-600 font-mono bg-red-100 p-3 rounded">
+            {String((failure as any).failure?.cause || "Unknown error")}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Both succeeded - render prompts
+  return Result.match(promptsResult, {
     onInitial: () => (
       <div className="flex items-center justify-center h-full bg-gradient-to-br from-slate-50 to-slate-100">
         <div className="text-center">
@@ -45,20 +82,32 @@ export const PromptPreview = (): React.ReactElement => {
         </div>
       </div>
     ),
-    onSuccess: (graphSuccess) => {
-      const { context, graph } = graphSuccess.value
+    onSuccess: (promptsSuccess) => {
+      const { nodePrompts, universalPrompt, context } = promptsSuccess.value
 
-      // If a node is selected, show its specific prompt
+      // If a node is selected, show its generated prompt
       if (Option.isSome(selectedNode)) {
-        const nodeOption = HashMap.get(context.nodes, selectedNode.value)
-        if (nodeOption._tag === "Some" && nodeOption.value._tag === "Class") {
-          const node = nodeOption.value
-          return <SelectedNodePrompt node={node} />
+        const promptOption = HashMap.get(nodePrompts, selectedNode.value)
+        if (Option.isSome(promptOption)) {
+          const nodeOption = HashMap.get(context.nodes, selectedNode.value)
+          const nodeName = Option.isSome(nodeOption) && (nodeOption.value as any)._tag === "Class"
+            ? (nodeOption.value as any).label
+            : selectedNode.value
+
+          return <SelectedNodePrompt
+            nodeId={selectedNode.value}
+            nodeName={nodeName}
+            prompt={promptOption.value as StructuredPrompt}
+          />
         }
       }
 
       // Otherwise show the full ontology overview
-      return <FullOntologyPrompt context={context} />
+      return <FullOntologyPrompt
+        nodePrompts={nodePrompts}
+        universalPrompt={universalPrompt}
+        context={context}
+      />
     }
   })
 }
@@ -66,10 +115,18 @@ export const PromptPreview = (): React.ReactElement => {
 /**
  * Display prompt for a selected class node
  */
-const SelectedNodePrompt = ({ node }: { node: any }) => {
+const SelectedNodePrompt = ({
+  nodeId,
+  nodeName,
+  prompt
+}: {
+  nodeId: string
+  nodeName: string
+  prompt: StructuredPrompt
+}) => {
   return (
     <motion.div
-      key={node.id}
+      key={nodeId}
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
@@ -84,58 +141,39 @@ const SelectedNodePrompt = ({ node }: { node: any }) => {
           </h2>
         </div>
         <div className="text-xs text-slate-400">
-          Generated from: <span className="text-blue-400 font-semibold">{node.label}</span>
+          Generated from: <span className="text-blue-400 font-semibold">{nodeName}</span>
         </div>
       </div>
 
       {/* Prompt Content */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6 font-mono text-sm">
         {/* System Section */}
-        <PromptSection
-          title="SYSTEM"
-          icon={<Layers className="w-4 h-4" />}
-          color="purple"
-          lines={[
-            `# Class: ${node.label}`,
-            `# IRI: ${node.id}`,
-            `# Properties: ${node.properties.length}`,
-            "",
-            "This class represents:",
-            `- ${node.label}`,
-            "",
-            "Available properties:",
-            ...node.properties.map((p: any) => `  - ${p.label} (${extractLabel(p.range)})`)
-          ]}
-        />
+        {prompt.system.length > 0 && (
+          <PromptSection
+            title="SYSTEM"
+            icon={<Layers className="w-4 h-4" />}
+            color="purple"
+            lines={[...prompt.system]}
+          />
+        )}
 
         {/* User Context Section */}
-        <PromptSection
-          title="USER CONTEXT"
-          icon={<FileText className="w-4 h-4" />}
-          color="green"
-          lines={[
-            "When creating instances of this class, ensure:",
-            ...node.properties.map((p: any) =>
-              `- ${p.label} is of type: ${extractLabel(p.range)}`
-            )
-          ]}
-        />
+        {prompt.user.length > 0 && (
+          <PromptSection
+            title="USER CONTEXT"
+            icon={<FileText className="w-4 h-4" />}
+            color="green"
+            lines={[...prompt.user]}
+          />
+        )}
 
         {/* Examples Section */}
-        {node.properties.length > 0 && (
+        {prompt.examples.length > 0 && (
           <PromptSection
-            title="EXAMPLE"
+            title="EXAMPLES"
             icon={<Sparkles className="w-4 h-4" />}
             color="amber"
-            lines={[
-              "Example instance:",
-              "{",
-              `  "type": "${node.label}",`,
-              ...node.properties.slice(0, 3).map((p: any, idx: number) =>
-                `  "${p.label}": "<${extractLabel(p.range)}>"${idx < Math.min(node.properties.length, 3) - 1 ? ',' : ''}`
-              ),
-              "}"
-            ]}
+            lines={[...prompt.examples]}
           />
         )}
       </div>
@@ -143,7 +181,9 @@ const SelectedNodePrompt = ({ node }: { node: any }) => {
       {/* Footer Stats */}
       <div className="px-6 py-3 border-t border-slate-700 bg-slate-800 text-xs text-slate-400">
         <div className="flex items-center justify-between">
-          <span>{node.properties.length} properties defined</span>
+          <span>
+            {prompt.system.length} system · {prompt.user.length} user · {prompt.examples.length} examples
+          </span>
           <span className="text-blue-400">Click another node to compare</span>
         </div>
       </div>
@@ -154,10 +194,20 @@ const SelectedNodePrompt = ({ node }: { node: any }) => {
 /**
  * Display full ontology overview
  */
-const FullOntologyPrompt = ({ context }: { context: any }) => {
-  const classCount = Array.from(context.nodes).filter(
-    ([_, node]: any) => node._tag === "Class"
-  ).length
+const FullOntologyPrompt = ({
+  nodePrompts,
+  universalPrompt,
+  context
+}: {
+  nodePrompts: HashMap.HashMap<string, StructuredPrompt>
+  universalPrompt: StructuredPrompt
+  context: any
+}) => {
+  const classCount = HashMap.size(nodePrompts)
+
+  // Combine all node prompts for overview
+  const allNodePrompts = Array.from(HashMap.values(nodePrompts))
+  const combinedSystemLines = allNodePrompts.flatMap(p => p.system)
 
   return (
     <motion.div
@@ -180,35 +230,23 @@ const FullOntologyPrompt = ({ context }: { context: any }) => {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6 font-mono text-sm">
-        {/* System Section */}
-        <PromptSection
-          title="ONTOLOGY METADATA"
-          icon={<Layers className="w-4 h-4" />}
-          color="purple"
-          lines={[
-            "# Ontology Structure",
-            "",
-            `Total Classes: ${classCount}`,
-            `Universal Properties: ${context.universalProperties.length}`,
-            "",
-            "This ontology defines a hierarchical class structure",
-            "for domain modeling and knowledge representation."
-          ]}
-        />
-
         {/* Universal Properties */}
-        {context.universalProperties.length > 0 && (
+        {universalPrompt.system.length > 0 && (
           <PromptSection
             title="UNIVERSAL PROPERTIES"
             icon={<Sparkles className="w-4 h-4" />}
             color="violet"
-            lines={[
-              "Domain-agnostic properties available to all classes:",
-              "",
-              ...context.universalProperties.map((p: any) =>
-                `- ${p.label} (${extractLabel(p.range)}): ${p.iri}`
-              )
-            ]}
+            lines={[...universalPrompt.system]}
+          />
+        )}
+
+        {/* Combined Class Definitions */}
+        {combinedSystemLines.length > 0 && (
+          <PromptSection
+            title="CLASS HIERARCHY"
+            icon={<Layers className="w-4 h-4" />}
+            color="purple"
+            lines={combinedSystemLines}
           />
         )}
 
@@ -232,7 +270,7 @@ const FullOntologyPrompt = ({ context }: { context: any }) => {
       {/* Footer */}
       <div className="px-6 py-3 border-t border-slate-700 bg-slate-800/50 text-xs text-slate-400">
         <div className="flex items-center justify-between">
-          <span>{classCount} classes ready for prompt generation</span>
+          <span>{classCount} classes with generated prompts</span>
           <span className="text-violet-400">Select a node to see details</span>
         </div>
       </div>
@@ -291,9 +329,3 @@ const PromptSection = ({
   )
 }
 
-/**
- * Extract readable label from IRI
- */
-function extractLabel(iri: string): string {
-  return iri.split('#').pop() || iri.split('/').pop() || iri
-}

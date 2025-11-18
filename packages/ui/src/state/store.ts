@@ -1,6 +1,12 @@
 import { Atom, Result } from "@effect-atom/atom"
 import { parseTurtleToGraph } from "@effect-ontology/core/Graph/Builder"
-import { Effect, Graph, Option } from "effect"
+import {
+  defaultPromptAlgebra,
+  processUniversalProperties,
+  solveGraph,
+  type StructuredPrompt
+} from "@effect-ontology/core/Prompt"
+import { Effect, Graph, HashMap, Option } from "effect"
 
 // Default example turtle
 const DEFAULT_TURTLE = `@prefix : <http://example.org/zoo#> .
@@ -74,5 +80,33 @@ export const topologicalOrderAtom = Atom.make((get) =>
   })
 )
 
-// 4. Selected Node (UI State)
+// 4. Generated Prompts (Effect-based catamorphism)
+export const generatedPromptsAtom = Atom.make((get) =>
+  Effect.gen(function*() {
+    const graphResult = get(ontologyGraphAtom)
+
+    // Convert Result to Effect
+    const graphEffect = Result.match(graphResult, {
+      onInitial: () => Effect.fail("Graph not yet loaded"),
+      onFailure: (failure) => Effect.failCause(failure.cause),
+      onSuccess: (success) => Effect.succeed(success.value)
+    })
+
+    const { graph, context } = yield* graphEffect
+
+    // Solve the graph to get prompts for each node
+    const prompts = yield* solveGraph(graph, context, defaultPromptAlgebra)
+
+    // Process universal properties
+    const universalPrompt = processUniversalProperties(context.universalProperties)
+
+    return {
+      nodePrompts: prompts,
+      universalPrompt,
+      context
+    }
+  })
+)
+
+// 5. Selected Node (UI State)
 export const selectedNodeAtom = Atom.make<Option.Option<string>>(Option.none())
