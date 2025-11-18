@@ -1,137 +1,366 @@
-import { describe, expect, test } from "vitest"
-import { Effect, Graph, Option } from "effect"
-import { parseTurtleToGraph } from "../../src/Graph/Builder"
+import { describe, expect, it } from "@effect/vitest"
+import { Effect, Graph, HashMap, Option } from "effect"
 import { readFileSync } from "node:fs"
+import { parseTurtleToGraph } from "../../src/Graph/Builder.js"
 
 describe("Graph Builder", () => {
   const zooTurtle = readFileSync("test-data/zoo.ttl", "utf-8")
+  const organizationTurtle = readFileSync("test-data/organization.ttl", "utf-8")
+  const dctermsTurtle = readFileSync("test-data/dcterms.ttl", "utf-8")
+  const foafTurtle = readFileSync("test-data/foaf.ttl", "utf-8")
 
-  test("parses classes from zoo.ttl", async () => {
-    const result = await Effect.runPromise(parseTurtleToGraph(zooTurtle))
+  it.effect("parses classes from zoo.ttl", () =>
+    Effect.gen(function*() {
+      const result = yield* parseTurtleToGraph(zooTurtle)
 
-    // Should have nodes for all classes
-    expect(result.context.nodes.has("http://example.org/zoo#Animal")).toBe(true)
-    expect(result.context.nodes.has("http://example.org/zoo#Mammal")).toBe(true)
-    expect(result.context.nodes.has("http://example.org/zoo#Pet")).toBe(true)
-    expect(result.context.nodes.has("http://example.org/zoo#Dog")).toBe(true)
-    expect(result.context.nodes.has("http://example.org/zoo#Cat")).toBe(true)
+      // Should have nodes for all classes
+      expect(HashMap.has(result.context.nodes, "http://example.org/zoo#Animal")).toBe(true)
+      expect(HashMap.has(result.context.nodes, "http://example.org/zoo#Mammal")).toBe(true)
+      expect(HashMap.has(result.context.nodes, "http://example.org/zoo#Pet")).toBe(true)
+      expect(HashMap.has(result.context.nodes, "http://example.org/zoo#Dog")).toBe(true)
+      expect(HashMap.has(result.context.nodes, "http://example.org/zoo#Cat")).toBe(true)
+    }))
+
+  it.effect("parses class labels correctly", () =>
+    Effect.gen(function*() {
+      const result = yield* parseTurtleToGraph(zooTurtle)
+
+      // Use Option.match for cleaner code
+      const dogLabel = Option.match(HashMap.get(result.context.nodes, "http://example.org/zoo#Dog"), {
+        onNone: () => null,
+        onSome: (node) => node._tag === "Class" ? node.label : null
+      })
+      expect(dogLabel).toBe("Dog")
+
+      const animalLabel = Option.match(HashMap.get(result.context.nodes, "http://example.org/zoo#Animal"), {
+        onNone: () => null,
+        onSome: (node) => node._tag === "Class" ? node.label : null
+      })
+      expect(animalLabel).toBe("Animal")
+    }))
+
+  it.effect("creates graph edges for subClassOf relationships", () =>
+    Effect.gen(function*() {
+      const result = yield* parseTurtleToGraph(zooTurtle)
+
+      // Dog subClassOf Mammal -> edge from Dog to Mammal
+      const dogIdxOption = HashMap.get(result.context.nodeIndexMap, "http://example.org/zoo#Dog")
+      expect(dogIdxOption._tag).toBe("Some")
+      const dogIdx = dogIdxOption._tag === "Some" ? dogIdxOption.value : 0
+      const dogNeighbors = Graph.neighbors(result.graph, dogIdx)
+
+      const mammalIdxOption = HashMap.get(result.context.nodeIndexMap, "http://example.org/zoo#Mammal")
+      const mammalIdx = mammalIdxOption._tag === "Some" ? mammalIdxOption.value : 0
+      const petIdxOption = HashMap.get(result.context.nodeIndexMap, "http://example.org/zoo#Pet")
+      const petIdx = petIdxOption._tag === "Some" ? petIdxOption.value : 0
+
+      expect(dogNeighbors).toContain(mammalIdx)
+      expect(dogNeighbors).toContain(petIdx)
+
+      // Mammal subClassOf Animal -> edge from Mammal to Animal
+      const mammalNeighbors = Graph.neighbors(result.graph, mammalIdx)
+      const animalIdxOption = HashMap.get(result.context.nodeIndexMap, "http://example.org/zoo#Animal")
+      const animalIdx = animalIdxOption._tag === "Some" ? animalIdxOption.value : 0
+      expect(mammalNeighbors).toContain(animalIdx)
+    }))
+
+  it.effect("attaches properties to domain classes", () =>
+    Effect.gen(function*() {
+      const result = yield* parseTurtleToGraph(zooTurtle)
+
+      const animalNodeOption = HashMap.get(result.context.nodes, "http://example.org/zoo#Animal")
+      expect(animalNodeOption._tag).toBe("Some")
+
+      if (animalNodeOption._tag === "Some") {
+        const animalNode = animalNodeOption.value
+        if (animalNode._tag === "Class") {
+          // hasName has domain Animal
+          const hasNameProp = animalNode.properties.find(
+            (p) => p.iri === "http://example.org/zoo#hasName"
+          )
+          expect(hasNameProp).toBeDefined()
+          expect(hasNameProp?.label).toBe("has name")
+          expect(hasNameProp?.range).toBe("http://www.w3.org/2001/XMLSchema#string")
+        }
+      }
+
+      const petNodeOption = HashMap.get(result.context.nodes, "http://example.org/zoo#Pet")
+      if (petNodeOption._tag === "Some") {
+        const petNode = petNodeOption.value
+        if (petNode._tag === "Class") {
+          // ownedBy has domain Pet
+          const ownedByProp = petNode.properties.find(
+            (p) => p.iri === "http://example.org/zoo#ownedBy"
+          )
+          expect(ownedByProp).toBeDefined()
+          expect(ownedByProp?.label).toBe("owned by")
+        }
+      }
+    }))
+
+  it.effect("handles poly-hierarchy (multiple inheritance)", () =>
+    Effect.gen(function*() {
+      const result = yield* parseTurtleToGraph(zooTurtle)
+
+      // Dog has two parents: Mammal and Pet
+      const dogIdxOption = HashMap.get(result.context.nodeIndexMap, "http://example.org/zoo#Dog")
+      const dogIdx = dogIdxOption._tag === "Some" ? dogIdxOption.value : 0
+      const dogNeighbors = Graph.neighbors(result.graph, dogIdx)
+
+      const mammalIdxOption = HashMap.get(result.context.nodeIndexMap, "http://example.org/zoo#Mammal")
+      const mammalIdx = mammalIdxOption._tag === "Some" ? mammalIdxOption.value : 0
+      const petIdxOption = HashMap.get(result.context.nodeIndexMap, "http://example.org/zoo#Pet")
+      const petIdx = petIdxOption._tag === "Some" ? petIdxOption.value : 0
+
+      expect(dogNeighbors).toHaveLength(2)
+      expect(dogNeighbors).toContain(mammalIdx)
+      expect(dogNeighbors).toContain(petIdx)
+
+      // Cat also has two parents
+      const catIdxOption = HashMap.get(result.context.nodeIndexMap, "http://example.org/zoo#Cat")
+      const catIdx = catIdxOption._tag === "Some" ? catIdxOption.value : 0
+      const catNeighbors = Graph.neighbors(result.graph, catIdx)
+
+      expect(catNeighbors).toHaveLength(2)
+      expect(catNeighbors).toContain(mammalIdx)
+      expect(catNeighbors).toContain(petIdx)
+    }))
+
+  it.effect("topological sort processes children before parents", () =>
+    Effect.gen(function*() {
+      const result = yield* parseTurtleToGraph(zooTurtle)
+
+      // Verify graph is acyclic (required for topological sort)
+      expect(Graph.isAcyclic(result.graph)).toBe(true)
+
+      // Get topological order
+      // Graph.topo() yields [nodeIndex, nodeData] tuples
+      const sortedIds: Array<string> = []
+      for (const [_nodeIdx, nodeData] of Graph.topo(result.graph)) {
+        sortedIds.push(nodeData)
+      }
+
+      // Verify all nodes are in the sort
+      expect(sortedIds.length).toBe(5) // Should have all 5 classes
+
+      // Find positions
+      const dogIdx = sortedIds.indexOf("http://example.org/zoo#Dog")
+      const mammalIdx = sortedIds.indexOf("http://example.org/zoo#Mammal")
+      const animalIdx = sortedIds.indexOf("http://example.org/zoo#Animal")
+
+      // All nodes should be in sorted output
+      expect(dogIdx).toBeGreaterThanOrEqual(0)
+      expect(mammalIdx).toBeGreaterThanOrEqual(0)
+      expect(animalIdx).toBeGreaterThanOrEqual(0)
+
+      // Dog should come before Mammal (child before parent)
+      expect(dogIdx).toBeLessThan(mammalIdx)
+
+      // Mammal should come before Animal
+      expect(mammalIdx).toBeLessThan(animalIdx)
+    }))
+
+  describe("Complex Organization Ontology", () => {
+    it.effect("parses all organization classes", () =>
+      Effect.gen(function*() {
+        const result = yield* parseTurtleToGraph(organizationTurtle)
+
+        // Verify all classes exist
+        const expectedClasses = [
+          "http://example.org/org#Organization",
+          "http://example.org/org#Company",
+          "http://example.org/org#NonProfit",
+          "http://example.org/org#StartupCompany",
+          "http://example.org/org#Person",
+          "http://example.org/org#Employee",
+          "http://example.org/org#Manager",
+          "http://example.org/org#Address"
+        ]
+
+        for (const classIri of expectedClasses) {
+          expect(HashMap.has(result.context.nodes, classIri)).toBe(true)
+        }
+      }))
+
+    it.effect("creates correct inheritance hierarchy", () =>
+      Effect.gen(function*() {
+        const result = yield* parseTurtleToGraph(organizationTurtle)
+
+        // StartupCompany -> Company -> Organization (2-level hierarchy)
+        const startupIdx = Option.getOrThrow(
+          HashMap.get(result.context.nodeIndexMap, "http://example.org/org#StartupCompany")
+        )
+        const companyIdx = Option.getOrThrow(
+          HashMap.get(result.context.nodeIndexMap, "http://example.org/org#Company")
+        )
+        const orgIdx = Option.getOrThrow(
+          HashMap.get(result.context.nodeIndexMap, "http://example.org/org#Organization")
+        )
+
+        const startupNeighbors = Graph.neighbors(result.graph, startupIdx)
+        expect(startupNeighbors).toContain(companyIdx)
+
+        const companyNeighbors = Graph.neighbors(result.graph, companyIdx)
+        expect(companyNeighbors).toContain(orgIdx)
+      }))
+
+    it.effect("attaches properties to correct domain classes", () =>
+      Effect.gen(function*() {
+        const result = yield* parseTurtleToGraph(organizationTurtle)
+
+        // Organization should have hasName, foundedDate, hasAddress, hasEmployee
+        const orgNode = Option.getOrThrow(
+          HashMap.get(result.context.nodes, "http://example.org/org#Organization")
+        )
+        if (orgNode._tag === "Class") {
+          const propLabels = orgNode.properties.map((p) => p.label)
+          expect(propLabels).toContain("has name")
+          expect(propLabels).toContain("founded date")
+          expect(propLabels).toContain("has address")
+          expect(propLabels).toContain("has employee")
+        }
+
+        // Company should have stockSymbol and revenue (in addition to inherited)
+        const companyNode = Option.getOrThrow(
+          HashMap.get(result.context.nodes, "http://example.org/org#Company")
+        )
+        if (companyNode._tag === "Class") {
+          const propLabels = companyNode.properties.map((p) => p.label)
+          expect(propLabels).toContain("stock symbol")
+          expect(propLabels).toContain("revenue")
+        }
+
+        // Manager should have manages property
+        const managerNode = Option.getOrThrow(
+          HashMap.get(result.context.nodes, "http://example.org/org#Manager")
+        )
+        if (managerNode._tag === "Class") {
+          const managesProp = managerNode.properties.find((p) => p.label === "manages")
+          expect(managesProp).toBeDefined()
+          expect(managesProp?.range).toBe("http://example.org/org#Employee")
+        }
+      }))
+
+    it.effect("handles object properties with correct ranges", () =>
+      Effect.gen(function*() {
+        const result = yield* parseTurtleToGraph(organizationTurtle)
+
+        const orgNode = Option.getOrThrow(
+          HashMap.get(result.context.nodes, "http://example.org/org#Organization")
+        )
+        if (orgNode._tag === "Class") {
+          // hasAddress should point to Address class
+          const hasAddressProp = orgNode.properties.find((p) => p.label === "has address")
+          expect(hasAddressProp?.range).toBe("http://example.org/org#Address")
+
+          // hasEmployee should point to Employee class
+          const hasEmployeeProp = orgNode.properties.find((p) => p.label === "has employee")
+          expect(hasEmployeeProp?.range).toBe("http://example.org/org#Employee")
+        }
+      }))
+
+    it.effect("correctly orders classes in topological sort", () =>
+      Effect.gen(function*() {
+        const result = yield* parseTurtleToGraph(organizationTurtle)
+
+        expect(Graph.isAcyclic(result.graph)).toBe(true)
+
+        const sortedIds: Array<string> = []
+        for (const [_idx, nodeData] of Graph.topo(result.graph)) {
+          sortedIds.push(nodeData)
+        }
+
+        // StartupCompany should come before Company
+        const startupIdx = sortedIds.indexOf("http://example.org/org#StartupCompany")
+        const companyIdx = sortedIds.indexOf("http://example.org/org#Company")
+        const orgIdx = sortedIds.indexOf("http://example.org/org#Organization")
+
+        expect(startupIdx).toBeLessThan(companyIdx)
+        expect(companyIdx).toBeLessThan(orgIdx)
+
+        // Manager should come before Employee
+        const managerIdx = sortedIds.indexOf("http://example.org/org#Manager")
+        const employeeIdx = sortedIds.indexOf("http://example.org/org#Employee")
+        const personIdx = sortedIds.indexOf("http://example.org/org#Person")
+
+        expect(managerIdx).toBeLessThan(employeeIdx)
+        expect(employeeIdx).toBeLessThan(personIdx)
+      }))
   })
 
-  test("parses class labels correctly", async () => {
-    const result = await Effect.runPromise(parseTurtleToGraph(zooTurtle))
+  describe("Universal Properties (Domain-Agnostic)", () => {
+    it.effect("collects properties without domains as universal properties", () =>
+      Effect.gen(function*() {
+        const result = yield* parseTurtleToGraph(dctermsTurtle)
 
-    const dogNode = result.context.nodes.get("http://example.org/zoo#Dog")
-    expect(dogNode).toBeDefined()
-    if (dogNode && dogNode._tag === "Class") {
-      expect(dogNode.label).toBe("Dog")
-    }
+        // Dublin Core has no domain-scoped properties
+        let scopedPropCount = 0
+        for (const [_id, node] of result.context.nodes) {
+          if (node._tag === "Class") {
+            scopedPropCount += node.properties.length
+          }
+        }
+        expect(scopedPropCount).toBe(0)
 
-    const animalNode = result.context.nodes.get("http://example.org/zoo#Animal")
-    expect(animalNode).toBeDefined()
-    if (animalNode && animalNode._tag === "Class") {
-      expect(animalNode.label).toBe("Animal")
-    }
-  })
+        // All properties should be universal
+        expect(result.context.universalProperties.length).toBeGreaterThan(30)
 
-  test("creates graph edges for subClassOf relationships", async () => {
-    const result = await Effect.runPromise(parseTurtleToGraph(zooTurtle))
+        // Check some key Dublin Core properties are present
+        const propLabels = result.context.universalProperties.map((p) => p.label)
+        expect(propLabels).toContain("Title")
+        expect(propLabels).toContain("Creator")
+        expect(propLabels).toContain("Description")
+        expect(propLabels).toContain("Date Created")
+      }))
 
-    // Dog subClassOf Mammal -> edge from Dog to Mammal
-    const dogIdx = result.context.nodeIndexMap.get("http://example.org/zoo#Dog")!
-    const dogNeighbors = Graph.neighbors(result.graph, dogIdx)
+    it.effect("FOAF has domain-scoped properties, not universal", () =>
+      Effect.gen(function*() {
+        const result = yield* parseTurtleToGraph(foafTurtle)
 
-    const mammalIdx = result.context.nodeIndexMap.get("http://example.org/zoo#Mammal")!
-    const petIdx = result.context.nodeIndexMap.get("http://example.org/zoo#Pet")!
+        // FOAF has explicit domains, so should have 0 universal properties
+        expect(result.context.universalProperties.length).toBe(0)
 
-    expect(dogNeighbors).toContain(mammalIdx)
-    expect(dogNeighbors).toContain(petIdx)
+        // All properties should be scoped to classes
+        let totalProps = 0
+        for (const [_id, node] of result.context.nodes) {
+          if (node._tag === "Class") {
+            totalProps += node.properties.length
+          }
+        }
+        expect(totalProps).toBeGreaterThan(20)
+      }))
 
-    // Mammal subClassOf Animal -> edge from Mammal to Animal
-    const mammalNeighbors = Graph.neighbors(result.graph, mammalIdx)
-    const animalIdx = result.context.nodeIndexMap.get("http://example.org/zoo#Animal")!
-    expect(mammalNeighbors).toContain(animalIdx)
-  })
+    it.effect("universal properties have correct ranges", () =>
+      Effect.gen(function*() {
+        const result = yield* parseTurtleToGraph(dctermsTurtle)
 
-  test("attaches properties to domain classes", async () => {
-    const result = await Effect.runPromise(parseTurtleToGraph(zooTurtle))
+        // Find creator property
+        const creatorProp = result.context.universalProperties.find(
+          (p) => p.label === "Creator"
+        )
+        expect(creatorProp).toBeDefined()
+        expect(creatorProp?.range).toBe("http://purl.org/dc/terms/Agent")
 
-    const animalNode = result.context.nodes.get("http://example.org/zoo#Animal")
-    expect(animalNode).toBeDefined()
+        // Find title property
+        const titleProp = result.context.universalProperties.find(
+          (p) => p.label === "Title"
+        )
+        expect(titleProp).toBeDefined()
+        expect(titleProp?.range).toBe("http://www.w3.org/2001/XMLSchema#string")
+      }))
 
-    if (animalNode && animalNode._tag === "Class") {
-      // hasName has domain Animal
-      const hasNameProp = animalNode.properties.find(
-        (p) => p.iri === "http://example.org/zoo#hasName"
-      )
-      expect(hasNameProp).toBeDefined()
-      expect(hasNameProp?.label).toBe("has name")
-      expect(hasNameProp?.range).toBe("http://www.w3.org/2001/XMLSchema#string")
-    }
+    it.effect("classes are still parsed even with no scoped properties", () =>
+      Effect.gen(function*() {
+        const result = yield* parseTurtleToGraph(dctermsTurtle)
 
-    const petNode = result.context.nodes.get("http://example.org/zoo#Pet")
-    if (petNode && petNode._tag === "Class") {
-      // ownedBy has domain Pet
-      const ownedByProp = petNode.properties.find(
-        (p) => p.iri === "http://example.org/zoo#ownedBy"
-      )
-      expect(ownedByProp).toBeDefined()
-      expect(ownedByProp?.label).toBe("owned by")
-    }
-  })
+        // Should still have all classes
+        expect(HashMap.size(result.context.nodes)).toBeGreaterThan(20)
 
-  test("handles poly-hierarchy (multiple inheritance)", async () => {
-    const result = await Effect.runPromise(parseTurtleToGraph(zooTurtle))
-
-    // Dog has two parents: Mammal and Pet
-    const dogIdx = result.context.nodeIndexMap.get("http://example.org/zoo#Dog")!
-    const dogNeighbors = Graph.neighbors(result.graph, dogIdx)
-
-    const mammalIdx = result.context.nodeIndexMap.get("http://example.org/zoo#Mammal")!
-    const petIdx = result.context.nodeIndexMap.get("http://example.org/zoo#Pet")!
-
-    expect(dogNeighbors).toHaveLength(2)
-    expect(dogNeighbors).toContain(mammalIdx)
-    expect(dogNeighbors).toContain(petIdx)
-
-    // Cat also has two parents
-    const catIdx = result.context.nodeIndexMap.get("http://example.org/zoo#Cat")!
-    const catNeighbors = Graph.neighbors(result.graph, catIdx)
-
-    expect(catNeighbors).toHaveLength(2)
-    expect(catNeighbors).toContain(mammalIdx)
-    expect(catNeighbors).toContain(petIdx)
-  })
-
-  test("topological sort processes children before parents", async () => {
-    const result = await Effect.runPromise(parseTurtleToGraph(zooTurtle))
-
-    // Verify graph is acyclic (required for topological sort)
-    expect(Graph.isAcyclic(result.graph)).toBe(true)
-
-    // Get topological order
-    // Graph.topo() yields [nodeIndex, nodeData] tuples
-    const sortedIds: string[] = []
-    for (const [_nodeIdx, nodeData] of Graph.topo(result.graph)) {
-      sortedIds.push(nodeData)
-    }
-
-    // Verify all nodes are in the sort
-    expect(sortedIds.length).toBe(5) // Should have all 5 classes
-
-    // Find positions
-    const dogIdx = sortedIds.indexOf("http://example.org/zoo#Dog")
-    const mammalIdx = sortedIds.indexOf("http://example.org/zoo#Mammal")
-    const animalIdx = sortedIds.indexOf("http://example.org/zoo#Animal")
-
-    // All nodes should be in sorted output
-    expect(dogIdx).toBeGreaterThanOrEqual(0)
-    expect(mammalIdx).toBeGreaterThanOrEqual(0)
-    expect(animalIdx).toBeGreaterThanOrEqual(0)
-
-    // Dog should come before Mammal (child before parent)
-    expect(dogIdx).toBeLessThan(mammalIdx)
-
-    // Mammal should come before Animal
-    expect(mammalIdx).toBeLessThan(animalIdx)
+        // Classes should exist
+        expect(HashMap.has(result.context.nodes, "http://purl.org/dc/terms/Agent")).toBe(true)
+        expect(HashMap.has(result.context.nodes, "http://purl.org/dc/terms/BibliographicResource")).toBe(
+          true
+        )
+      }))
   })
 })

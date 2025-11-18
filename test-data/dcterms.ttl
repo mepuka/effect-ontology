@@ -1,0 +1,307 @@
+@prefix : <http://purl.org/dc/terms/> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Dublin Core Metadata Terms (DCMI) - Subset
+# Based on https://www.dublincore.org/specifications/dublin-core/dcmi-terms/
+
+### Resource Types (Classes)
+
+:BibliographicResource a owl:Class ;
+    rdfs:label "Bibliographic Resource" ;
+    rdfs:comment "A book, article, or other documentary resource." .
+
+:Collection a owl:Class ;
+    rdfs:label "Collection" ;
+    rdfs:comment "An aggregation of resources." .
+
+:Dataset a owl:Class ;
+    rdfs:label "Dataset" ;
+    rdfs:comment "Data encoded in a defined structure." .
+
+:Event a owl:Class ;
+    rdfs:label "Event" ;
+    rdfs:comment "A non-persistent, time-based occurrence." .
+
+:Image a owl:Class ;
+    rdfs:label "Image" ;
+    rdfs:comment "A visual representation other than text." .
+
+:InteractiveResource a owl:Class ;
+    rdfs:label "Interactive Resource" ;
+    rdfs:comment "A resource requiring interaction from the user to be understood." .
+
+:MovingImage a owl:Class ;
+    rdfs:subClassOf :Image ;
+    rdfs:label "Moving Image" ;
+    rdfs:comment "A series of visual representations imparting an impression of motion when shown in succession." .
+
+:PhysicalObject a owl:Class ;
+    rdfs:label "Physical Object" ;
+    rdfs:comment "An inanimate, three-dimensional object or substance." .
+
+:Service a owl:Class ;
+    rdfs:label "Service" ;
+    rdfs:comment "A system that provides one or more functions." .
+
+:Software a owl:Class ;
+    rdfs:label "Software" ;
+    rdfs:comment "A computer program in source or compiled form." .
+
+:Sound a owl:Class ;
+    rdfs:label "Sound" ;
+    rdfs:comment "A resource primarily intended to be heard." .
+
+:StillImage a owl:Class ;
+    rdfs:subClassOf :Image ;
+    rdfs:label "Still Image" ;
+    rdfs:comment "A static visual representation." .
+
+:Text a owl:Class ;
+    rdfs:label "Text" ;
+    rdfs:comment "A resource consisting primarily of words for reading." .
+
+### Agent Classes
+
+:Agent a owl:Class ;
+    rdfs:label "Agent" ;
+    rdfs:comment "A resource that acts or has the power to act." .
+
+:AgentClass a owl:Class ;
+    rdfs:label "Agent Class" ;
+    rdfs:comment "A group of agents." .
+
+:Person a owl:Class ;
+    rdfs:subClassOf :Agent ;
+    rdfs:label "Person" ;
+    rdfs:comment "An individual person." .
+
+:Organization a owl:Class ;
+    rdfs:subClassOf :Agent ;
+    rdfs:label "Organization" ;
+    rdfs:comment "A social or legal structure formed by human beings." .
+
+### Location and Jurisdiction Classes
+
+:Location a owl:Class ;
+    rdfs:label "Location" ;
+    rdfs:comment "A spatial region or named place." .
+
+:LocationPeriodOrJurisdiction a owl:Class ;
+    rdfs:label "Location, Period, or Jurisdiction" ;
+    rdfs:comment "A location, period of time, or jurisdiction." .
+
+:Jurisdiction a owl:Class ;
+    rdfs:subClassOf :LocationPeriodOrJurisdiction ;
+    rdfs:label "Jurisdiction" ;
+    rdfs:comment "The extent or range of judicial, law enforcement, or other authority." .
+
+### Time Classes
+
+:PeriodOfTime a owl:Class ;
+    rdfs:label "Period of Time" ;
+    rdfs:comment "An interval of time that is named or defined by its start and end dates." .
+
+### Core Metadata Properties
+
+# Title and Description
+:title a owl:DatatypeProperty ;
+    rdfs:label "Title" ;
+    rdfs:comment "A name given to the resource." ;
+    rdfs:range xsd:string .
+
+:description a owl:DatatypeProperty ;
+    rdfs:label "Description" ;
+    rdfs:comment "An account of the resource." ;
+    rdfs:range xsd:string .
+
+:abstract a owl:DatatypeProperty ;
+    rdfs:subPropertyOf :description ;
+    rdfs:label "Abstract" ;
+    rdfs:comment "A summary of the resource." ;
+    rdfs:range xsd:string .
+
+:alternative a owl:DatatypeProperty ;
+    rdfs:subPropertyOf :title ;
+    rdfs:label "Alternative Title" ;
+    rdfs:comment "An alternative name for the resource." ;
+    rdfs:range xsd:string .
+
+# Creator and Contributors
+:creator a owl:ObjectProperty ;
+    rdfs:label "Creator" ;
+    rdfs:comment "An entity responsible for making the resource." ;
+    rdfs:range :Agent .
+
+:contributor a owl:ObjectProperty ;
+    rdfs:label "Contributor" ;
+    rdfs:comment "An entity responsible for making contributions to the resource." ;
+    rdfs:range :Agent .
+
+:publisher a owl:ObjectProperty ;
+    rdfs:label "Publisher" ;
+    rdfs:comment "An entity responsible for making the resource available." ;
+    rdfs:range :Agent .
+
+:rightsHolder a owl:ObjectProperty ;
+    rdfs:label "Rights Holder" ;
+    rdfs:comment "A person or organization owning or managing rights over the resource." ;
+    rdfs:range :Agent .
+
+# Dates
+:created a owl:DatatypeProperty ;
+    rdfs:label "Date Created" ;
+    rdfs:comment "Date of creation of the resource." ;
+    rdfs:range xsd:date .
+
+:modified a owl:DatatypeProperty ;
+    rdfs:label "Date Modified" ;
+    rdfs:comment "Date on which the resource was changed." ;
+    rdfs:range xsd:date .
+
+:issued a owl:DatatypeProperty ;
+    rdfs:label "Date Issued" ;
+    rdfs:comment "Date of formal issuance of the resource." ;
+    rdfs:range xsd:date .
+
+:valid a owl:DatatypeProperty ;
+    rdfs:label "Date Valid" ;
+    rdfs:comment "Date (often a range) of validity of a resource." ;
+    rdfs:range xsd:string .
+
+:available a owl:DatatypeProperty ;
+    rdfs:label "Date Available" ;
+    rdfs:comment "Date that the resource became or will become available." ;
+    rdfs:range xsd:date .
+
+# Subject and Coverage
+:subject a owl:ObjectProperty ;
+    rdfs:label "Subject" ;
+    rdfs:comment "A topic of the resource." .
+
+:coverage a owl:ObjectProperty ;
+    rdfs:label "Coverage" ;
+    rdfs:comment "The spatial or temporal topic of the resource." ;
+    rdfs:range :LocationPeriodOrJurisdiction .
+
+:spatial a owl:ObjectProperty ;
+    rdfs:subPropertyOf :coverage ;
+    rdfs:label "Spatial Coverage" ;
+    rdfs:comment "Spatial characteristics of the resource." ;
+    rdfs:range :Location .
+
+:temporal a owl:ObjectProperty ;
+    rdfs:subPropertyOf :coverage ;
+    rdfs:label "Temporal Coverage" ;
+    rdfs:comment "Temporal characteristics of the resource." ;
+    rdfs:range :PeriodOfTime .
+
+# Type and Format
+:type a owl:ObjectProperty ;
+    rdfs:label "Type" ;
+    rdfs:comment "The nature or genre of the resource." .
+
+:format a owl:DatatypeProperty ;
+    rdfs:label "Format" ;
+    rdfs:comment "The file format, physical medium, or dimensions of the resource." ;
+    rdfs:range xsd:string .
+
+:extent a owl:DatatypeProperty ;
+    rdfs:label "Extent" ;
+    rdfs:comment "The size or duration of the resource." ;
+    rdfs:range xsd:string .
+
+:medium a owl:ObjectProperty ;
+    rdfs:label "Medium" ;
+    rdfs:comment "The material or physical carrier of the resource." ;
+    rdfs:range :PhysicalObject .
+
+# Identifiers
+:identifier a owl:DatatypeProperty ;
+    rdfs:label "Identifier" ;
+    rdfs:comment "An unambiguous reference to the resource within a given context." ;
+    rdfs:range xsd:string .
+
+:bibliographicCitation a owl:DatatypeProperty ;
+    rdfs:label "Bibliographic Citation" ;
+    rdfs:comment "A bibliographic reference for the resource." ;
+    rdfs:range xsd:string .
+
+# Relations
+:relation a owl:ObjectProperty ;
+    rdfs:label "Relation" ;
+    rdfs:comment "A related resource." .
+
+:isPartOf a owl:ObjectProperty ;
+    rdfs:subPropertyOf :relation ;
+    rdfs:label "Is Part Of" ;
+    rdfs:comment "A related resource in which the described resource is physically or logically included." ;
+    rdfs:range :Collection .
+
+:hasPart a owl:ObjectProperty ;
+    rdfs:subPropertyOf :relation ;
+    rdfs:label "Has Part" ;
+    rdfs:comment "A related resource that is included either physically or logically in the described resource." .
+
+:isVersionOf a owl:ObjectProperty ;
+    rdfs:subPropertyOf :relation ;
+    rdfs:label "Is Version Of" ;
+    rdfs:comment "A related resource of which the described resource is a version, edition, or adaptation." .
+
+:hasVersion a owl:ObjectProperty ;
+    rdfs:subPropertyOf :relation ;
+    rdfs:label "Has Version" ;
+    rdfs:comment "A related resource that is a version, edition, or adaptation of the described resource." .
+
+:isReferencedBy a owl:ObjectProperty ;
+    rdfs:subPropertyOf :relation ;
+    rdfs:label "Is Referenced By" ;
+    rdfs:comment "A related resource that references, cites, or otherwise points to the described resource." .
+
+:references a owl:ObjectProperty ;
+    rdfs:subPropertyOf :relation ;
+    rdfs:label "References" ;
+    rdfs:comment "A related resource that is referenced, cited, or otherwise pointed to by the described resource." .
+
+# Language and Audience
+:language a owl:DatatypeProperty ;
+    rdfs:label "Language" ;
+    rdfs:comment "A language of the resource." ;
+    rdfs:range xsd:string .
+
+:audience a owl:ObjectProperty ;
+    rdfs:label "Audience" ;
+    rdfs:comment "A class of agents for whom the resource is intended or useful." ;
+    rdfs:range :AgentClass .
+
+:educationLevel a owl:ObjectProperty ;
+    rdfs:label "Audience Education Level" ;
+    rdfs:comment "A class of agents, defined in terms of progression through an educational or training context." ;
+    rdfs:range :AgentClass .
+
+# Rights
+:rights a owl:DatatypeProperty ;
+    rdfs:label "Rights" ;
+    rdfs:comment "Information about rights held in and over the resource." ;
+    rdfs:range xsd:string .
+
+:license a owl:ObjectProperty ;
+    rdfs:label "License" ;
+    rdfs:comment "A legal document giving official permission to do something with the resource." .
+
+:accessRights a owl:DatatypeProperty ;
+    rdfs:label "Access Rights" ;
+    rdfs:comment "Information about who access the resource or an indication of its security status." ;
+    rdfs:range xsd:string .
+
+# Source and Provenance
+:source a owl:ObjectProperty ;
+    rdfs:label "Source" ;
+    rdfs:comment "A related resource from which the described resource is derived." .
+
+:provenance a owl:DatatypeProperty ;
+    rdfs:label "Provenance" ;
+    rdfs:comment "A statement of any changes in ownership and custody of the resource." ;
+    rdfs:range xsd:string .

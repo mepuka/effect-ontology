@@ -9,9 +9,9 @@
  * 5. Return Graph + Context
  */
 
-import { Data, Effect, Graph, HashMap } from "effect"
+import { Data, Effect, Graph, HashMap, Option } from "effect"
 import * as N3 from "n3"
-import type { ClassNode, NodeId, OntologyContext, PropertyData } from "./Types"
+import { ClassNode, type NodeId, type OntologyContext, type PropertyData } from "./Types.js"
 
 class ParseError extends Data.TaggedError("ParseError")<{
   cause: unknown
@@ -60,7 +60,7 @@ export const parseTurtleToGraph = (
       null
     )
 
-    const classNodes = new Map<NodeId, ClassNode>()
+    let classNodes = HashMap.empty<NodeId, ClassNode>()
 
     for (const quad of classTriples) {
       const classIri = quad.subject.value
@@ -75,19 +75,25 @@ export const parseTurtleToGraph = (
       const label = labelQuad?.object.value || classIri.split("#")[1] || classIri
 
       // Initially empty properties array (will populate next)
-      classNodes.set(classIri, {
-        _tag: "Class",
-        id: classIri,
-        label,
-        properties: []
-      })
+      classNodes = HashMap.set(
+        classNodes,
+        classIri,
+        ClassNode.make({
+          id: classIri,
+          label,
+          properties: []
+        })
+      )
     }
 
     // 3. Extract all properties and attach to their domain classes
+    // Properties without domains are collected as "universal properties"
     const propertyTypes = [
       "http://www.w3.org/2002/07/owl#ObjectProperty",
       "http://www.w3.org/2002/07/owl#DatatypeProperty"
     ]
+
+    const universalProperties: Array<PropertyData> = []
 
     for (const propType of propertyTypes) {
       const propTriples = store.getQuads(
@@ -118,7 +124,7 @@ export const parseTurtleToGraph = (
         )[0]
         const range = rangeQuad?.object.value || "http://www.w3.org/2001/XMLSchema#string"
 
-        // Get domain
+        // Get domain(s)
         const domainQuads = store.getQuads(
           propIri,
           "http://www.w3.org/2000/01/rdf-schema#domain",
@@ -126,22 +132,32 @@ export const parseTurtleToGraph = (
           null
         )
 
-        // Attach property to each domain class
-        for (const domainQuad of domainQuads) {
-          const domainIri = domainQuad.object.value
-          const classNode = classNodes.get(domainIri)
+        const propertyData: PropertyData = {
+          iri: propIri,
+          label,
+          range
+        }
 
-          if (classNode) {
-            const propertyData: PropertyData = {
-              iri: propIri,
-              label,
-              range
-            }
+        if (domainQuads.length === 0) {
+          // CASE A: No Domain -> Universal Property (e.g., Dublin Core)
+          universalProperties.push(propertyData)
+        } else {
+          // CASE B: Explicit Domain -> Attach to specific ClassNode(s)
+          for (const domainQuad of domainQuads) {
+            const domainIri = domainQuad.object.value
 
-            // Create updated node with property added
-            classNodes.set(domainIri, {
-              ...classNode,
-              properties: [...classNode.properties, propertyData]
+            // Use Option.match to update the node if it exists
+            classNodes = Option.match(HashMap.get(classNodes, domainIri), {
+              onNone: () => classNodes, // No change if class not found
+              onSome: (classNode) =>
+                HashMap.set(
+                  classNodes,
+                  domainIri,
+                  ClassNode.make({
+                    ...classNode,
+                    properties: [...classNode.properties, propertyData]
+                  })
+                )
             })
           }
         }
@@ -158,14 +174,14 @@ export const parseTurtleToGraph = (
     )
 
     // Build graph using Effect's Graph API
-    // Map to store NodeId -> GraphNodeIndex
-    const nodeIndexMap = new Map<NodeId, number>()
+    // HashMap to store NodeId -> GraphNodeIndex
+    let nodeIndexMap = HashMap.empty<NodeId, number>()
 
     const graph = Graph.mutate(Graph.directed<NodeId, null>(), (mutable) => {
       // Add all class nodes first
-      for (const classIri of classNodes.keys()) {
+      for (const classIri of HashMap.keys(classNodes)) {
         const nodeIndex = Graph.addNode(mutable, classIri)
-        nodeIndexMap.set(classIri, nodeIndex)
+        nodeIndexMap = HashMap.set(nodeIndexMap, classIri, nodeIndex)
       }
 
       // Add edges: Child -> Parent (dependency direction)
@@ -173,19 +189,25 @@ export const parseTurtleToGraph = (
         const childIri = quad.subject.value // subClass
         const parentIri = quad.object.value // superClass
 
-        const childIdx = nodeIndexMap.get(childIri)
-        const parentIdx = nodeIndexMap.get(parentIri)
-
-        if (childIdx !== undefined && parentIdx !== undefined) {
-          // Child depends on Parent (render children before parents)
-          Graph.addEdge(mutable, childIdx, parentIdx, null)
-        }
+        // Use Option.flatMap to add edge only if both nodes exist
+        Option.flatMap(
+          HashMap.get(nodeIndexMap, childIri),
+          (childIdx) =>
+            Option.map(
+              HashMap.get(nodeIndexMap, parentIri),
+              (parentIdx) => {
+                // Child depends on Parent (render children before parents)
+                Graph.addEdge(mutable, childIdx, parentIdx, null)
+              }
+            )
+        )
       }
     })
 
     // 5. Build context (node data store)
     const context: OntologyContext = {
       nodes: classNodes,
+      universalProperties,
       nodeIndexMap
     }
 

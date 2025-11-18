@@ -7,10 +7,14 @@
  * - Graph edges represent subClassOf relationships (Child -> Parent dependency)
  */
 
+import type { HashMap } from "effect"
+import { Schema } from "effect"
+
 /**
  * NodeId - Unique identifier for graph nodes (typically IRI)
  */
-export type NodeId = string
+export const NodeIdSchema = Schema.String
+export type NodeId = typeof NodeIdSchema.Type
 
 /**
  * PropertyData - Information attached to a ClassNode
@@ -19,21 +23,28 @@ export type NodeId = string
  * This prevents cycles: if Property were a node, then
  *   Dog -> hasOwner (domain) and hasOwner -> Dog (creates cycle)
  */
-export interface PropertyData {
-  readonly iri: string
-  readonly label: string
-  readonly range: string // IRI or datatype - stored as string reference (not graph edge)
-}
+export const PropertyDataSchema = Schema.Struct({
+  iri: Schema.String,
+  label: Schema.String,
+  range: Schema.String // IRI or datatype - stored as string reference (not graph edge)
+})
+export type PropertyData = typeof PropertyDataSchema.Type
 
 /**
  * ClassNode - A node representing an OWL Class
  */
-export interface ClassNode {
-  readonly _tag: "Class"
-  readonly id: NodeId // IRI
-  readonly label: string
-  readonly properties: ReadonlyArray<PropertyData>
-}
+export class ClassNode extends Schema.Class<ClassNode>("ClassNode")({
+  _tag: Schema.Literal("Class").pipe(
+    Schema.optional,
+    Schema.withDefaults({
+      constructor: () => "Class" as const,
+      decoding: () => "Class" as const
+    })
+  ),
+  id: NodeIdSchema,
+  label: Schema.String,
+  properties: Schema.Array(PropertyDataSchema)
+}) {}
 
 /**
  * PropertyNode - A separate node for properties (optional, for flexibility)
@@ -41,19 +52,26 @@ export interface ClassNode {
  * In the main graph, properties are attached to ClassNode.
  * This type exists for cases where we need to treat properties as first-class entities.
  */
-export interface PropertyNode {
-  readonly _tag: "Property"
-  readonly id: NodeId // IRI
-  readonly label: string
-  readonly domain: NodeId // Class IRI reference
-  readonly range: string // IRI or datatype
-  readonly functional: boolean
-}
+export class PropertyNode extends Schema.Class<PropertyNode>("PropertyNode")({
+  _tag: Schema.Literal("Property").pipe(
+    Schema.optional,
+    Schema.withDefaults({
+      constructor: () => "Property" as const,
+      decoding: () => "Property" as const
+    })
+  ),
+  id: NodeIdSchema,
+  label: Schema.String,
+  domain: NodeIdSchema, // Class IRI reference
+  range: Schema.String, // IRI or datatype
+  functional: Schema.Boolean
+}) {}
 
 /**
  * OntologyNode - Discriminated union of all node types
  */
-export type OntologyNode = ClassNode | PropertyNode
+export const OntologyNodeSchema = Schema.Union(ClassNode, PropertyNode)
+export type OntologyNode = typeof OntologyNodeSchema.Type
 
 /**
  * OntologyContext - The data store mapping NodeId to Node data
@@ -62,10 +80,20 @@ export type OntologyNode = ClassNode | PropertyNode
  * This context holds the actual data for each node.
  */
 export interface OntologyContext {
-  readonly nodes: Map<NodeId, OntologyNode>
+  readonly nodes: HashMap.HashMap<NodeId, OntologyNode>
+  /**
+   * Universal Properties - Properties without explicit rdfs:domain
+   *
+   * These are domain-agnostic properties (e.g., Dublin Core metadata)
+   * that can apply to any resource. Kept separate from the graph to:
+   * - Avoid token bloat (not repeated on every class)
+   * - Maintain graph hygiene (strict dependencies only)
+   * - Improve LLM comprehension (global context)
+   */
+  readonly universalProperties: ReadonlyArray<PropertyData>
   /**
    * Mapping from NodeId (IRI) to Graph NodeIndex (number)
    * Needed because Effect.Graph uses numeric indices internally
    */
-  readonly nodeIndexMap: Map<NodeId, number>
+  readonly nodeIndexMap: HashMap.HashMap<NodeId, number>
 }

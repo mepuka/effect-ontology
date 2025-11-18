@@ -1,9 +1,8 @@
-import { describe, expect, test } from "vitest"
-import { Data } from "effect"
-import type { ClassNode, OntologyNode, PropertyNode } from "../../src/Graph/Types"
+import { describe, expect, it } from "@effect/vitest"
+import type { ClassNode, OntologyNode, PropertyNode } from "../../src/Graph/Types.js"
 
 describe("Graph Types", () => {
-  test("ClassNode has required fields", () => {
+  it("ClassNode has required fields", () => {
     const classNode: ClassNode = {
       _tag: "Class",
       id: "http://example.org/zoo#Dog",
@@ -17,7 +16,7 @@ describe("Graph Types", () => {
     expect(classNode.properties).toEqual([])
   })
 
-  test("ClassNode can have properties", () => {
+  it("ClassNode can have properties", () => {
     const classNode: ClassNode = {
       _tag: "Class",
       id: "http://example.org/zoo#Animal",
@@ -35,7 +34,7 @@ describe("Graph Types", () => {
     expect(classNode.properties[0].iri).toBe("http://example.org/zoo#hasName")
   })
 
-  test("PropertyNode has required fields", () => {
+  it("PropertyNode has required fields", () => {
     const propNode: PropertyNode = {
       _tag: "Property",
       id: "http://example.org/zoo#hasName",
@@ -51,7 +50,7 @@ describe("Graph Types", () => {
     expect(propNode.functional).toBe(false)
   })
 
-  test("OntologyNode discriminated union", () => {
+  it("OntologyNode discriminated union", () => {
     const classNode: OntologyNode = {
       _tag: "Class",
       id: "http://example.org/zoo#Dog",

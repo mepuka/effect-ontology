@@ -1,0 +1,136 @@
+@prefix : <http://example.org/org#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+### Organization Ontology - More realistic example
+
+### Classes
+
+:Organization a owl:Class ;
+    rdfs:label "Organization" ;
+    rdfs:comment "A group of people organized for a particular purpose" .
+
+:Company a owl:Class ;
+    rdfs:subClassOf :Organization ;
+    rdfs:label "Company" ;
+    rdfs:comment "A commercial business" .
+
+:NonProfit a owl:Class ;
+    rdfs:subClassOf :Organization ;
+    rdfs:label "NonProfit" ;
+    rdfs:comment "A non-profit organization" .
+
+:StartupCompany a owl:Class ;
+    rdfs:subClassOf :Company ;
+    rdfs:label "Startup Company" ;
+    rdfs:comment "A newly established business" .
+
+:Person a owl:Class ;
+    rdfs:label "Person" ;
+    rdfs:comment "An individual human being" .
+
+:Employee a owl:Class ;
+    rdfs:subClassOf :Person ;
+    rdfs:label "Employee" ;
+    rdfs:comment "A person employed by an organization" .
+
+:Manager a owl:Class ;
+    rdfs:subClassOf :Employee ;
+    rdfs:label "Manager" ;
+    rdfs:comment "An employee who manages others" .
+
+:Address a owl:Class ;
+    rdfs:label "Address" ;
+    rdfs:comment "A physical location" .
+
+### Properties
+
+# Organization properties
+:hasName a owl:DatatypeProperty ;
+    rdfs:domain :Organization ;
+    rdfs:range xsd:string ;
+    rdfs:label "has name" ;
+    rdfs:comment "The official name of the organization" .
+
+:foundedDate a owl:DatatypeProperty ;
+    rdfs:domain :Organization ;
+    rdfs:range xsd:date ;
+    rdfs:label "founded date" ;
+    rdfs:comment "The date when the organization was founded" .
+
+:hasAddress a owl:ObjectProperty ;
+    rdfs:domain :Organization ;
+    rdfs:range :Address ;
+    rdfs:label "has address" ;
+    rdfs:comment "The physical address of the organization" .
+
+:hasEmployee a owl:ObjectProperty ;
+    rdfs:domain :Organization ;
+    rdfs:range :Employee ;
+    rdfs:label "has employee" ;
+    rdfs:comment "An employee of the organization" .
+
+# Company-specific properties
+:stockSymbol a owl:DatatypeProperty ;
+    rdfs:domain :Company ;
+    rdfs:range xsd:string ;
+    rdfs:label "stock symbol" ;
+    rdfs:comment "The stock ticker symbol" .
+
+:revenue a owl:DatatypeProperty ;
+    rdfs:domain :Company ;
+    rdfs:range xsd:decimal ;
+    rdfs:label "revenue" ;
+    rdfs:comment "Annual revenue in USD" .
+
+# Person properties
+:firstName a owl:DatatypeProperty ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:string ;
+    rdfs:label "first name" .
+
+:lastName a owl:DatatypeProperty ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:string ;
+    rdfs:label "last name" .
+
+:email a owl:DatatypeProperty ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:string ;
+    rdfs:label "email" .
+
+# Employee properties
+:employeeId a owl:DatatypeProperty ;
+    rdfs:domain :Employee ;
+    rdfs:range xsd:string ;
+    rdfs:label "employee ID" .
+
+:worksFor a owl:ObjectProperty ;
+    rdfs:domain :Employee ;
+    rdfs:range :Organization ;
+    rdfs:label "works for" ;
+    rdfs:comment "The organization this person works for" .
+
+# Manager properties
+:manages a owl:ObjectProperty ;
+    rdfs:domain :Manager ;
+    rdfs:range :Employee ;
+    rdfs:label "manages" ;
+    rdfs:comment "Employees managed by this manager" .
+
+# Address properties
+:streetAddress a owl:DatatypeProperty ;
+    rdfs:domain :Address ;
+    rdfs:range xsd:string ;
+    rdfs:label "street address" .
+
+:city a owl:DatatypeProperty ;
+    rdfs:domain :Address ;
+    rdfs:range xsd:string ;
+    rdfs:label "city" .
+
+:postalCode a owl:DatatypeProperty ;
+    rdfs:domain :Address ;
+    rdfs:range xsd:string ;
+    rdfs:label "postal code" .
