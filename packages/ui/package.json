@@ -9,15 +9,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@effect-ontology/core": "workspace:*",
-    "effect": "^3.17.7",
     "@effect-atom/atom": "latest",
     "@effect-atom/atom-react": "latest",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "@effect-ontology/core": "workspace:*",
     "@radix-ui/react-slot": "^1.1.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "effect": "^3.17.7",
+    "framer-motion": "^12.23.24",
+    "lucide-react": "^0.554.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "tailwind-merge": "^2.5.5"
   },
   "devDependencies": {
