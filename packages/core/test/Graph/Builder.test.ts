@@ -1,13 +1,14 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Graph, HashMap, Option } from "effect"
 import { readFileSync } from "node:fs"
+import path from "node:path"
 import { parseTurtleToGraph } from "../../src/Graph/Builder.js"
 
 describe("Graph Builder", () => {
-  const zooTurtle = readFileSync("test-data/zoo.ttl", "utf-8")
-  const organizationTurtle = readFileSync("test-data/organization.ttl", "utf-8")
-  const dctermsTurtle = readFileSync("test-data/dcterms.ttl", "utf-8")
-  const foafTurtle = readFileSync("test-data/foaf.ttl", "utf-8")
+  const zooTurtle = readFileSync(path.join(__dirname, "../../test-data/zoo.ttl"), "utf-8")
+  const organizationTurtle = readFileSync(path.join(__dirname, "../../test-data/organization.ttl"), "utf-8")
+  const dctermsTurtle = readFileSync(path.join(__dirname, "../../test-data/dcterms.ttl"), "utf-8")
+  const foafTurtle = readFileSync(path.join(__dirname, "../../test-data/foaf.ttl"), "utf-8")
 
   it.effect("parses classes from zoo.ttl", () =>
     Effect.gen(function*() {

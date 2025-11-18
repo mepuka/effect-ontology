@@ -1,21 +1,22 @@
 name: Setup
-description: Perform standard setup and install dependencies using pnpm.
-inputs:
-  node-version:
-    description: The version of Node.js to install
-    required: true
-    default: 20.16.0
+description: Setup Bun and install dependencies
 
 runs:
   using: composite
   steps:
-    - name: Install pnpm
-      uses: pnpm/action-setup@v3
-    - name: Install node
-      uses: actions/setup-node@v4
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
       with:
-        cache: pnpm
-        node-version: ${{ inputs.node-version }}
+        bun-version: 1.2.23
+
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.bun/install/cache
+        key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-bun-
+
     - name: Install dependencies
       shell: bash
-      run: pnpm install
+      run: bun install --frozen-lockfile

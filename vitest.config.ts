@@ -5,13 +5,12 @@ export default defineConfig({
   plugins: [],
   test: {
     setupFiles: [path.join(__dirname, "setupTests.ts")],
-    include: ["./test/**/*.test.ts"],
+    include: ["./packages/*/test/**/*.test.ts"],
     globals: true
   },
   resolve: {
     alias: {
-      "@template/basic/test": path.join(__dirname, "test"),
-      "@template/basic": path.join(__dirname, "src")
+      "@effect-ontology/core": path.join(__dirname, "packages/core/src")
     }
   }
 })
