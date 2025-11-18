@@ -97,3 +97,19 @@ export interface OntologyContext {
    */
   readonly nodeIndexMap: HashMap.HashMap<NodeId, number>
 }
+
+/**
+ * GraphAlgebra - The algebra for folding over the graph
+ *
+ * Type: D × List<R> → R
+ * where D is the node data (OntologyNode)
+ * and R is the result type (generic, typically StructuredPrompt)
+ *
+ * @param nodeData - The data of the current node being processed
+ * @param childrenResults - Ordered list of results from the node's dependencies (children)
+ * @returns The result for the current node
+ */
+export type GraphAlgebra<R> = (
+  nodeData: OntologyNode,
+  childrenResults: ReadonlyArray<R>
+) => R
