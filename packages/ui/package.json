@@ -1,0 +1,36 @@
+{
+  "name": "@effect-ontology/ui",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@effect-ontology/core": "workspace:*",
+    "effect": "^3.17.7",
+    "@effect-atom/atom": "latest",
+    "@effect-atom/atom-react": "latest",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "@radix-ui/react-slot": "^1.1.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.5.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.17",
+    "@tailwindcss/vite": "^4.1.17",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^5.1.1",
+    "autoprefixer": "^10.4.22",
+    "minimatch": "^10.1.1",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.17",
+    "typescript": "^5.6.2",
+    "vite": "^7.2.2"
+  }
+}

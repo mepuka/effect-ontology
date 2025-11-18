@@ -1,0 +1,26 @@
+{
+  "name": "@effect-ontology/core",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    "./Graph/Builder": "./src/Graph/Builder.ts",
+    "./Graph/Types": "./src/Graph/Types.ts"
+  },
+  "scripts": {
+    "test": "vitest",
+    "check": "tsc -b tsconfig.json"
+  },
+  "dependencies": {
+    "@effect/typeclass": "^0.38.0",
+    "effect": "^3.17.7",
+    "n3": "^1.26.0"
+  },
+  "devDependencies": {
+    "@effect/vitest": "^0.25.1",
+    "@types/n3": "^1.26.1",
+    "@types/node": "^22.5.2",
+    "typescript": "^5.6.2",
+    "vitest": "^3.2.0"
+  }
+}

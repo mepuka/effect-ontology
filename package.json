@@ -1,15 +1,16 @@
 {
   "name": "effect-ontology",
   "version": "0.0.0",
+  "private": true,
   "type": "module",
   "packageManager": "bun@1.2.23",
+  "workspaces": [
+    "packages/*"
+  ],
   "license": "MIT",
-  "description": "Effect-based ontology framework",
-  "publishConfig": {
-    "access": "public",
-    "directory": "dist"
-  },
+  "description": "Effect-based ontology framework monorepo",
   "scripts": {
+    "dev": "cd packages/ui && bun run dev",
     "codegen": "build-utils prepare-v2",
     "build": "bun run build-esm && bun run build-annotate && bun run build-cjs && build-utils pack-v2",
     "build-esm": "tsc -b tsconfig.build.json",
@@ -24,7 +25,10 @@
   "dependencies": {
     "@effect/typeclass": "^0.38.0",
     "effect": "^3.17.7",
-    "n3": "^1.26.0"
+    "jotai": "^2.15.1",
+    "n3": "^1.26.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "@babel/cli": "^7.24.8",
@@ -42,6 +46,8 @@
     "@types/node": "^22.5.2",
     "@typescript-eslint/eslint-plugin": "^8.4.0",
     "@typescript-eslint/parser": "^8.4.0",
+    "@vitejs/plugin-react": "^5.1.1",
+    "autoprefixer": "^10.4.22",
     "babel-plugin-annotate-pure-calls": "^0.5.0",
     "eslint": "^9.10.0",
     "eslint-import-resolver-typescript": "^3.6.3",
@@ -50,8 +56,11 @@
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "eslint-plugin-sort-destructure-keys": "^2.0.0",
     "fast-check": "^4.3.0",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.17",
     "tsx": "^4.17.0",
     "typescript": "^5.6.2",
+    "vite": "^7.2.2",
     "vitest": "^3.2.0"
   },
   "effect": {
