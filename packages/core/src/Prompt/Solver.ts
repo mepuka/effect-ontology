@@ -11,7 +11,7 @@
  */
 
 import { Data, Effect, Graph, HashMap, Option } from "effect"
-import type { NodeId, OntologyContext, OntologyNode } from "../Graph/Types.js"
+import type { NodeId, OntologyContext } from "../Graph/Types.js"
 import type { GraphAlgebra } from "./Types.js"
 
 /**
@@ -135,13 +135,13 @@ export const solveGraph = <R>(
       )
 
       // Get OntologyNode from context
-      const ontologyNode = HashMap.get(context.nodes, nodeData).pipe(
-        Option.getOrElse(
-          (): OntologyNode => {
-            // This shouldn't happen if graph was built correctly,
-            // but we provide a fallback for type safety
-            throw new Error(`Node data ${nodeData} not found in context`)
-          }
+      const ontologyNode = yield* HashMap.get(context.nodes, nodeData).pipe(
+        Effect.mapError(
+          () =>
+            new MissingNodeDataError({
+              nodeId: nodeData,
+              message: `Node data ${nodeData} not found in context`
+            })
         )
       )
 
