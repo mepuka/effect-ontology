@@ -2,8 +2,13 @@
  * Visualization Utilities - Observable Plot Integration
  *
  * Provides utilities for converting metadata structures into Observable Plot
- * visualizations. These functions are designed to be used in the UI layer
- * but are defined in core for type safety and reusability.
+ * visualizations using Effect Schema and Data structures for type safety.
+ *
+ * **Effect Integration:**
+ * - Schema.Struct for all data types with validation
+ * - Schema.Data for structural equality
+ * - Schema.make factories for ergonomic construction
+ * - Functional pipelines with pipe() for transformations
  *
  * **Note:** This module exports data transformation functions, not Plot objects.
  * The UI layer should import Observable Plot and pass it to these functions.
@@ -12,43 +17,116 @@
  * @since 1.0.0
  */
 
-import { HashMap, Option, pipe } from "effect"
+import { Array as EffectArray, Data, HashMap, Option, pipe, Schema } from "effect"
 import type { ClassSummary, DependencyGraph, HierarchyTree, KnowledgeMetadata, TokenStats } from "./Metadata.js"
+
+/**
+ * DependencyGraph Node Schema
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export const DependencyGraphNodeSchema = Schema.Data(
+  Schema.Struct({
+    id: Schema.String,
+    label: Schema.String,
+    propertyCount: Schema.Number,
+    depth: Schema.Number,
+    group: Schema.String
+  })
+)
+
+/**
+ * DependencyGraph Node Type
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export type DependencyGraphNode = typeof DependencyGraphNodeSchema.Type
+
+/**
+ * DependencyGraph Link Schema
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export const DependencyGraphLinkSchema = Schema.Data(
+  Schema.Struct({
+    source: Schema.String,
+    target: Schema.String
+  })
+)
+
+/**
+ * DependencyGraph Link Type
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export type DependencyGraphLink = typeof DependencyGraphLinkSchema.Type
 
 /**
  * PlotData for dependency graph visualization
  *
  * Structure optimized for Observable Plot's force-directed layout.
+ * Uses Schema.Data for structural equality.
  *
  * @since 1.0.0
  * @category models
  */
-export interface DependencyGraphPlotData {
-  /** Nodes for plotting */
-  readonly nodes: ReadonlyArray<{
-    readonly id: string
-    readonly label: string
-    readonly propertyCount: number
-    readonly depth: number
-    readonly group: string
-  }>
-  /** Links for plotting */
-  readonly links: ReadonlyArray<{
-    readonly source: string
-    readonly target: string
-  }>
+export const DependencyGraphPlotDataSchema = Schema.Data(
+  Schema.Struct({
+    /** Nodes for plotting */
+    nodes: Schema.Array(DependencyGraphNodeSchema),
+    /** Links for plotting */
+    links: Schema.Array(DependencyGraphLinkSchema)
+  })
+)
+
+/**
+ * DependencyGraph PlotData Type
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export type DependencyGraphPlotData = typeof DependencyGraphPlotDataSchema.Type
+
+/**
+ * DependencyGraph PlotData Factory
+ *
+ * @since 1.0.0
+ * @category constructors
+ */
+export const DependencyGraphPlotData = {
+  schema: DependencyGraphPlotDataSchema,
+  make: Schema.make(DependencyGraphPlotDataSchema)
 }
 
 /**
  * PlotData for hierarchy tree visualization
  *
  * Structure optimized for Observable Plot's tree layout.
+ * Uses Schema.Data for structural equality.
  *
  * @since 1.0.0
  * @category models
  */
-export interface HierarchyTreePlotData {
-  /** Tree structure in hierarchical format */
+export const HierarchyTreePlotDataSchema: Schema.Schema<HierarchyTreePlotData> = Schema.Data(
+  Schema.Struct({
+    name: Schema.String,
+    children: Schema.optional(Schema.Array(Schema.suspend(() => HierarchyTreePlotDataSchema))),
+    value: Schema.optional(Schema.Number),
+    depth: Schema.optional(Schema.Number)
+  })
+)
+
+/**
+ * HierarchyTree PlotData Type
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export type HierarchyTreePlotData = {
   readonly name: string
   readonly children?: ReadonlyArray<HierarchyTreePlotData>
   readonly value?: number
@@ -56,22 +134,92 @@ export interface HierarchyTreePlotData {
 }
 
 /**
- * PlotData for token statistics bar chart
+ * HierarchyTree PlotData Factory
+ *
+ * @since 1.0.0
+ * @category constructors
+ */
+export const HierarchyTreePlotData = {
+  schema: HierarchyTreePlotDataSchema,
+  make: Schema.make(HierarchyTreePlotDataSchema)
+}
+
+/**
+ * Token Stats Data Point Schema
  *
  * @since 1.0.0
  * @category models
  */
-export interface TokenStatsPlotData {
-  readonly data: ReadonlyArray<{
-    readonly iri: string
-    readonly label: string
-    readonly tokens: number
-  }>
-  readonly summary: {
-    readonly total: number
-    readonly average: number
-    readonly max: number
-  }
+export const TokenStatsDataPointSchema = Schema.Data(
+  Schema.Struct({
+    iri: Schema.String,
+    label: Schema.String,
+    tokens: Schema.Number
+  })
+)
+
+/**
+ * Token Stats Data Point Type
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export type TokenStatsDataPoint = typeof TokenStatsDataPointSchema.Type
+
+/**
+ * Token Stats Summary Schema
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export const TokenStatsSummarySchema = Schema.Data(
+  Schema.Struct({
+    total: Schema.Number,
+    average: Schema.Number,
+    max: Schema.Number
+  })
+)
+
+/**
+ * Token Stats Summary Type
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export type TokenStatsSummary = typeof TokenStatsSummarySchema.Type
+
+/**
+ * PlotData for token statistics bar chart
+ *
+ * Uses Schema.Data for structural equality.
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export const TokenStatsPlotDataSchema = Schema.Data(
+  Schema.Struct({
+    data: Schema.Array(TokenStatsDataPointSchema),
+    summary: TokenStatsSummarySchema
+  })
+)
+
+/**
+ * Token Stats PlotData Type
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export type TokenStatsPlotData = typeof TokenStatsPlotDataSchema.Type
+
+/**
+ * Token Stats PlotData Factory
+ *
+ * @since 1.0.0
+ * @category constructors
+ */
+export const TokenStatsPlotData = {
+  schema: TokenStatsPlotDataSchema,
+  make: Schema.make(TokenStatsPlotDataSchema)
 }
 
 /**
@@ -79,6 +227,8 @@ export interface TokenStatsPlotData {
  *
  * Transforms the dependency graph into a format suitable for
  * Observable Plot's force-directed graph visualization.
+ *
+ * Uses functional pipeline with pipe() for clean transformation.
  *
  * @param graph - The dependency graph
  * @returns Plot data structure
@@ -111,29 +261,41 @@ export interface TokenStatsPlotData {
  * })
  * ```
  */
-export const toDependencyGraphPlotData = (graph: DependencyGraph): DependencyGraphPlotData => {
-  const nodes = graph.nodes.map((node) => ({
-    id: node.id,
-    label: node.label,
-    propertyCount: node.propertyCount,
-    depth: node.depth,
-    // Group by depth for color coding
-    group: `depth-${node.depth}`
-  }))
-
-  const links = graph.edges.map((edge) => ({
-    source: edge.source,
-    target: edge.target
-  }))
-
-  return { nodes, links }
-}
+export const toDependencyGraphPlotData = (graph: DependencyGraph): DependencyGraphPlotData =>
+  pipe(
+    Data.struct({
+      nodes: pipe(
+        graph.nodes,
+        EffectArray.map((node) =>
+          Data.struct({
+            id: node.id,
+            label: node.label,
+            propertyCount: node.propertyCount,
+            depth: node.depth,
+            // Group by depth for color coding
+            group: `depth-${node.depth}`
+          })
+        )
+      ),
+      links: pipe(
+        graph.edges,
+        EffectArray.map((edge) =>
+          Data.struct({
+            source: edge.source,
+            target: edge.target
+          })
+        )
+      )
+    })
+  )
 
 /**
  * Convert HierarchyTree to plot data
  *
  * Transforms the hierarchy tree into a format suitable for
  * Observable Plot's tree visualization.
+ *
+ * Uses recursive functional approach with Data.struct for value equality.
  *
  * @param tree - The hierarchy tree
  * @returns Plot data structure
@@ -159,12 +321,17 @@ export const toDependencyGraphPlotData = (graph: DependencyGraph): DependencyGra
  * ```
  */
 export const toHierarchyTreePlotData = (tree: HierarchyTree): HierarchyTreePlotData => {
-  const convertNode = (node: HierarchyTree["roots"][number]): HierarchyTreePlotData => ({
-    name: node.label,
-    value: node.propertyCount,
-    depth: node.depth,
-    children: node.children.length > 0 ? node.children.map(convertNode) : undefined
-  })
+  const convertNode = (node: HierarchyTree["roots"][number]): HierarchyTreePlotData =>
+    Data.struct({
+      name: node.label,
+      value: node.propertyCount,
+      depth: node.depth,
+      children: pipe(
+        node.children,
+        EffectArray.isNonEmptyArray,
+        (hasChildren) => (hasChildren ? EffectArray.map(node.children, convertNode) : undefined)
+      )
+    })
 
   // If there's a single root, return it directly
   if (tree.roots.length === 1) {
@@ -172,11 +339,11 @@ export const toHierarchyTreePlotData = (tree: HierarchyTree): HierarchyTreePlotD
   }
 
   // If multiple roots, create a virtual root
-  return {
+  return Data.struct({
     name: "Ontology",
-    children: tree.roots.map(convertNode),
+    children: pipe(tree.roots, EffectArray.map(convertNode)),
     depth: -1
-  }
+  })
 }
 
 /**
@@ -184,6 +351,8 @@ export const toHierarchyTreePlotData = (tree: HierarchyTree): HierarchyTreePlotD
  *
  * Transforms token statistics into a format suitable for
  * Observable Plot's bar chart visualization.
+ *
+ * Uses functional pipeline with HashMap operations for clean data flow.
  *
  * @param stats - The token statistics
  * @param metadata - Full metadata (for labels)
@@ -214,40 +383,43 @@ export const toHierarchyTreePlotData = (tree: HierarchyTree): HierarchyTreePlotD
 export const toTokenStatsPlotData = (
   stats: TokenStats,
   metadata: KnowledgeMetadata
-): TokenStatsPlotData => {
-  const data: Array<{ iri: string; label: string; tokens: number }> = []
-
-  // Convert HashMap to array with labels
-  for (const [iri, tokens] of HashMap.entries(stats.byClass)) {
-    const label = pipe(
-      HashMap.get(metadata.classSummaries, iri),
-      Option.match({
-        onNone: () => iri,
-        onSome: (summary) => summary.label
+): TokenStatsPlotData =>
+  pipe(
+    Data.struct({
+      data: pipe(
+        HashMap.entries(stats.byClass),
+        EffectArray.fromIterable,
+        EffectArray.map(([iri, tokens]) =>
+          Data.struct({
+            iri,
+            label: pipe(
+              HashMap.get(metadata.classSummaries, iri),
+              Option.match({
+                onNone: () => iri,
+                onSome: (summary) => summary.label
+              })
+            ),
+            tokens
+          })
+        ),
+        // Sort by token count descending
+        EffectArray.sort((a, b) => b.tokens - a.tokens)
+      ),
+      summary: Data.struct({
+        total: stats.totalTokens,
+        average: stats.averageTokensPerClass,
+        max: stats.maxTokensPerClass
       })
-    )
-
-    data.push({ iri, label, tokens })
-  }
-
-  // Sort by token count descending
-  data.sort((a, b) => b.tokens - a.tokens)
-
-  return {
-    data,
-    summary: {
-      total: stats.totalTokens,
-      average: stats.averageTokensPerClass,
-      max: stats.maxTokensPerClass
-    }
-  }
-}
+    })
+  )
 
 /**
  * Export ClassSummary to markdown table
  *
  * Generates a markdown table from class summary data.
  * Useful for documentation and debugging.
+ *
+ * Uses functional pipeline for string building.
  *
  * @param summary - The class summary
  * @returns Markdown table string
@@ -268,29 +440,30 @@ export const toTokenStatsPlotData = (
  * // ...
  * ```
  */
-export const classSummaryToMarkdown = (summary: ClassSummary): string => {
-  const rows = [
-    ["Property", "Value"],
-    ["--------", "-----"],
-    ["IRI", summary.iri],
-    ["Label", summary.label],
-    ["Direct Properties", summary.directProperties.toString()],
-    ["Inherited Properties", summary.inheritedProperties.toString()],
-    ["Total Properties", summary.totalProperties.toString()],
-    ["Parents", summary.parents.join(", ") || "None"],
-    ["Children", summary.children.join(", ") || "None"],
-    ["Depth", summary.depth.toString()],
-    ["Estimated Tokens", summary.estimatedTokens.toString()]
-  ]
-
-  return rows.map((row) => `| ${row[0]} | ${row[1]} |`).join("\n")
-}
+export const classSummaryToMarkdown = (summary: ClassSummary): string =>
+  pipe(
+    [
+      ["Property", "Value"],
+      ["--------", "-----"],
+      ["IRI", summary.iri],
+      ["Label", summary.label],
+      ["Direct Properties", summary.directProperties.toString()],
+      ["Inherited Properties", summary.inheritedProperties.toString()],
+      ["Total Properties", summary.totalProperties.toString()],
+      ["Parents", summary.parents.join(", ") || "None"],
+      ["Children", summary.children.join(", ") || "None"],
+      ["Depth", summary.depth.toString()],
+      ["Estimated Tokens", summary.estimatedTokens.toString()]
+    ],
+    EffectArray.map((row) => `| ${row[0]} | ${row[1]} |`),
+    EffectArray.join("\n")
+  )
 
 /**
  * Export complete metadata to JSON
  *
  * Serializes metadata to JSON format for export/storage.
- * Note: This loses Effect Schema type safety.
+ * Uses functional pipeline to convert HashMaps to plain objects.
  *
  * @param metadata - The knowledge metadata
  * @returns JSON string
@@ -298,38 +471,34 @@ export const classSummaryToMarkdown = (summary: ClassSummary): string => {
  * @since 1.0.0
  * @category formatters
  */
-export const metadataToJSON = (metadata: KnowledgeMetadata): string => {
-  // Convert HashMaps to plain objects for JSON serialization
-  const classSummariesObj: Record<string, ClassSummary> = {}
-  for (const [iri, summary] of HashMap.entries(metadata.classSummaries)) {
-    classSummariesObj[iri] = summary
-  }
-
-  const byClassObj: Record<string, number> = {}
-  for (const [iri, tokens] of HashMap.entries(metadata.tokenStats.byClass)) {
-    byClassObj[iri] = tokens
-  }
-
-  return JSON.stringify(
+export const metadataToJSON = (metadata: KnowledgeMetadata): string =>
+  pipe(
     {
-      classSummaries: classSummariesObj,
+      classSummaries: pipe(
+        HashMap.entries(metadata.classSummaries),
+        EffectArray.fromIterable,
+        EffectArray.reduce({}, (acc, [iri, summary]) => ({ ...acc, [iri]: summary }))
+      ),
       dependencyGraph: metadata.dependencyGraph,
       hierarchyTree: metadata.hierarchyTree,
       tokenStats: {
         ...metadata.tokenStats,
-        byClass: byClassObj
+        byClass: pipe(
+          HashMap.entries(metadata.tokenStats.byClass),
+          EffectArray.fromIterable,
+          EffectArray.reduce({}, (acc, [iri, tokens]) => ({ ...acc, [iri]: tokens }))
+        )
       },
       stats: metadata.stats
     },
-    null,
-    2
+    (obj) => JSON.stringify(obj, null, 2)
   )
-}
 
 /**
  * Create a summary report in plain text
  *
  * Generates a human-readable summary of the metadata.
+ * Uses functional pipeline for string building.
  *
  * @param metadata - The knowledge metadata
  * @returns Plain text summary
@@ -349,30 +518,30 @@ export const metadataToJSON = (metadata: KnowledgeMetadata): string => {
  * // ...
  * ```
  */
-export const createSummaryReport = (metadata: KnowledgeMetadata): string => {
-  const lines = [
-    "Ontology Metadata Summary",
-    "========================",
-    "",
-    `Total Classes: ${metadata.stats.totalClasses}`,
-    `Total Properties: ${metadata.stats.totalProperties}`,
-    `Inherited Properties: ${metadata.stats.totalInheritedProperties}`,
-    `Average Properties/Class: ${metadata.stats.averagePropertiesPerClass.toFixed(2)}`,
-    `Maximum Depth: ${metadata.stats.maxDepth}`,
-    "",
-    "Token Statistics",
-    "----------------",
-    `Total Tokens: ${metadata.tokenStats.totalTokens}`,
-    `Average Tokens/Class: ${metadata.tokenStats.averageTokensPerClass.toFixed(2)}`,
-    `Maximum Tokens/Class: ${metadata.tokenStats.maxTokensPerClass}`,
-    `Estimated Cost: $${metadata.tokenStats.estimatedCost.toFixed(4)}`,
-    "",
-    "Graph Structure",
-    "---------------",
-    `Nodes: ${metadata.dependencyGraph.nodes.length}`,
-    `Edges: ${metadata.dependencyGraph.edges.length}`,
-    `Roots: ${metadata.hierarchyTree.roots.length}`
-  ]
-
-  return lines.join("\n")
-}
+export const createSummaryReport = (metadata: KnowledgeMetadata): string =>
+  pipe(
+    [
+      "Ontology Metadata Summary",
+      "========================",
+      "",
+      `Total Classes: ${metadata.stats.totalClasses}`,
+      `Total Properties: ${metadata.stats.totalProperties}`,
+      `Inherited Properties: ${metadata.stats.totalInheritedProperties}`,
+      `Average Properties/Class: ${metadata.stats.averagePropertiesPerClass.toFixed(2)}`,
+      `Maximum Depth: ${metadata.stats.maxDepth}`,
+      "",
+      "Token Statistics",
+      "----------------",
+      `Total Tokens: ${metadata.tokenStats.totalTokens}`,
+      `Average Tokens/Class: ${metadata.tokenStats.averageTokensPerClass.toFixed(2)}`,
+      `Maximum Tokens/Class: ${metadata.tokenStats.maxTokensPerClass}`,
+      `Estimated Cost: $${metadata.tokenStats.estimatedCost.toFixed(4)}`,
+      "",
+      "Graph Structure",
+      "---------------",
+      `Nodes: ${metadata.dependencyGraph.nodes.length}`,
+      `Edges: ${metadata.dependencyGraph.edges.length}`,
+      `Roots: ${metadata.hierarchyTree.roots.length}`
+    ],
+    EffectArray.join("\n")
+  )
