@@ -7,8 +7,7 @@
  * - Graph edges represent subClassOf relationships (Child -> Parent dependency)
  */
 
-import { HashMap, Schema } from "effect"
-import type * as fc from "fast-check"
+import { FastCheck, HashMap, Schema } from "effect"
 
 /**
  * NodeId - Unique identifier for graph nodes (typically IRI)
@@ -21,8 +20,8 @@ import type * as fc from "fast-check"
  * - XSD (XML Schema Datatypes)
  */
 export const NodeIdSchema = Schema.String.annotations({
-  arbitrary: () => (fc: typeof import("fast-check")) =>
-    fc.constantFrom(
+  arbitrary: () => () =>
+    FastCheck.constantFrom(
       // FOAF vocabulary
       "http://xmlns.com/foaf/0.1/Person",
       "http://xmlns.com/foaf/0.1/Organization",
@@ -56,8 +55,8 @@ export type NodeId = typeof NodeIdSchema.Type
  */
 export const PropertyDataSchema = Schema.Struct({
   iri: Schema.String.annotations({
-    arbitrary: () => (fc: typeof import("fast-check")) =>
-      fc.constantFrom(
+    arbitrary: () => () =>
+      FastCheck.constantFrom(
         // FOAF properties
         "http://xmlns.com/foaf/0.1/name",
         "http://xmlns.com/foaf/0.1/knows",
@@ -79,8 +78,8 @@ export const PropertyDataSchema = Schema.Struct({
       )
   }),
   label: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100)).annotations({
-    arbitrary: () => (fc: typeof import("fast-check")) =>
-      fc.constantFrom(
+    arbitrary: () => () =>
+      FastCheck.constantFrom(
         // Common property labels
         "name",
         "description",
@@ -101,10 +100,10 @@ export const PropertyDataSchema = Schema.Struct({
       )
   }),
   range: Schema.String.annotations({
-    arbitrary: () => (fc: typeof import("fast-check")) =>
-      fc.oneof(
+    arbitrary: () => () =>
+      FastCheck.oneof(
         // XSD datatypes (biased higher - 60% of properties are datatype properties)
-        fc.constantFrom(
+        FastCheck.constantFrom(
           "http://www.w3.org/2001/XMLSchema#string",
           "http://www.w3.org/2001/XMLSchema#integer",
           "http://www.w3.org/2001/XMLSchema#boolean",
@@ -119,7 +118,7 @@ export const PropertyDataSchema = Schema.Struct({
           "xsd:dateTime"
         ),
         // Class IRIs (40% are object properties)
-        fc.constantFrom(
+        FastCheck.constantFrom(
           "http://xmlns.com/foaf/0.1/Person",
           "http://xmlns.com/foaf/0.1/Organization",
           "http://schema.org/Person",
@@ -144,8 +143,8 @@ export class ClassNode extends Schema.Class<ClassNode>("ClassNode")({
   ),
   id: NodeIdSchema,
   label: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100)).annotations({
-    arbitrary: () => (fc: typeof import("fast-check")) =>
-      fc.constantFrom(
+    arbitrary: () => () =>
+      FastCheck.constantFrom(
         // Common class labels
         "Person",
         "Organization",
@@ -299,7 +298,7 @@ export const OntologyContext = {
    * @returns Validated OntologyContext
    * @throws ParseError if validation fails
    */
-  make: Schema.make(OntologyContextSchema),
+  make: (input: unknown) => Schema.decodeUnknownSync(OntologyContextSchema)(input),
 
   /**
    * Create empty OntologyContext
