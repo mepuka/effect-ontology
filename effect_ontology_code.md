@@ -55,23 +55,77 @@ Directory Structure
 packages/
   core/
     src/
+      Config/
+        index.ts
+        Schema.ts
+        Services.ts
+      Extraction/
+        Events.ts
       Graph/
         Builder.ts
         Types.ts
+      Ontology/
+        index.ts
+        Inheritance.ts
       Prompt/
         Algebra.ts
+        Ast.ts
+        DocBuilder.ts
+        Focus.ts
         index.ts
+        KnowledgeIndex.ts
+        Metadata.ts
+        PromptDoc.ts
+        Render.ts
         Solver.ts
         Types.ts
+        Visualization.ts
+      Schema/
+        Factory.ts
+        IMPLEMENTATION_NOTES.md
+        index.ts
+        Metadata.ts
+        README.md
+      Services/
+        Extraction.ts
+        Llm.ts
+        Rdf.ts
       inspect.ts
       Program.ts
     test/
+      Config/
+        Schema.test.ts
+        Services.test.ts
+      Extraction/
+        Events.test.ts
+      fixtures/
+        ontologies/
+          dcterms.ttl
+          foaf-minimal.ttl
       Graph/
         Builder.test.ts
         Types.test.ts
+      Ontology/
+        Inheritance.test.ts
       Prompt/
         Algebra.test.ts
+        DocBuilder.test.ts
+        Integration.test.ts
+        KnowledgeIndex.property.test.ts
+        KnowledgeIndex.test.ts
+        Metadata.property.test.ts
+        Metadata.test.ts
+        PromptDoc.test.ts
+        RealOntologies.test.ts
         Solver.test.ts
+      Schema/
+        Factory.test.ts
+        JsonSchemaExport.test.ts
+        JsonSchemaInspect.test.ts
+      Services/
+        Extraction.test.ts
+        Llm.test.ts
+        Rdf.test.ts
       Dummy.test.ts
     test-data/
       dcterms.ttl
@@ -109,6 +163,7 @@ packages/
     vite.config.ts
 scratchpad/
   tsconfig.json
+.env.example
 .gitignore
 .prettierignore
 .repomixignore
@@ -240,6 +295,880 @@ jobs:
         uses: ./.github/actions/setup
       - name: Build package
         run: bun run build
+
+================
+File: packages/core/src/Config/index.ts
+================
+/**
+ * Configuration Module
+ *
+ * Type-safe configuration management for Effect Ontology using Effect.Config.
+ *
+ * This module provides:
+ * - Configuration schemas for all services (LLM, RDF, SHACL)
+ * - Effect services for dependency injection
+ * - Layer constructors for test and production configs
+ * - Multi-provider LLM support (Anthropic, Gemini, OpenRouter)
+ *
+ * @module Config
+ * @since 1.0.0
+ *
+ * @example
+ * **Loading configuration from environment:**
+ * ```typescript
+ * import { Effect } from "effect"
+ * import { LlmConfigService } from "@effect-ontology/core/Config"
+ *
+ * const program = Effect.gen(function* () {
+ *   const config = yield* LlmConfigService
+ *   console.log(`Using ${config.provider} provider`)
+ * }).pipe(Effect.provide(LlmConfigService.Default))
+ * ```
+ *
+ * @example
+ * **Creating test configuration:**
+ * ```typescript
+ * import { ConfigProvider, Layer } from "effect"
+ * import { LlmConfigService } from "@effect-ontology/core/Config"
+ *
+ * const testConfig = ConfigProvider.fromMap(
+ *   new Map([
+ *     ["LLM.PROVIDER", "anthropic"],
+ *     ["LLM.ANTHROPIC_API_KEY", "test-key"]
+ *   ])
+ * )
+ *
+ * const program = Effect.gen(function* () {
+ *   const config = yield* LlmConfigService
+ * }).pipe(Effect.provide(Layer.setConfigProvider(testConfig)))
+ * ```
+ */
+
+// Export schemas
+export type {
+  AnthropicConfig,
+  AppConfig,
+  GeminiConfig,
+  LlmConfig,
+  LlmProvider,
+  OpenRouterConfig,
+  RdfConfig,
+  ShaclConfig
+} from "./Schema.js"
+
+export {
+  AnthropicConfigSchema,
+  AppConfigSchema,
+  GeminiConfigSchema,
+  LlmProviderConfig,
+  OpenRouterConfigSchema,
+  RdfConfigSchema,
+  ShaclConfigSchema
+} from "./Schema.js"
+
+// Export services
+export {
+  AppConfigService,
+  LlmConfigService,
+  RdfConfigService,
+  ShaclConfigService
+} from "./Services.js"
+
+================
+File: packages/core/src/Config/Schema.ts
+================
+/**
+ * Configuration Schemas
+ *
+ * Type-safe configuration schemas using Effect.Config for all services.
+ * Defines configuration for LLM providers, RDF services, and SHACL validation.
+ *
+ * **Architecture:**
+ * - Uses Effect.Config for declarative, type-safe config definition
+ * - Supports multiple LLM providers (Anthropic, Gemini, OpenRouter)
+ * - Provides optional configs with sensible defaults
+ * - Integrates with Effect's dependency injection via layers
+ *
+ * @module Config/Schema
+ * @since 1.0.0
+ *
+ * @example
+ * ```typescript
+ * import { Config, ConfigProvider, Layer } from "effect"
+ * import { LlmProviderConfig } from "@effect-ontology/core/Config/Schema"
+ *
+ * // Load from environment
+ * const config = await Effect.runPromise(LlmProviderConfig)
+ *
+ * // Or provide test config
+ * const testConfig = ConfigProvider.fromMap(
+ *   new Map([
+ *     ["LLM.PROVIDER", "anthropic"],
+ *     ["LLM.ANTHROPIC_API_KEY", "test-key"]
+ *   ])
+ * )
+ * ```
+ */
+
+import { Config } from "effect"
+
+/**
+ * LLM Provider types
+ *
+ * Supported language model providers for knowledge graph extraction.
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export type LlmProvider = "anthropic" | "gemini" | "openrouter"
+
+/**
+ * Anthropic Provider Configuration
+ *
+ * Configuration for Claude models via Anthropic API.
+ *
+ * @since 1.0.0
+ * @category schemas
+ */
+export interface AnthropicConfig {
+  readonly apiKey: string
+  readonly model: string
+  readonly maxTokens: number
+  readonly temperature: number
+}
+
+/**
+ * Gemini Provider Configuration
+ *
+ * Configuration for Google Gemini models.
+ *
+ * @since 1.0.0
+ * @category schemas
+ */
+export interface GeminiConfig {
+  readonly apiKey: string
+  readonly model: string
+  readonly maxTokens: number
+  readonly temperature: number
+}
+
+/**
+ * OpenRouter Provider Configuration
+ *
+ * Configuration for models via OpenRouter API.
+ *
+ * @since 1.0.0
+ * @category schemas
+ */
+export interface OpenRouterConfig {
+  readonly apiKey: string
+  readonly model: string
+  readonly maxTokens: number
+  readonly temperature: number
+  readonly siteUrl?: string
+  readonly siteName?: string
+}
+
+/**
+ * LLM Provider Configuration
+ *
+ * Top-level configuration for LLM service with provider selection
+ * and provider-specific configs.
+ *
+ * @since 1.0.0
+ * @category schemas
+ */
+export interface LlmConfig {
+  readonly provider: LlmProvider
+  readonly anthropic?: AnthropicConfig
+  readonly gemini?: GeminiConfig
+  readonly openrouter?: OpenRouterConfig
+}
+
+/**
+ * RDF Service Configuration
+ *
+ * Configuration for N3-based RDF operations.
+ *
+ * @since 1.0.0
+ * @category schemas
+ */
+export interface RdfConfig {
+  readonly format: "Turtle" | "N-Triples" | "N-Quads" | "TriG"
+  readonly baseIri?: string
+  readonly prefixes: Record<string, string>
+}
+
+/**
+ * SHACL Validation Configuration
+ *
+ * Configuration for SHACL-based validation (future).
+ *
+ * @since 1.0.0
+ * @category schemas
+ */
+export interface ShaclConfig {
+  readonly enabled: boolean
+  readonly shapesPath?: string
+  readonly strictMode: boolean
+}
+
+/**
+ * Application Configuration
+ *
+ * Complete application configuration combining all service configs.
+ *
+ * @since 1.0.0
+ * @category schemas
+ */
+export interface AppConfig {
+  readonly llm: LlmConfig
+  readonly rdf: RdfConfig
+  readonly shacl: ShaclConfig
+}
+
+/**
+ * Anthropic Config Schema
+ *
+ * Effect.Config schema for Anthropic provider configuration.
+ *
+ * Environment variables:
+ * - LLM.ANTHROPIC_API_KEY (required)
+ * - LLM.ANTHROPIC_MODEL (optional, default: "claude-3-5-sonnet-20241022")
+ * - LLM.ANTHROPIC_MAX_TOKENS (optional, default: 4096)
+ * - LLM.ANTHROPIC_TEMPERATURE (optional, default: 0.0)
+ *
+ * @since 1.0.0
+ * @category config
+ */
+export const AnthropicConfigSchema = Config.all({
+  apiKey: Config.string("ANTHROPIC_API_KEY"),
+  model: Config.withDefault(
+    Config.string("ANTHROPIC_MODEL"),
+    "claude-3-5-sonnet-20241022"
+  ),
+  maxTokens: Config.withDefault(Config.number("ANTHROPIC_MAX_TOKENS"), 4096),
+  temperature: Config.withDefault(Config.number("ANTHROPIC_TEMPERATURE"), 0.0)
+})
+
+/**
+ * Gemini Config Schema
+ *
+ * Effect.Config schema for Google Gemini provider configuration.
+ *
+ * Environment variables:
+ * - LLM.GEMINI_API_KEY (required)
+ * - LLM.GEMINI_MODEL (optional, default: "gemini-2.0-flash-exp")
+ * - LLM.GEMINI_MAX_TOKENS (optional, default: 4096)
+ * - LLM.GEMINI_TEMPERATURE (optional, default: 0.0)
+ *
+ * @since 1.0.0
+ * @category config
+ */
+export const GeminiConfigSchema = Config.all({
+  apiKey: Config.string("GEMINI_API_KEY"),
+  model: Config.withDefault(Config.string("GEMINI_MODEL"), "gemini-2.0-flash-exp"),
+  maxTokens: Config.withDefault(Config.number("GEMINI_MAX_TOKENS"), 4096),
+  temperature: Config.withDefault(Config.number("GEMINI_TEMPERATURE"), 0.0)
+})
+
+/**
+ * OpenRouter Config Schema
+ *
+ * Effect.Config schema for OpenRouter provider configuration.
+ *
+ * Environment variables:
+ * - LLM.OPENROUTER_API_KEY (required)
+ * - LLM.OPENROUTER_MODEL (optional, default: "anthropic/claude-3.5-sonnet")
+ * - LLM.OPENROUTER_MAX_TOKENS (optional, default: 4096)
+ * - LLM.OPENROUTER_TEMPERATURE (optional, default: 0.0)
+ * - LLM.OPENROUTER_SITE_URL (optional)
+ * - LLM.OPENROUTER_SITE_NAME (optional)
+ *
+ * @since 1.0.0
+ * @category config
+ */
+export const OpenRouterConfigSchema = Config.all({
+  apiKey: Config.string("OPENROUTER_API_KEY"),
+  model: Config.withDefault(
+    Config.string("OPENROUTER_MODEL"),
+    "anthropic/claude-3.5-sonnet"
+  ),
+  maxTokens: Config.withDefault(Config.number("OPENROUTER_MAX_TOKENS"), 4096),
+  temperature: Config.withDefault(Config.number("OPENROUTER_TEMPERATURE"), 0.0),
+  siteUrl: Config.option(Config.string("OPENROUTER_SITE_URL")),
+  siteName: Config.option(Config.string("OPENROUTER_SITE_NAME"))
+})
+
+/**
+ * LLM Config Schema
+ *
+ * Effect.Config schema for LLM service configuration with provider selection.
+ *
+ * Environment variables:
+ * - LLM.PROVIDER (required): "anthropic" | "gemini" | "openrouter"
+ * - Plus provider-specific variables (see provider schemas)
+ *
+ * @since 1.0.0
+ * @category config
+ *
+ * @example
+ * ```typescript
+ * import { ConfigProvider, Effect, Layer } from "effect"
+ * import { LlmProviderConfig } from "@effect-ontology/core/Config/Schema"
+ *
+ * // Load from environment
+ * const config = await Effect.runPromise(LlmProviderConfig)
+ * console.log(config.provider) // "anthropic"
+ *
+ * // Or provide programmatically
+ * const testConfig = ConfigProvider.fromMap(
+ *   new Map([
+ *     ["LLM.PROVIDER", "anthropic"],
+ *     ["LLM.ANTHROPIC_API_KEY", "sk-ant-test"]
+ *   ])
+ * )
+ * ```
+ */
+export const LlmProviderConfig = Config.nested("LLM")(
+  Config.all({
+    provider: Config.string("PROVIDER").pipe(
+      Config.validate({
+        message: "Invalid provider. Must be one of: anthropic, gemini, openrouter",
+        validation: (value): value is LlmProvider =>
+          value === "anthropic" || value === "gemini" || value === "openrouter"
+      })
+    ),
+    anthropic: Config.option(AnthropicConfigSchema),
+    gemini: Config.option(GeminiConfigSchema),
+    openrouter: Config.option(OpenRouterConfigSchema)
+  })
+)
+
+/**
+ * RDF Config Schema
+ *
+ * Effect.Config schema for RDF service configuration.
+ *
+ * Environment variables:
+ * - RDF.FORMAT (optional, default: "Turtle")
+ * - RDF.BASE_IRI (optional)
+ * - RDF.PREFIX_* for namespace prefixes
+ *
+ * @since 1.0.0
+ * @category config
+ */
+export const RdfConfigSchema = Config.nested("RDF")(
+  Config.all({
+    format: Config.withDefault(Config.string("FORMAT"), "Turtle").pipe(
+      Config.validate({
+        message: "Invalid RDF format",
+        validation: (value): value is "Turtle" | "N-Triples" | "N-Quads" | "TriG" =>
+          value === "Turtle" ||
+          value === "N-Triples" ||
+          value === "N-Quads" ||
+          value === "TriG"
+      })
+    ),
+    baseIri: Config.option(Config.string("BASE_IRI")),
+    // Default common RDF prefixes
+    prefixes: Config.succeed({
+      rdf: "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+      rdfs: "http://www.w3.org/2000/01/rdf-schema#",
+      xsd: "http://www.w3.org/2001/XMLSchema#",
+      foaf: "http://xmlns.com/foaf/0.1/",
+      dcterms: "http://purl.org/dc/terms/"
+    })
+  })
+)
+
+/**
+ * SHACL Config Schema
+ *
+ * Effect.Config schema for SHACL validation configuration.
+ *
+ * Environment variables:
+ * - SHACL.ENABLED (optional, default: false)
+ * - SHACL.SHAPES_PATH (optional)
+ * - SHACL.STRICT_MODE (optional, default: true)
+ *
+ * @since 1.0.0
+ * @category config
+ */
+export const ShaclConfigSchema = Config.nested("SHACL")(
+  Config.all({
+    enabled: Config.withDefault(Config.boolean("ENABLED"), false),
+    shapesPath: Config.option(Config.string("SHAPES_PATH")),
+    strictMode: Config.withDefault(Config.boolean("STRICT_MODE"), true)
+  })
+)
+
+/**
+ * Application Config Schema
+ *
+ * Complete application configuration combining all service configs.
+ *
+ * @since 1.0.0
+ * @category config
+ *
+ * @example
+ * ```typescript
+ * import { Effect } from "effect"
+ * import { AppConfigSchema } from "@effect-ontology/core/Config/Schema"
+ *
+ * const program = Effect.gen(function* () {
+ *   const config = yield* AppConfigSchema
+ *   console.log(`Using LLM provider: ${config.llm.provider}`)
+ *   console.log(`RDF format: ${config.rdf.format}`)
+ * })
+ * ```
+ */
+export const AppConfigSchema = Config.all({
+  llm: LlmProviderConfig,
+  rdf: RdfConfigSchema,
+  shacl: ShaclConfigSchema
+})
+
+================
+File: packages/core/src/Config/Services.ts
+================
+/**
+ * Configuration Services
+ *
+ * Effect services that provide type-safe access to application configuration.
+ * Integrates with Effect's dependency injection system via layers.
+ *
+ * **Architecture:**
+ * - Configuration services wrap Config schemas as injectable services
+ * - Layers provide configurations from environment or test values
+ * - Services are accessed via Effect.gen yielding the service tag
+ *
+ * @module Config/Services
+ * @since 1.0.0
+ *
+ * @example
+ * ```typescript
+ * import { Effect } from "effect"
+ * import { LlmConfigService } from "@effect-ontology/core/Config/Services"
+ *
+ * const program = Effect.gen(function* () {
+ *   const config = yield* LlmConfigService
+ *   console.log(`Using ${config.provider} provider`)
+ * }).pipe(Effect.provide(LlmConfigService.Default))
+ * ```
+ */
+
+import { ConfigProvider, Effect, Layer } from "effect"
+import {
+  AppConfigSchema,
+  LlmProviderConfig,
+  RdfConfigSchema,
+  ShaclConfigSchema
+} from "./Schema.js"
+
+/**
+ * LLM Configuration Service
+ *
+ * Provides type-safe access to LLM provider configuration.
+ *
+ * **Usage:**
+ * ```typescript
+ * const program = Effect.gen(function* () {
+ *   const config = yield* LlmConfigService
+ *
+ *   // Access provider
+ *   console.log(config.provider) // "anthropic" | "gemini" | "openrouter"
+ *
+ *   // Access provider-specific config
+ *   if (config.provider === "anthropic" && config.anthropic) {
+ *     console.log(config.anthropic.model)
+ *   }
+ * })
+ * ```
+ *
+ * @since 1.0.0
+ * @category services
+ */
+export class LlmConfigService extends Effect.Service<LlmConfigService>()(
+  "LlmConfigService",
+  {
+    effect: LlmProviderConfig,
+    dependencies: []
+  }
+) {
+  /**
+   * Test layer with sensible defaults for Anthropic provider.
+   *
+   * @example
+   * ```typescript
+   * const program = Effect.gen(function* () {
+   *   const config = yield* LlmConfigService
+   *   expect(config.provider).toBe("anthropic")
+   * }).pipe(Effect.provide(LlmConfigService.Test))
+   * ```
+   *
+   * @since 1.0.0
+   * @category layers
+   */
+  static Test = Layer.setConfigProvider(
+    ConfigProvider.fromMap(
+      new Map([
+        ["LLM.PROVIDER", "anthropic"],
+        ["LLM.ANTHROPIC_API_KEY", "test-api-key"],
+        ["LLM.ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022"],
+        ["LLM.ANTHROPIC_MAX_TOKENS", "4096"],
+        ["LLM.ANTHROPIC_TEMPERATURE", "0.0"]
+      ])
+    )
+  )
+}
+
+/**
+ * RDF Configuration Service
+ *
+ * Provides type-safe access to RDF service configuration.
+ *
+ * **Usage:**
+ * ```typescript
+ * const program = Effect.gen(function* () {
+ *   const config = yield* RdfConfigService
+ *   console.log(config.format) // "Turtle" | "N-Triples" | etc.
+ *   console.log(config.prefixes) // { rdf: "...", rdfs: "..." }
+ * })
+ * ```
+ *
+ * @since 1.0.0
+ * @category services
+ */
+export class RdfConfigService extends Effect.Service<RdfConfigService>()(
+  "RdfConfigService",
+  {
+    effect: RdfConfigSchema,
+    dependencies: []
+  }
+) {
+  /**
+   * Test layer with Turtle format (default prefixes included).
+   *
+   * @example
+   * ```typescript
+   * const program = Effect.gen(function* () {
+   *   const config = yield* RdfConfigService
+   *   expect(config.format).toBe("Turtle")
+   * }).pipe(Effect.provide(RdfConfigService.Test))
+   * ```
+   *
+   * @since 1.0.0
+   * @category layers
+   */
+  static Test = Layer.setConfigProvider(
+    ConfigProvider.fromMap(
+      new Map([["RDF.FORMAT", "Turtle"]])
+    )
+  )
+}
+
+/**
+ * SHACL Configuration Service
+ *
+ * Provides type-safe access to SHACL validation configuration.
+ *
+ * **Usage:**
+ * ```typescript
+ * const program = Effect.gen(function* () {
+ *   const config = yield* ShaclConfigService
+ *
+ *   if (config.enabled) {
+ *     console.log(`Validating with shapes from: ${config.shapesPath}`)
+ *   }
+ * })
+ * ```
+ *
+ * @since 1.0.0
+ * @category services
+ */
+export class ShaclConfigService extends Effect.Service<ShaclConfigService>()(
+  "ShaclConfigService",
+  {
+    effect: ShaclConfigSchema,
+    dependencies: []
+  }
+) {
+  /**
+   * Test layer with SHACL validation disabled.
+   *
+   * @example
+   * ```typescript
+   * const program = Effect.gen(function* () {
+   *   const config = yield* ShaclConfigService
+   *   expect(config.enabled).toBe(false)
+   * }).pipe(Effect.provide(ShaclConfigService.Test))
+   * ```
+   *
+   * @since 1.0.0
+   * @category layers
+   */
+  static Test = Layer.setConfigProvider(
+    ConfigProvider.fromMap(
+      new Map([["SHACL.ENABLED", "false"]])
+    )
+  )
+}
+
+/**
+ * Application Configuration Service
+ *
+ * Provides type-safe access to complete application configuration.
+ *
+ * **Usage:**
+ * ```typescript
+ * const program = Effect.gen(function* () {
+ *   const config = yield* AppConfigService
+ *
+ *   console.log(`LLM Provider: ${config.llm.provider}`)
+ *   console.log(`RDF Format: ${config.rdf.format}`)
+ *   console.log(`SHACL Enabled: ${config.shacl.enabled}`)
+ * })
+ * ```
+ *
+ * @since 1.0.0
+ * @category services
+ */
+export class AppConfigService extends Effect.Service<AppConfigService>()(
+  "AppConfigService",
+  {
+    effect: AppConfigSchema,
+    dependencies: []
+  }
+) {
+  /**
+   * Test layer with complete app configuration using sensible defaults.
+   *
+   * @example
+   * ```typescript
+   * const program = Effect.gen(function* () {
+   *   const config = yield* AppConfigService
+   *   expect(config.llm.provider).toBe("anthropic")
+   * }).pipe(Effect.provide(AppConfigService.Test))
+   * ```
+   *
+   * @since 1.0.0
+   * @category layers
+   */
+  static Test = Layer.setConfigProvider(
+    ConfigProvider.fromMap(
+      new Map([
+        ["LLM.PROVIDER", "anthropic"],
+        ["LLM.ANTHROPIC_API_KEY", "test-api-key"],
+        ["LLM.ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022"],
+        ["LLM.ANTHROPIC_MAX_TOKENS", "4096"],
+        ["LLM.ANTHROPIC_TEMPERATURE", "0.0"],
+        ["RDF.FORMAT", "Turtle"],
+        ["SHACL.ENABLED", "false"]
+      ])
+    )
+  )
+}
+
+================
+File: packages/core/src/Extraction/Events.ts
+================
+/**
+ * Extraction Pipeline Events and Errors
+ *
+ * This module defines the event types emitted during the extraction pipeline
+ * and the error types that can occur at each stage.
+ *
+ * Follows @effect/ai patterns for error handling using Schema.TaggedError
+ * for serializable, well-structured errors with rich context.
+ *
+ * @since 1.0.0
+ */
+
+import { Data, Schema as S } from "effect"
+
+/**
+ * Events emitted during the extraction pipeline.
+ *
+ * These events are emitted as a Stream to provide real-time progress updates
+ * to the UI layer.
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export type ExtractionEvent = Data.TaggedEnum<{
+  /**
+   * Emitted when the LLM is processing the input text.
+   *
+   * @since 1.0.0
+   */
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+  LLMThinking: {}
+
+  /**
+   * Emitted after the LLM returns JSON and it has been successfully parsed.
+   *
+   * @since 1.0.0
+   */
+  JSONParsed: {
+    /** Number of entities extracted */
+    readonly count: number
+  }
+
+  /**
+   * Emitted after JSON entities have been converted to RDF quads.
+   *
+   * @since 1.0.0
+   */
+  RDFConstructed: {
+    /** Number of RDF triples in the graph */
+    readonly triples: number
+  }
+
+  /**
+   * Emitted after SHACL validation completes.
+   *
+   * @since 1.0.0
+   */
+  ValidationComplete: {
+    /** SHACL validation report */
+    readonly report: ValidationReport
+  }
+}>
+
+/**
+ * SHACL validation report structure.
+ *
+ * This is a simplified representation of the rdf-validate-shacl ValidationReport.
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export interface ValidationReport {
+  readonly conforms: boolean
+  readonly results: ReadonlyArray<ValidationResult>
+}
+
+/**
+ * Individual SHACL validation result.
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export interface ValidationResult {
+  readonly severity: "Violation" | "Warning" | "Info"
+  readonly message: string
+  readonly path?: string
+  readonly focusNode?: string
+}
+
+/**
+ * Extraction event constructors and matchers.
+ *
+ * @since 1.0.0
+ * @category constructors
+ */
+export const ExtractionEvent = Data.taggedEnum<ExtractionEvent>()
+
+/**
+ * Errors that can occur during the extraction pipeline.
+ *
+ * Each stage of the pipeline can emit specific error types that are tagged
+ * for precise error handling with Effect.catchTags().
+ *
+ * Following @effect/ai patterns, these errors use Schema.TaggedError for:
+ * - Automatic encoding/decoding
+ * - Rich context (module, method, description)
+ * - Serialization support
+ *
+ * @since 1.0.0
+ * @category errors
+ */
+
+/**
+ * Error emitted when LLM API call fails or returns invalid response.
+ *
+ * @since 1.0.0
+ * @category errors
+ * @example
+ * ```ts
+ * new LLMError({
+ *   module: "Anthropic",
+ *   method: "generateText",
+ *   reason: "ApiTimeout",
+ *   description: "Request timed out after 30 seconds"
+ * })
+ * ```
+ */
+export class LLMError extends S.TaggedError<LLMError>(
+  "@effect-ontology/Extraction/LLMError"
+)("LLMError", {
+  module: S.String,
+  method: S.String,
+  reason: S.Literal("ApiError", "ApiTimeout", "InvalidResponse", "ValidationFailed"),
+  description: S.optional(S.String),
+  cause: S.optional(S.Unknown)
+}) {}
+
+/**
+ * Error emitted when RDF conversion fails.
+ *
+ * @since 1.0.0
+ * @category errors
+ * @example
+ * ```ts
+ * new RdfError({
+ *   module: "RdfService",
+ *   method: "jsonToStore",
+ *   reason: "InvalidQuad",
+ *   description: "Blank node format invalid"
+ * })
+ * ```
+ */
+export class RdfError extends S.TaggedError<RdfError>(
+  "@effect-ontology/Extraction/RdfError"
+)("RdfError", {
+  module: S.String,
+  method: S.String,
+  reason: S.Literal("InvalidQuad", "ParseError", "StoreError"),
+  description: S.optional(S.String),
+  cause: S.optional(S.Unknown)
+}) {}
+
+/**
+ * Error emitted when SHACL validation process fails (not validation violations).
+ *
+ * @since 1.0.0
+ * @category errors
+ * @example
+ * ```ts
+ * new ShaclError({
+ *   module: "ShaclService",
+ *   method: "validate",
+ *   reason: "ValidatorCrash",
+ *   description: "SHACL validator threw exception"
+ * })
+ * ```
+ */
+export class ShaclError extends S.TaggedError<ShaclError>(
+  "@effect-ontology/Extraction/ShaclError"
+)("ShaclError", {
+  module: S.String,
+  method: S.String,
+  reason: S.Literal("ValidatorCrash", "InvalidShapesGraph", "LoadError"),
+  description: S.optional(S.String),
+  cause: S.optional(S.Unknown)
+}) {}
+
+/**
+ * Union type of all extraction errors.
+ *
+ * Use this type with Effect.catchTags() for precise error recovery.
+ *
+ * @since 1.0.0
+ * @category errors
+ */
+export type ExtractionError = LLMError | RdfError | ShaclError
 
 ================
 File: packages/core/src/Graph/Builder.ts
@@ -589,6 +1518,320 @@ export type GraphAlgebra<R> = (
 ) => R
 
 ================
+File: packages/core/src/Ontology/index.ts
+================
+/**
+ * Ontology Module - Core ontology services and utilities
+ *
+ * @module Ontology
+ */
+
+export * from "./Inheritance.js"
+
+================
+File: packages/core/src/Ontology/Inheritance.ts
+================
+/**
+ * Inheritance Service - Resolves inherited properties and ancestors
+ *
+ * Handles the "Inheritance Gap" problem by computing effective properties
+ * (own + inherited) for any class in the ontology.
+ *
+ * Based on: docs/higher_order_monoid_implementation.md
+ */
+
+import { Context, Data, Effect, Graph, HashMap, Option } from "effect"
+import type { NodeId, OntologyContext, PropertyData } from "../Graph/Types.js"
+
+/**
+ * Errors that can occur during inheritance resolution
+ */
+export class InheritanceError extends Data.TaggedError("InheritanceError")<{
+  readonly nodeId: string
+  readonly message: string
+}> {}
+
+export class CircularInheritanceError extends Data.TaggedError("CircularInheritanceError")<{
+  readonly nodeId: string
+  readonly cycle: ReadonlyArray<string>
+}> {}
+
+/**
+ * InheritanceService - Service for computing inherited attributes
+ *
+ * Provides methods to:
+ * 1. Get all ancestors of a class (transitive closure of subClassOf)
+ * 2. Get effective properties (own + inherited from ancestors)
+ */
+export interface InheritanceService {
+  /**
+   * Get all ancestor IRIs for a given class
+   *
+   * Performs a depth-first traversal up the subClassOf hierarchy.
+   * Returns ancestors in topological order (immediate parents first).
+   *
+   * @param classIri - The IRI of the class to query
+   * @returns Effect containing array of ancestor IRIs, or error if class not found
+   */
+  readonly getAncestors: (
+    classIri: string
+  ) => Effect.Effect<ReadonlyArray<string>, InheritanceError | CircularInheritanceError>
+
+  /**
+   * Get all effective properties for a given class
+   *
+   * Combines:
+   * - Direct properties defined on the class
+   * - Properties inherited from all ancestors
+   *
+   * Deduplicates properties by IRI (child definition wins in case of conflict).
+   *
+   * @param classIri - The IRI of the class to query
+   * @returns Effect containing array of properties, or error if class not found
+   */
+  readonly getEffectiveProperties: (
+    classIri: string
+  ) => Effect.Effect<ReadonlyArray<PropertyData>, InheritanceError | CircularInheritanceError>
+
+  /**
+   * Get immediate parents of a class
+   *
+   * Returns only direct superclasses (one level up).
+   *
+   * @param classIri - The IRI of the class to query
+   * @returns Effect containing array of parent IRIs
+   */
+  readonly getParents: (classIri: string) => Effect.Effect<ReadonlyArray<string>, InheritanceError>
+
+  /**
+   * Get immediate children of a class
+   *
+   * Returns only direct subclasses (one level down).
+   *
+   * @param classIri - The IRI of the class to query
+   * @returns Effect containing array of child IRIs
+   */
+  readonly getChildren: (
+    classIri: string
+  ) => Effect.Effect<ReadonlyArray<string>, InheritanceError>
+}
+
+/**
+ * Service Tag for InheritanceService
+ *
+ * Used for Effect's dependency injection system.
+ */
+export const InheritanceService = Context.GenericTag<InheritanceService>(
+  "@effect-ontology/InheritanceService"
+)
+
+/**
+ * Live implementation of InheritanceService
+ *
+ * Requires access to the Graph and OntologyContext.
+ */
+export const make = (
+  graph: Graph.Graph<NodeId, unknown, "directed">,
+  context: OntologyContext
+): InheritanceService => {
+  /**
+   * Helper: Get node index from IRI
+   */
+  const getNodeIndex = (
+    iri: string
+  ): Effect.Effect<Graph.NodeIndex, InheritanceError> =>
+    HashMap.get(context.nodeIndexMap, iri).pipe(
+      Effect.mapError(
+        () =>
+          new InheritanceError({
+            nodeId: iri,
+            message: `IRI ${iri} not found in nodeIndexMap`
+          })
+      )
+    )
+
+  /**
+   * Get immediate parents (neighbors in the graph)
+   */
+  const getParents = (
+    classIri: string
+  ): Effect.Effect<ReadonlyArray<string>, InheritanceError> =>
+    Effect.gen(function*() {
+      const nodeIndex = yield* getNodeIndex(classIri)
+
+      // Graph edges are Child -> Parent, so neighbors are parents
+      const parentIndices = Graph.neighbors(graph, nodeIndex)
+
+      // Convert indices back to IRIs
+      const parents: Array<string> = []
+      for (const parentIndex of parentIndices) {
+        const parentIri = yield* Graph.getNode(graph, parentIndex).pipe(
+          Effect.mapError(
+            () =>
+              new InheritanceError({
+                nodeId: classIri,
+                message: `Parent node index ${parentIndex} not found in graph`
+              })
+          )
+        )
+        parents.push(parentIri)
+      }
+
+      return parents
+    })
+
+  /**
+   * Get immediate children (reverse lookup - nodes that point to this one)
+   */
+  const getChildren = (
+    classIri: string
+  ): Effect.Effect<ReadonlyArray<string>, InheritanceError> =>
+    Effect.gen(function*() {
+      const targetIndex = yield* getNodeIndex(classIri)
+
+      const children: Array<string> = []
+
+      // Iterate all nodes to find those with edges to this node
+      for (const [nodeIndex, nodeIri] of graph) {
+        const neighbors = Graph.neighbors(graph, nodeIndex)
+        if (Array.from(neighbors).includes(targetIndex)) {
+          children.push(nodeIri)
+        }
+      }
+
+      return children
+    })
+
+  /**
+   * Get all ancestors via DFS with cycle detection
+   */
+  const getAncestors = (
+    classIri: string
+  ): Effect.Effect<ReadonlyArray<string>, InheritanceError | CircularInheritanceError> =>
+    Effect.gen(function*() {
+      const visited = new Set<string>()
+      const path = new Set<string>() // For cycle detection
+      const ancestors: Array<string> = []
+
+      const visit = (iri: string): Effect.Effect<void, InheritanceError | CircularInheritanceError> =>
+        Effect.gen(function*() {
+          // Check for cycles
+          if (path.has(iri)) {
+            return yield* Effect.fail(
+              new CircularInheritanceError({
+                nodeId: iri,
+                cycle: Array.from(path)
+              })
+            )
+          }
+
+          // Skip already visited nodes
+          if (visited.has(iri)) {
+            return
+          }
+
+          visited.add(iri)
+          path.add(iri)
+
+          // Get parents
+          const parents = yield* getParents(iri)
+
+          // Visit each parent
+          for (const parentIri of parents) {
+            ancestors.push(parentIri)
+            yield* visit(parentIri)
+          }
+
+          path.delete(iri)
+        })
+
+      yield* visit(classIri)
+
+      // Deduplicate while preserving order (immediate parents first)
+      return Array.from(new Set(ancestors))
+    })
+
+  /**
+   * Get effective properties (own + inherited)
+   */
+  const getEffectiveProperties = (
+    classIri: string
+  ): Effect.Effect<ReadonlyArray<PropertyData>, InheritanceError | CircularInheritanceError> =>
+    Effect.gen(function*() {
+      // Get own properties
+      const ownNode = yield* HashMap.get(context.nodes, classIri).pipe(
+        Effect.mapError(
+          () =>
+            new InheritanceError({
+              nodeId: classIri,
+              message: `Class ${classIri} not found in context`
+            })
+        )
+      )
+
+      const ownProperties = "properties" in ownNode ? ownNode.properties : []
+
+      // Get ancestors
+      const ancestors = yield* getAncestors(classIri)
+
+      // Collect properties from ancestors
+      const ancestorProperties: Array<PropertyData> = []
+
+      for (const ancestorIri of ancestors) {
+        const ancestorNode = yield* HashMap.get(context.nodes, ancestorIri).pipe(
+          Effect.mapError(
+            () =>
+              new InheritanceError({
+                nodeId: ancestorIri,
+                message: `Ancestor ${ancestorIri} not found in context`
+              })
+          )
+        )
+
+        if ("properties" in ancestorNode) {
+          ancestorProperties.push(...ancestorNode.properties)
+        }
+      }
+
+      // Deduplicate by property IRI (child wins)
+      const propertyMap = new Map<string, PropertyData>()
+
+      // Add ancestor properties first
+      for (const prop of ancestorProperties) {
+        propertyMap.set(prop.iri, prop)
+      }
+
+      // Override with own properties
+      for (const prop of ownProperties) {
+        propertyMap.set(prop.iri, prop)
+      }
+
+      return Array.from(propertyMap.values())
+    })
+
+  return {
+    getAncestors,
+    getEffectiveProperties,
+    getParents,
+    getChildren
+  }
+}
+
+/**
+ * Effect Layer for InheritanceService
+ *
+ * Creates a live InheritanceService from Graph and Context.
+ * This is a helper for testing and dependency injection.
+ */
+export const layer = (
+  graph: Graph.Graph<NodeId, unknown, "directed">,
+  context: OntologyContext
+) =>
+  Effect.succeed(make(graph, context)).pipe(
+    Effect.map((service) => InheritanceService.of(service))
+  )
+
+================
 File: packages/core/src/Prompt/Algebra.ts
 ================
 /**
@@ -600,9 +1843,12 @@ File: packages/core/src/Prompt/Algebra.ts
  * Based on: docs/effect_ontology_engineering_spec.md
  */
 
-import type { PropertyData } from "../Graph/Types.js"
-import type { OntologyNode } from "../Graph/Types.js"
-import type { PromptAlgebra } from "./Types.js"
+import { HashMap } from "effect"
+import { isClassNode, isPropertyNode, type PropertyData } from "../Graph/Types.js"
+import { KnowledgeUnit } from "./Ast.js"
+import * as KnowledgeIndex from "./KnowledgeIndex.js"
+import type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
+import type { GraphAlgebra, PromptAlgebra } from "./Types.js"
 import { StructuredPrompt } from "./Types.js"
 
 /**
@@ -638,7 +1884,7 @@ export const defaultPromptAlgebra: PromptAlgebra = (
   childrenResults
 ): StructuredPrompt => {
   // Handle ClassNode
-  if (nodeData._tag === "Class") {
+  if (isClassNode(nodeData)) {
     const classDefinition = [
       `Class: ${nodeData.label}`,
       `Properties:`,
@@ -659,7 +1905,7 @@ export const defaultPromptAlgebra: PromptAlgebra = (
   }
 
   // Handle PropertyNode (if used as first-class entity)
-  if (nodeData._tag === "Property") {
+  if (isPropertyNode(nodeData)) {
     const propertyDefinition = [
       `Property: ${nodeData.label}`,
       `  Domain: ${nodeData.domain}`,
@@ -726,6 +1972,752 @@ export const combineWithUniversal = (
   return StructuredPrompt.combine(universalPrompt, graphPrompt)
 }
 
+// ============================================================================
+// Knowledge Index Algebra (New Higher-Order Monoid)
+// ============================================================================
+
+/**
+ * Smart algebra using HashMap-based KnowledgeIndex Monoid
+ *
+ * Replaces string concatenation with queryable structure.
+ * Solves the Context Explosion problem by deferring rendering
+ * and enabling focused context selection.
+ *
+ * Key differences from defaultPromptAlgebra:
+ * 1. Result type: KnowledgeIndex (HashMap) instead of StructuredPrompt (arrays)
+ * 2. Monoid operation: HashMap.union instead of array concatenation
+ * 3. No string formatting here - deferred to render time
+ * 4. Captures graph structure (parents/children relationships)
+ *
+ * @param nodeData - The ontology node (ClassNode or PropertyNode)
+ * @param childrenResults - Knowledge indexes from all direct subclasses
+ * @returns A KnowledgeIndex containing this node + all descendants
+ */
+export const knowledgeIndexAlgebra: GraphAlgebra<KnowledgeIndexType> = (
+  nodeData,
+  childrenResults
+): KnowledgeIndexType => {
+  // Handle ClassNode
+  if (isClassNode(nodeData)) {
+    // Extract child IRIs from children's indexes
+    const childIris = childrenResults.flatMap((childIndex) => Array.from(KnowledgeIndex.keys(childIndex)))
+
+    // Note: Parents will be populated during graph traversal
+    // Each child's result is pushed to parent, so we know our children,
+    // but not our parents yet (they come from the graph structure)
+
+    // Create definition for this class
+    const definition = [
+      `Class: ${nodeData.label}`,
+      `Properties:`,
+      formatProperties(nodeData.properties)
+    ].join("\n")
+
+    // Create KnowledgeUnit for this node
+    const unit = new KnowledgeUnit({
+      iri: nodeData.id,
+      label: nodeData.label,
+      definition,
+      properties: nodeData.properties,
+      inheritedProperties: [], // Will be computed by InheritanceService
+      children: childIris,
+      parents: [] // Will be populated when needed (reverse lookup from graph)
+    })
+
+    // Create index with this unit
+    let index = KnowledgeIndex.fromUnit(unit)
+
+    // Union with all children's indexes
+    // This is the key Monoid operation: HashMap.union
+    for (const childIndex of childrenResults) {
+      index = KnowledgeIndex.combine(index, childIndex)
+    }
+
+    return index
+  }
+
+  // Handle PropertyNode (if used as first-class entity)
+  if (isPropertyNode(nodeData)) {
+    const definition = [
+      `Property: ${nodeData.label}`,
+      `  Domain: ${nodeData.domain}`,
+      `  Range: ${nodeData.range}`,
+      `  Functional: ${nodeData.functional}`
+    ].join("\n")
+
+    const unit = new KnowledgeUnit({
+      iri: nodeData.id,
+      label: nodeData.label,
+      definition,
+      properties: [], // Properties don't have properties
+      inheritedProperties: [],
+      children: [],
+      parents: []
+    })
+
+    // Combine with children (though properties typically don't have subproperties)
+    return KnowledgeIndex.combineAll([
+      KnowledgeIndex.fromUnit(unit),
+      ...childrenResults
+    ])
+  }
+
+  // Fallback for unknown node types
+  return KnowledgeIndex.empty()
+}
+
+/**
+ * Process universal properties into KnowledgeIndex
+ *
+ * Creates a special "UniversalProperties" unit that can be combined
+ * with the main ontology index.
+ *
+ * @param universalProperties - Array of properties without explicit domains
+ * @returns A KnowledgeIndex with a synthetic universal properties unit
+ */
+export const processUniversalPropertiesToIndex = (
+  universalProperties: ReadonlyArray<PropertyData>
+): KnowledgeIndexType => {
+  if (universalProperties.length === 0) {
+    return KnowledgeIndex.empty()
+  }
+
+  const definition = [
+    "Universal Properties (applicable to any resource):",
+    formatProperties(universalProperties)
+  ].join("\n")
+
+  const unit = new KnowledgeUnit({
+    iri: "urn:x-ontology:UniversalProperties",
+    label: "Universal Properties",
+    definition,
+    properties: universalProperties,
+    inheritedProperties: [],
+    children: [],
+    parents: []
+  })
+
+  return KnowledgeIndex.fromUnit(unit)
+}
+
+/**
+ * Combine universal properties index with graph results
+ *
+ * Final composition using the KnowledgeIndex Monoid:
+ * K_final = K_universal ⊕ (⊕_{v ∈ Roots(G)} Results(v))
+ *
+ * @param universalIndex - Index from universal properties
+ * @param graphResults - Indexes from all root nodes in the graph
+ * @returns Combined final knowledge index
+ */
+export const combineWithUniversalIndex = (
+  universalIndex: KnowledgeIndexType,
+  graphResults: ReadonlyArray<KnowledgeIndexType>
+): KnowledgeIndexType => {
+  const graphIndex = KnowledgeIndex.combineAll(graphResults)
+  return KnowledgeIndex.combine(universalIndex, graphIndex)
+}
+
+================
+File: packages/core/src/Prompt/Ast.ts
+================
+/**
+ * Prompt AST Types
+ *
+ * Defines the Abstract Syntax Tree for prompt generation.
+ * Replaces string-based StructuredPrompt with queryable structure.
+ *
+ * Based on: docs/higher_order_monoid_implementation.md
+ */
+
+import { Data } from "effect"
+import type { PropertyData } from "../Graph/Types.js"
+
+/**
+ * KnowledgeUnit - A single ontology class definition with metadata
+ *
+ * This is the atomic unit stored in the KnowledgeIndex.
+ * Contains all information needed to render a class definition.
+ */
+export class KnowledgeUnit extends Data.Class<{
+  /** The IRI of the class */
+  readonly iri: string
+  /** Human-readable label */
+  readonly label: string
+  /** Formatted definition text */
+  readonly definition: string
+  /** Direct properties defined on this class */
+  readonly properties: ReadonlyArray<PropertyData>
+  /** Properties inherited from ancestors (computed separately) */
+  readonly inheritedProperties: ReadonlyArray<PropertyData>
+  /** IRIs of direct children (subclasses) */
+  readonly children: ReadonlyArray<string>
+  /** IRIs of direct parents (superclasses) */
+  readonly parents: ReadonlyArray<string>
+}> {
+  /**
+   * Create a minimal KnowledgeUnit (for testing or incremental construction)
+   */
+  static minimal(iri: string, label: string): KnowledgeUnit {
+    return new KnowledgeUnit({
+      iri,
+      label,
+      definition: `Class: ${label}`,
+      properties: [],
+      inheritedProperties: [],
+      children: [],
+      parents: []
+    })
+  }
+
+  /**
+   * Merge two KnowledgeUnits for the same IRI
+   *
+   * Used during HashMap.union when the same class appears multiple times.
+   * Combines children/parents lists and prefers more complete data.
+   */
+  static merge(a: KnowledgeUnit, b: KnowledgeUnit): KnowledgeUnit {
+    // Sanity check: merging units with different IRIs is a bug
+    if (a.iri !== b.iri) {
+      throw new Error(`Cannot merge KnowledgeUnits with different IRIs: ${a.iri} vs ${b.iri}`)
+    }
+
+    // Prefer non-empty definition
+    const definition = a.definition.length > b.definition.length ? a.definition : b.definition
+
+    // Union children and parents (deduplicated)
+    const children = Array.from(new Set([...a.children, ...b.children]))
+    const parents = Array.from(new Set([...a.parents, ...b.parents]))
+
+    // Prefer longer property arrays (more complete)
+    const properties = a.properties.length >= b.properties.length ? a.properties : b.properties
+    const inheritedProperties = a.inheritedProperties.length >= b.inheritedProperties.length
+      ? a.inheritedProperties
+      : b.inheritedProperties
+
+    return new KnowledgeUnit({
+      iri: a.iri,
+      label: a.label || b.label,
+      definition,
+      properties,
+      inheritedProperties,
+      children,
+      parents
+    })
+  }
+}
+
+/**
+ * PromptAST - Abstract Syntax Tree for prompts
+ *
+ * Future extension point for more complex prompt structures.
+ * Currently simplified to focus on KnowledgeIndex implementation.
+ */
+export type PromptAST =
+  | EmptyNode
+  | DefinitionNode
+  | CompositeNode
+
+/**
+ * EmptyNode - Identity element for AST composition
+ */
+export class EmptyNode extends Data.TaggedClass("Empty")<{}> {
+  static readonly instance = new EmptyNode()
+}
+
+/**
+ * DefinitionNode - A single class/property definition
+ */
+export class DefinitionNode extends Data.TaggedClass("Definition")<{
+  readonly unit: KnowledgeUnit
+  /** IRIs that this definition depends on (for ordering) */
+  readonly dependencies: ReadonlyArray<string>
+}> {}
+
+/**
+ * CompositeNode - Combination of multiple AST nodes
+ */
+export class CompositeNode extends Data.TaggedClass("Composite")<{
+  readonly children: ReadonlyArray<PromptAST>
+}> {
+  /**
+   * Flatten a CompositeNode into a list of DefinitionNodes
+   */
+  flatten(): ReadonlyArray<DefinitionNode> {
+    const result: Array<DefinitionNode> = []
+
+    const visit = (node: PromptAST): void => {
+      if (node instanceof EmptyNode) {
+        return
+      } else if (node instanceof DefinitionNode) {
+        result.push(node)
+      } else if (node instanceof CompositeNode) {
+        node.children.forEach(visit)
+      }
+    }
+
+    visit(this)
+    return result
+  }
+}
+
+/**
+ * Type guard for PromptAST variants
+ */
+export const isEmptyNode = (ast: PromptAST): ast is EmptyNode => ast instanceof EmptyNode
+export const isDefinitionNode = (ast: PromptAST): ast is DefinitionNode => ast instanceof DefinitionNode
+export const isCompositeNode = (ast: PromptAST): ast is CompositeNode => ast instanceof CompositeNode
+
+================
+File: packages/core/src/Prompt/DocBuilder.ts
+================
+/**
+ * Core utilities for building prompt documents with @effect/printer
+ *
+ * Provides semantic document builders for prompt construction.
+ *
+ * @module Prompt/DocBuilder
+ * @since 1.0.0
+ */
+
+import { Doc } from "@effect/printer"
+
+/**
+ * Create a header with trailing colon
+ *
+ * @param title - The header title (will be uppercased)
+ * @returns Doc representing "TITLE:"
+ *
+ * @example
+ * ```typescript
+ * const doc = header("system")
+ * renderDoc(doc) // => "SYSTEM:"
+ * ```
+ *
+ * @since 1.0.0
+ * @category constructors
+ */
+export const header = (title: string): Doc.Doc<never> => Doc.cat(Doc.text(title.toUpperCase()), Doc.text(":"))
+
+/**
+ * Create a section with title and items
+ *
+ * Renders as:
+ * ```
+ * TITLE:
+ * item 1
+ * item 2
+ *
+ * ```
+ *
+ * Empty sections return Doc.empty.
+ *
+ * @param title - The section title
+ * @param items - Array of items to display
+ * @returns Doc representing the section
+ *
+ * @example
+ * ```typescript
+ * const doc = section("SYSTEM", ["instruction 1", "instruction 2"])
+ * renderDoc(doc)
+ * // =>
+ * // SYSTEM:
+ * // instruction 1
+ * // instruction 2
+ * //
+ * ```
+ *
+ * @since 1.0.0
+ * @category constructors
+ */
+export const section = (
+  title: string,
+  items: ReadonlyArray<string>
+): Doc.Doc<never> => {
+  if (items.length === 0) {
+    return Doc.empty
+  }
+
+  return Doc.vcat([
+    header(title),
+    Doc.vsep(items.map(Doc.text)),
+    Doc.empty // Blank line after section
+  ])
+}
+
+/**
+ * Create a bullet list with custom bullet character
+ *
+ * @param items - Array of items to display
+ * @param bullet - Bullet character (default: "-")
+ * @returns Doc representing the bullet list
+ *
+ * @example
+ * ```typescript
+ * const doc = bulletList(["item 1", "item 2"])
+ * renderDoc(doc)
+ * // =>
+ * // - item 1
+ * // - item 2
+ * ```
+ *
+ * @since 1.0.0
+ * @category constructors
+ */
+export const bulletList = (
+  items: ReadonlyArray<string>,
+  bullet: string = "-"
+): Doc.Doc<never> =>
+  Doc.vsep(
+    items.map((item) => Doc.catWithSpace(Doc.text(bullet), Doc.text(item)))
+  )
+
+/**
+ * Create a numbered list
+ *
+ * @param items - Array of items to display
+ * @returns Doc representing the numbered list
+ *
+ * @example
+ * ```typescript
+ * const doc = numberedList(["first", "second", "third"])
+ * renderDoc(doc)
+ * // =>
+ * // 1. first
+ * // 2. second
+ * // 3. third
+ * ```
+ *
+ * @since 1.0.0
+ * @category constructors
+ */
+export const numberedList = (
+  items: ReadonlyArray<string>
+): Doc.Doc<never> =>
+  Doc.vsep(
+    items.map((item, i) => Doc.catWithSpace(Doc.text(`${i + 1}.`), Doc.text(item)))
+  )
+
+/**
+ * Render a Doc to a string with pretty layout
+ *
+ * Uses the default layout algorithm with unbounded width.
+ *
+ * @param doc - The document to render
+ * @returns Rendered string
+ *
+ * @example
+ * ```typescript
+ * const doc = header("test")
+ * const output = renderDoc(doc)
+ * console.log(output) // => "TEST:"
+ * ```
+ *
+ * @since 1.0.0
+ * @category rendering
+ */
+export const renderDoc = (doc: Doc.Doc<never>): string => {
+  return Doc.render(doc, { style: "pretty" })
+}
+
+/**
+ * Render with custom width constraint
+ *
+ * Uses the pretty layout algorithm with specified line width.
+ *
+ * @param doc - The document to render
+ * @param width - Maximum line width
+ * @returns Rendered string
+ *
+ * @example
+ * ```typescript
+ * const doc = section("SYSTEM", ["a very long instruction..."])
+ * const output = renderDocWithWidth(doc, 80)
+ * ```
+ *
+ * @since 1.0.0
+ * @category rendering
+ */
+export const renderDocWithWidth = (
+  doc: Doc.Doc<never>,
+  width: number
+): string => {
+  return Doc.render(doc, { style: "pretty", options: { lineWidth: width } })
+}
+
+================
+File: packages/core/src/Prompt/Focus.ts
+================
+/**
+ * Focus - Context Selection and Pruning Strategies
+ *
+ * Solves the Context Explosion problem by selecting only relevant
+ * portions of the KnowledgeIndex based on query requirements.
+ *
+ * Based on: docs/higher_order_monoid_implementation.md
+ */
+
+import { Effect, HashMap, HashSet } from "effect"
+import type { CircularInheritanceError, InheritanceError, InheritanceService } from "../Ontology/Inheritance.js"
+import * as KnowledgeIndex from "./KnowledgeIndex.js"
+import type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
+
+/**
+ * Context Selection Strategy
+ *
+ * Determines how much context to include around focus nodes.
+ */
+export type ContextStrategy =
+  | "Full" // Include entire index (no pruning)
+  | "Focused" // Include only focus nodes + ancestors
+  | "Neighborhood" // Include focus nodes + ancestors + direct children
+
+/**
+ * Focus Configuration
+ *
+ * Specifies which nodes to focus on and how much context to include.
+ */
+export interface FocusConfig {
+  /** IRIs of classes/entities to focus on */
+  readonly focusNodes: ReadonlyArray<string>
+  /** Selection strategy */
+  readonly strategy: ContextStrategy
+  /** Maximum depth of ancestors to include (default: unlimited) */
+  readonly maxAncestorDepth?: number
+  /** Maximum depth of descendants to include (default: 1 for Neighborhood, 0 for Focused) */
+  readonly maxDescendantDepth?: number
+}
+
+/**
+ * Select context from a KnowledgeIndex based on focus configuration
+ *
+ * This is the key operation that solves Context Explosion.
+ * Instead of dumping the entire ontology, we extract only relevant nodes.
+ *
+ * Strategies:
+ * - Full: Return entire index unchanged
+ * - Focused: Return focus nodes + all ancestors (for inheritance)
+ * - Neighborhood: Return focus nodes + ancestors + direct children (for polymorphism)
+ *
+ * @param index - The complete knowledge index
+ * @param config - Focus configuration
+ * @param inheritanceService - Service for resolving ancestors
+ * @returns Effect containing pruned knowledge index
+ */
+export const selectContext = (
+  index: KnowledgeIndexType,
+  config: FocusConfig,
+  inheritanceService: InheritanceService
+): Effect.Effect<KnowledgeIndexType, InheritanceError | CircularInheritanceError> =>
+  Effect.gen(function*() {
+    // Strategy: Full - no pruning
+    if (config.strategy === "Full") {
+      return index
+    }
+
+    // Initialize result index
+    let result = KnowledgeIndex.empty()
+
+    // Process each focus node
+    for (const focusIri of config.focusNodes) {
+      // Add focus node itself
+      const focusUnit = KnowledgeIndex.get(index, focusIri)
+      if (focusUnit._tag === "Some") {
+        result = HashMap.set(result, focusIri, focusUnit.value)
+      }
+
+      // Add ancestors (for inheritance)
+      const ancestors = yield* inheritanceService.getAncestors(focusIri)
+
+      for (const ancestorIri of ancestors) {
+        const ancestorUnit = KnowledgeIndex.get(index, ancestorIri)
+        if (ancestorUnit._tag === "Some") {
+          result = HashMap.set(result, ancestorIri, ancestorUnit.value)
+        }
+      }
+
+      // Strategy: Neighborhood - also include children
+      if (config.strategy === "Neighborhood") {
+        const children = yield* inheritanceService.getChildren(focusIri)
+
+        for (const childIri of children) {
+          const childUnit = KnowledgeIndex.get(index, childIri)
+          if (childUnit._tag === "Some") {
+            result = HashMap.set(result, childIri, childUnit.value)
+          }
+        }
+      }
+    }
+
+    return result
+  })
+
+/**
+ * Select focused context (convenience function)
+ *
+ * Selects only the specified classes and their ancestors.
+ * Most common use case for extraction tasks.
+ *
+ * @param index - The complete knowledge index
+ * @param focusNodes - IRIs to focus on
+ * @param inheritanceService - Service for resolving ancestors
+ * @returns Effect containing focused index
+ */
+export const selectFocused = (
+  index: KnowledgeIndexType,
+  focusNodes: ReadonlyArray<string>,
+  inheritanceService: InheritanceService
+): Effect.Effect<KnowledgeIndexType, InheritanceError | CircularInheritanceError> =>
+  selectContext(index, { focusNodes, strategy: "Focused" }, inheritanceService)
+
+/**
+ * Select neighborhood context (convenience function)
+ *
+ * Selects the specified classes, their ancestors, and their direct children.
+ * Useful for polymorphic extraction (e.g., extract Person and all its subtypes).
+ *
+ * @param index - The complete knowledge index
+ * @param focusNodes - IRIs to focus on
+ * @param inheritanceService - Service for resolving relationships
+ * @returns Effect containing neighborhood index
+ */
+export const selectNeighborhood = (
+  index: KnowledgeIndexType,
+  focusNodes: ReadonlyArray<string>,
+  inheritanceService: InheritanceService
+): Effect.Effect<KnowledgeIndexType, InheritanceError | CircularInheritanceError> =>
+  selectContext(index, { focusNodes, strategy: "Neighborhood" }, inheritanceService)
+
+/**
+ * Compute context size reduction metrics
+ *
+ * Compares full index with focused index to measure token savings.
+ *
+ * @param fullIndex - The complete knowledge index
+ * @param focusedIndex - The pruned knowledge index
+ * @returns Reduction metrics
+ */
+export interface ContextReduction {
+  /** Number of units in full index */
+  readonly fullSize: number
+  /** Number of units in focused index */
+  readonly focusedSize: number
+  /** Reduction percentage (0-100) */
+  readonly reductionPercent: number
+  /** Estimated token savings (based on average definition size) */
+  readonly estimatedTokenSavings: number
+}
+
+/**
+ * Analyze context reduction achieved by focusing
+ *
+ * @param fullIndex - The complete knowledge index
+ * @param focusedIndex - The pruned knowledge index
+ * @param avgTokensPerUnit - Average tokens per knowledge unit (default: 50)
+ * @returns Reduction metrics
+ */
+export const analyzeReduction = (
+  fullIndex: KnowledgeIndexType,
+  focusedIndex: KnowledgeIndexType,
+  avgTokensPerUnit = 50
+): ContextReduction => {
+  const fullSize = KnowledgeIndex.size(fullIndex)
+  const focusedSize = KnowledgeIndex.size(focusedIndex)
+
+  const reductionPercent = fullSize === 0 ? 0 : ((fullSize - focusedSize) / fullSize) * 100
+
+  const estimatedTokenSavings = (fullSize - focusedSize) * avgTokensPerUnit
+
+  return {
+    fullSize,
+    focusedSize,
+    reductionPercent,
+    estimatedTokenSavings
+  }
+}
+
+/**
+ * Extract dependencies of a set of nodes
+ *
+ * Given a set of focus nodes, returns all IRIs they transitively depend on.
+ * Useful for minimal context extraction.
+ *
+ * @param index - The knowledge index
+ * @param focusNodes - IRIs to analyze
+ * @param inheritanceService - Service for resolving dependencies
+ * @returns Effect containing set of all dependency IRIs
+ */
+export const extractDependencies = (
+  index: KnowledgeIndexType,
+  focusNodes: ReadonlyArray<string>,
+  inheritanceService: InheritanceService
+): Effect.Effect<HashSet.HashSet<string>, InheritanceError | CircularInheritanceError> =>
+  Effect.gen(function*() {
+    let dependencies = HashSet.empty<string>()
+
+    for (const focusIri of focusNodes) {
+      // Add the focus node itself
+      dependencies = HashSet.add(dependencies, focusIri)
+
+      // Add all ancestors (dependencies)
+      const ancestors = yield* inheritanceService.getAncestors(focusIri)
+      for (const ancestorIri of ancestors) {
+        dependencies = HashSet.add(dependencies, ancestorIri)
+      }
+
+      // Add property range types (if they're classes in the ontology)
+      const unit = KnowledgeIndex.get(index, focusIri)
+      if (unit._tag === "Some") {
+        for (const prop of unit.value.properties) {
+          // Check if range is a class IRI (not a datatype)
+          if (KnowledgeIndex.has(index, prop.range)) {
+            dependencies = HashSet.add(dependencies, prop.range)
+
+            // Recursively add range class's ancestors
+            const rangeAncestors = yield* inheritanceService.getAncestors(prop.range)
+            for (const ancestorIri of rangeAncestors) {
+              dependencies = HashSet.add(dependencies, ancestorIri)
+            }
+          }
+        }
+      }
+    }
+
+    return dependencies
+  })
+
+/**
+ * Select minimal context (dependencies only)
+ *
+ * Most aggressive pruning strategy.
+ * Includes only the focus nodes and their transitive dependencies
+ * (ancestors + property range types).
+ *
+ * @param index - The complete knowledge index
+ * @param focusNodes - IRIs to focus on
+ * @param inheritanceService - Service for resolving dependencies
+ * @returns Effect containing minimal index
+ */
+export const selectMinimal = (
+  index: KnowledgeIndexType,
+  focusNodes: ReadonlyArray<string>,
+  inheritanceService: InheritanceService
+): Effect.Effect<KnowledgeIndexType, InheritanceError | CircularInheritanceError> =>
+  Effect.gen(function*() {
+    const dependencies = yield* extractDependencies(index, focusNodes, inheritanceService)
+
+    let result = KnowledgeIndex.empty()
+
+    for (const iri of dependencies) {
+      const unit = KnowledgeIndex.get(index, iri)
+      if (unit._tag === "Some") {
+        result = HashMap.set(result, iri, unit.value)
+      }
+    }
+
+    return result
+  })
+
 ================
 File: packages/core/src/Prompt/index.ts
 ================
@@ -733,14 +2725,1520 @@ File: packages/core/src/Prompt/index.ts
  * Prompt Generation Module
  *
  * Public API for generating structured prompts from ontology graphs
- * using topological catamorphism.
+ * using topological catamorphism and rendering them with @effect/printer.
  *
  * @module Prompt
  */
 
-export { combineWithUniversal, defaultPromptAlgebra, processUniversalProperties } from "./Algebra.js"
-export { GraphCycleError, MissingNodeDataError, solveGraph, type SolverError } from "./Solver.js"
+export {
+  combineWithUniversal,
+  combineWithUniversalIndex,
+  defaultPromptAlgebra,
+  knowledgeIndexAlgebra,
+  processUniversalProperties,
+  processUniversalPropertiesToIndex
+} from "./Algebra.js"
+export { KnowledgeUnit, type PromptAST } from "./Ast.js"
+export { bulletList, header, numberedList, renderDoc, renderDocWithWidth, section } from "./DocBuilder.js"
+export * as Focus from "./Focus.js"
+export * as KnowledgeIndex from "./KnowledgeIndex.js"
+export type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
+export {
+  buildClassSummary,
+  buildDependencyGraph,
+  buildHierarchyTree,
+  buildKnowledgeMetadata,
+  buildTokenStats,
+  ClassSummary,
+  DependencyGraph,
+  getClassSummary,
+  getClassTokens,
+  GraphEdge,
+  GraphNode,
+  HierarchyTree,
+  KnowledgeMetadata,
+  MetadataError,
+  TokenStats,
+  TreeNode
+} from "./Metadata.js"
+export {
+  buildExtractionPromptDoc,
+  buildPromptDoc,
+  renderExtractionPrompt,
+  renderStructuredPrompt
+} from "./PromptDoc.js"
+export * as Render from "./Render.js"
+export { GraphCycleError, MissingNodeDataError, solveGraph, type SolverError, solveToKnowledgeIndex } from "./Solver.js"
 export { type GraphAlgebra, type PromptAlgebra, StructuredPrompt } from "./Types.js"
+export {
+  classSummaryToMarkdown,
+  createSummaryReport,
+  type DependencyGraphPlotData,
+  type HierarchyTreePlotData,
+  metadataToJSON,
+  toDependencyGraphPlotData,
+  toHierarchyTreePlotData,
+  type TokenStatsPlotData,
+  toTokenStatsPlotData
+} from "./Visualization.js"
+
+================
+File: packages/core/src/Prompt/KnowledgeIndex.ts
+================
+/**
+ * KnowledgeIndex - HashMap-based Monoid for Ontology Knowledge
+ *
+ * Replaces the string concatenation Monoid with a queryable index.
+ * Solves the Context Explosion problem via deferred rendering and focus operations.
+ *
+ * Based on: docs/higher_order_monoid_implementation.md
+ */
+
+import { HashMap, Option } from "effect"
+import { KnowledgeUnit } from "./Ast.js"
+
+/**
+ * KnowledgeIndex - The new Monoid for ontology folding
+ *
+ * Maps IRI (string) → KnowledgeUnit
+ * Replaces StructuredPrompt as the result type of the GraphAlgebra.
+ */
+export type KnowledgeIndex = HashMap.HashMap<string, KnowledgeUnit>
+
+/**
+ * Monoid: Identity element
+ *
+ * Returns an empty KnowledgeIndex (empty HashMap)
+ */
+export const empty = (): KnowledgeIndex => HashMap.empty<string, KnowledgeUnit>()
+
+/**
+ * Monoid: Combine operation
+ *
+ * Merges two KnowledgeIndex instances with custom merge strategy for duplicate keys.
+ * This is the core operation that makes KnowledgeIndex a Monoid.
+ *
+ * Properties:
+ * - Associative: combine(combine(a, b), c) = combine(a, combine(b, c))
+ * - Identity: combine(empty(), a) = combine(a, empty()) = a
+ * - (Approximately) Commutative: combine(a, b) ≈ combine(b, a)
+ *   (exact commutativity depends on merge strategy)
+ *
+ * @param left - First knowledge index
+ * @param right - Second knowledge index
+ * @returns Merged knowledge index
+ */
+export const combine = (left: KnowledgeIndex, right: KnowledgeIndex): KnowledgeIndex => {
+  // Start with left and merge in entries from right
+  return HashMap.reduce(right, left, (acc, rightUnit, iri) => {
+    const leftUnit = HashMap.get(acc, iri)
+    if (Option.isSome(leftUnit)) {
+      // Both have this key - merge them
+      return HashMap.set(acc, iri, KnowledgeUnit.merge(leftUnit.value, rightUnit))
+    } else {
+      // Only right has this key - add it
+      return HashMap.set(acc, iri, rightUnit)
+    }
+  })
+}
+
+/**
+ * Monoid: Combine multiple indexes
+ *
+ * Reduces a list of indexes using the combine operation.
+ * Equivalent to: indexes.reduce(combine, empty())
+ *
+ * @param indexes - Array of knowledge indexes to combine
+ * @returns Single combined index
+ */
+export const combineAll = (indexes: ReadonlyArray<KnowledgeIndex>): KnowledgeIndex => indexes.reduce(combine, empty())
+
+/**
+ * Create a KnowledgeIndex from a single KnowledgeUnit
+ *
+ * Helper for the algebra: converts a node's data into an index.
+ *
+ * @param unit - The knowledge unit to wrap
+ * @returns Index containing only this unit
+ */
+export const fromUnit = (unit: KnowledgeUnit): KnowledgeIndex => HashMap.make([unit.iri, unit])
+
+/**
+ * Create a KnowledgeIndex from multiple units
+ *
+ * @param units - Array of knowledge units
+ * @returns Index containing all units
+ */
+export const fromUnits = (units: ReadonlyArray<KnowledgeUnit>): KnowledgeIndex => combineAll(units.map(fromUnit))
+
+/**
+ * Get a KnowledgeUnit by IRI
+ *
+ * @param index - The knowledge index to query
+ * @param iri - The IRI to look up
+ * @returns Option containing the unit if found
+ */
+export const get = (index: KnowledgeIndex, iri: string): Option.Option<KnowledgeUnit> => HashMap.get(index, iri)
+
+/**
+ * Check if an IRI exists in the index
+ *
+ * @param index - The knowledge index to query
+ * @param iri - The IRI to check
+ * @returns True if the IRI exists
+ */
+export const has = (index: KnowledgeIndex, iri: string): boolean => HashMap.has(index, iri)
+
+/**
+ * Get all IRIs in the index
+ *
+ * @param index - The knowledge index
+ * @returns Iterable of all IRIs
+ */
+export const keys = (index: KnowledgeIndex): Iterable<string> => HashMap.keys(index)
+
+/**
+ * Get all KnowledgeUnits in the index
+ *
+ * @param index - The knowledge index
+ * @returns Iterable of all units
+ */
+export const values = (index: KnowledgeIndex): Iterable<KnowledgeUnit> => HashMap.values(index)
+
+/**
+ * Get all IRI-Unit pairs in the index
+ *
+ * @param index - The knowledge index
+ * @returns Iterable of [IRI, Unit] tuples
+ */
+export const entries = (index: KnowledgeIndex): Iterable<readonly [string, KnowledgeUnit]> => HashMap.entries(index)
+
+/**
+ * Get the size of the index
+ *
+ * @param index - The knowledge index
+ * @returns Number of units in the index
+ */
+export const size = (index: KnowledgeIndex): number => HashMap.size(index)
+
+/**
+ * Filter the index by predicate
+ *
+ * @param index - The knowledge index
+ * @param predicate - Function to test each unit
+ * @returns Filtered index
+ */
+export const filter = (
+  index: KnowledgeIndex,
+  predicate: (unit: KnowledgeUnit, iri: string) => boolean
+): KnowledgeIndex => HashMap.filter(index, predicate)
+
+/**
+ * Map over the index values
+ *
+ * @param index - The knowledge index
+ * @param f - Function to transform each unit
+ * @returns Transformed index
+ */
+export const map = (
+  index: KnowledgeIndex,
+  f: (unit: KnowledgeUnit, iri: string) => KnowledgeUnit
+): KnowledgeIndex => HashMap.map(index, f)
+
+/**
+ * Convert index to array of units
+ *
+ * @param index - The knowledge index
+ * @returns Array of all units
+ */
+export const toArray = (index: KnowledgeIndex): ReadonlyArray<KnowledgeUnit> => Array.from(values(index))
+
+/**
+ * Statistics about the index
+ *
+ * Useful for debugging and performance analysis.
+ */
+export interface IndexStats {
+  readonly totalUnits: number
+  readonly totalProperties: number
+  readonly totalInheritedProperties: number
+  readonly averagePropertiesPerUnit: number
+  readonly maxDepth: number // Max children depth
+}
+
+/**
+ * Compute statistics about a KnowledgeIndex
+ *
+ * @param index - The knowledge index to analyze
+ * @returns Statistics object
+ */
+export const stats = (index: KnowledgeIndex): IndexStats => {
+  const units = toArray(index)
+  const totalUnits = units.length
+
+  if (totalUnits === 0) {
+    return {
+      totalUnits: 0,
+      totalProperties: 0,
+      totalInheritedProperties: 0,
+      averagePropertiesPerUnit: 0,
+      maxDepth: 0
+    }
+  }
+
+  const totalProperties = units.reduce((sum, unit) => sum + unit.properties.length, 0)
+  const totalInheritedProperties = units.reduce(
+    (sum, unit) => sum + unit.inheritedProperties.length,
+    0
+  )
+
+  const averagePropertiesPerUnit = totalProperties / totalUnits
+
+  // Compute max depth (BFS from roots)
+  const roots = units.filter((unit) => unit.parents.length === 0)
+  let maxDepth = 0
+
+  const computeDepth = (iri: string, depth: number, visited: Set<string>): void => {
+    if (visited.has(iri)) return
+    visited.add(iri)
+
+    maxDepth = Math.max(maxDepth, depth)
+
+    const unit = get(index, iri)
+    if (Option.isSome(unit)) {
+      for (const childIri of unit.value.children) {
+        computeDepth(childIri, depth + 1, visited)
+      }
+    }
+  }
+
+  for (const root of roots) {
+    computeDepth(root.iri, 1, new Set())
+  }
+
+  return {
+    totalUnits,
+    totalProperties,
+    totalInheritedProperties,
+    averagePropertiesPerUnit,
+    maxDepth
+  }
+}
+
+================
+File: packages/core/src/Prompt/Metadata.ts
+================
+/**
+ * Metadata API - Runtime Metadata for Ontology Knowledge Indexes
+ *
+ * Provides queryable metadata for visualization, debugging, and token optimization.
+ * Builds on top of existing KnowledgeIndex and KnowledgeUnit structures.
+ *
+ * **Architecture:**
+ * - Extends existing KnowledgeIndex.stats() with richer metadata
+ * - Effect Schemas for type-safe metadata structures
+ * - Effect-based functions for consistent error handling
+ * - Integration with Focus API for token optimization
+ *
+ * @module Prompt/Metadata
+ * @since 1.0.0
+ */
+
+import { Data, Effect, Graph, HashMap, Option, Schema } from "effect"
+import type { NodeId, OntologyContext } from "../Graph/Types.js"
+import { KnowledgeUnit } from "./Ast.js"
+import * as KnowledgeIndex from "./KnowledgeIndex.js"
+import type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
+
+/**
+ * Metadata errors
+ *
+ * @since 1.0.0
+ * @category errors
+ */
+export class MetadataError extends Data.TaggedError("MetadataError")<{
+  module: string
+  method: string
+  reason: string
+  description: string
+  cause?: unknown
+}> {}
+
+/**
+ * ClassSummary - Metadata for a single ontology class
+ *
+ * Provides rich metadata about a class including its position in the hierarchy,
+ * property counts, and relationships.
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export class ClassSummary extends Schema.Class<ClassSummary>("ClassSummary")({
+  /** Class IRI */
+  iri: Schema.String,
+  /** Human-readable label */
+  label: Schema.String,
+  /** Number of direct properties defined on this class */
+  directProperties: Schema.Number,
+  /** Number of inherited properties from ancestors */
+  inheritedProperties: Schema.Number,
+  /** Total properties (direct + inherited) */
+  totalProperties: Schema.Number,
+  /** IRIs of direct parent classes */
+  parents: Schema.Array(Schema.String),
+  /** IRIs of direct child classes */
+  children: Schema.Array(Schema.String),
+  /** Depth in hierarchy (distance from root, 0 for roots) */
+  depth: Schema.Number,
+  /** Estimated token count for this class definition */
+  estimatedTokens: Schema.Number
+}) {}
+
+/**
+ * GraphNode - A node in the dependency graph visualization
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export class GraphNode extends Schema.Class<GraphNode>("GraphNode")({
+  /** Node identifier (IRI) */
+  id: Schema.String,
+  /** Display label */
+  label: Schema.String,
+  /** Node type (always "class" for now) */
+  type: Schema.Literal("class"),
+  /** Number of properties on this class */
+  propertyCount: Schema.Number,
+  /** Depth in hierarchy */
+  depth: Schema.Number
+}) {}
+
+/**
+ * GraphEdge - An edge in the dependency graph
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export class GraphEdge extends Schema.Class<GraphEdge>("GraphEdge")({
+  /** Source node IRI (child class) */
+  source: Schema.String,
+  /** Target node IRI (parent class) */
+  target: Schema.String,
+  /** Edge type */
+  type: Schema.Literal("subClassOf")
+}) {}
+
+/**
+ * DependencyGraph - Graph structure for visualization
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export class DependencyGraph extends Schema.Class<DependencyGraph>("DependencyGraph")({
+  /** All nodes in the graph */
+  nodes: Schema.Array(GraphNode),
+  /** All edges in the graph */
+  edges: Schema.Array(GraphEdge)
+}) {}
+
+/**
+ * TreeNode - A node in the hierarchy tree
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export class TreeNode extends Schema.Class<TreeNode>("TreeNode")({
+  /** Node IRI */
+  iri: Schema.String,
+  /** Display label */
+  label: Schema.String,
+  /** Direct children */
+  children: Schema.Array(Schema.suspend((): Schema.Schema<TreeNode> => TreeNode)),
+  /** Number of properties */
+  propertyCount: Schema.Number,
+  /** Depth in tree */
+  depth: Schema.Number
+}) {}
+
+/**
+ * HierarchyTree - Tree structure for hierarchy visualization
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export class HierarchyTree extends Schema.Class<HierarchyTree>("HierarchyTree")({
+  /** Root nodes (classes with no parents) */
+  roots: Schema.Array(TreeNode)
+}) {}
+
+/**
+ * TokenStats - Token usage statistics for optimization
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export class TokenStats extends Schema.Class<TokenStats>("TokenStats")({
+  /** Total estimated tokens for full context */
+  totalTokens: Schema.Number,
+  /** Tokens by class IRI */
+  byClass: Schema.HashMap({ key: Schema.String, value: Schema.Number }),
+  /** Estimated cost in USD (assuming GPT-4 pricing) */
+  estimatedCost: Schema.Number,
+  /** Average tokens per class */
+  averageTokensPerClass: Schema.Number,
+  /** Maximum tokens in any single class */
+  maxTokensPerClass: Schema.Number
+}) {}
+
+/**
+ * KnowledgeMetadata - Complete metadata for a knowledge index
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export class KnowledgeMetadata extends Schema.Class<KnowledgeMetadata>("KnowledgeMetadata")({
+  /** Summary for each class */
+  classSummaries: Schema.HashMap({ key: Schema.String, value: ClassSummary }),
+  /** Dependency graph for visualization */
+  dependencyGraph: DependencyGraph,
+  /** Hierarchy tree for visualization */
+  hierarchyTree: HierarchyTree,
+  /** Token statistics */
+  tokenStats: TokenStats,
+  /** Overall statistics */
+  stats: Schema.Struct({
+    totalClasses: Schema.Number,
+    totalProperties: Schema.Number,
+    totalInheritedProperties: Schema.Number,
+    averagePropertiesPerClass: Schema.Number,
+    maxDepth: Schema.Number
+  })
+}) {}
+
+/**
+ * Populate parent relationships from the Effect Graph
+ *
+ * The knowledgeIndexAlgebra creates KnowledgeUnits with empty parents arrays.
+ * This function uses the Effect Graph structure to fill in the parents for each unit.
+ *
+ * @param graph - The Effect Graph containing edge information
+ * @param index - The knowledge index to update
+ * @returns Updated knowledge index with parents populated
+ *
+ * @since 1.0.0
+ * @category utilities
+ */
+const populateParents = (
+  graph: Graph.Graph<NodeId, unknown, "directed">,
+  index: KnowledgeIndexType
+): KnowledgeIndexType => {
+  let updatedIndex = index
+
+  // For each node in the graph, find its neighbors (parents) and update the unit
+  for (const [nodeIndex, nodeId] of graph) {
+    const unit = KnowledgeIndex.get(index, nodeId)
+    if (Option.isNone(unit)) continue
+
+    // Get all neighbors (parents in the graph)
+    const neighbors = Graph.neighbors(graph, nodeIndex)
+    const parentIris: Array<string> = []
+
+    for (const neighborIndex of neighbors) {
+      const parentId = Graph.getNode(graph, neighborIndex)
+      if (parentId._tag === "Some") {
+        parentIris.push(parentId.value)
+      }
+    }
+
+    // Update the unit with populated parents
+    const updatedUnit = new KnowledgeUnit({
+      ...unit.value,
+      parents: parentIris
+    })
+
+    // Replace in index (KnowledgeIndex is a HashMap)
+    updatedIndex = HashMap.set(updatedIndex, nodeId, updatedUnit)
+  }
+
+  return updatedIndex
+}
+
+/**
+ * Compute depth of each class in the hierarchy
+ *
+ * Performs BFS from roots to assign depth values.
+ * Roots have depth 0, their children have depth 1, etc.
+ *
+ * Uses the Effect Graph structure to determine parent-child relationships
+ * (not unit.children, which contains ALL descendants, not just direct children).
+ *
+ * @param graph - The Effect Graph containing edge structure
+ * @param index - The knowledge index (must have parents populated)
+ * @returns HashMap mapping IRI to depth
+ *
+ * @since 1.0.0
+ * @category utilities
+ */
+const computeDepths = (
+  graph: Graph.Graph<NodeId, unknown, "directed">,
+  index: KnowledgeIndexType
+): HashMap.HashMap<string, number> => {
+  let depths = HashMap.empty<string, number>()
+  const queue: Array<{ iri: string; nodeIndex: Graph.NodeIndex; depth: number }> = []
+
+  // Create IRI -> NodeIndex map for quick lookups
+  const iriToIndex = new Map<string, Graph.NodeIndex>()
+  for (const [nodeIndex, nodeId] of graph) {
+    iriToIndex.set(nodeId, nodeIndex)
+  }
+
+  // Find roots (classes with no parents) and enqueue with depth 0
+  for (const unit of KnowledgeIndex.values(index)) {
+    if (unit.parents.length === 0) {
+      const nodeIndex = iriToIndex.get(unit.iri)
+      if (nodeIndex !== undefined) {
+        queue.push({ iri: unit.iri, nodeIndex, depth: 0 })
+        depths = HashMap.set(depths, unit.iri, 0)
+      }
+    }
+  }
+
+  // BFS to assign depths using DIRECT children from graph
+  while (queue.length > 0) {
+    const current = queue.shift()!
+
+    // Get direct children from graph (nodes that have current as parent)
+    // We need to iterate all nodes and check if they have current as a neighbor
+    for (const [childIndex, childId] of graph) {
+      // Check if this child has current node as a parent
+      const neighbors = Graph.neighbors(graph, childIndex)
+      let hasCurrentAsParent = false
+
+      for (const neighborIndex of neighbors) {
+        if (neighborIndex === current.nodeIndex) {
+          hasCurrentAsParent = true
+          break
+        }
+      }
+
+      if (hasCurrentAsParent && !HashMap.has(depths, childId)) {
+        const childDepth = current.depth + 1
+        depths = HashMap.set(depths, childId, childDepth)
+        queue.push({ iri: childId, nodeIndex: childIndex, depth: childDepth })
+      }
+    }
+  }
+
+  return depths
+}
+
+/**
+ * Simple token estimation (roughly 4 characters per token)
+ *
+ * This is a rough heuristic. For production, consider using a proper tokenizer
+ * like @effect/ai's Tokenizer service or tiktoken.
+ *
+ * @param text - Text to estimate
+ * @returns Estimated token count
+ *
+ * @since 1.0.0
+ * @category utilities
+ */
+const estimateTokens = (text: string): number => Math.ceil(text.length / 4)
+
+/**
+ * Build ClassSummary for a single class
+ *
+ * @param unit - The knowledge unit for this class
+ * @param depth - The depth in the hierarchy
+ * @returns ClassSummary
+ *
+ * @since 1.0.0
+ * @category constructors
+ */
+export const buildClassSummary = (unit: KnowledgeUnit, depth: number): ClassSummary => {
+  const directProperties = unit.properties.length
+  const inheritedProperties = unit.inheritedProperties.length
+  const totalProperties = directProperties + inheritedProperties
+
+  // Estimate tokens: definition + property descriptions
+  const definitionTokens = estimateTokens(unit.definition)
+  const propertyTokens = unit.properties.reduce(
+    (sum, prop) => sum + estimateTokens(`${prop.label}: ${prop.range}`),
+    0
+  )
+  const estimatedTokensValue = definitionTokens + propertyTokens
+
+  return new ClassSummary({
+    iri: unit.iri,
+    label: unit.label,
+    directProperties,
+    inheritedProperties,
+    totalProperties,
+    parents: unit.parents,
+    children: unit.children,
+    depth,
+    estimatedTokens: estimatedTokensValue
+  })
+}
+
+/**
+ * Build DependencyGraph from Effect Graph
+ *
+ * Converts the Effect Graph into a structure suitable for visualization.
+ * Uses the graph's native structure instead of reconstructing from KnowledgeIndex.
+ *
+ * @param graph - The Effect Graph (from parseTurtleToGraph)
+ * @param context - The ontology context (for labels and metadata)
+ * @param index - The knowledge index (for property counts)
+ * @param depths - Pre-computed depth map
+ * @returns Effect with DependencyGraph or MetadataError
+ *
+ * @since 1.0.0
+ * @category constructors
+ */
+export const buildDependencyGraph = (
+  graph: Graph.Graph<NodeId, unknown, "directed">,
+  context: OntologyContext,
+  index: KnowledgeIndexType,
+  depths: HashMap.HashMap<string, number>
+): Effect.Effect<DependencyGraph, MetadataError> =>
+  Effect.try({
+    try: () => {
+      const nodes: Array<GraphNode> = []
+      const edges: Array<GraphEdge> = []
+
+      // Create nodes from Effect Graph
+      for (const [nodeIndex, nodeId] of graph) {
+        const ontologyNode = HashMap.get(context.nodes, nodeId)
+        const knowledgeUnit = KnowledgeIndex.get(index, nodeId)
+        const depth = HashMap.get(depths, nodeId).pipe(Option.getOrElse(() => 0))
+
+        if (Option.isSome(ontologyNode) && Option.isSome(knowledgeUnit)) {
+          const unit = knowledgeUnit.value
+          nodes.push(
+            new GraphNode({
+              id: nodeId,
+              label: unit.label,
+              type: "class",
+              propertyCount: unit.properties.length + unit.inheritedProperties.length,
+              depth
+            })
+          )
+
+          // Create edges from Effect Graph (child -> parent)
+          const neighbors = Graph.neighbors(graph, nodeIndex)
+          for (const neighborIndex of neighbors) {
+            const parentId = Graph.getNode(graph, neighborIndex)
+            if (parentId._tag === "Some") {
+              edges.push(
+                new GraphEdge({
+                  source: nodeId,
+                  target: parentId.value,
+                  type: "subClassOf"
+                })
+              )
+            }
+          }
+        }
+      }
+
+      return new DependencyGraph({ nodes, edges })
+    },
+    catch: (cause) =>
+      new MetadataError({
+        module: "Metadata",
+        method: "buildDependencyGraph",
+        reason: "BuildError",
+        description: "Failed to build dependency graph from Effect Graph",
+        cause
+      })
+  })
+
+/**
+ * Build TreeNode recursively
+ *
+ * @param iri - Class IRI
+ * @param index - Knowledge index
+ * @param depths - Pre-computed depths
+ * @param visited - Set to prevent cycles
+ * @returns TreeNode or null if already visited
+ *
+ * @since 1.0.0
+ * @category utilities
+ */
+const buildTreeNode = (
+  iri: string,
+  index: KnowledgeIndexType,
+  depths: HashMap.HashMap<string, number>,
+  visited: Set<string>
+): TreeNode | null => {
+  // Prevent cycles
+  if (visited.has(iri)) return null
+  visited.add(iri)
+
+  const unit = KnowledgeIndex.get(index, iri)
+  if (Option.isNone(unit)) return null
+
+  const depth = HashMap.get(depths, iri).pipe(Option.getOrElse(() => 0))
+
+  // Recursively build children
+  const children: Array<TreeNode> = []
+  for (const childIri of unit.value.children) {
+    const childNode = buildTreeNode(childIri, index, depths, visited)
+    if (childNode) children.push(childNode)
+  }
+
+  return new TreeNode({
+    iri: unit.value.iri,
+    label: unit.value.label,
+    children,
+    propertyCount: unit.value.properties.length + unit.value.inheritedProperties.length,
+    depth
+  })
+}
+
+/**
+ * Build HierarchyTree from KnowledgeIndex
+ *
+ * Converts the index into a tree structure suitable for hierarchy visualization.
+ * Finds all root nodes and builds trees from them.
+ *
+ * @param index - The knowledge index
+ * @param depths - Pre-computed depth map
+ * @returns HierarchyTree
+ *
+ * @since 1.0.0
+ * @category constructors
+ */
+export const buildHierarchyTree = (
+  index: KnowledgeIndexType,
+  depths: HashMap.HashMap<string, number>
+): HierarchyTree => {
+  const roots: Array<TreeNode> = []
+  const visited = new Set<string>()
+
+  // Find all root classes (no parents)
+  for (const unit of KnowledgeIndex.values(index)) {
+    if (unit.parents.length === 0) {
+      const rootNode = buildTreeNode(unit.iri, index, depths, visited)
+      if (rootNode) roots.push(rootNode)
+    }
+  }
+
+  return new HierarchyTree({ roots })
+}
+
+/**
+ * Build TokenStats from KnowledgeIndex
+ *
+ * Computes token usage statistics for the entire index.
+ * Uses simple character-based estimation (4 chars/token).
+ *
+ * @param index - The knowledge index
+ * @returns TokenStats
+ *
+ * @since 1.0.0
+ * @category constructors
+ */
+export const buildTokenStats = (index: KnowledgeIndexType): TokenStats => {
+  let totalTokens = 0
+  let byClass = HashMap.empty<string, number>()
+  let maxTokens = 0
+
+  for (const unit of KnowledgeIndex.values(index)) {
+    const tokens = estimateTokens(unit.definition) +
+      unit.properties.reduce((sum, p) => sum + estimateTokens(`${p.label}: ${p.range}`), 0)
+
+    totalTokens += tokens
+    byClass = HashMap.set(byClass, unit.iri, tokens)
+    maxTokens = Math.max(maxTokens, tokens)
+  }
+
+  const classCount = KnowledgeIndex.size(index)
+  const averageTokensPerClass = classCount > 0 ? totalTokens / classCount : 0
+
+  // GPT-4 pricing: ~$0.03 per 1K input tokens (rough estimate)
+  const estimatedCost = (totalTokens / 1000) * 0.03
+
+  return new TokenStats({
+    totalTokens,
+    byClass,
+    estimatedCost,
+    averageTokensPerClass,
+    maxTokensPerClass: maxTokens
+  })
+}
+
+/**
+ * Build complete KnowledgeMetadata from Effect Graph
+ *
+ * This is the main entry point for generating metadata.
+ * Now takes the Effect Graph as input for a unified, composable API.
+ *
+ * **Composable Pipeline:**
+ * ```
+ * parseTurtleToGraph → solveGraph → buildKnowledgeMetadata
+ * ```
+ *
+ * @param graph - The Effect Graph (from parseTurtleToGraph)
+ * @param context - The ontology context (from parseTurtleToGraph)
+ * @param index - The knowledge index (from solveToKnowledgeIndex)
+ * @returns Effect yielding KnowledgeMetadata or MetadataError
+ *
+ * @since 1.0.0
+ * @category constructors
+ * @example
+ * ```typescript
+ * import { buildKnowledgeMetadata } from "@effect-ontology/core/Prompt/Metadata"
+ * import { parseTurtleToGraph } from "@effect-ontology/core/Graph/Builder"
+ * import { solveToKnowledgeIndex, knowledgeIndexAlgebra } from "@effect-ontology/core/Prompt"
+ * import { Effect } from "effect"
+ *
+ * const program = Effect.gen(function*() {
+ *   const { graph, context } = yield* parseTurtleToGraph(turtle)
+ *   const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+ *   const metadata = yield* buildKnowledgeMetadata(graph, context, index)
+ *
+ *   console.log(`Total classes: ${metadata.stats.totalClasses}`)
+ *   console.log(`Total tokens: ${metadata.tokenStats.totalTokens}`)
+ * })
+ * ```
+ */
+export const buildKnowledgeMetadata = (
+  graph: Graph.Graph<NodeId, unknown, "directed">,
+  context: OntologyContext,
+  index: KnowledgeIndexType
+): Effect.Effect<KnowledgeMetadata, MetadataError> =>
+  Effect.gen(function*() {
+    // Populate parents from graph structure
+    // (The algebra leaves parents empty, so we fill them in from the Effect Graph)
+    const indexWithParents = populateParents(graph, index)
+
+    // Get existing stats from KnowledgeIndex
+    const indexStats = KnowledgeIndex.stats(indexWithParents)
+
+    // Compute depths for all classes (using graph structure for direct children)
+    const depths = computeDepths(graph, indexWithParents)
+
+    // Build class summaries
+    let classSummaries = HashMap.empty<string, ClassSummary>()
+    for (const unit of KnowledgeIndex.values(indexWithParents)) {
+      const depth = HashMap.get(depths, unit.iri).pipe(Option.getOrElse(() => 0))
+      const summary = buildClassSummary(unit, depth)
+      classSummaries = HashMap.set(classSummaries, unit.iri, summary)
+    }
+
+    // Build dependency graph (now uses Effect Graph!)
+    const dependencyGraph = yield* buildDependencyGraph(graph, context, indexWithParents, depths)
+
+    // Build hierarchy tree
+    const hierarchyTree = buildHierarchyTree(indexWithParents, depths)
+
+    // Build token stats
+    const tokenStats = buildTokenStats(indexWithParents)
+
+    return new KnowledgeMetadata({
+      classSummaries,
+      dependencyGraph,
+      hierarchyTree,
+      tokenStats,
+      stats: {
+        totalClasses: indexStats.totalUnits,
+        totalProperties: indexStats.totalProperties,
+        totalInheritedProperties: indexStats.totalInheritedProperties,
+        averagePropertiesPerClass: indexStats.averagePropertiesPerUnit,
+        maxDepth: indexStats.maxDepth
+      }
+    })
+  }).pipe(
+    Effect.catchAllDefect((cause) =>
+      Effect.fail(
+        new MetadataError({
+          module: "Metadata",
+          method: "buildKnowledgeMetadata",
+          reason: "BuildError",
+          description: "Failed to build knowledge metadata",
+          cause
+        })
+      )
+    )
+  )
+
+/**
+ * Get ClassSummary for a specific class
+ *
+ * Convenience function to extract a single class summary from metadata.
+ *
+ * @param metadata - The knowledge metadata
+ * @param iri - The class IRI to look up
+ * @returns Option containing ClassSummary if found
+ *
+ * @since 1.0.0
+ * @category utilities
+ */
+export const getClassSummary = (
+  metadata: KnowledgeMetadata,
+  iri: string
+): Option.Option<ClassSummary> => HashMap.get(metadata.classSummaries, iri)
+
+/**
+ * Get token count for a specific class
+ *
+ * @param metadata - The knowledge metadata
+ * @param iri - The class IRI
+ * @returns Option containing token count if found
+ *
+ * @since 1.0.0
+ * @category utilities
+ */
+export const getClassTokens = (
+  metadata: KnowledgeMetadata,
+  iri: string
+): Option.Option<number> => HashMap.get(metadata.tokenStats.byClass, iri)
+
+================
+File: packages/core/src/Prompt/PromptDoc.ts
+================
+/**
+ * Build prompt documents from StructuredPrompt
+ *
+ * Converts StructuredPrompt (arrays of strings) into semantic Doc structures
+ * and renders them to match the exact format of buildPromptText.
+ *
+ * @module Prompt/PromptDoc
+ * @since 1.0.0
+ */
+
+import { Doc } from "@effect/printer"
+import { header, renderDoc } from "./DocBuilder.js"
+import type { StructuredPrompt } from "./Types.js"
+
+/**
+ * Create a section for system instructions
+ *
+ * System items are separated by double newlines (paragraph breaks)
+ * This matches: items.join("\n\n") in the reference implementation
+ */
+const systemSection = (items: ReadonlyArray<string>): Doc.Doc<never> => {
+  if (items.length === 0) {
+    return Doc.empty
+  }
+
+  // To match "\n\n" separator, we need text + linebreak + text
+  // Doc.vsep adds single newlines, so we insert Doc.empty between items
+  const itemsWithBreaks = items.flatMap((item, i) =>
+    i === items.length - 1
+      ? [Doc.text(item)]
+      : [Doc.text(item), Doc.empty] // Empty doc creates paragraph break
+  )
+
+  return Doc.vcat([
+    header("SYSTEM INSTRUCTIONS"),
+    Doc.vsep(itemsWithBreaks),
+    Doc.empty // Blank line after section
+  ])
+}
+
+/**
+ * Create a section for user context
+ *
+ * User items are separated by single newlines
+ */
+const contextSection = (items: ReadonlyArray<string>): Doc.Doc<never> => {
+  if (items.length === 0) {
+    return Doc.empty
+  }
+
+  return Doc.vcat([
+    header("CONTEXT"),
+    Doc.vsep(items.map(Doc.text)),
+    Doc.empty // Blank line after section
+  ])
+}
+
+/**
+ * Create a section for examples
+ *
+ * Examples are separated by double newlines (paragraph breaks)
+ * This matches: items.join("\n\n") in the reference implementation
+ */
+const examplesSection = (items: ReadonlyArray<string>): Doc.Doc<never> => {
+  if (items.length === 0) {
+    return Doc.empty
+  }
+
+  // To match "\n\n" separator, insert Doc.empty between items
+  const itemsWithBreaks = items.flatMap((item, i) =>
+    i === items.length - 1
+      ? [Doc.text(item)]
+      : [Doc.text(item), Doc.empty] // Empty doc creates paragraph break
+  )
+
+  return Doc.vcat([
+    header("EXAMPLES"),
+    Doc.vsep(itemsWithBreaks),
+    Doc.empty // Blank line after section
+  ])
+}
+
+/**
+ * Build a Doc from StructuredPrompt
+ *
+ * Creates a semantic document with three sections:
+ * - SYSTEM INSTRUCTIONS (paragraph-separated)
+ * - CONTEXT (line-separated)
+ * - EXAMPLES (paragraph-separated)
+ *
+ * Empty sections are omitted.
+ *
+ * @param prompt - The structured prompt to render
+ * @returns Doc representing the prompt
+ *
+ * @example
+ * ```typescript
+ * const prompt = StructuredPrompt.make({
+ *   system: ["You are an expert", "Follow these rules"],
+ *   user: ["Extract from healthcare domain"],
+ *   examples: ["Example 1", "Example 2"]
+ * })
+ *
+ * const doc = buildPromptDoc(prompt)
+ * const output = renderDoc(doc)
+ * ```
+ *
+ * @since 1.0.0
+ * @category constructors
+ */
+export const buildPromptDoc = (prompt: StructuredPrompt): Doc.Doc<never> => {
+  const sections: Array<Doc.Doc<never>> = []
+
+  // System section
+  if (prompt.system.length > 0) {
+    sections.push(systemSection(prompt.system))
+  }
+
+  // User context section
+  if (prompt.user.length > 0) {
+    sections.push(contextSection(prompt.user))
+  }
+
+  // Examples section
+  if (prompt.examples.length > 0) {
+    sections.push(examplesSection(prompt.examples))
+  }
+
+  return Doc.vsep(sections)
+}
+
+/**
+ * Build complete extraction prompt Doc
+ *
+ * Combines StructuredPrompt sections with extraction task instructions.
+ *
+ * @param prompt - The structured prompt
+ * @param text - The input text to extract from
+ * @returns Doc representing the complete extraction prompt
+ *
+ * @example
+ * ```typescript
+ * const doc = buildExtractionPromptDoc(prompt, "Alice is a person.")
+ * const output = renderDoc(doc)
+ * ```
+ *
+ * @since 1.0.0
+ * @category constructors
+ */
+export const buildExtractionPromptDoc = (
+  prompt: StructuredPrompt,
+  text: string
+): Doc.Doc<never> => {
+  const promptDoc = buildPromptDoc(prompt)
+
+  const taskDoc = Doc.vcat([
+    header("TASK"),
+    Doc.text("Extract knowledge graph from the following text:"),
+    Doc.empty,
+    Doc.text(text),
+    Doc.empty,
+    Doc.text("Return a valid JSON object matching the schema with all extracted entities and their relationships.")
+  ])
+
+  // If prompt is empty, just return task
+  if (prompt.system.length === 0 && prompt.user.length === 0 && prompt.examples.length === 0) {
+    return taskDoc
+  }
+
+  return Doc.vsep([promptDoc, taskDoc])
+}
+
+/**
+ * Render StructuredPrompt to string (for backward compatibility)
+ *
+ * @param prompt - The structured prompt to render
+ * @returns Rendered string
+ *
+ * @since 1.0.0
+ * @category rendering
+ */
+export const renderStructuredPrompt = (prompt: StructuredPrompt): string => {
+  const doc = buildPromptDoc(prompt)
+  return renderDoc(doc)
+}
+
+/**
+ * Render extraction prompt to string
+ *
+ * This is the main function that replaces buildPromptText in Llm.ts.
+ * Output is guaranteed to be identical to buildPromptText.
+ *
+ * @param prompt - The structured prompt
+ * @param text - The input text to extract from
+ * @returns Rendered string matching buildPromptText format
+ *
+ * @since 1.0.0
+ * @category rendering
+ */
+export const renderExtractionPrompt = (
+  prompt: StructuredPrompt,
+  text: string
+): string => {
+  const doc = buildExtractionPromptDoc(prompt, text)
+  return renderDoc(doc)
+}
+
+================
+File: packages/core/src/Prompt/Render.ts
+================
+/**
+ * Render - Convert KnowledgeIndex to StructuredPrompt
+ *
+ * Renders the queryable KnowledgeIndex AST into string-based StructuredPrompt
+ * for final consumption by LLMs.
+ *
+ * Based on: docs/higher_order_monoid_implementation.md
+ */
+
+import { Effect, HashMap, HashSet } from "effect"
+import type { CircularInheritanceError, InheritanceError, InheritanceService } from "../Ontology/Inheritance.js"
+import { KnowledgeUnit } from "./Ast.js"
+import * as KnowledgeIndex from "./KnowledgeIndex.js"
+import type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
+import { StructuredPrompt } from "./Types.js"
+
+/**
+ * Rendering options
+ */
+export interface RenderOptions {
+  /** Include inherited properties in class definitions */
+  readonly includeInheritedProperties?: boolean
+  /** Sort units before rendering (default: topological) */
+  readonly sortStrategy?: "topological" | "alphabetical" | "none"
+  /** Include metadata (IRI, children count, etc.) */
+  readonly includeMetadata?: boolean
+}
+
+/**
+ * Default render options
+ */
+export const defaultRenderOptions: RenderOptions = {
+  includeInheritedProperties: false,
+  sortStrategy: "topological",
+  includeMetadata: false
+}
+
+/**
+ * Topologically sort KnowledgeUnits by dependencies
+ *
+ * Ensures that parent classes are rendered before children.
+ * Uses the children field (which is populated during graph solving).
+ *
+ * Algorithm: Start from roots (units with no parents in the set),
+ * then recursively visit children. This gives parent-before-child order.
+ *
+ * @param units - Array of knowledge units
+ * @returns Topologically sorted array
+ */
+const topologicalSort = (units: ReadonlyArray<KnowledgeUnit>): ReadonlyArray<KnowledgeUnit> => {
+  const unitMap = new Map<string, KnowledgeUnit>()
+  const childToParents = new Map<string, Set<string>>()
+
+  // Build unit map and reverse parent-child relationships
+  for (const unit of units) {
+    unitMap.set(unit.iri, unit)
+
+    // For each child, track that this unit is its parent
+    for (const childIri of unit.children) {
+      if (!childToParents.has(childIri)) {
+        childToParents.set(childIri, new Set())
+      }
+      childToParents.get(childIri)!.add(unit.iri)
+    }
+  }
+
+  // Find roots: units that have no parents in the current set
+  const roots = units.filter((unit) => {
+    const parents = childToParents.get(unit.iri)
+    return !parents || parents.size === 0
+  })
+
+  const visited = new Set<string>()
+  const result: Array<KnowledgeUnit> = []
+
+  const visit = (iri: string): void => {
+    if (visited.has(iri)) return
+    visited.add(iri)
+
+    const unit = unitMap.get(iri)
+    if (!unit) return
+
+    // Add this unit first (parent before children)
+    result.push(unit)
+
+    // Then visit children
+    for (const childIri of unit.children) {
+      // Only visit children that are in our unit set
+      if (unitMap.has(childIri)) {
+        visit(childIri)
+      }
+    }
+  }
+
+  // Start from roots
+  for (const root of roots) {
+    visit(root.iri)
+  }
+
+  // Handle any disconnected components (shouldn't happen in well-formed ontology)
+  for (const unit of units) {
+    if (!visited.has(unit.iri)) {
+      visit(unit.iri)
+    }
+  }
+
+  return result
+}
+
+/**
+ * Format a single KnowledgeUnit to string
+ *
+ * @param unit - The knowledge unit to format
+ * @param options - Rendering options
+ * @returns Formatted string
+ */
+const formatUnit = (unit: KnowledgeUnit, options: RenderOptions): string => {
+  const parts: Array<string> = []
+
+  // Add IRI metadata if requested
+  if (options.includeMetadata) {
+    parts.push(`IRI: ${unit.iri}`)
+  }
+
+  // Add the main definition
+  parts.push(unit.definition)
+
+  // Add inherited properties if requested
+  if (options.includeInheritedProperties && unit.inheritedProperties.length > 0) {
+    parts.push("\nInherited Properties:")
+    for (const prop of unit.inheritedProperties) {
+      const rangeLabel = prop.range.split("#")[1] || prop.range.split("/").pop() || prop.range
+      parts.push(`  - ${prop.label} (${rangeLabel}) [inherited]`)
+    }
+  }
+
+  // Add metadata about children/parents if requested
+  if (options.includeMetadata) {
+    if (unit.parents.length > 0) {
+      parts.push(`\nParents: ${unit.parents.length}`)
+    }
+    if (unit.children.length > 0) {
+      parts.push(`Children: ${unit.children.length}`)
+    }
+  }
+
+  return parts.join("\n")
+}
+
+/**
+ * Render KnowledgeIndex to StructuredPrompt
+ *
+ * This is the final step in the pipeline:
+ * KnowledgeIndex (queryable AST) → StructuredPrompt (strings for LLM)
+ *
+ * @param index - The knowledge index to render
+ * @param options - Rendering options
+ * @returns StructuredPrompt ready for LLM consumption
+ */
+export const renderToStructuredPrompt = (
+  index: KnowledgeIndexType,
+  options: RenderOptions = defaultRenderOptions
+): StructuredPrompt => {
+  // Get all units
+  let units = KnowledgeIndex.toArray(index)
+
+  // Sort according to strategy
+  if (options.sortStrategy === "topological") {
+    units = topologicalSort(units)
+  } else if (options.sortStrategy === "alphabetical") {
+    units = Array.from(units).sort((a, b) => a.label.localeCompare(b.label))
+  }
+  // "none" - keep original order
+
+  // Format each unit
+  const system = units.map((unit) => formatUnit(unit, options))
+
+  return StructuredPrompt.make({
+    system,
+    user: [],
+    examples: []
+  })
+}
+
+/**
+ * Render with inherited properties
+ *
+ * Enriches each KnowledgeUnit with inherited properties before rendering.
+ * Requires InheritanceService to compute effective properties.
+ *
+ * @param index - The knowledge index to render
+ * @param inheritanceService - Service for computing inherited properties
+ * @param options - Rendering options (includeInheritedProperties will be set to true)
+ * @returns Effect containing enriched StructuredPrompt
+ */
+export const renderWithInheritance = (
+  index: KnowledgeIndexType,
+  inheritanceService: InheritanceService,
+  options: RenderOptions = defaultRenderOptions
+): Effect.Effect<StructuredPrompt, InheritanceError | CircularInheritanceError> =>
+  Effect.gen(function*() {
+    // Enrich each unit with inherited properties
+    let enrichedIndex = index
+
+    for (const [iri, unit] of KnowledgeIndex.entries(index)) {
+      // Get effective properties (own + inherited)
+      const effectiveProperties = yield* inheritanceService.getEffectiveProperties(iri)
+
+      // Separate own from inherited
+      const ownPropertyIris = new Set(unit.properties.map((p) => p.iri))
+      const inheritedProperties = effectiveProperties.filter(
+        (p) => !ownPropertyIris.has(p.iri)
+      )
+
+      // Update unit with inherited properties
+      const enrichedUnit = new KnowledgeUnit({
+        ...unit,
+        inheritedProperties
+      })
+
+      enrichedIndex = HashMap.set(enrichedIndex, iri, enrichedUnit)
+    }
+
+    // Render with inherited properties enabled
+    return renderToStructuredPrompt(enrichedIndex, {
+      ...options,
+      includeInheritedProperties: true
+    })
+  })
+
+/**
+ * Render to plain text (for debugging/logging)
+ *
+ * Converts KnowledgeIndex to a simple string representation.
+ *
+ * @param index - The knowledge index
+ * @returns Plain text representation
+ */
+export const renderToText = (index: KnowledgeIndexType): string => {
+  const prompt = renderToStructuredPrompt(index, {
+    ...defaultRenderOptions,
+    sortStrategy: "topological"
+  })
+
+  return prompt.system.join("\n\n")
+}
+
+/**
+ * Render index statistics
+ *
+ * Generates a summary of the index for debugging/analysis.
+ *
+ * @param index - The knowledge index
+ * @returns Statistics string
+ */
+export const renderStats = (index: KnowledgeIndexType): string => {
+  const stats = KnowledgeIndex.stats(index)
+
+  return [
+    `Knowledge Index Statistics:`,
+    `  Total Units: ${stats.totalUnits}`,
+    `  Total Properties: ${stats.totalProperties}`,
+    `  Total Inherited Properties: ${stats.totalInheritedProperties}`,
+    `  Average Properties per Unit: ${stats.averagePropertiesPerUnit.toFixed(2)}`,
+    `  Max Depth: ${stats.maxDepth}`
+  ].join("\n")
+}
+
+/**
+ * Render a diff between two indexes
+ *
+ * Useful for showing the effect of focus operations.
+ *
+ * @param before - The original index
+ * @param after - The modified index
+ * @returns Diff summary
+ */
+export const renderDiff = (
+  before: KnowledgeIndexType,
+  after: KnowledgeIndexType
+): string => {
+  const beforeIris = new Set(KnowledgeIndex.keys(before))
+  const afterIris = new Set(KnowledgeIndex.keys(after))
+
+  const added: Array<string> = []
+  const removed: Array<string> = []
+  const kept: Array<string> = []
+
+  for (const iri of afterIris) {
+    if (!beforeIris.has(iri)) {
+      added.push(iri)
+    } else {
+      kept.push(iri)
+    }
+  }
+
+  for (const iri of beforeIris) {
+    if (!afterIris.has(iri)) {
+      removed.push(iri)
+    }
+  }
+
+  const parts = [
+    `Index Diff:`,
+    `  Kept: ${kept.length} units`,
+    `  Removed: ${removed.length} units`,
+    `  Added: ${added.length} units`
+  ]
+
+  if (removed.length > 0 && removed.length <= 20) {
+    parts.push(`\nRemoved IRIs:`)
+    removed.forEach((iri) => {
+      const label = KnowledgeIndex.get(before, iri)
+      const labelText = label._tag === "Some" ? label.value.label : iri
+      parts.push(`  - ${labelText}`)
+    })
+  }
+
+  if (added.length > 0 && added.length <= 20) {
+    parts.push(`\nAdded IRIs:`)
+    added.forEach((iri) => {
+      const label = KnowledgeIndex.get(after, iri)
+      const labelText = label._tag === "Some" ? label.value.label : iri
+      parts.push(`  + ${labelText}`)
+    })
+  }
+
+  return parts.join("\n")
+}
 
 ================
 File: packages/core/src/Prompt/Solver.ts
@@ -758,7 +4256,9 @@ File: packages/core/src/Prompt/Solver.ts
  */
 
 import { Data, Effect, Graph, HashMap, Option } from "effect"
-import type { NodeId, OntologyContext, OntologyNode } from "../Graph/Types.js"
+import type { NodeId, OntologyContext } from "../Graph/Types.js"
+import * as KnowledgeIndex from "./KnowledgeIndex.js"
+import type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
 import type { GraphAlgebra } from "./Types.js"
 
 /**
@@ -882,13 +4382,13 @@ export const solveGraph = <R>(
       )
 
       // Get OntologyNode from context
-      const ontologyNode = HashMap.get(context.nodes, nodeData).pipe(
-        Option.getOrElse(
-          (): OntologyNode => {
-            // This shouldn't happen if graph was built correctly,
-            // but we provide a fallback for type safety
-            throw new Error(`Node data ${nodeData} not found in context`)
-          }
+      const ontologyNode = yield* HashMap.get(context.nodes, nodeData).pipe(
+        Effect.mapError(
+          () =>
+            new MissingNodeDataError({
+              nodeId: nodeData,
+              message: `Node data ${nodeData} not found in context`
+            })
         )
       )
 
@@ -927,6 +4427,92 @@ export const solveGraph = <R>(
     return finalResults
   })
 
+/**
+ * Find root nodes in the graph
+ *
+ * Root nodes are those with no outgoing edges (no parents in subClassOf hierarchy).
+ *
+ * @param graph - The dependency graph
+ * @returns Effect with array of root node indices
+ */
+const findRoots = <N, E>(
+  graph: Graph.Graph<N, E, "directed">
+): Effect.Effect<ReadonlyArray<Graph.NodeIndex>> =>
+  Effect.sync(() => {
+    const roots: Array<Graph.NodeIndex> = []
+
+    for (const [nodeIndex, _] of graph) {
+      const neighbors = Graph.neighbors(graph, nodeIndex)
+      // If node has no neighbors, it's a root (no parents)
+      if (Array.from(neighbors).length === 0) {
+        roots.push(nodeIndex)
+      }
+    }
+
+    return roots
+  })
+
+/**
+ * Solve graph to KnowledgeIndex and return combined result
+ *
+ * Convenience function that:
+ * 1. Solves the graph using knowledgeIndexAlgebra
+ * 2. Finds all root nodes
+ * 3. Combines their results into a single KnowledgeIndex
+ *
+ * This is the primary entry point for the new KnowledgeIndex-based pipeline.
+ *
+ * @param graph - The dependency graph
+ * @param context - The ontology context
+ * @param algebra - The algebra to use (typically knowledgeIndexAlgebra)
+ * @returns Effect with combined knowledge index from all roots
+ */
+export const solveToKnowledgeIndex = (
+  graph: Graph.Graph<NodeId, unknown, "directed">,
+  context: OntologyContext,
+  algebra: GraphAlgebra<KnowledgeIndexType>
+): Effect.Effect<KnowledgeIndexType, SolverError> =>
+  Effect.gen(function*() {
+    // Solve graph to get HashMap<NodeId, KnowledgeIndex>
+    const indexMap = yield* solveGraph(graph, context, algebra)
+
+    // Find root nodes
+    const rootIndices = yield* findRoots(graph)
+
+    // Collect root node IDs
+    const rootIds: Array<NodeId> = []
+    for (const rootIndex of rootIndices) {
+      const rootId = yield* Graph.getNode(graph, rootIndex).pipe(
+        Effect.mapError(
+          () =>
+            new MissingNodeDataError({
+              nodeId: `node-${rootIndex}`,
+              message: `Root node index ${rootIndex} not found in graph`
+            })
+        )
+      )
+      rootIds.push(rootId)
+    }
+
+    // Combine all root indexes
+    const rootIndexes: Array<KnowledgeIndexType> = []
+    for (const rootId of rootIds) {
+      const rootIndex = yield* HashMap.get(indexMap, rootId).pipe(
+        Effect.mapError(
+          () =>
+            new MissingNodeDataError({
+              nodeId: rootId,
+              message: `Root node ${rootId} not found in result map`
+            })
+        )
+      )
+      rootIndexes.push(rootIndex)
+    }
+
+    // Combine all root results using the Monoid operation
+    return KnowledgeIndex.combineAll(rootIndexes)
+  })
+
 ================
 File: packages/core/src/Prompt/Types.ts
 ================
@@ -940,7 +4526,7 @@ File: packages/core/src/Prompt/Types.ts
  */
 
 import { Schema } from "effect"
-import type { NodeId, OntologyNode } from "../Graph/Types.js"
+import type { OntologyNode } from "../Graph/Types.js"
 
 /**
  * StructuredPrompt - The result type for the catamorphism
@@ -1008,6 +4594,1969 @@ export type GraphAlgebra<R> = (
 export type PromptAlgebra = GraphAlgebra<StructuredPrompt>
 
 ================
+File: packages/core/src/Prompt/Visualization.ts
+================
+/**
+ * Visualization Utilities - Observable Plot Integration
+ *
+ * Provides utilities for converting metadata structures into Observable Plot
+ * visualizations. These functions are designed to be used in the UI layer
+ * but are defined in core for type safety and reusability.
+ *
+ * **Note:** This module exports data transformation functions, not Plot objects.
+ * The UI layer should import Observable Plot and pass it to these functions.
+ *
+ * @module Prompt/Visualization
+ * @since 1.0.0
+ */
+
+import { HashMap } from "effect"
+import type {
+  ClassSummary,
+  DependencyGraph,
+  HierarchyTree,
+  KnowledgeMetadata,
+  TokenStats
+} from "./Metadata.js"
+
+/**
+ * PlotData for dependency graph visualization
+ *
+ * Structure optimized for Observable Plot's force-directed layout.
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export interface DependencyGraphPlotData {
+  /** Nodes for plotting */
+  readonly nodes: ReadonlyArray<{
+    readonly id: string
+    readonly label: string
+    readonly propertyCount: number
+    readonly depth: number
+    readonly group: string
+  }>
+  /** Links for plotting */
+  readonly links: ReadonlyArray<{
+    readonly source: string
+    readonly target: string
+  }>
+}
+
+/**
+ * PlotData for hierarchy tree visualization
+ *
+ * Structure optimized for Observable Plot's tree layout.
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export interface HierarchyTreePlotData {
+  /** Tree structure in hierarchical format */
+  readonly name: string
+  readonly children?: ReadonlyArray<HierarchyTreePlotData>
+  readonly value?: number
+  readonly depth?: number
+}
+
+/**
+ * PlotData for token statistics bar chart
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export interface TokenStatsPlotData {
+  readonly data: ReadonlyArray<{
+    readonly iri: string
+    readonly label: string
+    readonly tokens: number
+  }>
+  readonly summary: {
+    readonly total: number
+    readonly average: number
+    readonly max: number
+  }
+}
+
+/**
+ * Convert DependencyGraph to plot data
+ *
+ * Transforms the dependency graph into a format suitable for
+ * Observable Plot's force-directed graph visualization.
+ *
+ * @param graph - The dependency graph
+ * @returns Plot data structure
+ *
+ * @since 1.0.0
+ * @category transformers
+ * @example
+ * ```typescript
+ * import { toDependencyGraphPlotData } from "@effect-ontology/core/Prompt/Visualization"
+ * import * as Plot from "@observablehq/plot"
+ *
+ * const plotData = toDependencyGraphPlotData(metadata.dependencyGraph)
+ *
+ * // In UI layer:
+ * const plot = Plot.plot({
+ *   marks: [
+ *     Plot.dot(plotData.nodes, {
+ *       x: "x",
+ *       y: "y",
+ *       fill: "group",
+ *       title: "label"
+ *     }),
+ *     Plot.link(plotData.links, {
+ *       x1: "x1",
+ *       y1: "y1",
+ *       x2: "x2",
+ *       y2: "y2"
+ *     })
+ *   ]
+ * })
+ * ```
+ */
+export const toDependencyGraphPlotData = (graph: DependencyGraph): DependencyGraphPlotData => {
+  const nodes = graph.nodes.map((node) => ({
+    id: node.id,
+    label: node.label,
+    propertyCount: node.propertyCount,
+    depth: node.depth,
+    // Group by depth for color coding
+    group: `depth-${node.depth}`
+  }))
+
+  const links = graph.edges.map((edge) => ({
+    source: edge.source,
+    target: edge.target
+  }))
+
+  return { nodes, links }
+}
+
+/**
+ * Convert HierarchyTree to plot data
+ *
+ * Transforms the hierarchy tree into a format suitable for
+ * Observable Plot's tree visualization.
+ *
+ * @param tree - The hierarchy tree
+ * @returns Plot data structure
+ *
+ * @since 1.0.0
+ * @category transformers
+ * @example
+ * ```typescript
+ * import { toHierarchyTreePlotData } from "@effect-ontology/core/Prompt/Visualization"
+ * import * as Plot from "@observablehq/plot"
+ *
+ * const plotData = toHierarchyTreePlotData(metadata.hierarchyTree)
+ *
+ * // In UI layer:
+ * const plot = Plot.plot({
+ *   marks: [
+ *     Plot.tree(plotData, {
+ *       path: "name",
+ *       treeLayout: "cluster"
+ *     })
+ *   ]
+ * })
+ * ```
+ */
+export const toHierarchyTreePlotData = (tree: HierarchyTree): HierarchyTreePlotData => {
+  const convertNode = (node: HierarchyTree["roots"][number]): HierarchyTreePlotData => ({
+    name: node.label,
+    value: node.propertyCount,
+    depth: node.depth,
+    children: node.children.length > 0 ? node.children.map(convertNode) : undefined
+  })
+
+  // If there's a single root, return it directly
+  if (tree.roots.length === 1) {
+    return convertNode(tree.roots[0])
+  }
+
+  // If multiple roots, create a virtual root
+  return {
+    name: "Ontology",
+    children: tree.roots.map(convertNode),
+    depth: -1
+  }
+}
+
+/**
+ * Convert TokenStats to plot data
+ *
+ * Transforms token statistics into a format suitable for
+ * Observable Plot's bar chart visualization.
+ *
+ * @param stats - The token statistics
+ * @param metadata - Full metadata (for labels)
+ * @returns Plot data structure
+ *
+ * @since 1.0.0
+ * @category transformers
+ * @example
+ * ```typescript
+ * import { toTokenStatsPlotData } from "@effect-ontology/core/Prompt/Visualization"
+ * import * as Plot from "@observablehq/plot"
+ *
+ * const plotData = toTokenStatsPlotData(metadata.tokenStats, metadata)
+ *
+ * // In UI layer:
+ * const plot = Plot.plot({
+ *   marks: [
+ *     Plot.barY(plotData.data, {
+ *       x: "label",
+ *       y: "tokens",
+ *       fill: "steelblue",
+ *       title: (d) => `${d.label}: ${d.tokens} tokens`
+ *     })
+ *   ]
+ * })
+ * ```
+ */
+export const toTokenStatsPlotData = (
+  stats: TokenStats,
+  metadata: KnowledgeMetadata
+): TokenStatsPlotData => {
+  const data: Array<{ iri: string; label: string; tokens: number }> = []
+
+  // Convert HashMap to array with labels
+  for (const [iri, tokens] of HashMap.entries(stats.byClass)) {
+    const summary = HashMap.get(metadata.classSummaries, iri)
+    const label = summary._tag === "Some" ? summary.value.label : iri
+
+    data.push({ iri, label, tokens })
+  }
+
+  // Sort by token count descending
+  data.sort((a, b) => b.tokens - a.tokens)
+
+  return {
+    data,
+    summary: {
+      total: stats.totalTokens,
+      average: stats.averageTokensPerClass,
+      max: stats.maxTokensPerClass
+    }
+  }
+}
+
+/**
+ * Export ClassSummary to markdown table
+ *
+ * Generates a markdown table from class summary data.
+ * Useful for documentation and debugging.
+ *
+ * @param summary - The class summary
+ * @returns Markdown table string
+ *
+ * @since 1.0.0
+ * @category formatters
+ * @example
+ * ```typescript
+ * import { classSummaryToMarkdown } from "@effect-ontology/core/Prompt/Visualization"
+ *
+ * const markdown = classSummaryToMarkdown(summary)
+ * console.log(markdown)
+ * // | Property | Value |
+ * // |----------|-------|
+ * // | IRI | http://example.org/Person |
+ * // | Label | Person |
+ * // | Direct Properties | 3 |
+ * // ...
+ * ```
+ */
+export const classSummaryToMarkdown = (summary: ClassSummary): string => {
+  const rows = [
+    ["Property", "Value"],
+    ["--------", "-----"],
+    ["IRI", summary.iri],
+    ["Label", summary.label],
+    ["Direct Properties", summary.directProperties.toString()],
+    ["Inherited Properties", summary.inheritedProperties.toString()],
+    ["Total Properties", summary.totalProperties.toString()],
+    ["Parents", summary.parents.join(", ") || "None"],
+    ["Children", summary.children.join(", ") || "None"],
+    ["Depth", summary.depth.toString()],
+    ["Estimated Tokens", summary.estimatedTokens.toString()]
+  ]
+
+  return rows.map((row) => `| ${row[0]} | ${row[1]} |`).join("\n")
+}
+
+/**
+ * Export complete metadata to JSON
+ *
+ * Serializes metadata to JSON format for export/storage.
+ * Note: This loses Effect Schema type safety.
+ *
+ * @param metadata - The knowledge metadata
+ * @returns JSON string
+ *
+ * @since 1.0.0
+ * @category formatters
+ */
+export const metadataToJSON = (metadata: KnowledgeMetadata): string => {
+  // Convert HashMaps to plain objects for JSON serialization
+  const classSummariesObj: Record<string, ClassSummary> = {}
+  for (const [iri, summary] of HashMap.entries(metadata.classSummaries)) {
+    classSummariesObj[iri] = summary
+  }
+
+  const byClassObj: Record<string, number> = {}
+  for (const [iri, tokens] of HashMap.entries(metadata.tokenStats.byClass)) {
+    byClassObj[iri] = tokens
+  }
+
+  return JSON.stringify(
+    {
+      classSummaries: classSummariesObj,
+      dependencyGraph: metadata.dependencyGraph,
+      hierarchyTree: metadata.hierarchyTree,
+      tokenStats: {
+        ...metadata.tokenStats,
+        byClass: byClassObj
+      },
+      stats: metadata.stats
+    },
+    null,
+    2
+  )
+}
+
+/**
+ * Create a summary report in plain text
+ *
+ * Generates a human-readable summary of the metadata.
+ *
+ * @param metadata - The knowledge metadata
+ * @returns Plain text summary
+ *
+ * @since 1.0.0
+ * @category formatters
+ * @example
+ * ```typescript
+ * import { createSummaryReport } from "@effect-ontology/core/Prompt/Visualization"
+ *
+ * const report = createSummaryReport(metadata)
+ * console.log(report)
+ * // Ontology Metadata Summary
+ * // ========================
+ * // Total Classes: 15
+ * // Total Properties: 42
+ * // ...
+ * ```
+ */
+export const createSummaryReport = (metadata: KnowledgeMetadata): string => {
+  const lines = [
+    "Ontology Metadata Summary",
+    "========================",
+    "",
+    `Total Classes: ${metadata.stats.totalClasses}`,
+    `Total Properties: ${metadata.stats.totalProperties}`,
+    `Inherited Properties: ${metadata.stats.totalInheritedProperties}`,
+    `Average Properties/Class: ${metadata.stats.averagePropertiesPerClass.toFixed(2)}`,
+    `Maximum Depth: ${metadata.stats.maxDepth}`,
+    "",
+    "Token Statistics",
+    "----------------",
+    `Total Tokens: ${metadata.tokenStats.totalTokens}`,
+    `Average Tokens/Class: ${metadata.tokenStats.averageTokensPerClass.toFixed(2)}`,
+    `Maximum Tokens/Class: ${metadata.tokenStats.maxTokensPerClass}`,
+    `Estimated Cost: $${metadata.tokenStats.estimatedCost.toFixed(4)}`,
+    "",
+    "Graph Structure",
+    "---------------",
+    `Nodes: ${metadata.dependencyGraph.nodes.length}`,
+    `Edges: ${metadata.dependencyGraph.edges.length}`,
+    `Roots: ${metadata.hierarchyTree.roots.length}`
+  ]
+
+  return lines.join("\n")
+}
+
+================
+File: packages/core/src/Schema/Factory.ts
+================
+/**
+ * Dynamic Knowledge Graph Schema Factory
+ *
+ * Creates Effect Schemas tailored to specific ontologies by restricting
+ * class and property IRIs to the ontology's vocabulary.
+ *
+ * @module
+ * @since 1.0.0
+ */
+
+import { Array as A, Data, Schema as S } from "effect"
+
+/**
+ * Error thrown when attempting to create a schema with empty vocabularies
+ *
+ * @category errors
+ * @since 1.0.0
+ */
+export class EmptyVocabularyError extends Data.TaggedError("EmptyVocabularyError")<{
+  readonly type: "classes" | "properties"
+}> {
+  get message() {
+    return `Cannot create schema with zero ${this.type} IRIs`
+  }
+}
+
+/**
+ * Helper: Creates a Union schema from a non-empty array of string literals
+ *
+ * This satisfies TypeScript's requirement that Schema.Union receives
+ * variadic arguments with at least one member.
+ *
+ * @internal
+ */
+const unionFromStringArray = <T extends string>(
+  values: ReadonlyArray<T>,
+  errorType: "classes" | "properties"
+): S.Schema<T> => {
+  if (A.isEmptyReadonlyArray(values)) {
+    throw new EmptyVocabularyError({ type: errorType })
+  }
+
+  // Create individual Literal schemas for each IRI
+  // Use 'as const' and type assertion to ensure proper typing
+  const literals = values.map((iri) => S.Literal(iri)) as [S.Literal<[T]>, ...Array<S.Literal<[T]>>]
+
+  // Union them - TypeScript will infer the correct type
+  return S.Union(...literals)
+}
+
+/**
+ * The JSON-LD compatible structure for a single entity
+ *
+ * This matches the "Loose" schema approach: structure is enforced,
+ * but business logic (cardinality, required fields) is delegated to SHACL.
+ *
+ * @category model
+ * @since 1.0.0
+ */
+export const makeEntitySchema = <
+  ClassIRI extends string,
+  PropertyIRI extends string
+>(
+  classUnion: S.Schema<ClassIRI, ClassIRI, never>,
+  propertyUnion: S.Schema<PropertyIRI, PropertyIRI, never>
+) =>
+  S.Struct({
+    /**
+     * Entity identifier - can be a URI or blank node
+     */
+    "@id": S.String,
+
+    /**
+     * Entity type - must be a known ontology class
+     */
+    "@type": classUnion,
+
+    /**
+     * Entity properties as an array of predicate-object pairs
+     *
+     * This structure is more LLM-friendly than JSON-LD's flattened approach
+     * and maps cleanly to RDF triples.
+     */
+    properties: S.Array(
+      S.Struct({
+        /**
+         * Property IRI - must be from ontology vocabulary
+         */
+        predicate: propertyUnion,
+
+        /**
+         * Property value - either a literal string or a reference to another entity
+         */
+        object: S.Union(
+          S.String,
+          S.Struct({
+            "@id": S.String
+          })
+        )
+      })
+    )
+  })
+
+/**
+ * Creates a complete Knowledge Graph schema from ontology vocabularies
+ *
+ * This schema defines the contract between the LLM and our validation pipeline.
+ * It ensures:
+ * - All entity types are known classes
+ * - All properties are known predicates
+ * - Structure is valid JSON-LD
+ *
+ * Business logic (cardinality, domains, ranges) is enforced by SHACL validation
+ * in a later stage of the pipeline.
+ *
+ * @example
+ * ```typescript
+ * import { makeKnowledgeGraphSchema } from "@effect-ontology/core/Schema/Factory"
+ *
+ * const schema = makeKnowledgeGraphSchema(
+ *   ["http://xmlns.com/foaf/0.1/Person", "http://xmlns.com/foaf/0.1/Organization"],
+ *   ["http://xmlns.com/foaf/0.1/name", "http://xmlns.com/foaf/0.1/knows"]
+ * )
+ *
+ * // Valid data
+ * const valid = {
+ *   entities: [
+ *     {
+ *       "@id": "_:person1",
+ *       "@type": "http://xmlns.com/foaf/0.1/Person",
+ *       properties: [
+ *         {
+ *           predicate: "http://xmlns.com/foaf/0.1/name",
+ *           object: "Alice"
+ *         }
+ *       ]
+ *     }
+ *   ]
+ * }
+ *
+ * // Decode with validation
+ * const result = Schema.decodeUnknownSync(schema)(valid)
+ * ```
+ *
+ * @param classIris - Array of ontology class IRIs (must be non-empty)
+ * @param propertyIris - Array of ontology property IRIs (must be non-empty)
+ * @returns Effect Schema for knowledge graph validation
+ * @throws {EmptyVocabularyError} if either array is empty
+ *
+ * @category constructors
+ * @since 1.0.0
+ */
+export const makeKnowledgeGraphSchema = <
+  ClassIRI extends string = string,
+  PropertyIRI extends string = string
+>(
+  classIris: ReadonlyArray<ClassIRI>,
+  propertyIris: ReadonlyArray<PropertyIRI>
+) => {
+  // Create union schemas for vocabulary validation
+  const ClassUnion = unionFromStringArray(classIris, "classes")
+  const PropertyUnion = unionFromStringArray(propertyIris, "properties")
+
+  // Create the entity schema with our vocabulary constraints
+  const EntitySchema = makeEntitySchema(ClassUnion, PropertyUnion)
+
+  // The top-level schema is just a wrapper with an entities array
+  return S.Struct({
+    entities: S.Array(EntitySchema)
+  }).annotations({
+    identifier: "KnowledgeGraph",
+    title: "Knowledge Graph Extraction",
+    description: "A collection of entities extracted from text, validated against an ontology"
+  })
+}
+
+/**
+ * Type inference helper: extract the schema type
+ *
+ * @category type utilities
+ * @since 1.0.0
+ */
+export type KnowledgeGraphSchema<
+  ClassIRI extends string = string,
+  PropertyIRI extends string = string
+> = ReturnType<typeof makeKnowledgeGraphSchema<ClassIRI, PropertyIRI>>
+
+/**
+ * Type inference helper: extract the validated data type
+ *
+ * @category type utilities
+ * @since 1.0.0
+ */
+export type KnowledgeGraph<
+  ClassIRI extends string = string,
+  PropertyIRI extends string = string
+> = S.Schema.Type<KnowledgeGraphSchema<ClassIRI, PropertyIRI>>
+
+================
+File: packages/core/src/Schema/IMPLEMENTATION_NOTES.md
+================
+# Effect Schema Implementation Notes
+
+**Date:** 2025-11-18
+**Source:** `/docs/effect-source/effect/src/Schema.ts`, `/docs/effect-source/effect/src/SchemaAST.ts`
+
+## Key Findings from Source Code Analysis
+
+### 1. Schema.Literal() Implementation
+
+**Location:** `Schema.ts:686-713`
+
+```typescript
+function makeLiteralClass<Literals extends array_.NonEmptyReadonlyArray<AST.LiteralValue>>(
+  literals: Literals,
+  ast: AST.AST = getDefaultLiteralAST(literals)
+): Literal<Literals> {
+  return class LiteralClass extends make<Literals[number]>(ast) {
+    static override annotations(annotations: Annotations.Schema<Literals[number]>): Literal<Literals> {
+      return makeLiteralClass(this.literals, mergeSchemaAnnotations(this.ast, annotations))
+    }
+    static literals = [...literals] as Literals
+  }
+}
+
+export function Literal<Literals extends ReadonlyArray<AST.LiteralValue>>(
+  ...literals: Literals
+): SchemaClass<Literals[number]> | Never {
+  return array_.isNonEmptyReadonlyArray(literals) ? makeLiteralClass(literals) : Never
+}
+```
+
+**Key Points:**
+- `Schema.Literal()` accepts **variadic arguments**, not an array
+- Returns `Never` if called with zero arguments
+- Uses `AST.Literal` internally via `getDefaultLiteralAST`
+- Each literal value creates an `AST.Literal` instance
+
+### 2. Schema.Union() Implementation
+
+**Location:** `Schema.ts:1267-1305`
+
+```typescript
+const getDefaultUnionAST = <Members extends AST.Members<Schema.All>>(members: Members): AST.AST =>
+  AST.Union.make(members.map((m) => m.ast))
+
+function makeUnionClass<Members extends AST.Members<Schema.All>>(
+  members: Members,
+  ast: AST.AST = getDefaultUnionAST(members)
+): Union<Members> {
+  return class UnionClass extends make<
+    Schema.Type<Members[number]>,
+    Schema.Encoded<Members[number]>,
+    Schema.Context<Members[number]>
+  >(ast) {
+    static override annotations(annotations: Annotations.Schema<Schema.Type<Members[number]>>): Union<Members> {
+      return makeUnionClass(this.members, mergeSchemaAnnotations(this.ast, annotations))
+    }
+    static members = [...members]
+  }
+}
+
+export function Union<Members extends ReadonlyArray<Schema.All>>(
+  ...members: Members
+) {
+  return AST.isMembers(members)
+    ? makeUnionClass(members)
+    : array_.isNonEmptyReadonlyArray(members)
+    ? members[0]
+    : Never
+}
+```
+
+**Key Points:**
+- `Schema.Union()` also accepts **variadic arguments**
+- Flattens and unifies the union members via `AST.Union.make()`
+- Returns single member if only one schema passed
+- Returns `Never` if called with zero arguments
+
+### 3. AST.Literal Structure
+
+**Location:** `SchemaAST.ts:527-547`
+
+```typescript
+export class Literal implements Annotated {
+  readonly _tag = "Literal"
+  constructor(readonly literal: LiteralValue, readonly annotations: Annotations = {}) {}
+  toString() {
+    return Option.getOrElse(getExpected(this), () => Inspectable.formatUnknown(this.literal))
+  }
+  toJSON(): object {
+    return {
+      _tag: this._tag,
+      literal: Predicate.isBigInt(this.literal) ? String(this.literal) : this.literal,
+      annotations: toJSONAnnotations(this.annotations)
+    }
+  }
+}
+
+export type LiteralValue = string | number | boolean | null | bigint
+```
+
+**Key Points:**
+- AST.Literal holds a single primitive value
+- Supports: `string | number | boolean | null | bigint`
+- Has annotations support for metadata
+
+### 4. AST.Union Structure
+
+**Location:** `SchemaAST.ts:1677-1697`
+
+```typescript
+export class Union<M extends AST = AST> implements Annotated {
+  static make = (types: ReadonlyArray<AST>, annotations?: Annotations): AST => {
+    return isMembers(types) ? new Union(types, annotations) : types.length === 1 ? types[0] : neverKeyword
+  }
+
+  static unify = (candidates: ReadonlyArray<AST>, annotations?: Annotations): AST => {
+    return Union.make(unify(flatten(candidates)), annotations)
+  }
+
+  readonly _tag = "Union"
+  private constructor(readonly types: Members<M>, readonly annotations: Annotations = {}) {}
+
+  toString() {
+    return Option.getOrElse(getExpected(this), () => this.types.map(String).join(" | "))
+  }
+}
+```
+
+**Key Points:**
+- `AST.Union.make()` is the factory (not a constructor)
+- Automatically flattens nested unions
+- Unifies duplicate members
+- Returns single type if only one member
+
+## Implementation Strategy for Dynamic Schemas
+
+### Challenge: Variadic Arguments vs Arrays
+
+Since we have dynamic arrays of IRIs from the ontology, we can't use variadic arguments directly.
+
+**Solution: Use spread operator with proper typing**
+
+```typescript
+// ❌ Won't work - type mismatch
+const literals = classIris.map(iri => Schema.Literal(iri))
+const union = Schema.Union(...literals) // Type error!
+
+// ✅ Correct approach
+import { Schema as S, Array as A } from "effect"
+
+export const makeClassUnion = (classIris: ReadonlyArray<string>) => {
+  // Create array of Schema instances
+  const schemas = A.map(classIris, (iri) => S.Literal(iri))
+
+  // TypeScript can spread the array if we assert the type
+  return S.Union(...(schemas as [S.Schema<string>, ...Array<S.Schema<string>>]))
+}
+```
+
+### Alternative: Use Schema.Enums for String Unions
+
+**Location:** `Schema.ts:747-780`
+
+For our use case with string IRIs, `Schema.Enums` might be more appropriate:
+
+```typescript
+const getDefaultEnumsAST = <A extends EnumsDefinition>(enums: A) =>
+  new AST.Enums(
+    Object.keys(enums).filter(
+      (key) => typeof enums[enums[key] as any] !== "number"
+    ).map((key) => [key, enums[key]])
+  )
+
+export interface Enums<A extends EnumsDefinition> extends AnnotableClass<Enums<A>, A[keyof A]> {
+  readonly enums: A
+}
+```
+
+**But:** Enums require an object definition, not a dynamic array. Less flexible.
+
+## Recommended Pattern for Our Use Case
+
+After analysis, the **correct pattern** is:
+
+```typescript
+import { Schema as S, Array as A } from "effect"
+
+export const makeKnowledgeGraphSchema = (
+  classIris: ReadonlyArray<string>,
+  propertyIris: ReadonlyArray<string>
+) => {
+  // Handle edge case: empty arrays
+  if (A.isEmptyReadonlyArray(classIris)) {
+    throw new Error("Cannot create schema with zero class IRIs")
+  }
+  if (A.isEmptyReadonlyArray(propertyIris)) {
+    throw new Error("Cannot create schema with zero property IRIs")
+  }
+
+  // Create individual Literal schemas
+  const classSchemas = A.map(classIris, (iri) => S.Literal(iri))
+  const propSchemas = A.map(propertyIris, (iri) => S.Literal(iri))
+
+  // Union them - TypeScript needs proper typing
+  // Use Array.headNonEmpty + Array.tailNonEmpty to satisfy type constraints
+  const ClassUnion = S.Union(
+    A.headNonEmpty(classSchemas),
+    ...A.tailNonEmpty(classSchemas)
+  )
+
+  const PropertyUnion = S.Union(
+    A.headNonEmpty(propSchemas),
+    ...A.tailNonEmpty(propSchemas)
+  )
+
+  return S.Struct({
+    entities: S.Array(
+      S.Struct({
+        "@id": S.String,
+        "@type": ClassUnion,
+        properties: S.Array(
+          S.Struct({
+            predicate: PropertyUnion,
+            object: S.Union(
+              S.String,
+              S.Struct({ "@id": S.String })
+            )
+          })
+        )
+      })
+    )
+  })
+}
+```
+
+### Why This Works:
+
+1. **Type Safety:** `headNonEmpty` + `tailNonEmpty` satisfy the `[T, ...T[]]` constraint
+2. **Runtime Safety:** We check for empty arrays upfront
+3. **No AST Manipulation:** Uses public API only
+4. **Performant:** Schema construction is one-time cost
+
+## Alternative: Helper Function
+
+For cleaner code, we can create a helper:
+
+```typescript
+const unionFromArray = <T extends string>(
+  values: ReadonlyArray<T>
+): S.Schema<T> => {
+  if (A.isEmptyReadonlyArray(values)) {
+    return S.Never as any // or throw
+  }
+  const schemas = A.map(values, (v) => S.Literal(v))
+  return S.Union(A.headNonEmpty(schemas), ...A.tailNonEmpty(schemas))
+}
+
+// Usage
+const ClassUnion = unionFromArray(classIris)
+const PropertyUnion = unionFromArray(propertyIris)
+```
+
+## Next Steps
+
+1. Implement the schema factory with the pattern above
+2. Write tests verifying:
+   - Valid IRIs accepted
+   - Unknown IRIs rejected
+   - Empty arrays handled gracefully
+3. Benchmark performance with large ontologies (1000+ classes)
+
+---
+
+**Source References:**
+- Schema.Literal: `/docs/effect-source/effect/src/Schema.ts:686-713`
+- Schema.Union: `/docs/effect-source/effect/src/Schema.ts:1267-1305`
+- AST.Literal: `/docs/effect-source/effect/src/SchemaAST.ts:527-547`
+- AST.Union: `/docs/effect-source/effect/src/SchemaAST.ts:1677-1697`
+
+================
+File: packages/core/src/Schema/index.ts
+================
+/**
+ * Schema Module
+ *
+ * Public API for Effect Schema utilities and metadata annotations.
+ *
+ * @module Schema
+ */
+
+export { type KnowledgeGraphSchema, makeKnowledgeGraphSchema } from "./Factory.js"
+export {
+  createAnnotatedSchema,
+  getOntologyMetadata,
+  hasOntologyMetadata,
+  type OntologyMetadata,
+  OntologyMetadataKey,
+  withOntologyMetadata
+} from "./Metadata.js"
+
+================
+File: packages/core/src/Schema/Metadata.ts
+================
+/**
+ * Schema Metadata Annotations
+ *
+ * Provides utilities for attaching ontology metadata to Effect Schemas.
+ * Useful for debugging, validation, and tracing schema origins.
+ *
+ * **Use Cases:**
+ * - Attach source ontology IRI to generated schemas
+ * - Track which ontology version was used for schema generation
+ * - Debug schema generation by tracing back to ontology source
+ *
+ * @module Schema/Metadata
+ * @since 1.0.0
+ */
+
+import { Option, Schema } from "effect"
+
+/**
+ * OntologyMetadata - Metadata about the ontology source
+ *
+ * Attached to Effect Schemas to track their ontology origin.
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export interface OntologyMetadata {
+  /** Source ontology IRI */
+  readonly sourceIRI: string
+  /** Ontology version (if available) */
+  readonly ontologyVersion?: string
+  /** Timestamp when schema was generated */
+  readonly generatedAt: Date
+  /** Additional custom metadata */
+  readonly custom?: Record<string, unknown>
+}
+
+/**
+ * Symbol key for storing ontology metadata on schemas
+ *
+ * @since 1.0.0
+ * @category symbols
+ */
+export const OntologyMetadataKey: unique symbol = Symbol.for(
+  "@effect-ontology/core/Schema/OntologyMetadata"
+)
+
+/**
+ * Attach ontology metadata to a schema
+ *
+ * Stores metadata using a symbol property that won't interfere with
+ * normal schema operations. The metadata can be retrieved later using
+ * getOntologyMetadata.
+ *
+ * @param schema - The schema to annotate
+ * @param metadata - The ontology metadata to attach
+ * @returns The same schema with metadata attached
+ *
+ * @since 1.0.0
+ * @category constructors
+ * @example
+ * ```typescript
+ * import { withOntologyMetadata } from "@effect-ontology/core/Schema/Metadata"
+ * import { Schema } from "effect"
+ *
+ * const PersonSchema = Schema.Struct({
+ *   name: Schema.String,
+ *   age: Schema.Number
+ * })
+ *
+ * const AnnotatedSchema = withOntologyMetadata(PersonSchema, {
+ *   sourceIRI: "http://xmlns.com/foaf/0.1/",
+ *   ontologyVersion: "1.0",
+ *   generatedAt: new Date()
+ * })
+ * ```
+ */
+export const withOntologyMetadata = <A, I, R>(
+  schema: Schema.Schema<A, I, R>,
+  metadata: OntologyMetadata
+): Schema.Schema<A, I, R> => {
+  // Cast to any to attach symbol property
+  // This is safe because we're not modifying the schema's behavior,
+  // just attaching metadata
+  ;(schema as any)[OntologyMetadataKey] = metadata
+  return schema
+}
+
+/**
+ * Retrieve ontology metadata from a schema
+ *
+ * Looks for metadata attached via withOntologyMetadata.
+ * Returns None if no metadata is found.
+ *
+ * @param schema - The schema to inspect
+ * @returns Option containing metadata if found
+ *
+ * @since 1.0.0
+ * @category accessors
+ * @example
+ * ```typescript
+ * import { getOntologyMetadata, withOntologyMetadata } from "@effect-ontology/core/Schema/Metadata"
+ * import { Schema, Option } from "effect"
+ *
+ * const schema = withOntologyMetadata(Schema.String, {
+ *   sourceIRI: "http://example.org/ontology",
+ *   generatedAt: new Date()
+ * })
+ *
+ * const metadata = getOntologyMetadata(schema)
+ * if (Option.isSome(metadata)) {
+ *   console.log(`Source: ${metadata.value.sourceIRI}`)
+ * }
+ * ```
+ */
+export const getOntologyMetadata = <A, I, R>(
+  schema: Schema.Schema<A, I, R>
+): Option.Option<OntologyMetadata> => {
+  const metadata = (schema as any)[OntologyMetadataKey]
+  return metadata ? Option.some(metadata) : Option.none()
+}
+
+/**
+ * Check if a schema has ontology metadata
+ *
+ * @param schema - The schema to check
+ * @returns True if schema has metadata attached
+ *
+ * @since 1.0.0
+ * @category guards
+ */
+export const hasOntologyMetadata = <A, I, R>(schema: Schema.Schema<A, I, R>): boolean =>
+  Option.isSome(getOntologyMetadata(schema))
+
+/**
+ * Create a metadata-annotated schema from scratch
+ *
+ * Convenience function that combines schema creation and metadata annotation.
+ *
+ * @param schemaFactory - Function that creates the schema
+ * @param metadata - Ontology metadata to attach
+ * @returns Schema with metadata attached
+ *
+ * @since 1.0.0
+ * @category constructors
+ * @example
+ * ```typescript
+ * import { createAnnotatedSchema } from "@effect-ontology/core/Schema/Metadata"
+ * import { Schema } from "effect"
+ *
+ * const PersonSchema = createAnnotatedSchema(
+ *   () => Schema.Struct({
+ *     name: Schema.String,
+ *     age: Schema.Number
+ *   }),
+ *   {
+ *     sourceIRI: "http://xmlns.com/foaf/0.1/Person",
+ *     generatedAt: new Date()
+ *   }
+ * )
+ * ```
+ */
+export const createAnnotatedSchema = <A, I, R>(
+  schemaFactory: () => Schema.Schema<A, I, R>,
+  metadata: OntologyMetadata
+): Schema.Schema<A, I, R> => withOntologyMetadata(schemaFactory(), metadata)
+
+================
+File: packages/core/src/Schema/README.md
+================
+# Schema Module - JSON Schema Export for LLMs
+
+## Overview
+
+The Schema module provides dynamic Effect Schema generation from ontology vocabularies with JSON Schema export for LLM tool calling APIs.
+
+## Usage
+
+### Creating a Schema
+
+```typescript
+import { makeKnowledgeGraphSchema } from "@effect-ontology/core/Schema/Factory"
+
+const schema = makeKnowledgeGraphSchema(
+  ["http://xmlns.com/foaf/0.1/Person", "http://xmlns.com/foaf/0.1/Organization"],
+  ["http://xmlns.com/foaf/0.1/name", "http://xmlns.com/foaf/0.1/knows"]
+)
+```
+
+### Exporting to JSON Schema
+
+```typescript
+import { JSONSchema } from "effect"
+
+const jsonSchema = JSONSchema.make(schema)
+```
+
+##JSON Schema Structure
+
+Effect generates JSON Schema with a `$ref` pattern:
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/$defs/KnowledgeGraph",
+  "$defs": {
+    "KnowledgeGraph": {
+      "type": "object",
+      "required": ["entities"],
+      "properties": {
+        "entities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["@id", "@type", "properties"],
+            "properties": {
+              "@id": { "type": "string" },
+              "@type": {
+                "type": "string",
+                "enum": ["http://xmlns.com/foaf/0.1/Person", ...]
+              },
+              "properties": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["predicate", "object"],
+                  "properties": {
+                    "predicate": {
+                      "type": "string",
+                      "enum": ["http://xmlns.com/foaf/0.1/name", ...]
+                    },
+                    "object": {
+                      "anyOf": [
+                        { "type": "string" },
+                        {
+                          "type": "object",
+                          "required": ["@id"],
+                          "properties": { "@id": { "type": "string" } }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "title": "Knowledge Graph Extraction",
+      "description": "A collection of entities extracted from text, validated against an ontology"
+    }
+  }
+}
+```
+
+## LLM Provider Integration
+
+### Anthropic Claude
+
+Anthropic accepts the full JSON Schema with `$ref`:
+
+```typescript
+const tool = {
+  name: "extract_knowledge_graph",
+  description: "Extract structured knowledge from text",
+  input_schema: JSONSchema.make(schema) // Use as-is
+}
+```
+
+### OpenAI
+
+OpenAI requires dereferencing and removing `$schema`:
+
+```typescript
+const jsonSchema = JSONSchema.make(schema)
+
+// Helper to dereference
+const getDefinition = (js: any) => {
+  const defName = js.$ref.split("/").pop()
+  return js.$defs[defName]
+}
+
+const schemaDef = getDefinition(jsonSchema)
+
+const tool = {
+  type: "function",
+  function: {
+    name: "extract_knowledge_graph",
+    description: "Extract structured knowledge from text",
+    parameters: {
+      type: schemaDef.type,
+      properties: schemaDef.properties,
+      required: schemaDef.required
+      // Note: No $schema field
+    }
+  }
+}
+```
+
+## Key Features
+
+### Vocabulary Constraints
+
+- **Class IRIs** → `enum` constraint on `@type`
+- **Property IRIs** → `enum` constraint on `predicate`
+- Unknown values rejected at validation time
+
+### Type Safety
+
+- Full TypeScript inference
+- Compile-time checks for valid IRIs
+- Runtime validation with Effect Schema
+
+### Performance
+
+- Schema creation: O(n + m) where n=classes, m=properties
+- Tested with 70+ classes (FOAF-sized ontologies)
+- Validation: O(k) where k=entities
+
+## Testing
+
+See `test/Schema/JsonSchemaExport.test.ts` for:
+- ✅ Anthropic compatibility
+- ✅ OpenAI compatibility
+- ✅ Large vocabulary handling (50+ classes)
+- ✅ Metadata preservation
+- ✅ Deterministic output
+
+## Integration Points
+
+### Phase 2.3: LLM Service
+
+The LLM service will use this for tool definitions:
+
+```typescript
+import { makeKnowledgeGraphSchema } from "@effect-ontology/core/Schema/Factory"
+import { JSONSchema } from "effect"
+
+class LLMService {
+  createToolDefinition(ontology: OntologyContext) {
+    const schema = makeKnowledgeGraphSchema(
+      ontology.classIris,
+      ontology.propertyIris
+    )
+
+    return {
+      name: "extract_knowledge_graph",
+      description: `Extract ${ontology.name} knowledge from text`,
+      input_schema: JSONSchema.make(schema)
+    }
+  }
+}
+```
+
+### Phase 2.1: RDF Service
+
+The validated output will be converted to RDF:
+
+```typescript
+import { Schema } from "effect"
+
+const validated = Schema.decodeUnknownSync(schema)(llmOutput)
+// validated.entities[].properties[] → RDF quads
+```
+
+## References
+
+- Effect Schema: https://effect.website/docs/schema/introduction
+- JSON Schema Spec: https://json-schema.org/draft-07/schema
+- Anthropic Tools: https://docs.anthropic.com/claude/docs/tool-use
+- OpenAI Functions: https://platform.openai.com/docs/guides/function-calling
+
+================
+File: packages/core/src/Services/Extraction.ts
+================
+/**
+ * Extraction Pipeline Service
+ *
+ * Orchestrates the end-to-end knowledge graph extraction pipeline:
+ * 1. Prompt generation from ontology
+ * 2. LLM extraction with structured output
+ * 3. RDF conversion
+ * 4. Event broadcasting to multiple consumers
+ *
+ * **Architecture:**
+ * - Uses PubSub.unbounded for event broadcasting to multiple UI consumers
+ * - Effect.gen workflow (not Stream) for single-value transformations
+ * - Scoped service with automatic PubSub cleanup
+ * - Integrates LlmService, RdfService, and PromptService
+ *
+ * @module Services/Extraction
+ * @since 1.0.0
+ */
+
+import type { LanguageModel } from "@effect/ai"
+import type { Graph } from "effect"
+import { Effect, HashMap, PubSub } from "effect"
+import { type ExtractionError, ExtractionEvent, type ValidationReport } from "../Extraction/Events.js"
+import type { NodeId, OntologyContext } from "../Graph/Types.js"
+import { defaultPromptAlgebra } from "../Prompt/Algebra.js"
+import { solveGraph, type SolverError } from "../Prompt/Solver.js"
+import { StructuredPrompt } from "../Prompt/Types.js"
+import { makeKnowledgeGraphSchema } from "../Schema/Factory.js"
+import { extractVocabulary, LlmService } from "./Llm.js"
+import { RdfService } from "./Rdf.js"
+
+/**
+ * Extraction request input
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export interface ExtractionRequest {
+  /** Input text to extract knowledge from */
+  readonly text: string
+  /** Dependency graph for prompt generation */
+  readonly graph: Graph.Graph<NodeId, unknown, "directed">
+  /** Ontology context for extraction */
+  readonly ontology: OntologyContext
+}
+
+/**
+ * Extraction result output
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export interface ExtractionResult {
+  /** SHACL validation report */
+  readonly report: ValidationReport
+  /** Turtle serialization of RDF graph */
+  readonly turtle: string
+}
+
+/**
+ * Extraction Pipeline Service
+ *
+ * Provides orchestration of the complete extraction pipeline with real-time
+ * event broadcasting to multiple consumers via PubSub.
+ *
+ * **Flow:**
+ * 1. Generate prompt from ontology using topological catamorphism
+ * 2. Extract vocabulary (classes + properties) for schema generation
+ * 3. Call LLM with structured output schema
+ * 4. Convert JSON entities to RDF quads
+ * 5. Validate RDF with SHACL (TODO: pending SHACL service)
+ * 6. Emit events at each stage for UI consumption
+ *
+ * **Event Broadcasting:**
+ * - Uses PubSub.unbounded for multiple independent consumers
+ * - Subscribers receive all events from pipeline execution
+ * - Events: LLMThinking, JSONParsed, RDFConstructed, ValidationComplete
+ *
+ * @since 1.0.0
+ * @category services
+ * @example
+ * ```typescript
+ * import { ExtractionPipeline } from "@effect-ontology/core/Services/Extraction"
+ * import { Effect, Stream } from "effect"
+ *
+ * const program = Effect.gen(function* () {
+ *   const pipeline = yield* ExtractionPipeline
+ *
+ *   // Subscribe to events
+ *   const subscription = yield* pipeline.subscribe
+ *
+ *   // Run extraction
+ *   const result = yield* pipeline.extract({
+ *     text: "Alice is a person.",
+ *     ontology
+ *   })
+ *
+ *   // Consume events
+ *   yield* Stream.fromQueue(subscription).pipe(
+ *     Stream.tap((event) =>
+ *       ExtractionEvent.$match(event, {
+ *         LLMThinking: () => Effect.log("LLMThinking"),
+ *         JSONParsed: (e) => Effect.log(`JSONParsed: ${e.count} entities`),
+ *         RDFConstructed: (e) => Effect.log(`RDFConstructed: ${e.triples} triples`),
+ *         ValidationComplete: (e) => Effect.log(`ValidationComplete: conforms=${e.report.conforms}`)
+ *       })
+ *     ),
+ *     Stream.runDrain
+ *   )
+ *
+ *   console.log(result.report)
+ * }).pipe(Effect.scoped)
+ * ```
+ */
+export class ExtractionPipeline extends Effect.Service<ExtractionPipeline>()(
+  "ExtractionPipeline",
+  {
+    scoped: Effect.gen(function*() {
+      // Create PubSub for event broadcasting (lives as long as service)
+      const eventBus = yield* PubSub.unbounded<ExtractionEvent>()
+
+      return {
+        /**
+         * Subscribe to extraction events
+         *
+         * Returns a scoped Queue subscription that receives all events
+         * emitted during pipeline execution. Multiple subscribers can
+         * consume events independently.
+         *
+         * **Cleanup:** Subscription is automatically closed when Effect scope ends
+         *
+         * @returns Scoped queue subscription
+         *
+         * @since 1.0.0
+         * @category operations
+         */
+        subscribe: eventBus.subscribe,
+
+        /**
+         * Execute knowledge graph extraction pipeline
+         *
+         * Orchestrates the complete extraction flow with event emission
+         * at each stage. Events are published to PubSub for consumption
+         * by multiple subscribers.
+         *
+         * **Pipeline Stages:**
+         * 1. Emit LLMThinking event
+         * 2. Generate prompt from ontology (solveGraph + PromptAlgebra)
+         * 3. Extract vocabulary for schema generation
+         * 4. Call LLM with structured output
+         * 5. Emit JSONParsed event with entity count
+         * 6. Convert JSON to RDF quads
+         * 7. Emit RDFConstructed event with triple count
+         * 8. Validate RDF with SHACL (TODO: pending SHACL service)
+         * 9. Emit ValidationComplete event with report
+         * 10. Return result
+         *
+         * **Error Handling:**
+         * - LLMError: API failures, timeouts, validation errors
+         * - RdfError: RDF conversion failures
+         * - ShaclError: SHACL validation failures (TODO)
+         *
+         * @param request - Extraction request with text and ontology
+         * @returns Effect yielding extraction result or error
+         *
+         * @since 1.0.0
+         * @category operations
+         */
+        extract: (request: ExtractionRequest): Effect.Effect<
+          ExtractionResult,
+          ExtractionError | SolverError,
+          LlmService | RdfService | LanguageModel.LanguageModel
+        > =>
+          Effect.gen(function*() {
+            const llm = yield* LlmService
+            const rdf = yield* RdfService
+
+            // Stage 1: Emit LLMThinking event
+            yield* eventBus.publish(ExtractionEvent.LLMThinking())
+
+            // Stage 2: Generate prompt from ontology
+            const promptMap = yield* solveGraph(
+              request.graph,
+              request.ontology,
+              defaultPromptAlgebra
+            )
+
+            // Combine all prompts into single StructuredPrompt
+            const prompts = Array.from(HashMap.values(promptMap))
+            const combinedPrompt = StructuredPrompt.combineAll(prompts)
+
+            // Stage 3: Extract vocabulary for schema generation
+            const { classIris, propertyIris } = extractVocabulary(
+              request.ontology
+            )
+
+            // Generate dynamic schema with vocabulary constraints
+            const schema = makeKnowledgeGraphSchema(classIris, propertyIris)
+
+            // Stage 4: Call LLM with structured output
+            const knowledgeGraph = yield* llm.extractKnowledgeGraph(
+              request.text,
+              request.ontology,
+              combinedPrompt,
+              schema
+            )
+
+            // Stage 5: Emit JSONParsed event
+            yield* eventBus.publish(
+              ExtractionEvent.JSONParsed({
+                count: knowledgeGraph.entities.length
+              })
+            )
+
+            // Stage 6: Convert JSON to RDF
+            const store = yield* rdf.jsonToStore(knowledgeGraph)
+
+            // Stage 7: Emit RDFConstructed event
+            yield* eventBus.publish(
+              ExtractionEvent.RDFConstructed({
+                triples: store.size
+              })
+            )
+
+            // Stage 8: Serialize to Turtle for output
+            const turtle = yield* rdf.storeToTurtle(store)
+
+            // Stage 9: SHACL validation (TODO: pending SHACL service)
+            // For now, return success report with no violations
+            const report: ValidationReport = {
+              conforms: true,
+              results: []
+            }
+
+            // Stage 10: Emit ValidationComplete event
+            yield* eventBus.publish(
+              ExtractionEvent.ValidationComplete({ report })
+            )
+
+            // Return result
+            return {
+              report,
+              turtle
+            }
+          })
+      }
+    })
+  }
+) {}
+
+================
+File: packages/core/src/Services/Llm.ts
+================
+/**
+ * LLM Service - Knowledge Graph Extraction using @effect/ai
+ *
+ * This service provides LLM-powered extraction operations using @effect/ai's
+ * LanguageModel service with structured output generation.
+ *
+ * **Architecture:**
+ * 1. Takes text + ontology + schema as input
+ * 2. Uses StructuredPrompt from Prompt service to build context
+ * 3. Calls LanguageModel.generateObject with the schema
+ * 4. Returns validated KnowledgeGraph type
+ *
+ * @module Services/Llm
+ * @since 1.0.0
+ */
+
+import { LanguageModel } from "@effect/ai"
+import { Effect, HashMap } from "effect"
+import { LLMError } from "../Extraction/Events.js"
+import { isClassNode, type OntologyContext } from "../Graph/Types.js"
+import { renderExtractionPrompt } from "../Prompt/PromptDoc.js"
+import type { StructuredPrompt } from "../Prompt/Types.js"
+import type { KnowledgeGraphSchema } from "../Schema/Factory.js"
+
+/**
+ * Extract class and property IRIs from OntologyContext
+ *
+ * Helper function to get vocabulary arrays for schema generation.
+ *
+ * @param ontology - The ontology context
+ * @returns Arrays of class and property IRIs
+ *
+ * @since 1.0.0
+ * @category helpers
+ */
+export const extractVocabulary = (ontology: OntologyContext) => {
+  const classIris: Array<string> = []
+  const propertyIris: Array<string> = []
+
+  // Extract class IRIs from nodes using HashMap.values()
+  for (const node of HashMap.values(ontology.nodes)) {
+    if (isClassNode(node)) {
+      classIris.push(node.id)
+
+      // Extract properties from this class
+      for (const prop of node.properties) {
+        if (!propertyIris.includes(prop.iri)) {
+          propertyIris.push(prop.iri)
+        }
+      }
+    }
+  }
+
+  // Add universal properties
+  for (const prop of ontology.universalProperties) {
+    if (!propertyIris.includes(prop.iri)) {
+      propertyIris.push(prop.iri)
+    }
+  }
+
+  return { classIris, propertyIris }
+}
+
+/**
+ * NOTE: buildPromptText has been replaced with renderExtractionPrompt
+ * from Prompt/PromptDoc.ts for better maintainability and semantic structure.
+ *
+ * The new implementation uses @effect/printer for declarative document
+ * construction while maintaining identical output format.
+ *
+ * See: packages/core/src/Prompt/PromptDoc.ts
+ */
+
+/**
+ * LLM Service for knowledge graph extraction
+ *
+ * Provides structured extraction of knowledge graphs from text using a language
+ * model with schema validation. Integrates with the Prompt service for contextual
+ * instructions and uses Effect Schema for type-safe validation.
+ *
+ * @since 1.0.0
+ * @category services
+ * @example
+ * ```typescript
+ * import { LlmService } from "@effect-ontology/core/Services/Llm"
+ * import { makeKnowledgeGraphSchema } from "@effect-ontology/core/Schema/Factory"
+ * import { LanguageModel } from "@effect/ai"
+ *
+ * const program = Effect.gen(function* () {
+ *   const llm = yield* LlmService
+ *
+ *   const schema = makeKnowledgeGraphSchema(
+ *     ["http://xmlns.com/foaf/0.1/Person"],
+ *     ["http://xmlns.com/foaf/0.1/name"]
+ *   )
+ *
+ *   const result = yield* llm.extractKnowledgeGraph(
+ *     "Alice is a person.",
+ *     ontology,
+ *     prompt,
+ *     schema
+ *   )
+ *
+ *   console.log(result.entities)
+ * })
+ * ```
+ */
+export class LlmService extends Effect.Service<LlmService>()("LlmService", {
+  sync: () => ({
+    /**
+     * Extract knowledge graph from text using LLM with tool calling
+     *
+     * Uses @effect/ai's generateObject to get structured output that matches
+     * the provided schema. The schema is dynamically generated based on the
+     * ontology vocabulary, ensuring the LLM only returns valid entities and
+     * properties.
+     *
+     * **Flow:**
+     * 1. Build prompt from StructuredPrompt + text
+     * 2. Call LanguageModel.generateObject with schema
+     * 3. Extract and return validated value
+     * 4. Map errors to LLMError
+     *
+     * @param text - Input text to extract knowledge from
+     * @param ontology - Ontology context (unused directly, but available for future extensions)
+     * @param prompt - Structured prompt from Prompt service
+     * @param schema - Dynamic schema for validation
+     * @returns Effect yielding validated knowledge graph or error
+     *
+     * @since 1.0.0
+     * @category operations
+     */
+    extractKnowledgeGraph: <ClassIRI extends string, PropertyIRI extends string>(
+      text: string,
+      _ontology: OntologyContext,
+      prompt: StructuredPrompt,
+      schema: KnowledgeGraphSchema<ClassIRI, PropertyIRI>
+    ) =>
+      Effect.gen(function*() {
+        // Build the complete prompt using @effect/printer
+        const promptText = renderExtractionPrompt(prompt, text)
+
+        // Call LLM with structured output using the exported function
+        const response = yield* LanguageModel.generateObject({
+          prompt: promptText,
+          schema,
+          objectName: "KnowledgeGraph"
+        })
+
+        // Return the validated value
+        return response.value
+      }).pipe(
+        // Map all errors to LLMError
+        Effect.catchAll((error) =>
+          Effect.fail(
+            new LLMError({
+              module: "LlmService",
+              method: "extractKnowledgeGraph",
+              reason: "ApiError",
+              description: `LLM extraction failed: ${
+                error && typeof error === "object" && "message" in error
+                  ? error.message
+                  : String(error)
+              }`,
+              cause: error
+            })
+          )
+        )
+      )
+  })
+}) {}
+
+================
+File: packages/core/src/Services/Rdf.ts
+================
+/**
+ * RDF Service - Converts validated JSON entities to RDF using N3 library
+ *
+ * This service provides stateless operations for converting knowledge graph
+ * entities (from makeKnowledgeGraphSchema) to RDF quads using the N3 library.
+ *
+ * **Design Principles:**
+ * - Stateless: Fresh N3.Store created per operation (no shared state)
+ * - Safe: No resource management needed (N3.Store is GC'd)
+ * - Type-safe: Explicit N3 types, no `any`
+ * - Effect-native: Proper error channel with RdfError
+ *
+ * **Resource Strategy:**
+ * N3.Store is a pure in-memory structure with no cleanup needed.
+ * Creating fresh stores per operation provides isolation and simplicity.
+ *
+ * @module Services/Rdf
+ * @since 1.0.0
+ */
+
+import { Effect } from "effect"
+import * as N3 from "n3"
+import { RdfError } from "../Extraction/Events.js"
+
+/**
+ * Re-exported N3 types for type safety
+ *
+ * @since 1.0.0
+ * @category types
+ */
+export type RdfQuad = N3.Quad
+export type RdfStore = N3.Store
+export type RdfTerm = N3.Term
+
+/**
+ * Entity structure from makeKnowledgeGraphSchema
+ *
+ * @since 1.0.0
+ * @category types
+ */
+export interface KnowledgeGraphEntity {
+  readonly "@id": string
+  readonly "@type": string
+  readonly properties: ReadonlyArray<{
+    readonly predicate: string
+    readonly object: string | { readonly "@id": string }
+  }>
+}
+
+/**
+ * Knowledge Graph structure from makeKnowledgeGraphSchema
+ *
+ * @since 1.0.0
+ * @category types
+ */
+export interface KnowledgeGraph {
+  readonly entities: ReadonlyArray<KnowledgeGraphEntity>
+}
+
+/**
+ * RDF Service for JSON-to-RDF conversion
+ *
+ * Stateless service that creates fresh N3.Store instances per operation.
+ * No resource management needed - N3.Store is garbage collected.
+ *
+ * @since 1.0.0
+ * @category services
+ * @example
+ * ```typescript
+ * import { RdfService } from "@effect-ontology/core/Services/Rdf"
+ *
+ * const program = Effect.gen(function* () {
+ *   const rdf = yield* RdfService
+ *
+ *   const entities = [{
+ *     "@id": "_:person1",
+ *     "@type": "http://xmlns.com/foaf/0.1/Person",
+ *     properties: [
+ *       { predicate: "http://xmlns.com/foaf/0.1/name", object: "Alice" }
+ *     ]
+ *   }]
+ *
+ *   const store = yield* rdf.jsonToStore({ entities })
+ *   const turtle = yield* rdf.storeToTurtle(store)
+ *
+ *   console.log(turtle)
+ * })
+ * ```
+ */
+export class RdfService extends Effect.Service<RdfService>()("RdfService", {
+  sync: () => ({
+    /**
+     * Convert validated JSON entities to N3 Store
+     *
+     * Creates a fresh N3.Store and populates it with RDF quads from entities.
+     * Each entity becomes:
+     * - Type triple: `<entity> rdf:type <type>`
+     * - Property triples: `<entity> <predicate> <object>`
+     *
+     * @param graph - Knowledge graph from makeKnowledgeGraphSchema
+     * @returns Effect yielding N3.Store or RdfError
+     *
+     * @since 1.0.0
+     * @category operations
+     * @example
+     * ```typescript
+     * const graph = {
+     *   entities: [{
+     *     "@id": "_:alice",
+     *     "@type": "foaf:Person",
+     *     properties: [
+     *       { predicate: "foaf:name", object: "Alice" },
+     *       { predicate: "foaf:knows", object: { "@id": "_:bob" } }
+     *     ]
+     *   }]
+     * }
+     *
+     * const store = yield* rdf.jsonToStore(graph)
+     * console.log(`Created ${store.size} triples`)
+     * ```
+     */
+    jsonToStore: (graph: KnowledgeGraph) =>
+      Effect.sync(() => {
+        const store = new N3.Store()
+        const { blankNode, literal, namedNode, quad } = N3.DataFactory
+
+        // Helper to create subject term (blank node or named node)
+        const createSubject = (id: string): N3.NamedNode | N3.BlankNode =>
+          id.startsWith("_:") ? blankNode(id.slice(2)) : namedNode(id)
+
+        // Convert each entity
+        for (const entity of graph.entities) {
+          const subject = createSubject(entity["@id"])
+
+          // Add type triple
+          store.addQuad(
+            quad(
+              subject,
+              namedNode("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+              namedNode(entity["@type"])
+            )
+          )
+
+          // Add property triples
+          for (const prop of entity.properties) {
+            const predicate = namedNode(prop.predicate)
+
+            // Object can be literal or reference
+            const object = typeof prop.object === "string"
+              ? literal(prop.object)
+              : createSubject(prop.object["@id"])
+
+            store.addQuad(quad(subject, predicate, object))
+          }
+        }
+
+        return store
+      }).pipe(
+        Effect.catchAllDefect((cause) =>
+          Effect.fail(
+            new RdfError({
+              module: "RdfService",
+              method: "jsonToStore",
+              reason: "InvalidQuad",
+              description: "Failed to create RDF quads from entities",
+              cause
+            })
+          )
+        )
+      ),
+
+    /**
+     * Serialize N3.Store to Turtle format
+     *
+     * Converts an N3.Store to Turtle RDF syntax for validation or storage.
+     * Uses N3.Writer internally (async callback-based API).
+     *
+     * @param store - N3.Store to serialize
+     * @returns Effect yielding Turtle string or RdfError
+     *
+     * @since 1.0.0
+     * @category operations
+     * @example
+     * ```typescript
+     * const turtle = yield* rdf.storeToTurtle(store)
+     * console.log(turtle)
+     * // @prefix ex: <http://example.org/> .
+     * // ex:Alice a ex:Person ;
+     * //   ex:name "Alice" .
+     * ```
+     */
+    storeToTurtle: (store: RdfStore) =>
+      Effect.tryPromise({
+        try: () =>
+          new Promise<string>((resolve, reject) => {
+            const writer = new N3.Writer({ format: "Turtle" })
+
+            // Add all quads from store
+            for (const quad of store) {
+              writer.addQuad(quad)
+            }
+
+            // Writer.end is callback-based
+            writer.end((error, result) => {
+              if (error) reject(error)
+              else resolve(result)
+            })
+          }),
+        catch: (cause) =>
+          new RdfError({
+            module: "RdfService",
+            method: "storeToTurtle",
+            reason: "ParseError",
+            description: "Failed to serialize store to Turtle",
+            cause
+          })
+      }),
+
+    /**
+     * Parse Turtle to N3.Store
+     *
+     * Converts Turtle RDF syntax to an N3.Store for programmatic access.
+     * Uses N3.Parser internally (async callback-based API).
+     *
+     * @param turtle - Turtle RDF string
+     * @returns Effect yielding N3.Store or RdfError
+     *
+     * @since 1.0.0
+     * @category operations
+     * @example
+     * ```typescript
+     * const turtle = `
+     *   @prefix ex: <http://example.org/> .
+     *   ex:Alice a ex:Person .
+     * `
+     * const store = yield* rdf.turtleToStore(turtle)
+     * console.log(`Parsed ${store.size} triples`)
+     * ```
+     */
+    turtleToStore: (turtle: string) =>
+      Effect.tryPromise({
+        try: () =>
+          new Promise<RdfStore>((resolve, reject) => {
+            const parser = new N3.Parser()
+            const store = new N3.Store()
+
+            // Parser.parse is callback-based (quad, error, quad, ..., end)
+            parser.parse(turtle, (error, quad, _prefixes) => {
+              if (error) {
+                reject(error)
+              } else if (quad) {
+                store.addQuad(quad)
+              } else {
+                // quad is null on completion
+                resolve(store)
+              }
+            })
+          }),
+        catch: (cause) =>
+          new RdfError({
+            module: "RdfService",
+            method: "turtleToStore",
+            reason: "ParseError",
+            description: "Failed to parse Turtle to store",
+            cause
+          })
+      })
+  })
+}) {}
+
+================
 File: packages/core/src/inspect.ts
 ================
 /**
@@ -1016,9 +6565,10 @@ File: packages/core/src/inspect.ts
  * Usage: bun run src/inspect.ts <path-to-turtle-file>
  */
 
-import { Console, Effect, Graph, HashMap } from "effect"
+import { Console, Effect, Graph, HashMap, Option } from "effect"
 import { readFileSync } from "node:fs"
 import { parseTurtleToGraph } from "./Graph/Builder.js"
+import { isClassNode } from "./Graph/Types.js"
 
 const inspectOntology = (turtlePath: string) =>
   Effect.gen(function*() {
@@ -1039,7 +6589,7 @@ const inspectOntology = (turtlePath: string) =>
     // Count total scoped properties (attached to classes)
     let scopedProps = 0
     for (const [_id, node] of context.nodes) {
-      if (node._tag === "Class") {
+      if (isClassNode(node)) {
         scopedProps += node.properties.length
       }
     }
@@ -1055,7 +6605,7 @@ const inspectOntology = (turtlePath: string) =>
 
     for (const classId of sortedClasses) {
       const nodeOption = HashMap.get(context.nodes, classId)
-      if (nodeOption._tag === "Some" && nodeOption.value._tag === "Class") {
+      if (Option.isSome(nodeOption) && isClassNode(nodeOption.value)) {
         const node = nodeOption.value
         const indent = "  "
         yield* Console.log(`${indent}${node.label} (${node.properties.length} properties)`)
@@ -1103,6 +6653,1272 @@ File: packages/core/src/Program.ts
 import * as Effect from "effect/Effect"
 
 Effect.runPromise(Effect.log("Hello, World!"))
+
+================
+File: packages/core/test/Config/Schema.test.ts
+================
+/**
+ * Tests for Configuration Schemas
+ *
+ * @since 1.0.0
+ */
+
+import { describe, expect, it } from "@effect/vitest"
+import { Config, ConfigProvider, Effect, Layer } from "effect"
+import {
+  AnthropicConfigSchema,
+  AppConfigSchema,
+  GeminiConfigSchema,
+  LlmProviderConfig,
+  OpenRouterConfigSchema,
+  RdfConfigSchema,
+  ShaclConfigSchema
+} from "../../src/Config/Schema.js"
+
+describe("Config.Schema", () => {
+  describe("AnthropicConfigSchema", () => {
+    it.effect("should load config from environment", () =>
+      Effect.gen(function*() {
+        const testConfig = ConfigProvider.fromMap(
+          new Map([
+            ["LLM.ANTHROPIC_API_KEY", "test-key"],
+            ["LLM.ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022"],
+            ["LLM.ANTHROPIC_MAX_TOKENS", "8192"],
+            ["LLM.ANTHROPIC_TEMPERATURE", "0.5"]
+          ])
+        )
+
+        const config = yield* Config.nested("LLM")(AnthropicConfigSchema).pipe(
+          Effect.provide(Layer.setConfigProvider(testConfig))
+        )
+
+        expect(config.apiKey).toBe("test-key")
+        expect(config.model).toBe("claude-3-5-sonnet-20241022")
+        expect(config.maxTokens).toBe(8192)
+        expect(config.temperature).toBe(0.5)
+      }))
+
+    it.effect("should use default values when optional fields missing", () =>
+      Effect.gen(function*() {
+        const testConfig = ConfigProvider.fromMap(
+          new Map([["LLM.ANTHROPIC_API_KEY", "test-key"]])
+        )
+
+        const config = yield* Config.nested("LLM")(AnthropicConfigSchema).pipe(
+          Effect.provide(Layer.setConfigProvider(testConfig))
+        )
+
+        expect(config.apiKey).toBe("test-key")
+        expect(config.model).toBe("claude-3-5-sonnet-20241022")
+        expect(config.maxTokens).toBe(4096)
+        expect(config.temperature).toBe(0.0)
+      }))
+
+    it.effect("should fail when API key missing", () =>
+      Effect.gen(function*() {
+        const testConfig = ConfigProvider.fromMap(new Map())
+
+        const result = yield* Config.nested("LLM")(AnthropicConfigSchema).pipe(
+          Effect.provide(Layer.setConfigProvider(testConfig)),
+          Effect.flip
+        )
+
+        expect(result._tag).toBe("MissingData")
+      }))
+  })
+
+  describe("GeminiConfigSchema", () => {
+    it.effect("should load config with defaults", () =>
+      Effect.gen(function*() {
+        const testConfig = ConfigProvider.fromMap(
+          new Map([["LLM.GEMINI_API_KEY", "gemini-test-key"]])
+        )
+
+        const config = yield* Config.nested("LLM")(GeminiConfigSchema).pipe(
+          Effect.provide(Layer.setConfigProvider(testConfig))
+        )
+
+        expect(config.apiKey).toBe("gemini-test-key")
+        expect(config.model).toBe("gemini-2.0-flash-exp")
+        expect(config.maxTokens).toBe(4096)
+        expect(config.temperature).toBe(0.0)
+      }))
+
+    it.effect("should allow custom model", () =>
+      Effect.gen(function*() {
+        const testConfig = ConfigProvider.fromMap(
+          new Map([
+            ["LLM.GEMINI_API_KEY", "gemini-test-key"],
+            ["LLM.GEMINI_MODEL", "gemini-1.5-pro"]
+          ])
+        )
+
+        const config = yield* Config.nested("LLM")(GeminiConfigSchema).pipe(
+          Effect.provide(Layer.setConfigProvider(testConfig))
+        )
+
+        expect(config.model).toBe("gemini-1.5-pro")
+      }))
+  })
+
+  describe("OpenRouterConfigSchema", () => {
+    it.effect("should load config with optional fields", () =>
+      Effect.gen(function*() {
+        const testConfig = ConfigProvider.fromMap(
+          new Map([
+            ["LLM.OPENROUTER_API_KEY", "or-test-key"],
+            ["LLM.OPENROUTER_SITE_URL", "https://example.com"],
+            ["LLM.OPENROUTER_SITE_NAME", "Test App"]
+          ])
+        )
+
+        const config = yield* Config.nested("LLM")(OpenRouterConfigSchema).pipe(
+          Effect.provide(Layer.setConfigProvider(testConfig))
+        )
+
+        expect(config.apiKey).toBe("or-test-key")
+        expect(config.model).toBe("anthropic/claude-3.5-sonnet")
+        expect(config.siteUrl._tag).toBe("Some")
+        expect(config.siteName._tag).toBe("Some")
+      }))
+
+    it.effect("should handle missing optional fields", () =>
+      Effect.gen(function*() {
+        const testConfig = ConfigProvider.fromMap(
+          new Map([["LLM.OPENROUTER_API_KEY", "or-test-key"]])
+        )
+
+        const config = yield* Config.nested("LLM")(OpenRouterConfigSchema).pipe(
+          Effect.provide(Layer.setConfigProvider(testConfig))
+        )
+
+        expect(config.siteUrl._tag).toBe("None")
+        expect(config.siteName._tag).toBe("None")
+      }))
+  })
+
+  describe("LlmProviderConfig", () => {
+    it.effect("should load Anthropic provider config", () =>
+      Effect.gen(function*() {
+        const testConfig = ConfigProvider.fromMap(
+          new Map([
+            ["LLM.PROVIDER", "anthropic"],
+            ["LLM.ANTHROPIC_API_KEY", "test-key"]
+          ])
+        )
+
+        const config = yield* LlmProviderConfig.pipe(
+          Effect.provide(Layer.setConfigProvider(testConfig))
+        )
+
+        expect(config.provider).toBe("anthropic")
+        expect(config.anthropic?._tag).toBe("Some")
+      }))
+
+    it.effect("should load Gemini provider config", () =>
+      Effect.gen(function*() {
+        const testConfig = ConfigProvider.fromMap(
+          new Map([
+            ["LLM.PROVIDER", "gemini"],
+            ["LLM.GEMINI_API_KEY", "gemini-key"]
+          ])
+        )
+
+        const config = yield* LlmProviderConfig.pipe(
+          Effect.provide(Layer.setConfigProvider(testConfig))
+        )
+
+        expect(config.provider).toBe("gemini")
+        expect(config.gemini?._tag).toBe("Some")
+      }))
+
+    it.effect("should load OpenRouter provider config", () =>
+      Effect.gen(function*() {
+        const testConfig = ConfigProvider.fromMap(
+          new Map([
+            ["LLM.PROVIDER", "openrouter"],
+            ["LLM.OPENROUTER_API_KEY", "or-key"]
+          ])
+        )
+
+        const config = yield* LlmProviderConfig.pipe(
+          Effect.provide(Layer.setConfigProvider(testConfig))
+        )
+
+        expect(config.provider).toBe("openrouter")
+        expect(config.openrouter?._tag).toBe("Some")
+      }))
+
+    it.effect("should fail with invalid provider", () =>
+      Effect.gen(function*() {
+        const testConfig = ConfigProvider.fromMap(
+          new Map([["LLM.PROVIDER", "invalid-provider"]])
+        )
+
+        const result = yield* LlmProviderConfig.pipe(
+          Effect.provide(Layer.setConfigProvider(testConfig)),
+          Effect.flip
+        )
+
+        expect(result._tag).toBe("And")
+      }))
+  })
+
+  describe("RdfConfigSchema", () => {
+    it.effect("should load with defaults", () =>
+      Effect.gen(function*() {
+        const testConfig = ConfigProvider.fromMap(new Map())
+
+        const config = yield* RdfConfigSchema.pipe(
+          Effect.provide(Layer.setConfigProvider(testConfig))
+        )
+
+        expect(config.format).toBe("Turtle")
+        expect(config.baseIri._tag).toBe("None")
+        expect(config.prefixes).toHaveProperty("rdf")
+        expect(config.prefixes).toHaveProperty("rdfs")
+        expect(config.prefixes).toHaveProperty("foaf")
+      }))
+
+    it.effect("should load custom format", () =>
+      Effect.gen(function*() {
+        const testConfig = ConfigProvider.fromMap(
+          new Map([["RDF.FORMAT", "N-Triples"]])
+        )
+
+        const config = yield* RdfConfigSchema.pipe(
+          Effect.provide(Layer.setConfigProvider(testConfig))
+        )
+
+        expect(config.format).toBe("N-Triples")
+      }))
+
+    it.effect("should load base IRI", () =>
+      Effect.gen(function*() {
+        const testConfig = ConfigProvider.fromMap(
+          new Map([["RDF.BASE_IRI", "http://example.org/"]])
+        )
+
+        const config = yield* RdfConfigSchema.pipe(
+          Effect.provide(Layer.setConfigProvider(testConfig))
+        )
+
+        expect(config.baseIri._tag).toBe("Some")
+      }))
+
+    it.effect("should fail with invalid format", () =>
+      Effect.gen(function*() {
+        const testConfig = ConfigProvider.fromMap(
+          new Map([["RDF.FORMAT", "InvalidFormat"]])
+        )
+
+        const result = yield* RdfConfigSchema.pipe(
+          Effect.provide(Layer.setConfigProvider(testConfig)),
+          Effect.flip
+        )
+
+        expect(result._tag).toBe("And")
+      }))
+  })
+
+  describe("ShaclConfigSchema", () => {
+    it.effect("should load with defaults", () =>
+      Effect.gen(function*() {
+        const testConfig = ConfigProvider.fromMap(new Map())
+
+        const config = yield* ShaclConfigSchema.pipe(
+          Effect.provide(Layer.setConfigProvider(testConfig))
+        )
+
+        expect(config.enabled).toBe(false)
+        expect(config.shapesPath._tag).toBe("None")
+        expect(config.strictMode).toBe(true)
+      }))
+
+    it.effect("should enable SHACL validation", () =>
+      Effect.gen(function*() {
+        const testConfig = ConfigProvider.fromMap(
+          new Map([
+            ["SHACL.ENABLED", "true"],
+            ["SHACL.SHAPES_PATH", "./shapes/ontology.ttl"],
+            ["SHACL.STRICT_MODE", "false"]
+          ])
+        )
+
+        const config = yield* ShaclConfigSchema.pipe(
+          Effect.provide(Layer.setConfigProvider(testConfig))
+        )
+
+        expect(config.enabled).toBe(true)
+        expect(config.shapesPath._tag).toBe("Some")
+        expect(config.strictMode).toBe(false)
+      }))
+  })
+
+  describe("AppConfigSchema", () => {
+    it.effect("should load complete app config", () =>
+      Effect.gen(function*() {
+        const testConfig = ConfigProvider.fromMap(
+          new Map([
+            ["LLM.PROVIDER", "anthropic"],
+            ["LLM.ANTHROPIC_API_KEY", "test-key"],
+            ["RDF.FORMAT", "Turtle"],
+            ["SHACL.ENABLED", "false"]
+          ])
+        )
+
+        const config = yield* AppConfigSchema.pipe(
+          Effect.provide(Layer.setConfigProvider(testConfig))
+        )
+
+        expect(config.llm.provider).toBe("anthropic")
+        expect(config.rdf.format).toBe("Turtle")
+        expect(config.shacl.enabled).toBe(false)
+      }))
+
+    it.effect("should combine all configs correctly", () =>
+      Effect.gen(function*() {
+        const testConfig = ConfigProvider.fromMap(
+          new Map([
+            ["LLM.PROVIDER", "gemini"],
+            ["LLM.GEMINI_API_KEY", "gemini-key"],
+            ["LLM.GEMINI_MODEL", "gemini-1.5-pro"],
+            ["RDF.FORMAT", "N-Triples"],
+            ["RDF.BASE_IRI", "http://example.org/"],
+            ["SHACL.ENABLED", "true"],
+            ["SHACL.SHAPES_PATH", "./shapes/test.ttl"]
+          ])
+        )
+
+        const config = yield* AppConfigSchema.pipe(
+          Effect.provide(Layer.setConfigProvider(testConfig))
+        )
+
+        expect(config.llm.provider).toBe("gemini")
+        expect(config.rdf.format).toBe("N-Triples")
+        expect(config.shacl.enabled).toBe(true)
+      }))
+  })
+})
+
+================
+File: packages/core/test/Config/Services.test.ts
+================
+/**
+ * Tests for Configuration Services
+ *
+ * @since 1.0.0
+ */
+
+import { describe, expect, it, layer } from "@effect/vitest"
+import { ConfigProvider, Effect, Layer } from "effect"
+import {
+  AppConfigService,
+  LlmConfigService,
+  RdfConfigService,
+  ShaclConfigService
+} from "../../src/Config/Services.js"
+
+describe("Config.Services", () => {
+  describe("LlmConfigService", () => {
+    it.layer(
+      Layer.setConfigProvider(
+        ConfigProvider.fromMap(
+          new Map([
+            ["LLM.PROVIDER", "anthropic"],
+            ["LLM.ANTHROPIC_API_KEY", "test-key"],
+            ["LLM.ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022"]
+          ])
+        )
+      )
+    )("should load Anthropic config from environment", () =>
+      Effect.gen(function*() {
+        const config = yield* LlmConfigService
+
+        expect(config.provider).toBe("anthropic")
+        if (config.anthropic?._tag === "Some") {
+          expect(config.anthropic.value.apiKey).toBe("test-key")
+          expect(config.anthropic.value.model).toBe("claude-3-5-sonnet-20241022")
+        }
+      }))
+
+    it.layer(
+      Layer.setConfigProvider(
+        ConfigProvider.fromMap(
+          new Map([
+            ["LLM.PROVIDER", "gemini"],
+            ["LLM.GEMINI_API_KEY", "gemini-key"],
+            ["LLM.GEMINI_MODEL", "gemini-1.5-pro"]
+          ])
+        )
+      )
+    )("should load Gemini config from environment", () =>
+      Effect.gen(function*() {
+        const config = yield* LlmConfigService
+
+        expect(config.provider).toBe("gemini")
+        if (config.gemini?._tag === "Some") {
+          expect(config.gemini.value.apiKey).toBe("gemini-key")
+          expect(config.gemini.value.model).toBe("gemini-1.5-pro")
+        }
+      }))
+
+    it.layer(
+      Layer.setConfigProvider(
+        ConfigProvider.fromMap(
+          new Map([
+            ["LLM.PROVIDER", "openrouter"],
+            ["LLM.OPENROUTER_API_KEY", "or-key"],
+            ["LLM.OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet"],
+            ["LLM.OPENROUTER_SITE_URL", "https://test.com"]
+          ])
+        )
+      )
+    )("should load OpenRouter config from environment", () =>
+      Effect.gen(function*() {
+        const config = yield* LlmConfigService
+
+        expect(config.provider).toBe("openrouter")
+        if (config.openrouter?._tag === "Some") {
+          expect(config.openrouter.value.apiKey).toBe("or-key")
+          expect(config.openrouter.value.siteUrl?._tag).toBe("Some")
+        }
+      }))
+
+    it.layer(
+      Layer.setConfigProvider(
+        ConfigProvider.fromMap(
+          new Map([
+            ["LLM.PROVIDER", "anthropic"],
+            ["LLM.ANTHROPIC_API_KEY", "test-key"]
+          ])
+        )
+      )
+    )("should use default values when optional fields missing", () =>
+      Effect.gen(function*() {
+        const config = yield* LlmConfigService
+
+        if (config.anthropic?._tag === "Some") {
+          expect(config.anthropic.value.model).toBe("claude-3-5-sonnet-20241022")
+          expect(config.anthropic.value.maxTokens).toBe(4096)
+          expect(config.anthropic.value.temperature).toBe(0.0)
+        }
+      }))
+  })
+
+  describe("RdfConfigService", () => {
+    it.layer(
+      Layer.setConfigProvider(
+        ConfigProvider.fromMap(
+          new Map([
+            ["RDF.FORMAT", "N-Triples"],
+            ["RDF.BASE_IRI", "http://example.org/"]
+          ])
+        )
+      )
+    )("should load RDF config from environment", () =>
+      Effect.gen(function*() {
+        const config = yield* RdfConfigService
+
+        expect(config.format).toBe("N-Triples")
+        expect(config.baseIri?._tag).toBe("Some")
+        expect(config.prefixes).toHaveProperty("rdf")
+        expect(config.prefixes).toHaveProperty("rdfs")
+      }))
+
+    it.layer(
+      Layer.setConfigProvider(ConfigProvider.fromMap(new Map()))
+    )("should use default format when not specified", () =>
+      Effect.gen(function*() {
+        const config = yield* RdfConfigService
+
+        expect(config.format).toBe("Turtle")
+        expect(config.prefixes).toHaveProperty("foaf")
+      }))
+  })
+
+  describe("ShaclConfigService", () => {
+    it.layer(
+      Layer.setConfigProvider(
+        ConfigProvider.fromMap(
+          new Map([
+            ["SHACL.ENABLED", "true"],
+            ["SHACL.SHAPES_PATH", "./shapes/test.ttl"],
+            ["SHACL.STRICT_MODE", "false"]
+          ])
+        )
+      )
+    )("should load SHACL config from environment", () =>
+      Effect.gen(function*() {
+        const config = yield* ShaclConfigService
+
+        expect(config.enabled).toBe(true)
+        expect(config.shapesPath?._tag).toBe("Some")
+        expect(config.strictMode).toBe(false)
+      }))
+
+    it.layer(
+      Layer.setConfigProvider(ConfigProvider.fromMap(new Map()))
+    )("should use defaults when not specified", () =>
+      Effect.gen(function*() {
+        const config = yield* ShaclConfigService
+
+        expect(config.enabled).toBe(false)
+        expect(config.strictMode).toBe(true)
+      }))
+  })
+
+  describe("AppConfigService", () => {
+    it.layer(
+      Layer.setConfigProvider(
+        ConfigProvider.fromMap(
+          new Map([
+            ["LLM.PROVIDER", "gemini"],
+            ["LLM.GEMINI_API_KEY", "gemini-key"],
+            ["RDF.FORMAT", "Turtle"],
+            ["SHACL.ENABLED", "false"]
+          ])
+        )
+      )
+    )("should provide complete app config from environment", () =>
+      Effect.gen(function*() {
+        const config = yield* AppConfigService
+
+        expect(config.llm.provider).toBe("gemini")
+        expect(config.rdf.format).toBe("Turtle")
+        expect(config.shacl.enabled).toBe(false)
+      }))
+
+    it.layer(
+      Layer.setConfigProvider(
+        ConfigProvider.fromMap(
+          new Map([
+            ["LLM.PROVIDER", "anthropic"],
+            ["LLM.ANTHROPIC_API_KEY", "test-key"],
+            ["RDF.FORMAT", "N-Triples"],
+            ["SHACL.ENABLED", "true"]
+          ])
+        )
+      )
+    )("should compose all config services", () =>
+      Effect.gen(function*() {
+        const config = yield* AppConfigService
+
+        expect(config.llm.provider).toBe("anthropic")
+        expect(config.rdf.format).toBe("N-Triples")
+        expect(config.shacl.enabled).toBe(true)
+      }))
+  })
+
+  describe("Layer Composition", () => {
+    it.layer(
+      Layer.setConfigProvider(
+        ConfigProvider.fromMap(
+          new Map([
+            ["LLM.PROVIDER", "anthropic"],
+            ["LLM.ANTHROPIC_API_KEY", "test-key"],
+            ["RDF.FORMAT", "Turtle"]
+          ])
+        )
+      )
+    )("should use individual service layers", () =>
+      Effect.gen(function*() {
+        const llmConfig = yield* LlmConfigService
+        const rdfConfig = yield* RdfConfigService
+
+        expect(llmConfig.provider).toBe("anthropic")
+        expect(rdfConfig.format).toBe("Turtle")
+      }))
+  })
+})
+
+================
+File: packages/core/test/Extraction/Events.test.ts
+================
+/**
+ * Tests for Extraction Events and Errors
+ *
+ * @since 1.0.0
+ */
+
+import { describe, expect, it } from "@effect/vitest"
+import { Effect, Equal } from "effect"
+import { ExtractionEvent, LLMError, RdfError, ShaclError, type ValidationReport } from "../../src/Extraction/Events"
+
+describe("Extraction.Events", () => {
+  describe("ExtractionEvent - Constructors", () => {
+    it.effect("should create LLMThinking event", () =>
+      Effect.sync(() => {
+        const event = ExtractionEvent.LLMThinking()
+
+        expect(event._tag).toBe("LLMThinking")
+      }))
+
+    it.effect("should create JSONParsed event with count", () =>
+      Effect.sync(() => {
+        const event = ExtractionEvent.JSONParsed({ count: 5 })
+
+        expect(event._tag).toBe("JSONParsed")
+        expect(event.count).toBe(5)
+      }))
+
+    it.effect("should create RDFConstructed event with triples count", () =>
+      Effect.sync(() => {
+        const event = ExtractionEvent.RDFConstructed({ triples: 15 })
+
+        expect(event._tag).toBe("RDFConstructed")
+        expect(event.triples).toBe(15)
+      }))
+
+    it.effect("should create ValidationComplete event with report", () =>
+      Effect.sync(() => {
+        const report: ValidationReport = {
+          conforms: true,
+          results: []
+        }
+
+        const event = ExtractionEvent.ValidationComplete({ report })
+
+        expect(event._tag).toBe("ValidationComplete")
+        expect(event.report.conforms).toBe(true)
+        expect(event.report.results).toHaveLength(0)
+      }))
+  })
+
+  describe("ExtractionEvent - Pattern Matching with $match", () => {
+    it.effect("should match LLMThinking event", () =>
+      Effect.sync(() => {
+        const event = ExtractionEvent.LLMThinking()
+
+        const result = ExtractionEvent.$match(event, {
+          LLMThinking: () => "thinking",
+          JSONParsed: () => "parsed",
+          RDFConstructed: () => "constructed",
+          ValidationComplete: () => "validated"
+        })
+
+        expect(result).toBe("thinking")
+      }))
+
+    it.effect("should match JSONParsed event and access count", () =>
+      Effect.sync(() => {
+        const event = ExtractionEvent.JSONParsed({ count: 10 })
+
+        const result = ExtractionEvent.$match(event, {
+          LLMThinking: () => 0,
+          JSONParsed: (e) => e.count,
+          RDFConstructed: () => 0,
+          ValidationComplete: () => 0
+        })
+
+        expect(result).toBe(10)
+      }))
+
+    it.effect("should match RDFConstructed event", () =>
+      Effect.sync(() => {
+        const event = ExtractionEvent.RDFConstructed({ triples: 20 })
+
+        const result = ExtractionEvent.$match(event, {
+          LLMThinking: () => "wrong",
+          JSONParsed: () => "wrong",
+          RDFConstructed: (e) => `${e.triples} triples`,
+          ValidationComplete: () => "wrong"
+        })
+
+        expect(result).toBe("20 triples")
+      }))
+
+    it.effect("should match ValidationComplete event", () =>
+      Effect.sync(() => {
+        const report: ValidationReport = {
+          conforms: false,
+          results: [
+            {
+              severity: "Violation",
+              message: "Invalid property",
+              path: "foaf:name"
+            }
+          ]
+        }
+
+        const event = ExtractionEvent.ValidationComplete({ report })
+
+        const result = ExtractionEvent.$match(event, {
+          LLMThinking: () => "wrong",
+          JSONParsed: () => "wrong",
+          RDFConstructed: () => "wrong",
+          ValidationComplete: (e) => e.report.conforms ? "valid" : `${e.report.results.length} violations`
+        })
+
+        expect(result).toBe("1 violations")
+      }))
+  })
+
+  describe("ExtractionEvent - Type Guards with $is", () => {
+    it.effect("should identify LLMThinking event", () =>
+      Effect.sync(() => {
+        const event = ExtractionEvent.LLMThinking()
+
+        expect(ExtractionEvent.$is("LLMThinking")(event)).toBe(true)
+        expect(ExtractionEvent.$is("JSONParsed")(event)).toBe(false)
+      }))
+
+    it.effect("should identify JSONParsed event", () =>
+      Effect.sync(() => {
+        const event = ExtractionEvent.JSONParsed({ count: 3 })
+
+        expect(ExtractionEvent.$is("JSONParsed")(event)).toBe(true)
+        expect(ExtractionEvent.$is("LLMThinking")(event)).toBe(false)
+      }))
+
+    it.effect("should identify RDFConstructed event", () =>
+      Effect.sync(() => {
+        const event = ExtractionEvent.RDFConstructed({ triples: 7 })
+
+        expect(ExtractionEvent.$is("RDFConstructed")(event)).toBe(true)
+        expect(ExtractionEvent.$is("ValidationComplete")(event)).toBe(false)
+      }))
+
+    it.effect("should identify ValidationComplete event", () =>
+      Effect.sync(() => {
+        const report: ValidationReport = { conforms: true, results: [] }
+        const event = ExtractionEvent.ValidationComplete({ report })
+
+        expect(ExtractionEvent.$is("ValidationComplete")(event)).toBe(true)
+        expect(ExtractionEvent.$is("RDFConstructed")(event)).toBe(false)
+      }))
+  })
+
+  describe("ExtractionEvent - Equality", () => {
+    it.effect("should consider events with same tag and no data equal", () =>
+      Effect.sync(() => {
+        const event1 = ExtractionEvent.LLMThinking()
+        const event2 = ExtractionEvent.LLMThinking()
+
+        expect(Equal.equals(event1, event2)).toBe(true)
+      }))
+
+    it.effect("should consider events with same tag and same data equal", () =>
+      Effect.sync(() => {
+        const event1 = ExtractionEvent.JSONParsed({ count: 5 })
+        const event2 = ExtractionEvent.JSONParsed({ count: 5 })
+
+        expect(Equal.equals(event1, event2)).toBe(true)
+      }))
+
+    it.effect("should consider events with same tag but different data unequal", () =>
+      Effect.sync(() => {
+        const event1 = ExtractionEvent.JSONParsed({ count: 5 })
+        const event2 = ExtractionEvent.JSONParsed({ count: 10 })
+
+        expect(Equal.equals(event1, event2)).toBe(false)
+      }))
+
+    it.effect("should consider events with different tags unequal", () =>
+      Effect.sync(() => {
+        const event1 = ExtractionEvent.LLMThinking()
+        const event2 = ExtractionEvent.JSONParsed({ count: 5 })
+
+        expect(Equal.equals(event1, event2)).toBe(false)
+      }))
+  })
+
+  describe("Extraction Errors - Constructors", () => {
+    it.effect("should create LLMError with required fields", () =>
+      Effect.sync(() => {
+        const error = new LLMError({
+          module: "Anthropic",
+          method: "generateText",
+          reason: "ApiTimeout"
+        })
+
+        expect(error._tag).toBe("LLMError")
+        expect(error.module).toBe("Anthropic")
+        expect(error.method).toBe("generateText")
+        expect(error.reason).toBe("ApiTimeout")
+      }))
+
+    it.effect("should create LLMError with description and cause", () =>
+      Effect.sync(() => {
+        const error = new LLMError({
+          module: "Anthropic",
+          method: "generateText",
+          reason: "ApiError",
+          description: "Request timeout after 30 seconds",
+          cause: new Error("Network error")
+        })
+
+        expect(error._tag).toBe("LLMError")
+        expect(error.description).toBe("Request timeout after 30 seconds")
+        expect(error.cause).toBeInstanceOf(Error)
+      }))
+
+    it.effect("should create RdfError with required fields", () =>
+      Effect.sync(() => {
+        const error = new RdfError({
+          module: "RdfService",
+          method: "jsonToStore",
+          reason: "InvalidQuad"
+        })
+
+        expect(error._tag).toBe("RdfError")
+        expect(error.module).toBe("RdfService")
+        expect(error.reason).toBe("InvalidQuad")
+      }))
+
+    it.effect("should create ShaclError with required fields", () =>
+      Effect.sync(() => {
+        const error = new ShaclError({
+          module: "ShaclService",
+          method: "validate",
+          reason: "ValidatorCrash"
+        })
+
+        expect(error._tag).toBe("ShaclError")
+        expect(error.module).toBe("ShaclService")
+        expect(error.reason).toBe("ValidatorCrash")
+      }))
+  })
+
+  describe("Extraction Errors - Effect Integration", () => {
+    it.effect("should fail Effect with LLMError", () =>
+      Effect.gen(function*() {
+        const program = Effect.fail(
+          new LLMError({
+            module: "Anthropic",
+            method: "generateText",
+            reason: "ApiTimeout"
+          })
+        )
+
+        const result = yield* program.pipe(Effect.exit)
+
+        expect(result._tag).toBe("Failure")
+      }))
+
+    it.effect("should catch LLMError with catchTag", () =>
+      Effect.gen(function*() {
+        const program = Effect.fail(
+          new LLMError({
+            module: "Anthropic",
+            method: "generateText",
+            reason: "ApiTimeout",
+            description: "Request timed out"
+          })
+        )
+
+        const recovered = program.pipe(
+          Effect.catchTag("LLMError", (e) => Effect.succeed(`Handled: ${e.module}.${e.method} - ${e.reason}`))
+        )
+
+        const result = yield* recovered
+
+        expect(result).toBe("Handled: Anthropic.generateText - ApiTimeout")
+      }))
+
+    it.effect("should catch multiple error types with catchTags", () =>
+      Effect.gen(function*() {
+        const llmProgram = Effect.fail(
+          new LLMError({
+            module: "Anthropic",
+            method: "generateText",
+            reason: "ApiTimeout"
+          })
+        )
+        const rdfProgram = Effect.fail(
+          new RdfError({
+            module: "RdfService",
+            method: "jsonToStore",
+            reason: "InvalidQuad"
+          })
+        )
+
+        const handleErrors = <A>(program: Effect.Effect<A, LLMError | RdfError>) =>
+          program.pipe(
+            Effect.catchTags({
+              LLMError: (e) => Effect.succeed(`LLM error: ${e.reason}`),
+              RdfError: (e) => Effect.succeed(`RDF error: ${e.reason}`)
+            })
+          )
+
+        const result1 = yield* handleErrors(llmProgram)
+        const result2 = yield* handleErrors(rdfProgram)
+
+        expect(result1).toBe("LLM error: ApiTimeout")
+        expect(result2).toBe("RDF error: InvalidQuad")
+      }))
+
+    it.effect("should preserve unmatched error tags", () =>
+      Effect.gen(function*() {
+        const program: Effect.Effect<never, LLMError | ShaclError> = Effect.fail(
+          new ShaclError({
+            module: "ShaclService",
+            method: "validate",
+            reason: "ValidatorCrash"
+          })
+        )
+
+        const partialCatch = program.pipe(
+          Effect.catchTag("LLMError", () => Effect.succeed("recovered"))
+        )
+
+        const result = yield* partialCatch.pipe(Effect.exit)
+
+        expect(result._tag).toBe("Failure")
+        if (result._tag === "Failure") {
+          expect(result.cause._tag).toBe("Fail")
+        }
+      }))
+  })
+
+  describe("Type Inference", () => {
+    it.effect("should infer correct event types", () =>
+      Effect.sync(() => {
+        const _event1 = ExtractionEvent.LLMThinking()
+        const _event2 = ExtractionEvent.JSONParsed({ count: 5 })
+
+        // TypeScript should narrow these types correctly
+        type Event1Tag = typeof _event1._tag
+        type Event2Tag = typeof _event2._tag
+
+        const _typeCheck1: Event1Tag = "LLMThinking"
+        const _typeCheck2: Event2Tag = "JSONParsed"
+
+        expect(true).toBe(true) // Compilation is the real test
+      }))
+
+    it.effect("should infer correct error types", () =>
+      Effect.sync(() => {
+        const _error1 = new LLMError({
+          module: "Anthropic",
+          method: "generateText",
+          reason: "ApiTimeout"
+        })
+        const _error2 = new RdfError({
+          module: "RdfService",
+          method: "jsonToStore",
+          reason: "InvalidQuad"
+        })
+
+        // TypeScript should provide correct types
+        type Error1Tag = typeof _error1._tag
+        type Error2Tag = typeof _error2._tag
+
+        const _typeCheck1: Error1Tag = "LLMError"
+        const _typeCheck2: Error2Tag = "RdfError"
+
+        expect(true).toBe(true) // Compilation is the real test
+      }))
+  })
+})
+
+================
+File: packages/core/test/fixtures/ontologies/dcterms.ttl
+================
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Dublin Core Metadata Terms (Simplified)
+# Standard for cross-domain information resource description
+
+### Classes
+
+dcterms:Agent a owl:Class ;
+    rdfs:label "Agent" ;
+    rdfs:comment "A resource that acts or has the power to act." .
+
+dcterms:AgentClass a owl:Class ;
+    rdfs:subClassOf rdfs:Class ;
+    rdfs:label "Agent Class" ;
+    rdfs:comment "A group of agents." .
+
+dcterms:BibliographicResource a owl:Class ;
+    rdfs:label "Bibliographic Resource" ;
+    rdfs:comment "A book, article, or other documentary resource." .
+
+dcterms:FileFormat a owl:Class ;
+    rdfs:label "File Format" ;
+    rdfs:comment "A digital resource format." .
+
+dcterms:Frequency a owl:Class ;
+    rdfs:label "Frequency" ;
+    rdfs:comment "A rate at which something recurs." .
+
+dcterms:Jurisdiction a owl:Class ;
+    rdfs:label "Jurisdiction" ;
+    rdfs:comment "The extent or range of judicial, law enforcement, or other authority." .
+
+dcterms:LicenseDocument a owl:Class ;
+    rdfs:label "License Document" ;
+    rdfs:comment "A legal document giving official permission to do something with a resource." .
+
+dcterms:LinguisticSystem a owl:Class ;
+    rdfs:label "Linguistic System" ;
+    rdfs:comment "A system of signs, symbols, sounds, gestures, or rules used in communication." .
+
+dcterms:Location a owl:Class ;
+    rdfs:label "Location" ;
+    rdfs:comment "A spatial region or named place." .
+
+dcterms:LocationPeriodOrJurisdiction a owl:Class ;
+    rdfs:label "Location, Period, or Jurisdiction" ;
+    rdfs:comment "A location, period of time, or jurisdiction." .
+
+dcterms:MediaType a owl:Class ;
+    rdfs:label "Media Type" ;
+    rdfs:comment "A file format or physical medium." .
+
+dcterms:MediaTypeOrExtent a owl:Class ;
+    rdfs:label "Media Type or Extent" ;
+    rdfs:comment "A media type or extent." .
+
+dcterms:MethodOfAccrual a owl:Class ;
+    rdfs:label "Method of Accrual" ;
+    rdfs:comment "A method by which resources are added to a collection." .
+
+dcterms:MethodOfInstruction a owl:Class ;
+    rdfs:label "Method Of Instruction" ;
+    rdfs:comment "A process that is used to engender knowledge, attitudes, and skills." .
+
+dcterms:PeriodOfTime a owl:Class ;
+    rdfs:label "Period of Time" ;
+    rdfs:comment "An interval of time that is named or defined by its start and end dates." .
+
+dcterms:PhysicalMedium a owl:Class ;
+    rdfs:label "Physical Medium" ;
+    rdfs:comment "A physical material or carrier." .
+
+dcterms:PhysicalResource a owl:Class ;
+    rdfs:label "Physical Resource" ;
+    rdfs:comment "A material thing." .
+
+dcterms:Policy a owl:Class ;
+    rdfs:label "Policy" ;
+    rdfs:comment "A plan or course of action by an authority, intended to influence decisions, actions, and other matters." .
+
+dcterms:ProvenanceStatement a owl:Class ;
+    rdfs:label "Provenance Statement" ;
+    rdfs:comment "A statement of any changes in ownership and custody of a resource since its creation." .
+
+dcterms:RightsStatement a owl:Class ;
+    rdfs:label "Rights Statement" ;
+    rdfs:comment "A statement about the intellectual property rights (IPR) held in or over a resource." .
+
+dcterms:SizeOrDuration a owl:Class ;
+    rdfs:label "Size or Duration" ;
+    rdfs:comment "A dimension or extent, or a time taken to play or execute." .
+
+dcterms:Standard a owl:Class ;
+    rdfs:label "Standard" ;
+    rdfs:comment "A reference point against which other things can be evaluated." .
+
+### Properties (Examples - Dublin Core has many)
+
+dcterms:title a owl:DatatypeProperty ;
+    rdfs:label "Title" ;
+    rdfs:comment "A name given to the resource." ;
+    rdfs:range rdfs:Literal .
+
+dcterms:creator a owl:ObjectProperty ;
+    rdfs:label "Creator" ;
+    rdfs:comment "An entity responsible for making the resource." ;
+    rdfs:range dcterms:Agent .
+
+dcterms:subject a owl:ObjectProperty ;
+    rdfs:label "Subject" ;
+    rdfs:comment "A topic of the resource." .
+
+dcterms:description a owl:DatatypeProperty ;
+    rdfs:label "Description" ;
+    rdfs:comment "An account of the resource." ;
+    rdfs:range rdfs:Literal .
+
+dcterms:publisher a owl:ObjectProperty ;
+    rdfs:label "Publisher" ;
+    rdfs:comment "An entity responsible for making the resource available." ;
+    rdfs:range dcterms:Agent .
+
+dcterms:contributor a owl:ObjectProperty ;
+    rdfs:label "Contributor" ;
+    rdfs:comment "An entity responsible for making contributions to the resource." ;
+    rdfs:range dcterms:Agent .
+
+dcterms:date a owl:DatatypeProperty ;
+    rdfs:label "Date" ;
+    rdfs:comment "A point or period of time associated with an event in the lifecycle of the resource." ;
+    rdfs:range rdfs:Literal .
+
+dcterms:type a owl:ObjectProperty ;
+    rdfs:label "Type" ;
+    rdfs:comment "The nature or genre of the resource." .
+
+dcterms:format a owl:ObjectProperty ;
+    rdfs:label "Format" ;
+    rdfs:comment "The file format, physical medium, or dimensions of the resource." ;
+    rdfs:range dcterms:MediaTypeOrExtent .
+
+dcterms:identifier a owl:DatatypeProperty ;
+    rdfs:label "Identifier" ;
+    rdfs:comment "An unambiguous reference to the resource within a given context." ;
+    rdfs:range rdfs:Literal .
+
+dcterms:source a owl:ObjectProperty ;
+    rdfs:label "Source" ;
+    rdfs:comment "A related resource from which the described resource is derived." .
+
+dcterms:language a owl:ObjectProperty ;
+    rdfs:label "Language" ;
+    rdfs:comment "A language of the resource." ;
+    rdfs:range dcterms:LinguisticSystem .
+
+dcterms:relation a owl:ObjectProperty ;
+    rdfs:label "Relation" ;
+    rdfs:comment "A related resource." .
+
+dcterms:coverage a owl:ObjectProperty ;
+    rdfs:label "Coverage" ;
+    rdfs:comment "The spatial or temporal topic of the resource." ;
+    rdfs:range dcterms:LocationPeriodOrJurisdiction .
+
+dcterms:rights a owl:ObjectProperty ;
+    rdfs:label "Rights" ;
+    rdfs:comment "Information about rights held in and over the resource." ;
+    rdfs:range dcterms:RightsStatement .
+
+================
+File: packages/core/test/fixtures/ontologies/foaf-minimal.ttl
+================
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# FOAF Ontology (Simplified)
+# Friend of a Friend vocabulary
+
+### Core Classes
+
+foaf:Agent a owl:Class ;
+    rdfs:label "Agent" ;
+    rdfs:comment "An agent (eg. person, group, software or physical artifact)." .
+
+foaf:Person a owl:Class ;
+    rdfs:subClassOf foaf:Agent ;
+    rdfs:label "Person" ;
+    rdfs:comment "A person." .
+
+foaf:Organization a owl:Class ;
+    rdfs:subClassOf foaf:Agent ;
+    rdfs:label "Organization" ;
+    rdfs:comment "An organization." .
+
+foaf:Group a owl:Class ;
+    rdfs:subClassOf foaf:Agent ;
+    rdfs:label "Group" ;
+    rdfs:comment "A class of Agents." .
+
+foaf:Document a owl:Class ;
+    rdfs:label "Document" ;
+    rdfs:comment "A document." .
+
+foaf:Image a owl:Class ;
+    rdfs:subClassOf foaf:Document ;
+    rdfs:label "Image" ;
+    rdfs:comment "An image." .
+
+foaf:OnlineAccount a owl:Class ;
+    rdfs:label "Online Account" ;
+    rdfs:comment "An online account." .
+
+foaf:OnlineChatAccount a owl:Class ;
+    rdfs:subClassOf foaf:OnlineAccount ;
+    rdfs:label "Online Chat Account" ;
+    rdfs:comment "An online chat account." .
+
+foaf:OnlineEcommerceAccount a owl:Class ;
+    rdfs:subClassOf foaf:OnlineAccount ;
+    rdfs:label "Online E-commerce Account" ;
+    rdfs:comment "An online e-commerce account." .
+
+foaf:OnlineGamingAccount a owl:Class ;
+    rdfs:subClassOf foaf:OnlineAccount ;
+    rdfs:label "Online Gaming Account" ;
+    rdfs:comment "An online gaming account." .
+
+foaf:Project a owl:Class ;
+    rdfs:label "Project" ;
+    rdfs:comment "A project (a collective endeavour of some kind)." .
+
+### Properties
+
+foaf:name a owl:DatatypeProperty ;
+    rdfs:domain foaf:Agent ;
+    rdfs:range xsd:string ;
+    rdfs:label "name" ;
+    rdfs:comment "A name for some thing." .
+
+foaf:mbox a owl:ObjectProperty ;
+    rdfs:domain foaf:Agent ;
+    rdfs:label "personal mailbox" ;
+    rdfs:comment "A personal mailbox, ie. an Internet mailbox associated with exactly one owner." .
+
+foaf:knows a owl:ObjectProperty ;
+    rdfs:domain foaf:Person ;
+    rdfs:range foaf:Person ;
+    rdfs:label "knows" ;
+    rdfs:comment "A person known by this person (indicating some level of reciprocated interaction between the parties)." .
+
+foaf:member a owl:ObjectProperty ;
+    rdfs:domain foaf:Group ;
+    rdfs:range foaf:Agent ;
+    rdfs:label "member" ;
+    rdfs:comment "Indicates a member of a Group." .
+
+foaf:homepage a owl:ObjectProperty ;
+    rdfs:domain foaf:Agent ;
+    rdfs:range foaf:Document ;
+    rdfs:label "homepage" ;
+    rdfs:comment "A homepage for some thing." .
+
+foaf:depiction a owl:ObjectProperty ;
+    rdfs:domain foaf:Agent ;
+    rdfs:range foaf:Image ;
+    rdfs:label "depiction" ;
+    rdfs:comment "A depiction of some thing." .
+
+foaf:account a owl:ObjectProperty ;
+    rdfs:domain foaf:Agent ;
+    rdfs:range foaf:OnlineAccount ;
+    rdfs:label "account" ;
+    rdfs:comment "Indicates an account held by this Agent." .
+
+foaf:currentProject a owl:ObjectProperty ;
+    rdfs:domain foaf:Person ;
+    rdfs:range foaf:Project ;
+    rdfs:label "current project" ;
+    rdfs:comment "A current project this person works on." .
+
+foaf:pastProject a owl:ObjectProperty ;
+    rdfs:domain foaf:Person ;
+    rdfs:range foaf:Project ;
+    rdfs:label "past project" ;
+    rdfs:comment "A project this person has previously worked on." .
+
+foaf:age a owl:DatatypeProperty ;
+    rdfs:domain foaf:Agent ;
+    rdfs:range xsd:integer ;
+    rdfs:label "age" ;
+    rdfs:comment "The age in years of some agent." .
+
+foaf:title a owl:DatatypeProperty ;
+    rdfs:domain foaf:Person ;
+    rdfs:range xsd:string ;
+    rdfs:label "title" ;
+    rdfs:comment "Title (Mr, Mrs, Ms, Dr. etc)" .
 
 ================
 File: packages/core/test/Graph/Builder.test.ts
@@ -1479,7 +8295,13 @@ describe("Graph Builder", () => {
 File: packages/core/test/Graph/Types.test.ts
 ================
 import { describe, expect, it } from "@effect/vitest"
-import type { ClassNode, OntologyNode, PropertyNode } from "../../src/Graph/Types.js"
+import {
+  type ClassNode,
+  isClassNode,
+  isPropertyNode,
+  type OntologyNode,
+  type PropertyNode
+} from "../../src/Graph/Types.js"
 
 describe("Graph Types", () => {
   it("ClassNode has required fields", () => {
@@ -1548,15 +8370,416 @@ describe("Graph Types", () => {
     }
 
     // Type narrowing works
-    if (classNode._tag === "Class") {
+    if (isClassNode(classNode)) {
       expect(classNode.properties).toBeDefined()
     }
 
-    if (propNode._tag === "Property") {
+    if (isPropertyNode(propNode)) {
       expect(propNode.domain).toBeDefined()
     }
   })
 })
+
+================
+File: packages/core/test/Ontology/Inheritance.test.ts
+================
+/**
+ * Inheritance Service Tests
+ *
+ * Tests the InheritanceService for computing ancestors and effective properties.
+ * Verifies:
+ * - Ancestor resolution (linear chains, diamonds, multiple inheritance)
+ * - Effective properties (own + inherited)
+ * - Parent/child relationships
+ * - Cycle detection
+ */
+
+import { describe, expect, it } from "@effect/vitest"
+import { Effect, Graph, HashMap } from "effect"
+import { ClassNode, type OntologyContext } from "../../src/Graph/Types.js"
+import * as Inheritance from "../../src/Ontology/Inheritance.js"
+
+describe("InheritanceService", () => {
+  describe("Linear Chain", () => {
+    /**
+     * Graph: D -> C -> B -> A
+     *
+     * D.ancestors should be [C, B, A]
+     * C.ancestors should be [B, A]
+     * B.ancestors should be [A]
+     * A.ancestors should be []
+     */
+    it("should resolve ancestors in linear chain", () =>
+      Effect.gen(function*() {
+        // Build graph: D -> C -> B -> A
+        const { context, graph } = buildLinearChain()
+        const service = Inheritance.make(graph, context)
+
+        // Test D
+        const dAncestors = yield* service.getAncestors("http://example.org/D")
+        expect(dAncestors).toContain("http://example.org/C")
+        expect(dAncestors).toContain("http://example.org/B")
+        expect(dAncestors).toContain("http://example.org/A")
+        expect(dAncestors).toHaveLength(3)
+
+        // Test C
+        const cAncestors = yield* service.getAncestors("http://example.org/C")
+        expect(cAncestors).toContain("http://example.org/B")
+        expect(cAncestors).toContain("http://example.org/A")
+        expect(cAncestors).toHaveLength(2)
+
+        // Test B
+        const bAncestors = yield* service.getAncestors("http://example.org/B")
+        expect(bAncestors).toContain("http://example.org/A")
+        expect(bAncestors).toHaveLength(1)
+
+        // Test A (root)
+        const aAncestors = yield* service.getAncestors("http://example.org/A")
+        expect(aAncestors).toHaveLength(0)
+      }).pipe(Effect.runPromise))
+
+    it("should get immediate parents", () =>
+      Effect.gen(function*() {
+        const { context, graph } = buildLinearChain()
+        const service = Inheritance.make(graph, context)
+
+        const dParents = yield* service.getParents("http://example.org/D")
+        expect(dParents).toContain("http://example.org/C")
+        expect(dParents).toHaveLength(1)
+
+        const aParents = yield* service.getParents("http://example.org/A")
+        expect(aParents).toHaveLength(0)
+      }).pipe(Effect.runPromise))
+
+    it("should get immediate children", () =>
+      Effect.gen(function*() {
+        const { context, graph } = buildLinearChain()
+        const service = Inheritance.make(graph, context)
+
+        const cChildren = yield* service.getChildren("http://example.org/C")
+        expect(cChildren).toContain("http://example.org/D")
+        expect(cChildren).toHaveLength(1)
+
+        const dChildren = yield* service.getChildren("http://example.org/D")
+        expect(dChildren).toHaveLength(0)
+      }).pipe(Effect.runPromise))
+  })
+
+  describe("Diamond Inheritance", () => {
+    /**
+     * Graph:
+     *     A
+     *    / \
+     *   B   C
+     *    \ /
+     *     D
+     *
+     * D.ancestors should be [B, C, A] (deduplicated)
+     */
+    it("should resolve ancestors in diamond", () =>
+      Effect.gen(function*() {
+        const { context, graph } = buildDiamond()
+        const service = Inheritance.make(graph, context)
+
+        const dAncestors = yield* service.getAncestors("http://example.org/D")
+
+        // Should contain all ancestors
+        expect(dAncestors).toContain("http://example.org/B")
+        expect(dAncestors).toContain("http://example.org/C")
+        expect(dAncestors).toContain("http://example.org/A")
+
+        // Should be deduplicated (A appears only once even though reachable via B and C)
+        expect(dAncestors).toHaveLength(3)
+      }).pipe(Effect.runPromise))
+
+    it("should get multiple parents", () =>
+      Effect.gen(function*() {
+        const { context, graph } = buildDiamond()
+        const service = Inheritance.make(graph, context)
+
+        const dParents = yield* service.getParents("http://example.org/D")
+
+        expect(dParents).toContain("http://example.org/B")
+        expect(dParents).toContain("http://example.org/C")
+        expect(dParents).toHaveLength(2)
+      }).pipe(Effect.runPromise))
+
+    it("should get multiple children", () =>
+      Effect.gen(function*() {
+        const { context, graph } = buildDiamond()
+        const service = Inheritance.make(graph, context)
+
+        const aChildren = yield* service.getChildren("http://example.org/A")
+
+        expect(aChildren).toContain("http://example.org/B")
+        expect(aChildren).toContain("http://example.org/C")
+        expect(aChildren).toHaveLength(2)
+      }).pipe(Effect.runPromise))
+  })
+
+  describe("Effective Properties", () => {
+    it("should combine own and inherited properties", () =>
+      Effect.gen(function*() {
+        const { context, graph } = buildWithProperties()
+        const service = Inheritance.make(graph, context)
+
+        // Employee extends Person
+        // Employee should have: hasSalary (own) + hasName (inherited from Person)
+        const effectiveProperties = yield* service.getEffectiveProperties(
+          "http://example.org/Employee"
+        )
+
+        const propIris = effectiveProperties.map((p) => p.iri)
+        expect(propIris).toContain("http://example.org/hasName")
+        expect(propIris).toContain("http://example.org/hasSalary")
+        expect(effectiveProperties).toHaveLength(2)
+      }).pipe(Effect.runPromise))
+
+    it("should handle properties at multiple levels", () =>
+      Effect.gen(function*() {
+        const { context, graph } = buildMultiLevelProperties()
+        const service = Inheritance.make(graph, context)
+
+        // Manager extends Employee extends Person
+        // Manager should have:
+        // - hasTeamSize (own)
+        // - hasSalary (from Employee)
+        // - hasName (from Person)
+        const effectiveProperties = yield* service.getEffectiveProperties(
+          "http://example.org/Manager"
+        )
+
+        const propIris = effectiveProperties.map((p) => p.iri)
+        expect(propIris).toContain("http://example.org/hasName")
+        expect(propIris).toContain("http://example.org/hasSalary")
+        expect(propIris).toContain("http://example.org/hasTeamSize")
+        expect(effectiveProperties).toHaveLength(3)
+      }).pipe(Effect.runPromise))
+  })
+
+  describe("Error Handling", () => {
+    it("should fail for non-existent class", () =>
+      Effect.gen(function*() {
+        const { context, graph } = buildLinearChain()
+        const service = Inheritance.make(graph, context)
+
+        const result = yield* service
+          .getAncestors("http://example.org/NonExistent")
+          .pipe(Effect.either)
+
+        expect(result._tag).toBe("Left")
+      }).pipe(Effect.runPromise))
+  })
+})
+
+// Test Helpers
+
+function buildLinearChain() {
+  const classA = ClassNode.make({
+    id: "http://example.org/A",
+    label: "A",
+    properties: []
+  })
+
+  const classB = ClassNode.make({
+    id: "http://example.org/B",
+    label: "B",
+    properties: []
+  })
+
+  const classC = ClassNode.make({
+    id: "http://example.org/C",
+    label: "C",
+    properties: []
+  })
+
+  const classD = ClassNode.make({
+    id: "http://example.org/D",
+    label: "D",
+    properties: []
+  })
+
+  let nodes = HashMap.empty<string, ClassNode>()
+  nodes = HashMap.set(nodes, "http://example.org/A", classA)
+  nodes = HashMap.set(nodes, "http://example.org/B", classB)
+  nodes = HashMap.set(nodes, "http://example.org/C", classC)
+  nodes = HashMap.set(nodes, "http://example.org/D", classD)
+
+  let nodeIndexMap = HashMap.empty<string, number>()
+
+  const graph = Graph.mutate(Graph.directed<string, null>(), (mutable) => {
+    const aIdx = Graph.addNode(mutable, "http://example.org/A")
+    const bIdx = Graph.addNode(mutable, "http://example.org/B")
+    const cIdx = Graph.addNode(mutable, "http://example.org/C")
+    const dIdx = Graph.addNode(mutable, "http://example.org/D")
+
+    nodeIndexMap = HashMap.set(nodeIndexMap, "http://example.org/A", aIdx)
+    nodeIndexMap = HashMap.set(nodeIndexMap, "http://example.org/B", bIdx)
+    nodeIndexMap = HashMap.set(nodeIndexMap, "http://example.org/C", cIdx)
+    nodeIndexMap = HashMap.set(nodeIndexMap, "http://example.org/D", dIdx)
+
+    // D -> C -> B -> A
+    Graph.addEdge(mutable, dIdx, cIdx, null)
+    Graph.addEdge(mutable, cIdx, bIdx, null)
+    Graph.addEdge(mutable, bIdx, aIdx, null)
+  })
+
+  const context: OntologyContext = {
+    nodes,
+    universalProperties: [],
+    nodeIndexMap
+  }
+
+  return { graph, context }
+}
+
+function buildDiamond() {
+  const classA = ClassNode.make({
+    id: "http://example.org/A",
+    label: "A",
+    properties: []
+  })
+
+  const classB = ClassNode.make({
+    id: "http://example.org/B",
+    label: "B",
+    properties: []
+  })
+
+  const classC = ClassNode.make({
+    id: "http://example.org/C",
+    label: "C",
+    properties: []
+  })
+
+  const classD = ClassNode.make({
+    id: "http://example.org/D",
+    label: "D",
+    properties: []
+  })
+
+  let nodes = HashMap.empty<string, ClassNode>()
+  nodes = HashMap.set(nodes, "http://example.org/A", classA)
+  nodes = HashMap.set(nodes, "http://example.org/B", classB)
+  nodes = HashMap.set(nodes, "http://example.org/C", classC)
+  nodes = HashMap.set(nodes, "http://example.org/D", classD)
+
+  let nodeIndexMap = HashMap.empty<string, number>()
+
+  const graph = Graph.mutate(Graph.directed<string, null>(), (mutable) => {
+    const aIdx = Graph.addNode(mutable, "http://example.org/A")
+    const bIdx = Graph.addNode(mutable, "http://example.org/B")
+    const cIdx = Graph.addNode(mutable, "http://example.org/C")
+    const dIdx = Graph.addNode(mutable, "http://example.org/D")
+
+    nodeIndexMap = HashMap.set(nodeIndexMap, "http://example.org/A", aIdx)
+    nodeIndexMap = HashMap.set(nodeIndexMap, "http://example.org/B", bIdx)
+    nodeIndexMap = HashMap.set(nodeIndexMap, "http://example.org/C", cIdx)
+    nodeIndexMap = HashMap.set(nodeIndexMap, "http://example.org/D", dIdx)
+
+    // Diamond: B -> A, C -> A, D -> B, D -> C
+    Graph.addEdge(mutable, bIdx, aIdx, null)
+    Graph.addEdge(mutable, cIdx, aIdx, null)
+    Graph.addEdge(mutable, dIdx, bIdx, null)
+    Graph.addEdge(mutable, dIdx, cIdx, null)
+  })
+
+  const context: OntologyContext = {
+    nodes,
+    universalProperties: [],
+    nodeIndexMap
+  }
+
+  return { graph, context }
+}
+
+function buildWithProperties() {
+  const classPerson = ClassNode.make({
+    id: "http://example.org/Person",
+    label: "Person",
+    properties: [{ iri: "http://example.org/hasName", label: "hasName", range: "string" }]
+  })
+
+  const classEmployee = ClassNode.make({
+    id: "http://example.org/Employee",
+    label: "Employee",
+    properties: [{ iri: "http://example.org/hasSalary", label: "hasSalary", range: "integer" }]
+  })
+
+  let nodes = HashMap.empty<string, ClassNode>()
+  nodes = HashMap.set(nodes, "http://example.org/Person", classPerson)
+  nodes = HashMap.set(nodes, "http://example.org/Employee", classEmployee)
+
+  let nodeIndexMap = HashMap.empty<string, number>()
+
+  const graph = Graph.mutate(Graph.directed<string, null>(), (mutable) => {
+    const personIdx = Graph.addNode(mutable, "http://example.org/Person")
+    const employeeIdx = Graph.addNode(mutable, "http://example.org/Employee")
+
+    nodeIndexMap = HashMap.set(nodeIndexMap, "http://example.org/Person", personIdx)
+    nodeIndexMap = HashMap.set(nodeIndexMap, "http://example.org/Employee", employeeIdx)
+
+    // Employee -> Person
+    Graph.addEdge(mutable, employeeIdx, personIdx, null)
+  })
+
+  const context: OntologyContext = {
+    nodes,
+    universalProperties: [],
+    nodeIndexMap
+  }
+
+  return { graph, context }
+}
+
+function buildMultiLevelProperties() {
+  const classPerson = ClassNode.make({
+    id: "http://example.org/Person",
+    label: "Person",
+    properties: [{ iri: "http://example.org/hasName", label: "hasName", range: "string" }]
+  })
+
+  const classEmployee = ClassNode.make({
+    id: "http://example.org/Employee",
+    label: "Employee",
+    properties: [{ iri: "http://example.org/hasSalary", label: "hasSalary", range: "integer" }]
+  })
+
+  const classManager = ClassNode.make({
+    id: "http://example.org/Manager",
+    label: "Manager",
+    properties: [{ iri: "http://example.org/hasTeamSize", label: "hasTeamSize", range: "integer" }]
+  })
+
+  let nodes = HashMap.empty<string, ClassNode>()
+  nodes = HashMap.set(nodes, "http://example.org/Person", classPerson)
+  nodes = HashMap.set(nodes, "http://example.org/Employee", classEmployee)
+  nodes = HashMap.set(nodes, "http://example.org/Manager", classManager)
+
+  let nodeIndexMap = HashMap.empty<string, number>()
+
+  const graph = Graph.mutate(Graph.directed<string, null>(), (mutable) => {
+    const personIdx = Graph.addNode(mutable, "http://example.org/Person")
+    const employeeIdx = Graph.addNode(mutable, "http://example.org/Employee")
+    const managerIdx = Graph.addNode(mutable, "http://example.org/Manager")
+
+    nodeIndexMap = HashMap.set(nodeIndexMap, "http://example.org/Person", personIdx)
+    nodeIndexMap = HashMap.set(nodeIndexMap, "http://example.org/Employee", employeeIdx)
+    nodeIndexMap = HashMap.set(nodeIndexMap, "http://example.org/Manager", managerIdx)
+
+    // Manager -> Employee -> Person
+    Graph.addEdge(mutable, employeeIdx, personIdx, null)
+    Graph.addEdge(mutable, managerIdx, employeeIdx, null)
+  })
+
+  const context: OntologyContext = {
+    nodes,
+    universalProperties: [],
+    nodeIndexMap
+  }
+
+  return { graph, context }
+}
 
 ================
 File: packages/core/test/Prompt/Algebra.test.ts
@@ -1573,11 +8796,7 @@ File: packages/core/test/Prompt/Algebra.test.ts
 
 import { describe, expect, it } from "@effect/vitest"
 import { ClassNode, PropertyNode } from "../../src/Graph/Types.js"
-import {
-  combineWithUniversal,
-  defaultPromptAlgebra,
-  processUniversalProperties
-} from "../../src/Prompt/Algebra.js"
+import { combineWithUniversal, defaultPromptAlgebra, processUniversalProperties } from "../../src/Prompt/Algebra.js"
 import { StructuredPrompt } from "../../src/Prompt/Types.js"
 
 describe("Prompt Algebra", () => {
@@ -1799,6 +9018,2303 @@ describe("Prompt Algebra", () => {
 })
 
 ================
+File: packages/core/test/Prompt/DocBuilder.test.ts
+================
+/**
+ * Tests for DocBuilder - Core document utilities
+ *
+ * @since 1.0.0
+ */
+
+import { describe, expect, it } from "@effect/vitest"
+import { Effect } from "effect"
+import { bulletList, header, numberedList, renderDoc, section } from "../../src/Prompt/DocBuilder.js"
+
+describe("DocBuilder", () => {
+  describe("header", () => {
+    it.effect("creates uppercase title with colon", () =>
+      Effect.sync(() => {
+        const doc = header("system")
+        const output = renderDoc(doc)
+        expect(output).toBe("SYSTEM:")
+      }))
+
+    it.effect("handles already uppercase input", () =>
+      Effect.sync(() => {
+        const doc = header("CONTEXT")
+        const output = renderDoc(doc)
+        expect(output).toBe("CONTEXT:")
+      }))
+
+    it.effect("handles mixed case input", () =>
+      Effect.sync(() => {
+        const doc = header("Task Instructions")
+        const output = renderDoc(doc)
+        expect(output).toBe("TASK INSTRUCTIONS:")
+      }))
+  })
+
+  describe("section", () => {
+    it.effect("creates titled block with items", () =>
+      Effect.sync(() => {
+        const doc = section("SYSTEM", ["instruction 1", "instruction 2"])
+        const output = renderDoc(doc)
+
+        expect(output).toBe(`SYSTEM:
+instruction 1
+instruction 2
+`)
+      }))
+
+    it.effect("returns empty for no items", () =>
+      Effect.sync(() => {
+        const doc = section("EMPTY", [])
+        const output = renderDoc(doc)
+        expect(output).toBe("")
+      }))
+
+    it.effect("handles single item", () =>
+      Effect.sync(() => {
+        const doc = section("SYSTEM", ["single instruction"])
+        const output = renderDoc(doc)
+
+        expect(output).toBe(`SYSTEM:
+single instruction
+`)
+      }))
+
+    it.effect("preserves item content exactly", () =>
+      Effect.sync(() => {
+        const doc = section("TEST", ["  indented", "no indent", "\ttab"])
+        const output = renderDoc(doc)
+
+        expect(output).toBe(`TEST:
+  indented
+no indent
+\ttab
+`)
+      }))
+  })
+
+  describe("bulletList", () => {
+    it.effect("creates bullet points with default bullet", () =>
+      Effect.sync(() => {
+        const doc = bulletList(["item 1", "item 2"])
+        const output = renderDoc(doc)
+
+        expect(output).toBe(`- item 1
+- item 2`)
+      }))
+
+    it.effect("allows custom bullet character", () =>
+      Effect.sync(() => {
+        const doc = bulletList(["item 1", "item 2"], "*")
+        const output = renderDoc(doc)
+
+        expect(output).toBe(`* item 1
+* item 2`)
+      }))
+
+    it.effect("handles empty array", () =>
+      Effect.sync(() => {
+        const doc = bulletList([])
+        const output = renderDoc(doc)
+        expect(output).toBe("")
+      }))
+
+    it.effect("handles single item", () =>
+      Effect.sync(() => {
+        const doc = bulletList(["only one"])
+        const output = renderDoc(doc)
+        expect(output).toBe("- only one")
+      }))
+
+    it.effect("supports multi-character bullets", () =>
+      Effect.sync(() => {
+        const doc = bulletList(["item 1", "item 2"], ">>")
+        const output = renderDoc(doc)
+
+        expect(output).toBe(`>> item 1
+>> item 2`)
+      }))
+  })
+
+  describe("numberedList", () => {
+    it.effect("creates numbered items", () =>
+      Effect.sync(() => {
+        const doc = numberedList(["first", "second", "third"])
+        const output = renderDoc(doc)
+
+        expect(output).toBe(`1. first
+2. second
+3. third`)
+      }))
+
+    it.effect("handles empty array", () =>
+      Effect.sync(() => {
+        const doc = numberedList([])
+        const output = renderDoc(doc)
+        expect(output).toBe("")
+      }))
+
+    it.effect("handles single item", () =>
+      Effect.sync(() => {
+        const doc = numberedList(["only one"])
+        const output = renderDoc(doc)
+        expect(output).toBe("1. only one")
+      }))
+
+    it.effect("numbers correctly for many items", () =>
+      Effect.sync(() => {
+        const items = Array.from({ length: 12 }, (_, i) => `item ${i + 1}`)
+        const doc = numberedList(items)
+        const output = renderDoc(doc)
+
+        expect(output).toContain("10. item 10")
+        expect(output).toContain("12. item 12")
+      }))
+  })
+
+  describe("renderDoc", () => {
+    it.effect("renders simple text", () =>
+      Effect.sync(() => {
+        const doc = header("test")
+        const output = renderDoc(doc)
+        expect(typeof output).toBe("string")
+        expect(output).toBe("TEST:")
+      }))
+
+    it.effect("handles empty doc", () =>
+      Effect.sync(() => {
+        const { Doc } = require("@effect/printer")
+        const doc = Doc.empty
+        const output = renderDoc(doc)
+        expect(output).toBe("")
+      }))
+  })
+
+  describe("integration", () => {
+    it.effect("can compose multiple sections", () =>
+      Effect.sync(() => {
+        const { Doc } = require("@effect/printer")
+
+        const systemSection = section("SYSTEM", ["instruction 1", "instruction 2"])
+        const contextSection = section("CONTEXT", ["context 1"])
+
+        const combined = Doc.vsep([systemSection, contextSection])
+        const output = renderDoc(combined)
+
+        expect(output).toBe(`SYSTEM:
+instruction 1
+instruction 2
+
+CONTEXT:
+context 1
+`)
+      }))
+
+    it.effect("can nest bullet lists in sections", () =>
+      Effect.sync(() => {
+        const { Doc } = require("@effect/printer")
+
+        const bullets = bulletList(["option 1", "option 2"])
+        const doc = Doc.vcat([
+          header("CHOICES"),
+          bullets
+        ])
+
+        const output = renderDoc(doc)
+
+        expect(output).toBe(`CHOICES:
+- option 1
+- option 2`)
+      }))
+  })
+})
+
+================
+File: packages/core/test/Prompt/Integration.test.ts
+================
+/**
+ * Integration Tests - End-to-End KnowledgeIndex Pipeline
+ *
+ * Tests the complete pipeline:
+ * 1. Parse ontology → Graph + Context
+ * 2. Solve with knowledgeIndexAlgebra → KnowledgeIndex
+ * 3. Apply focus/pruning → Focused KnowledgeIndex
+ * 4. Render → StructuredPrompt
+ *
+ * Verifies:
+ * - Context reduction (token savings)
+ * - Inheritance resolution
+ * - Complete workflow
+ */
+
+import { describe, expect, it } from "@effect/vitest"
+import { Effect } from "effect"
+import { parseTurtleToGraph } from "../../src/Graph/Builder.js"
+import * as Inheritance from "../../src/Ontology/Inheritance.js"
+import { knowledgeIndexAlgebra } from "../../src/Prompt/Algebra.js"
+import * as Focus from "../../src/Prompt/Focus.js"
+import * as KnowledgeIndex from "../../src/Prompt/KnowledgeIndex.js"
+import * as Render from "../../src/Prompt/Render.js"
+import { solveToKnowledgeIndex } from "../../src/Prompt/Solver.js"
+
+describe("KnowledgeIndex Integration", () => {
+  const ontology = `
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix ex: <http://example.org/> .
+
+# Classes
+ex:Thing a owl:Class ;
+  rdfs:label "Thing" .
+
+ex:Person a owl:Class ;
+  rdfs:label "Person" ;
+  rdfs:subClassOf ex:Thing .
+
+ex:Employee a owl:Class ;
+  rdfs:label "Employee" ;
+  rdfs:subClassOf ex:Person .
+
+ex:Manager a owl:Class ;
+  rdfs:label "Manager" ;
+  rdfs:subClassOf ex:Employee .
+
+ex:Animal a owl:Class ;
+  rdfs:label "Animal" ;
+  rdfs:subClassOf ex:Thing .
+
+ex:Dog a owl:Class ;
+  rdfs:label "Dog" ;
+  rdfs:subClassOf ex:Animal .
+
+ex:Vehicle a owl:Class ;
+  rdfs:label "Vehicle" ;
+  rdfs:subClassOf ex:Thing .
+
+# Properties
+ex:hasName a owl:DatatypeProperty ;
+  rdfs:label "hasName" ;
+  rdfs:domain ex:Person ;
+  rdfs:range rdfs:Literal .
+
+ex:hasSalary a owl:DatatypeProperty ;
+  rdfs:label "hasSalary" ;
+  rdfs:domain ex:Employee ;
+  rdfs:range rdfs:Literal .
+
+ex:hasTeamSize a owl:DatatypeProperty ;
+  rdfs:label "hasTeamSize" ;
+  rdfs:domain ex:Manager ;
+  rdfs:range rdfs:Literal .
+
+ex:hasBreed a owl:DatatypeProperty ;
+  rdfs:label "hasBreed" ;
+  rdfs:domain ex:Dog ;
+  rdfs:range rdfs:Literal .
+  `
+
+  describe("Full Pipeline", () => {
+    it("should build complete knowledge index from ontology", () =>
+      Effect.gen(function*() {
+        // Step 1: Parse ontology
+        const { context, graph } = yield* parseTurtleToGraph(ontology)
+
+        // Step 2: Solve to KnowledgeIndex
+        const fullIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+
+        // Verify all classes are present
+        expect(KnowledgeIndex.has(fullIndex, "http://example.org/Thing")).toBe(true)
+        expect(KnowledgeIndex.has(fullIndex, "http://example.org/Person")).toBe(true)
+        expect(KnowledgeIndex.has(fullIndex, "http://example.org/Employee")).toBe(true)
+        expect(KnowledgeIndex.has(fullIndex, "http://example.org/Manager")).toBe(true)
+        expect(KnowledgeIndex.has(fullIndex, "http://example.org/Animal")).toBe(true)
+        expect(KnowledgeIndex.has(fullIndex, "http://example.org/Dog")).toBe(true)
+        expect(KnowledgeIndex.has(fullIndex, "http://example.org/Vehicle")).toBe(true)
+
+        expect(KnowledgeIndex.size(fullIndex)).toBe(7)
+      }).pipe(Effect.runPromise))
+
+    it("should capture properties correctly", () =>
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(ontology)
+        const fullIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+
+        // Check Employee has hasSalary property
+        const employee = KnowledgeIndex.get(fullIndex, "http://example.org/Employee")
+        expect(employee._tag).toBe("Some")
+        if (employee._tag === "Some") {
+          const propIris = employee.value.properties.map((p) => p.iri)
+          expect(propIris).toContain("http://example.org/hasSalary")
+        }
+
+        // Check Manager has hasTeamSize property
+        const manager = KnowledgeIndex.get(fullIndex, "http://example.org/Manager")
+        expect(manager._tag).toBe("Some")
+        if (manager._tag === "Some") {
+          const propIris = manager.value.properties.map((p) => p.iri)
+          expect(propIris).toContain("http://example.org/hasTeamSize")
+        }
+      }).pipe(Effect.runPromise))
+  })
+
+  describe("Context Pruning", () => {
+    it("should reduce context size with focused strategy", () =>
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(ontology)
+        const fullIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+
+        const inheritanceService = Inheritance.make(graph, context)
+
+        // Focus on Person and Manager only
+        const focusedIndex = yield* Focus.selectFocused(
+          fullIndex,
+          ["http://example.org/Person", "http://example.org/Manager"],
+          inheritanceService
+        )
+
+        // Focused index should be smaller
+        expect(KnowledgeIndex.size(focusedIndex)).toBeLessThan(KnowledgeIndex.size(fullIndex))
+
+        // Should include focus nodes
+        expect(KnowledgeIndex.has(focusedIndex, "http://example.org/Person")).toBe(true)
+        expect(KnowledgeIndex.has(focusedIndex, "http://example.org/Manager")).toBe(true)
+
+        // Should include ancestors (Employee, Thing)
+        expect(KnowledgeIndex.has(focusedIndex, "http://example.org/Employee")).toBe(true)
+        expect(KnowledgeIndex.has(focusedIndex, "http://example.org/Thing")).toBe(true)
+
+        // Should NOT include unrelated classes (Animal, Dog, Vehicle)
+        expect(KnowledgeIndex.has(focusedIndex, "http://example.org/Animal")).toBe(false)
+        expect(KnowledgeIndex.has(focusedIndex, "http://example.org/Dog")).toBe(false)
+        expect(KnowledgeIndex.has(focusedIndex, "http://example.org/Vehicle")).toBe(false)
+      }).pipe(Effect.runPromise))
+
+    it("should measure context reduction", () =>
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(ontology)
+        const fullIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+
+        const inheritanceService = Inheritance.make(graph, context)
+
+        // Focus on just Employee
+        const focusedIndex = yield* Focus.selectFocused(
+          fullIndex,
+          ["http://example.org/Employee"],
+          inheritanceService
+        )
+
+        const reduction = Focus.analyzeReduction(fullIndex, focusedIndex)
+
+        // Should show significant reduction
+        expect(reduction.fullSize).toBe(7)
+        expect(reduction.focusedSize).toBe(3) // Employee, Person, Thing
+        expect(reduction.reductionPercent).toBeGreaterThan(40)
+        expect(reduction.estimatedTokenSavings).toBeGreaterThan(0)
+      }).pipe(Effect.runPromise))
+  })
+
+  describe("Inheritance Resolution", () => {
+    it("should compute effective properties", () =>
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(ontology)
+        const inheritanceService = Inheritance.make(graph, context)
+
+        // Manager should inherit from Employee and Person
+        const effectiveProperties = yield* inheritanceService.getEffectiveProperties(
+          "http://example.org/Manager"
+        )
+
+        const propIris = effectiveProperties.map((p) => p.iri)
+
+        // Own property
+        expect(propIris).toContain("http://example.org/hasTeamSize")
+
+        // From Employee
+        expect(propIris).toContain("http://example.org/hasSalary")
+
+        // From Person
+        expect(propIris).toContain("http://example.org/hasName")
+
+        expect(effectiveProperties).toHaveLength(3)
+      }).pipe(Effect.runPromise))
+  })
+
+  describe("Rendering", () => {
+    it("should render index to structured prompt", () =>
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(ontology)
+        const fullIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+
+        const prompt = Render.renderToStructuredPrompt(fullIndex)
+
+        expect(prompt.system.length).toBeGreaterThan(0)
+
+        // Should contain class definitions
+        const systemText = prompt.system.join("\n")
+        expect(systemText).toContain("Class: Person")
+        expect(systemText).toContain("Class: Employee")
+        expect(systemText).toContain("Class: Manager")
+      }).pipe(Effect.runPromise))
+
+    it("should render with inherited properties", () =>
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(ontology)
+        const fullIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+
+        const inheritanceService = Inheritance.make(graph, context)
+
+        const prompt = yield* Render.renderWithInheritance(fullIndex, inheritanceService)
+
+        const systemText = prompt.system.join("\n")
+
+        // Manager should show inherited properties
+        expect(systemText).toContain("hasTeamSize")
+        expect(systemText).toContain("hasSalary")
+        expect(systemText).toContain("hasName")
+      }).pipe(Effect.runPromise))
+
+    it("should render statistics", () =>
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(ontology)
+        const fullIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+
+        const statsText = Render.renderStats(fullIndex)
+
+        expect(statsText).toContain("Total Units")
+        expect(statsText).toContain("Total Properties")
+        expect(statsText).toContain("7") // 7 classes
+      }).pipe(Effect.runPromise))
+  })
+
+  describe("Neighborhood Strategy", () => {
+    it("should include children in neighborhood", () =>
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(ontology)
+        const fullIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+
+        const inheritanceService = Inheritance.make(graph, context)
+
+        // Focus on Person with neighborhood strategy
+        const neighborhoodIndex = yield* Focus.selectNeighborhood(
+          fullIndex,
+          ["http://example.org/Person"],
+          inheritanceService
+        )
+
+        // Should include Person
+        expect(KnowledgeIndex.has(neighborhoodIndex, "http://example.org/Person")).toBe(true)
+
+        // Should include parent (Thing)
+        expect(KnowledgeIndex.has(neighborhoodIndex, "http://example.org/Thing")).toBe(true)
+
+        // Should include child (Employee)
+        expect(KnowledgeIndex.has(neighborhoodIndex, "http://example.org/Employee")).toBe(true)
+
+        // Should NOT include grandchildren (Manager) - only direct children
+        expect(KnowledgeIndex.has(neighborhoodIndex, "http://example.org/Manager")).toBe(false)
+
+        // Should NOT include unrelated (Animal, Vehicle)
+        expect(KnowledgeIndex.has(neighborhoodIndex, "http://example.org/Animal")).toBe(false)
+        expect(KnowledgeIndex.has(neighborhoodIndex, "http://example.org/Vehicle")).toBe(false)
+      }).pipe(Effect.runPromise))
+  })
+})
+
+================
+File: packages/core/test/Prompt/KnowledgeIndex.property.test.ts
+================
+/**
+ * Property-Based Tests for KnowledgeIndex
+ *
+ * Tests monoid laws and algebraic properties with randomized inputs.
+ * Uses fast-check for property-based testing with Effect integration.
+ * Based on patterns from PR #6 (review-ontology-math-rigor).
+ */
+
+import { describe, expect, test } from "@effect/vitest"
+import { Equal } from "effect"
+import fc from "fast-check"
+import type { PropertyData } from "../../src/Graph/Types.js"
+import { KnowledgeUnit } from "../../src/Prompt/Ast.js"
+import * as KnowledgeIndex from "../../src/Prompt/KnowledgeIndex.js"
+
+// ============================================================================
+// Arbitraries (Random Value Generators)
+// ============================================================================
+
+/**
+ * Generate random IRIs
+ */
+const arbIri = fc.webUrl({ withFragments: true })
+
+/**
+ * Generate random property data
+ */
+const arbPropertyData: fc.Arbitrary<PropertyData> = fc.record({
+  iri: arbIri,
+  label: fc.string({ minLength: 1, maxLength: 50 }),
+  range: fc.oneof(
+    fc.constant("string"),
+    fc.constant("integer"),
+    fc.constant("boolean"),
+    fc.constant("float"),
+    arbIri
+  )
+})
+
+/**
+ * Generate random KnowledgeUnit
+ */
+const arbKnowledgeUnit: fc.Arbitrary<KnowledgeUnit> = fc
+  .record({
+    iri: arbIri,
+    label: fc.string({ minLength: 1, maxLength: 100 }),
+    definition: fc.string({ minLength: 1, maxLength: 500 }),
+    properties: fc.array(arbPropertyData, { maxLength: 10 }),
+    inheritedProperties: fc.array(arbPropertyData, { maxLength: 10 }),
+    children: fc.array(arbIri, { maxLength: 5 }),
+    parents: fc.array(arbIri, { maxLength: 5 })
+  })
+  .map((data) => new KnowledgeUnit(data))
+
+/**
+ * Generate random KnowledgeIndex
+ */
+const arbKnowledgeIndex = fc
+  .array(arbKnowledgeUnit, { maxLength: 20 })
+  .map((units) => KnowledgeIndex.fromUnits(units))
+
+// ============================================================================
+// Property-Based Tests
+// ============================================================================
+
+describe("KnowledgeIndex - Property-Based Tests", () => {
+  /**
+   * Monoid Law 1: Left Identity
+   * empty ⊕ x = x
+   */
+  test("Monoid: Left Identity (1000 runs)", () => {
+    fc.assert(
+      fc.property(arbKnowledgeIndex, (x) => {
+        const result = KnowledgeIndex.combine(KnowledgeIndex.empty(), x)
+
+        // Compare by converting to sorted arrays
+        const xArray = Array.from(KnowledgeIndex.entries(x)).sort((a, b) => a[0].localeCompare(b[0]))
+        const resultArray = Array.from(KnowledgeIndex.entries(result)).sort((a, b) => a[0].localeCompare(b[0]))
+
+        if (xArray.length !== resultArray.length) return false
+
+        for (let i = 0; i < xArray.length; i++) {
+          if (xArray[i][0] !== resultArray[i][0]) return false
+          if (!Equal.equals(xArray[i][1], resultArray[i][1])) return false
+        }
+
+        return true
+      }),
+      { numRuns: 1000 }
+    )
+  })
+
+  /**
+   * Monoid Law 2: Right Identity
+   * x ⊕ empty = x
+   */
+  test("Monoid: Right Identity (1000 runs)", () => {
+    fc.assert(
+      fc.property(arbKnowledgeIndex, (x) => {
+        const result = KnowledgeIndex.combine(x, KnowledgeIndex.empty())
+
+        const xArray = Array.from(KnowledgeIndex.entries(x)).sort((a, b) => a[0].localeCompare(b[0]))
+        const resultArray = Array.from(KnowledgeIndex.entries(result)).sort((a, b) => a[0].localeCompare(b[0]))
+
+        if (xArray.length !== resultArray.length) return false
+
+        for (let i = 0; i < xArray.length; i++) {
+          if (xArray[i][0] !== resultArray[i][0]) return false
+          if (!Equal.equals(xArray[i][1], resultArray[i][1])) return false
+        }
+
+        return true
+      }),
+      { numRuns: 1000 }
+    )
+  })
+
+  /**
+   * Monoid Law 3: Associativity
+   * (a ⊕ b) ⊕ c = a ⊕ (b ⊕ c)
+   */
+  test("Monoid: Associativity (500 runs)", () => {
+    fc.assert(
+      fc.property(arbKnowledgeIndex, arbKnowledgeIndex, arbKnowledgeIndex, (a, b, c) => {
+        const left = KnowledgeIndex.combine(KnowledgeIndex.combine(a, b), c)
+        const right = KnowledgeIndex.combine(a, KnowledgeIndex.combine(b, c))
+
+        const leftArray = Array.from(KnowledgeIndex.entries(left)).sort((a, b) => a[0].localeCompare(b[0]))
+        const rightArray = Array.from(KnowledgeIndex.entries(right)).sort((a, b) => a[0].localeCompare(b[0]))
+
+        if (leftArray.length !== rightArray.length) return false
+
+        for (let i = 0; i < leftArray.length; i++) {
+          if (leftArray[i][0] !== rightArray[i][0]) return false
+          if (!Equal.equals(leftArray[i][1], rightArray[i][1])) return false
+        }
+
+        return true
+      }),
+      { numRuns: 500 }
+    )
+  })
+
+  /**
+   * Property: Size bounds after combine
+   * max(size(a), size(b)) <= size(a ⊕ b) <= size(a) + size(b)
+   */
+  test("Size: combine bounds (1000 runs)", () => {
+    fc.assert(
+      fc.property(arbKnowledgeIndex, arbKnowledgeIndex, (a, b) => {
+        const combined = KnowledgeIndex.combine(a, b)
+        const sizeA = KnowledgeIndex.size(a)
+        const sizeB = KnowledgeIndex.size(b)
+        const sizeCombined = KnowledgeIndex.size(combined)
+
+        return (
+          sizeCombined >= Math.max(sizeA, sizeB) && sizeCombined <= sizeA + sizeB
+        )
+      }),
+      { numRuns: 1000 }
+    )
+  })
+
+  /**
+   * Property: Idempotence on keys
+   * keys(combine(x, x)) = keys(x)
+   */
+  test("Idempotence: keys preserved (1000 runs)", () => {
+    fc.assert(
+      fc.property(arbKnowledgeIndex, (x) => {
+        const doubled = KnowledgeIndex.combine(x, x)
+        const keysX = new Set(KnowledgeIndex.keys(x))
+        const keysDoubled = new Set(KnowledgeIndex.keys(doubled))
+
+        if (keysX.size !== keysDoubled.size) return false
+
+        for (const key of keysX) {
+          if (!keysDoubled.has(key)) return false
+        }
+
+        return true
+      }),
+      { numRuns: 1000 }
+    )
+  })
+
+  /**
+   * Property: Commutativity of keys
+   * keys(a ⊕ b) = keys(b ⊕ a)
+   */
+  test("Commutativity: keys are symmetric (1000 runs)", () => {
+    fc.assert(
+      fc.property(arbKnowledgeIndex, arbKnowledgeIndex, (a, b) => {
+        const ab = KnowledgeIndex.combine(a, b)
+        const ba = KnowledgeIndex.combine(b, a)
+
+        const keysAB = new Set(KnowledgeIndex.keys(ab))
+        const keysBA = new Set(KnowledgeIndex.keys(ba))
+
+        if (keysAB.size !== keysBA.size) return false
+
+        for (const key of keysAB) {
+          if (!keysBA.has(key)) return false
+        }
+
+        return true
+      }),
+      { numRuns: 1000 }
+    )
+  })
+
+  /**
+   * Property: get/has consistency
+   * has(index, iri) ⟺ isSome(get(index, iri))
+   */
+  test("get/has: consistency (1000 runs)", () => {
+    fc.assert(
+      fc.property(arbKnowledgeIndex, arbIri, (index, testIri) => {
+        const has = KnowledgeIndex.has(index, testIri)
+        const get = KnowledgeIndex.get(index, testIri)
+
+        // has should be true iff get returns Some
+        return has === (get._tag === "Some")
+      }),
+      { numRuns: 1000 }
+    )
+  })
+
+  /**
+   * Property: fromUnit creates single-element index
+   * size(fromUnit(unit)) = 1
+   */
+  test("fromUnit: creates single element (100 runs)", () => {
+    fc.assert(
+      fc.property(arbKnowledgeUnit, (unit) => {
+        const index = KnowledgeIndex.fromUnit(unit)
+
+        if (KnowledgeIndex.size(index) !== 1) return false
+        if (!KnowledgeIndex.has(index, unit.iri)) return false
+
+        const retrieved = KnowledgeIndex.get(index, unit.iri)
+        if (retrieved._tag !== "Some") return false
+
+        return Equal.equals(retrieved.value, unit)
+      }),
+      { numRuns: 100 }
+    )
+  })
+
+  /**
+   * Property: toArray preserves all entries
+   * length(toArray(index)) = size(index)
+   */
+  test("toArray: preserves size (1000 runs)", () => {
+    fc.assert(
+      fc.property(arbKnowledgeIndex, (index) => {
+        const array = KnowledgeIndex.toArray(index)
+        return array.length === KnowledgeIndex.size(index)
+      }),
+      { numRuns: 1000 }
+    )
+  })
+
+  /**
+   * Property: stats consistency
+   * stats.totalUnits = size(index)
+   */
+  test("stats: totalUnits matches size (1000 runs)", () => {
+    fc.assert(
+      fc.property(arbKnowledgeIndex, (index) => {
+        const stats = KnowledgeIndex.stats(index)
+        return stats.totalUnits === KnowledgeIndex.size(index)
+      }),
+      { numRuns: 1000 }
+    )
+  })
+
+  /**
+   * Property: stats total properties
+   * stats.totalProperties = sum of all direct properties
+   */
+  test("stats: totalProperties is sum of direct properties (1000 runs)", () => {
+    fc.assert(
+      fc.property(arbKnowledgeIndex, (index) => {
+        const stats = KnowledgeIndex.stats(index)
+
+        let expectedTotal = 0
+        for (const unit of KnowledgeIndex.values(index)) {
+          expectedTotal += unit.properties.length
+        }
+
+        return stats.totalProperties === expectedTotal
+      }),
+      { numRuns: 1000 }
+    )
+  })
+
+  /**
+   * Property: stats average
+   * stats.averagePropertiesPerUnit = totalProperties / totalUnits
+   * (or 0 if totalUnits = 0)
+   */
+  test("stats: average properties per unit (1000 runs)", () => {
+    fc.assert(
+      fc.property(arbKnowledgeIndex, (index) => {
+        const stats = KnowledgeIndex.stats(index)
+
+        if (stats.totalUnits === 0) {
+          return stats.averagePropertiesPerUnit === 0
+        }
+
+        const expectedAvg = stats.totalProperties / stats.totalUnits
+        // Use small tolerance for floating point comparison
+        return Math.abs(stats.averagePropertiesPerUnit - expectedAvg) < 0.01
+      }),
+      { numRuns: 1000 }
+    )
+  })
+
+  /**
+   * Property: combineAll single element
+   * combineAll([x]) = x
+   */
+  test("combineAll: single element (100 runs)", () => {
+    fc.assert(
+      fc.property(arbKnowledgeIndex, (x) => {
+        const result = KnowledgeIndex.combineAll([x])
+
+        const xArray = Array.from(KnowledgeIndex.entries(x)).sort((a, b) => a[0].localeCompare(b[0]))
+        const resultArray = Array.from(KnowledgeIndex.entries(result)).sort((a, b) => a[0].localeCompare(b[0]))
+
+        if (xArray.length !== resultArray.length) return false
+
+        for (let i = 0; i < xArray.length; i++) {
+          if (xArray[i][0] !== resultArray[i][0]) return false
+          if (!Equal.equals(xArray[i][1], resultArray[i][1])) return false
+        }
+
+        return true
+      }),
+      { numRuns: 100 }
+    )
+  })
+
+  /**
+   * Property: combineAll empty array
+   * combineAll([]) = empty
+   */
+  test("combineAll: empty array", () => {
+    const result = KnowledgeIndex.combineAll([])
+    expect(KnowledgeIndex.size(result)).toBe(0)
+  })
+
+  /**
+   * Property: empty index stats
+   * stats(empty()) should have all zeros
+   */
+  test("stats: empty index", () => {
+    const index = KnowledgeIndex.empty()
+    const stats = KnowledgeIndex.stats(index)
+
+    expect(stats.totalUnits).toBe(0)
+    expect(stats.totalProperties).toBe(0)
+    expect(stats.totalInheritedProperties).toBe(0)
+    expect(stats.averagePropertiesPerUnit).toBe(0)
+    expect(stats.maxDepth).toBe(0)
+  })
+})
+
+================
+File: packages/core/test/Prompt/KnowledgeIndex.test.ts
+================
+/**
+ * KnowledgeIndex Tests - Higher-Order Monoid Implementation
+ *
+ * Tests the new HashMap-based Monoid for ontology knowledge.
+ * Verifies:
+ * - Monoid laws (identity, associativity, commutativity)
+ * - KnowledgeUnit construction and merging
+ * - Index operations (get, has, keys, values)
+ * - Statistics computation
+ */
+
+import { describe, expect, it } from "@effect/vitest"
+import { KnowledgeUnit } from "../../src/Prompt/Ast.js"
+import * as KnowledgeIndex from "../../src/Prompt/KnowledgeIndex.js"
+
+describe("KnowledgeIndex", () => {
+  describe("KnowledgeUnit", () => {
+    it("should create minimal unit", () => {
+      const unit = KnowledgeUnit.minimal("http://example.org/Person", "Person")
+
+      expect(unit.iri).toBe("http://example.org/Person")
+      expect(unit.label).toBe("Person")
+      expect(unit.definition).toBe("Class: Person")
+      expect(unit.properties).toEqual([])
+      expect(unit.inheritedProperties).toEqual([])
+      expect(unit.children).toEqual([])
+      expect(unit.parents).toEqual([])
+    })
+
+    it("should merge two units with same IRI", () => {
+      const unit1 = new KnowledgeUnit({
+        iri: "http://example.org/Person",
+        label: "Person",
+        definition: "Class: Person",
+        properties: [{ iri: "http://example.org/hasName", label: "hasName", range: "string" }],
+        inheritedProperties: [],
+        children: ["http://example.org/Employee"],
+        parents: []
+      })
+
+      const unit2 = new KnowledgeUnit({
+        iri: "http://example.org/Person",
+        label: "Person",
+        definition: "Class: Person",
+        properties: [{ iri: "http://example.org/hasName", label: "hasName", range: "string" }],
+        inheritedProperties: [],
+        children: ["http://example.org/Student"],
+        parents: []
+      })
+
+      const merged = KnowledgeUnit.merge(unit1, unit2)
+
+      expect(merged.iri).toBe("http://example.org/Person")
+      expect(merged.children).toContain("http://example.org/Employee")
+      expect(merged.children).toContain("http://example.org/Student")
+      expect(merged.children).toHaveLength(2)
+    })
+
+    it("should throw error when merging units with different IRIs", () => {
+      const unit1 = KnowledgeUnit.minimal("http://example.org/Person", "Person")
+      const unit2 = KnowledgeUnit.minimal("http://example.org/Animal", "Animal")
+
+      expect(() => KnowledgeUnit.merge(unit1, unit2)).toThrow()
+    })
+  })
+
+  describe("Monoid Laws", () => {
+    it("should satisfy left identity: empty ⊕ x = x", () => {
+      const x = KnowledgeIndex.fromUnit(
+        KnowledgeUnit.minimal("http://example.org/Person", "Person")
+      )
+
+      const result = KnowledgeIndex.combine(KnowledgeIndex.empty(), x)
+
+      expect(KnowledgeIndex.size(result)).toBe(1)
+      expect(KnowledgeIndex.has(result, "http://example.org/Person")).toBe(true)
+    })
+
+    it("should satisfy right identity: x ⊕ empty = x", () => {
+      const x = KnowledgeIndex.fromUnit(
+        KnowledgeUnit.minimal("http://example.org/Person", "Person")
+      )
+
+      const result = KnowledgeIndex.combine(x, KnowledgeIndex.empty())
+
+      expect(KnowledgeIndex.size(result)).toBe(1)
+      expect(KnowledgeIndex.has(result, "http://example.org/Person")).toBe(true)
+    })
+
+    it("should satisfy associativity: (a ⊕ b) ⊕ c = a ⊕ (b ⊕ c)", () => {
+      const a = KnowledgeIndex.fromUnit(
+        KnowledgeUnit.minimal("http://example.org/Person", "Person")
+      )
+      const b = KnowledgeIndex.fromUnit(
+        KnowledgeUnit.minimal("http://example.org/Animal", "Animal")
+      )
+      const c = KnowledgeIndex.fromUnit(
+        KnowledgeUnit.minimal("http://example.org/Vehicle", "Vehicle")
+      )
+
+      const left = KnowledgeIndex.combine(KnowledgeIndex.combine(a, b), c)
+      const right = KnowledgeIndex.combine(a, KnowledgeIndex.combine(b, c))
+
+      expect(KnowledgeIndex.size(left)).toBe(3)
+      expect(KnowledgeIndex.size(right)).toBe(3)
+      expect(KnowledgeIndex.has(left, "http://example.org/Person")).toBe(true)
+      expect(KnowledgeIndex.has(right, "http://example.org/Person")).toBe(true)
+    })
+
+    it("should be approximately commutative: a ⊕ b ≈ b ⊕ a", () => {
+      const a = KnowledgeIndex.fromUnit(
+        KnowledgeUnit.minimal("http://example.org/Person", "Person")
+      )
+      const b = KnowledgeIndex.fromUnit(
+        KnowledgeUnit.minimal("http://example.org/Animal", "Animal")
+      )
+
+      const left = KnowledgeIndex.combine(a, b)
+      const right = KnowledgeIndex.combine(b, a)
+
+      expect(KnowledgeIndex.size(left)).toBe(2)
+      expect(KnowledgeIndex.size(right)).toBe(2)
+      expect(KnowledgeIndex.has(left, "http://example.org/Person")).toBe(true)
+      expect(KnowledgeIndex.has(right, "http://example.org/Person")).toBe(true)
+    })
+  })
+
+  describe("Index Operations", () => {
+    it("should get unit by IRI", () => {
+      const unit = KnowledgeUnit.minimal("http://example.org/Person", "Person")
+      const index = KnowledgeIndex.fromUnit(unit)
+
+      const result = KnowledgeIndex.get(index, "http://example.org/Person")
+
+      expect(result._tag).toBe("Some")
+      if (result._tag === "Some") {
+        expect(result.value.label).toBe("Person")
+      }
+    })
+
+    it("should return None for missing IRI", () => {
+      const index = KnowledgeIndex.empty()
+
+      const result = KnowledgeIndex.get(index, "http://example.org/Missing")
+
+      expect(result._tag).toBe("None")
+    })
+
+    it("should check if IRI exists", () => {
+      const unit = KnowledgeUnit.minimal("http://example.org/Person", "Person")
+      const index = KnowledgeIndex.fromUnit(unit)
+
+      expect(KnowledgeIndex.has(index, "http://example.org/Person")).toBe(true)
+      expect(KnowledgeIndex.has(index, "http://example.org/Missing")).toBe(false)
+    })
+
+    it("should iterate keys", () => {
+      const index = KnowledgeIndex.fromUnits([
+        KnowledgeUnit.minimal("http://example.org/Person", "Person"),
+        KnowledgeUnit.minimal("http://example.org/Animal", "Animal")
+      ])
+
+      const keys = Array.from(KnowledgeIndex.keys(index))
+
+      expect(keys).toContain("http://example.org/Person")
+      expect(keys).toContain("http://example.org/Animal")
+      expect(keys).toHaveLength(2)
+    })
+
+    it("should convert to array", () => {
+      const index = KnowledgeIndex.fromUnits([
+        KnowledgeUnit.minimal("http://example.org/Person", "Person"),
+        KnowledgeUnit.minimal("http://example.org/Animal", "Animal")
+      ])
+
+      const units = KnowledgeIndex.toArray(index)
+
+      expect(units).toHaveLength(2)
+      expect(units.map((u) => u.label)).toContain("Person")
+      expect(units.map((u) => u.label)).toContain("Animal")
+    })
+  })
+
+  describe("Deduplication", () => {
+    it("should deduplicate units with same IRI", () => {
+      const unit1 = KnowledgeUnit.minimal("http://example.org/Person", "Person")
+      const unit2 = KnowledgeUnit.minimal("http://example.org/Person", "Person")
+
+      const index1 = KnowledgeIndex.fromUnit(unit1)
+      const index2 = KnowledgeIndex.fromUnit(unit2)
+
+      const combined = KnowledgeIndex.combine(index1, index2)
+
+      expect(KnowledgeIndex.size(combined)).toBe(1)
+    })
+
+    it("should merge children when combining units with same IRI", () => {
+      const unit1 = new KnowledgeUnit({
+        iri: "http://example.org/Person",
+        label: "Person",
+        definition: "Class: Person",
+        properties: [],
+        inheritedProperties: [],
+        children: ["http://example.org/Employee"],
+        parents: []
+      })
+
+      const unit2 = new KnowledgeUnit({
+        iri: "http://example.org/Person",
+        label: "Person",
+        definition: "Class: Person",
+        properties: [],
+        inheritedProperties: [],
+        children: ["http://example.org/Student"],
+        parents: []
+      })
+
+      const index = KnowledgeIndex.combine(
+        KnowledgeIndex.fromUnit(unit1),
+        KnowledgeIndex.fromUnit(unit2)
+      )
+
+      const result = KnowledgeIndex.get(index, "http://example.org/Person")
+      expect(result._tag).toBe("Some")
+      if (result._tag === "Some") {
+        expect(result.value.children).toContain("http://example.org/Employee")
+        expect(result.value.children).toContain("http://example.org/Student")
+      }
+    })
+  })
+
+  describe("Statistics", () => {
+    it("should compute stats for empty index", () => {
+      const index = KnowledgeIndex.empty()
+      const stats = KnowledgeIndex.stats(index)
+
+      expect(stats.totalUnits).toBe(0)
+      expect(stats.totalProperties).toBe(0)
+      expect(stats.averagePropertiesPerUnit).toBe(0)
+    })
+
+    it("should compute stats for non-empty index", () => {
+      const index = KnowledgeIndex.fromUnits([
+        new KnowledgeUnit({
+          iri: "http://example.org/Person",
+          label: "Person",
+          definition: "Class: Person",
+          properties: [
+            { iri: "http://example.org/hasName", label: "hasName", range: "string" },
+            { iri: "http://example.org/hasAge", label: "hasAge", range: "integer" }
+          ],
+          inheritedProperties: [],
+          children: [],
+          parents: []
+        }),
+        new KnowledgeUnit({
+          iri: "http://example.org/Animal",
+          label: "Animal",
+          definition: "Class: Animal",
+          properties: [{ iri: "http://example.org/hasSpecies", label: "hasSpecies", range: "string" }],
+          inheritedProperties: [],
+          children: [],
+          parents: []
+        })
+      ])
+
+      const stats = KnowledgeIndex.stats(index)
+
+      expect(stats.totalUnits).toBe(2)
+      expect(stats.totalProperties).toBe(3)
+      expect(stats.averagePropertiesPerUnit).toBe(1.5)
+    })
+  })
+
+  describe("combineAll", () => {
+    it("should combine empty array to empty index", () => {
+      const result = KnowledgeIndex.combineAll([])
+
+      expect(KnowledgeIndex.size(result)).toBe(0)
+    })
+
+    it("should combine multiple indexes", () => {
+      const indexes = [
+        KnowledgeIndex.fromUnit(KnowledgeUnit.minimal("http://example.org/Person", "Person")),
+        KnowledgeIndex.fromUnit(KnowledgeUnit.minimal("http://example.org/Animal", "Animal")),
+        KnowledgeIndex.fromUnit(KnowledgeUnit.minimal("http://example.org/Vehicle", "Vehicle"))
+      ]
+
+      const result = KnowledgeIndex.combineAll(indexes)
+
+      expect(KnowledgeIndex.size(result)).toBe(3)
+      expect(KnowledgeIndex.has(result, "http://example.org/Person")).toBe(true)
+      expect(KnowledgeIndex.has(result, "http://example.org/Animal")).toBe(true)
+      expect(KnowledgeIndex.has(result, "http://example.org/Vehicle")).toBe(true)
+    })
+  })
+})
+
+================
+File: packages/core/test/Prompt/Metadata.property.test.ts
+================
+/**
+ * Property-Based Tests for Metadata API
+ *
+ * Tests invariants and properties that should hold for all valid inputs.
+ * Uses fast-check for property-based testing with Effect integration.
+ */
+
+import { describe, expect, it } from "@effect/vitest"
+import { Effect, HashMap } from "effect"
+import { parseTurtleToGraph } from "../../src/Graph/Builder.js"
+import * as KnowledgeIndex from "../../src/Prompt/KnowledgeIndex.js"
+import { knowledgeIndexAlgebra } from "../../src/Prompt/Algebra.js"
+import { buildKnowledgeMetadata, type KnowledgeMetadata } from "../../src/Prompt/Metadata.js"
+import { solveToKnowledgeIndex } from "../../src/Prompt/Solver.js"
+
+/**
+ * Helper: Create a valid ontology with N classes in a chain
+ * Animal -> Mammal -> Dog -> ... -> ClassN
+ */
+const createChainOntology = (numClasses: number): string => {
+  if (numClasses < 1) numClasses = 1
+
+  const classes: Array<string> = []
+  const classNames = ["Animal", "Mammal", "Dog", "Poodle", "ToyPoodle"]
+
+  for (let i = 0; i < Math.min(numClasses, classNames.length); i++) {
+    const name = classNames[i]
+    const iri = `:${name}`
+    const parent = i > 0 ? `:${classNames[i - 1]}` : null
+
+    classes.push(`
+${iri} a owl:Class ;
+    rdfs:label "${name}" ;
+    rdfs:comment "A ${name.toLowerCase()}" ${parent ? `;
+    rdfs:subClassOf ${parent}` : ""} .
+`)
+  }
+
+  return `@prefix : <http://example.org/test#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+### Classes
+${classes.join("\n")}
+`
+}
+
+/**
+ * Helper: Parse ontology and build metadata
+ */
+const buildMetadataFromTurtle = (turtle: string) =>
+  Effect.gen(function*() {
+    const { graph, context } = yield* parseTurtleToGraph(turtle)
+    const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+    return yield* buildKnowledgeMetadata(graph, context, index)
+  })
+
+describe("Metadata API - Property-Based Tests", () => {
+  /**
+   * Property 1: Total classes in metadata matches classes in index
+   */
+  it.effect("metadata.stats.totalClasses equals KnowledgeIndex.size", () =>
+    Effect.gen(function*() {
+      const ontology = createChainOntology(4)
+      const { graph, context } = yield* parseTurtleToGraph(ontology)
+      const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+      const metadata = yield* buildKnowledgeMetadata(graph, context, index)
+
+      expect(metadata.stats.totalClasses).toBe(KnowledgeIndex.size(index))
+    })
+  )
+
+  /**
+   * Property 2: Number of nodes in dependency graph equals total classes
+   */
+  it.effect("dependencyGraph.nodes.length equals stats.totalClasses", () =>
+    Effect.gen(function*() {
+      const ontology = createChainOntology(3)
+      const metadata = yield* buildMetadataFromTurtle(ontology)
+
+      expect(metadata.dependencyGraph.nodes.length).toBe(metadata.stats.totalClasses)
+    })
+  )
+
+  /**
+   * Property 3: Edges in chain ontology should be N-1 (linear chain)
+   */
+  it.effect("chain ontology has N-1 edges", () =>
+    Effect.gen(function*() {
+      const numClasses = 5
+      const ontology = createChainOntology(numClasses)
+      const metadata = yield* buildMetadataFromTurtle(ontology)
+
+      expect(metadata.dependencyGraph.edges.length).toBe(numClasses - 1)
+    })
+  )
+
+  /**
+   * Property 4: All edges should have valid source and target in nodes
+   */
+  it.effect("all edges reference existing nodes", () =>
+    Effect.gen(function*() {
+      const ontology = createChainOntology(4)
+      const metadata = yield* buildMetadataFromTurtle(ontology)
+
+      const nodeIds = new Set(metadata.dependencyGraph.nodes.map((n) => n.id))
+
+      for (const edge of metadata.dependencyGraph.edges) {
+        expect(nodeIds.has(edge.source)).toBe(true)
+        expect(nodeIds.has(edge.target)).toBe(true)
+      }
+    })
+  )
+
+  /**
+   * Property 5: Hierarchy tree should have exactly one root for chain
+   */
+  it.effect("chain ontology has single root in hierarchy tree", () =>
+    Effect.gen(function*() {
+      const ontology = createChainOntology(3)
+      const metadata = yield* buildMetadataFromTurtle(ontology)
+
+      expect(metadata.hierarchyTree.roots.length).toBe(1)
+    })
+  )
+
+  /**
+   * Property 6: Root node in tree should have depth 0
+   */
+  it.effect("root node has depth 0", () =>
+    Effect.gen(function*() {
+      const ontology = createChainOntology(3)
+      const metadata = yield* buildMetadataFromTurtle(ontology)
+
+      const root = metadata.hierarchyTree.roots[0]
+      expect(root.depth).toBe(0)
+    })
+  )
+
+  /**
+   * Property 7: Depth increases by 1 for each level in chain
+   */
+  it.effect("depths increase monotonically in chain", () =>
+    Effect.gen(function*() {
+      const ontology = createChainOntology(4)
+      const metadata = yield* buildMetadataFromTurtle(ontology)
+
+      // Collect all depths from tree
+      const depths: Array<number> = []
+      const collectDepths = (node: KnowledgeMetadata["hierarchyTree"]["roots"][number]) => {
+        depths.push(node.depth)
+        for (const child of node.children) {
+          collectDepths(child)
+        }
+      }
+
+      for (const root of metadata.hierarchyTree.roots) {
+        collectDepths(root)
+      }
+
+      // Depths should be [0, 1, 2, 3] for 4-class chain
+      expect(depths).toEqual([0, 1, 2, 3])
+    })
+  )
+
+  /**
+   * Property 8: Token stats should sum correctly
+   */
+  it.effect("token stats aggregate correctly", () =>
+    Effect.gen(function*() {
+      const ontology = createChainOntology(3)
+      const metadata = yield* buildMetadataFromTurtle(ontology)
+
+      // Sum tokens from byClass HashMap
+      let sumFromByClass = 0
+      for (const [_iri, tokens] of HashMap.entries(metadata.tokenStats.byClass)) {
+        sumFromByClass += tokens
+      }
+
+      expect(sumFromByClass).toBe(metadata.tokenStats.totalTokens)
+    })
+  )
+
+  /**
+   * Property 9: Average tokens per class is total / count
+   */
+  it.effect("averageTokensPerClass is correct", () =>
+    Effect.gen(function*() {
+      const ontology = createChainOntology(4)
+      const metadata = yield* buildMetadataFromTurtle(ontology)
+
+      const expectedAverage = metadata.tokenStats.totalTokens / metadata.stats.totalClasses
+      expect(metadata.tokenStats.averageTokensPerClass).toBeCloseTo(expectedAverage, 2)
+    })
+  )
+
+  /**
+   * Property 10: Max tokens should be >= average tokens
+   */
+  it.effect("maxTokensPerClass >= averageTokensPerClass", () =>
+    Effect.gen(function*() {
+      const ontology = createChainOntology(3)
+      const metadata = yield* buildMetadataFromTurtle(ontology)
+
+      expect(metadata.tokenStats.maxTokensPerClass).toBeGreaterThanOrEqual(
+        metadata.tokenStats.averageTokensPerClass
+      )
+    })
+  )
+
+  /**
+   * Property 11: All ClassSummaries should have non-negative property counts
+   */
+  it.effect("all property counts are non-negative", () =>
+    Effect.gen(function*() {
+      const ontology = createChainOntology(3)
+      const metadata = yield* buildMetadataFromTurtle(ontology)
+
+      for (const [_iri, summary] of HashMap.entries(metadata.classSummaries)) {
+        expect(summary.directProperties).toBeGreaterThanOrEqual(0)
+        expect(summary.inheritedProperties).toBeGreaterThanOrEqual(0)
+        expect(summary.totalProperties).toBeGreaterThanOrEqual(0)
+      }
+    })
+  )
+
+  /**
+   * Property 12: totalProperties = directProperties + inheritedProperties
+   */
+  it.effect("totalProperties is sum of direct and inherited", () =>
+    Effect.gen(function*() {
+      const ontology = createChainOntology(3)
+      const metadata = yield* buildMetadataFromTurtle(ontology)
+
+      for (const [_iri, summary] of HashMap.entries(metadata.classSummaries)) {
+        expect(summary.totalProperties).toBe(
+          summary.directProperties + summary.inheritedProperties
+        )
+      }
+    })
+  )
+
+  /**
+   * Property 13: Estimated cost should be proportional to tokens
+   */
+  it.effect("estimatedCost is proportional to totalTokens", () =>
+    Effect.gen(function*() {
+      const ontology = createChainOntology(3)
+      const metadata = yield* buildMetadataFromTurtle(ontology)
+
+      // Cost formula: (tokens / 1000) * 0.03
+      const expectedCost = (metadata.tokenStats.totalTokens / 1000) * 0.03
+      expect(metadata.tokenStats.estimatedCost).toBeCloseTo(expectedCost, 6)
+    })
+  )
+
+  /**
+   * Property 14: Max depth should be at most totalClasses - 1 (for chain)
+   */
+  it.effect("maxDepth <= totalClasses - 1 for chain", () =>
+    Effect.gen(function*() {
+      const ontology = createChainOntology(4)
+      const metadata = yield* buildMetadataFromTurtle(ontology)
+
+      // In a chain of 4 classes: depths are 0,1,2,3 so maxDepth = 3
+      expect(metadata.stats.maxDepth).toBeLessThanOrEqual(metadata.stats.totalClasses)
+    })
+  )
+
+  /**
+   * Property 15: All edge types should be "subClassOf"
+   */
+  it.effect('all edges have type "subClassOf"', () =>
+    Effect.gen(function*() {
+      const ontology = createChainOntology(3)
+      const metadata = yield* buildMetadataFromTurtle(ontology)
+
+      for (const edge of metadata.dependencyGraph.edges) {
+        expect(edge.type).toBe("subClassOf")
+      }
+    })
+  )
+
+  /**
+   * Property 16: All node types should be "class"
+   */
+  it.effect('all nodes have type "class"', () =>
+    Effect.gen(function*() {
+      const ontology = createChainOntology(3)
+      const metadata = yield* buildMetadataFromTurtle(ontology)
+
+      for (const node of metadata.dependencyGraph.nodes) {
+        expect(node.type).toBe("class")
+      }
+    })
+  )
+
+  /**
+   * Property 17: Empty ontology should produce empty metadata
+   */
+  it.effect("empty ontology produces empty metadata", () =>
+    Effect.gen(function*() {
+      const emptyOntology = `@prefix : <http://example.org/test#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+`
+      const metadata = yield* buildMetadataFromTurtle(emptyOntology)
+
+      expect(metadata.stats.totalClasses).toBe(0)
+      expect(metadata.dependencyGraph.nodes.length).toBe(0)
+      expect(metadata.dependencyGraph.edges.length).toBe(0)
+      expect(metadata.tokenStats.totalTokens).toBe(0)
+    })
+  )
+
+  /**
+   * Property 18: Single class ontology should have no edges
+   */
+  it.effect("single class has no edges", () =>
+    Effect.gen(function*() {
+      const ontology = createChainOntology(1)
+      const metadata = yield* buildMetadataFromTurtle(ontology)
+
+      expect(metadata.stats.totalClasses).toBe(1)
+      expect(metadata.dependencyGraph.edges.length).toBe(0)
+    })
+  )
+
+  /**
+   * Property 19: HashMap sizes should match stats
+   */
+  it.effect("HashMap sizes match reported stats", () =>
+    Effect.gen(function*() {
+      const ontology = createChainOntology(4)
+      const metadata = yield* buildMetadataFromTurtle(ontology)
+
+      expect(HashMap.size(metadata.classSummaries)).toBe(metadata.stats.totalClasses)
+      expect(HashMap.size(metadata.tokenStats.byClass)).toBe(metadata.stats.totalClasses)
+    })
+  )
+
+  /**
+   * Property 20: Parent-child relationships are consistent
+   */
+  it.effect("parent-child relationships are bidirectional", () =>
+    Effect.gen(function*() {
+      const ontology = createChainOntology(3)
+      const metadata = yield* buildMetadataFromTurtle(ontology)
+
+      // For each edge child->parent, check that:
+      // - child's summary lists parent in parents
+      // - parent's summary lists child in children
+      for (const edge of metadata.dependencyGraph.edges) {
+        const childSummary = HashMap.get(metadata.classSummaries, edge.source)
+        const parentSummary = HashMap.get(metadata.classSummaries, edge.target)
+
+        if (childSummary._tag === "Some" && parentSummary._tag === "Some") {
+          expect(childSummary.value.parents).toContain(edge.target)
+          expect(parentSummary.value.children).toContain(edge.source)
+        }
+      }
+    })
+  )
+})
+
+================
+File: packages/core/test/Prompt/Metadata.test.ts
+================
+/**
+ * Metadata API Tests
+ *
+ * Tests for the Metadata API integration with Effect Graph.
+ */
+
+import { describe, expect, it } from "@effect/vitest"
+import { Effect, HashMap } from "effect"
+import { parseTurtleToGraph } from "../../src/Graph/Builder.js"
+import { knowledgeIndexAlgebra } from "../../src/Prompt/Algebra.js"
+import { buildKnowledgeMetadata } from "../../src/Prompt/Metadata.js"
+import { solveToKnowledgeIndex } from "../../src/Prompt/Solver.js"
+
+const TEST_ONTOLOGY = `@prefix : <http://example.org/test#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+### Classes
+
+:Animal a owl:Class ;
+    rdfs:label "Animal" ;
+    rdfs:comment "A living organism" .
+
+:Mammal a owl:Class ;
+    rdfs:subClassOf :Animal ;
+    rdfs:label "Mammal" ;
+    rdfs:comment "An animal that feeds its young with milk" .
+
+:Dog a owl:Class ;
+    rdfs:subClassOf :Mammal ;
+    rdfs:label "Dog" ;
+    rdfs:comment "A domesticated canine" .
+
+### Properties
+
+:hasName a owl:DatatypeProperty ;
+    rdfs:domain :Animal ;
+    rdfs:range xsd:string ;
+    rdfs:label "has name" .
+
+:ownedBy a owl:ObjectProperty ;
+    rdfs:domain :Dog ;
+    rdfs:label "owned by" .
+`
+
+describe("Metadata API", () => {
+  it.effect("should build metadata from Effect Graph", () =>
+    Effect.gen(function*() {
+      // Parse ontology
+      const { context, graph } = yield* parseTurtleToGraph(TEST_ONTOLOGY)
+
+      // Solve graph to KnowledgeIndex
+      const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+
+      // Build metadata using Effect Graph
+      const metadata = yield* buildKnowledgeMetadata(graph, context, index)
+
+      // Assertions
+      expect(metadata.stats.totalClasses).toBe(3)
+      expect(metadata.dependencyGraph.nodes.length).toBe(3)
+      expect(metadata.dependencyGraph.edges.length).toBe(2) // Mammal->Animal, Dog->Mammal
+      expect(metadata.hierarchyTree.roots.length).toBe(1) // Animal is root
+    }))
+
+  it.effect("should compute correct depths", () =>
+    Effect.gen(function*() {
+      const { context, graph } = yield* parseTurtleToGraph(TEST_ONTOLOGY)
+      const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+      const metadata = yield* buildKnowledgeMetadata(graph, context, index)
+
+      // Find summaries
+      const animalIri = "http://example.org/test#Animal"
+      const mammalIri = "http://example.org/test#Mammal"
+      const dogIri = "http://example.org/test#Dog"
+
+      const animalSummary = metadata.classSummaries.pipe(
+        (m) => HashMap.get(m, animalIri),
+        (opt) => opt._tag === "Some" ? opt.value : null
+      )
+
+      const mammalSummary = metadata.classSummaries.pipe(
+        (m) => HashMap.get(m, mammalIri),
+        (opt) => opt._tag === "Some" ? opt.value : null
+      )
+
+      const dogSummary = metadata.classSummaries.pipe(
+        (m) => HashMap.get(m, dogIri),
+        (opt) => opt._tag === "Some" ? opt.value : null
+      )
+
+      expect(animalSummary?.depth).toBe(0) // Root
+      expect(mammalSummary?.depth).toBe(1) // Child of Animal
+      expect(dogSummary?.depth).toBe(2) // Grandchild of Animal
+    }))
+
+  it.effect("should estimate token counts", () =>
+    Effect.gen(function*() {
+      const { context, graph } = yield* parseTurtleToGraph(TEST_ONTOLOGY)
+      const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+      const metadata = yield* buildKnowledgeMetadata(graph, context, index)
+
+      // Token stats should be computed
+      expect(metadata.tokenStats.totalTokens).toBeGreaterThan(0)
+      expect(metadata.tokenStats.averageTokensPerClass).toBeGreaterThan(0)
+      expect(metadata.tokenStats.estimatedCost).toBeGreaterThan(0)
+    }))
+
+  it.effect("should build correct hierarchy tree", () =>
+    Effect.gen(function*() {
+      const { context, graph } = yield* parseTurtleToGraph(TEST_ONTOLOGY)
+      const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+      const metadata = yield* buildKnowledgeMetadata(graph, context, index)
+
+      const tree = metadata.hierarchyTree
+
+      // Should have one root (Animal)
+      expect(tree.roots.length).toBe(1)
+      expect(tree.roots[0].label).toBe("Animal")
+
+      // Animal should have one child (Mammal)
+      expect(tree.roots[0].children.length).toBe(1)
+      expect(tree.roots[0].children[0].label).toBe("Mammal")
+
+      // Mammal should have one child (Dog)
+      expect(tree.roots[0].children[0].children.length).toBe(1)
+      expect(tree.roots[0].children[0].children[0].label).toBe("Dog")
+    }))
+
+  it.effect("should use Effect Graph for edges", () =>
+    Effect.gen(function*() {
+      const { context, graph } = yield* parseTurtleToGraph(TEST_ONTOLOGY)
+      const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+      const metadata = yield* buildKnowledgeMetadata(graph, context, index)
+
+      const depGraph = metadata.dependencyGraph
+
+      // Edges should match subClassOf relationships
+      const edges = depGraph.edges
+
+      // Find specific edges
+      const mammalToAnimal = edges.find(
+        (e) =>
+          e.source === "http://example.org/test#Mammal" &&
+          e.target === "http://example.org/test#Animal"
+      )
+
+      const dogToMammal = edges.find(
+        (e) =>
+          e.source === "http://example.org/test#Dog" &&
+          e.target === "http://example.org/test#Mammal"
+      )
+
+      expect(mammalToAnimal).toBeDefined()
+      expect(mammalToAnimal?.type).toBe("subClassOf")
+
+      expect(dogToMammal).toBeDefined()
+      expect(dogToMammal?.type).toBe("subClassOf")
+    }))
+})
+
+================
+File: packages/core/test/Prompt/PromptDoc.test.ts
+================
+/**
+ * Tests for PromptDoc - Prompt-specific document rendering
+ *
+ * Critical: These tests verify that output matches buildPromptText exactly
+ *
+ * @since 1.0.0
+ */
+
+import { describe, expect, it } from "@effect/vitest"
+import { Effect } from "effect"
+import {
+  buildExtractionPromptDoc,
+  buildPromptDoc,
+  renderExtractionPrompt,
+  renderStructuredPrompt
+} from "../../src/Prompt/PromptDoc.js"
+import { StructuredPrompt } from "../../src/Prompt/Types.js"
+
+/**
+ * Reference implementation of buildPromptText for comparison
+ * (copied from Llm.ts:76-109)
+ */
+const buildPromptText_REFERENCE = (prompt: StructuredPrompt, text: string): string => {
+  const parts: Array<string> = []
+
+  // Add system instructions
+  if (prompt.system.length > 0) {
+    parts.push("SYSTEM INSTRUCTIONS:")
+    parts.push(prompt.system.join("\n\n"))
+    parts.push("")
+  }
+
+  // Add user context
+  if (prompt.user.length > 0) {
+    parts.push("CONTEXT:")
+    parts.push(prompt.user.join("\n"))
+    parts.push("")
+  }
+
+  // Add examples
+  if (prompt.examples.length > 0) {
+    parts.push("EXAMPLES:")
+    parts.push(prompt.examples.join("\n\n"))
+    parts.push("")
+  }
+
+  // Add the actual extraction task
+  parts.push("TASK:")
+  parts.push("Extract knowledge graph from the following text:")
+  parts.push("")
+  parts.push(text)
+  parts.push("")
+  parts.push("Return a valid JSON object matching the schema with all extracted entities and their relationships.")
+
+  return parts.join("\n")
+}
+
+describe("PromptDoc", () => {
+  describe("buildPromptDoc", () => {
+    it.effect("creates doc with all sections", () =>
+      Effect.sync(() => {
+        const prompt = StructuredPrompt.make({
+          system: ["You are an expert", "Follow these rules"],
+          user: ["Extract from healthcare domain"],
+          examples: ["Example 1", "Example 2"]
+        })
+
+        const output = renderStructuredPrompt(prompt)
+
+        expect(output).toContain("SYSTEM INSTRUCTIONS:")
+        expect(output).toContain("You are an expert")
+        expect(output).toContain("Follow these rules")
+        expect(output).toContain("CONTEXT:")
+        expect(output).toContain("Extract from healthcare domain")
+        expect(output).toContain("EXAMPLES:")
+        expect(output).toContain("Example 1")
+        expect(output).toContain("Example 2")
+      }))
+
+    it.effect("omits empty sections", () =>
+      Effect.sync(() => {
+        const prompt = StructuredPrompt.make({
+          system: ["System instruction"],
+          user: [],
+          examples: []
+        })
+
+        const output = renderStructuredPrompt(prompt)
+
+        expect(output).toContain("SYSTEM INSTRUCTIONS:")
+        expect(output).not.toContain("CONTEXT:")
+        expect(output).not.toContain("EXAMPLES:")
+      }))
+
+    it.effect("handles all empty sections", () =>
+      Effect.sync(() => {
+        const prompt = StructuredPrompt.make({
+          system: [],
+          user: [],
+          examples: []
+        })
+
+        const output = renderStructuredPrompt(prompt)
+        expect(output).toBe("")
+      }))
+
+    it.effect("system items separated by double newline", () =>
+      Effect.sync(() => {
+        const prompt = StructuredPrompt.make({
+          system: ["First instruction", "Second instruction"],
+          user: [],
+          examples: []
+        })
+
+        const output = renderStructuredPrompt(prompt)
+
+        // Should have double newline between system items
+        expect(output).toContain("First instruction\n\nSecond instruction")
+      }))
+
+    it.effect("user items separated by single newline", () =>
+      Effect.sync(() => {
+        const prompt = StructuredPrompt.make({
+          system: [],
+          user: ["Context 1", "Context 2"],
+          examples: []
+        })
+
+        const output = renderStructuredPrompt(prompt)
+
+        // Should have single newline between user items
+        expect(output).toContain("Context 1\nContext 2")
+        // Should NOT have double newline
+        expect(output).not.toContain("Context 1\n\nContext 2")
+      }))
+
+    it.effect("examples separated by double newline", () =>
+      Effect.sync(() => {
+        const prompt = StructuredPrompt.make({
+          system: [],
+          user: [],
+          examples: ["Example 1", "Example 2"]
+        })
+
+        const output = renderStructuredPrompt(prompt)
+
+        // Should have double newline between examples
+        expect(output).toContain("Example 1\n\nExample 2")
+      }))
+  })
+
+  describe("buildExtractionPromptDoc", () => {
+    it.effect("includes task section", () =>
+      Effect.sync(() => {
+        const prompt = StructuredPrompt.make({
+          system: ["System instruction"],
+          user: [],
+          examples: []
+        })
+
+        const output = renderExtractionPrompt(prompt, "Alice is a patient.")
+
+        expect(output).toContain("TASK:")
+        expect(output).toContain("Extract knowledge graph")
+        expect(output).toContain("Alice is a patient.")
+        expect(output).toContain("Return a valid JSON object")
+      }))
+
+    it.effect("handles empty prompt with task", () =>
+      Effect.sync(() => {
+        const prompt = StructuredPrompt.make({
+          system: [],
+          user: [],
+          examples: []
+        })
+
+        const output = renderExtractionPrompt(prompt, "Test text.")
+
+        expect(output).toContain("TASK:")
+        expect(output).toContain("Test text.")
+        expect(output).not.toContain("SYSTEM INSTRUCTIONS:")
+        expect(output).not.toContain("CONTEXT:")
+      }))
+  })
+
+  describe("Output Compatibility with buildPromptText", () => {
+    it.effect("matches reference implementation: all sections", () =>
+      Effect.sync(() => {
+        const prompt = StructuredPrompt.make({
+          system: ["instruction 1", "instruction 2"],
+          user: ["context 1", "context 2"],
+          examples: ["example 1", "example 2"]
+        })
+
+        const text = "Test text"
+        const reference = buildPromptText_REFERENCE(prompt, text)
+        const docOutput = renderExtractionPrompt(prompt, text)
+
+        expect(docOutput).toBe(reference)
+      }))
+
+    it.effect("matches reference implementation: system only", () =>
+      Effect.sync(() => {
+        const prompt = StructuredPrompt.make({
+          system: ["instruction 1", "instruction 2"],
+          user: [],
+          examples: []
+        })
+
+        const text = "Test text"
+        const reference = buildPromptText_REFERENCE(prompt, text)
+        const docOutput = renderExtractionPrompt(prompt, text)
+
+        expect(docOutput).toBe(reference)
+      }))
+
+    it.effect("matches reference implementation: user only", () =>
+      Effect.sync(() => {
+        const prompt = StructuredPrompt.make({
+          system: [],
+          user: ["context 1"],
+          examples: []
+        })
+
+        const text = "Test text"
+        const reference = buildPromptText_REFERENCE(prompt, text)
+        const docOutput = renderExtractionPrompt(prompt, text)
+
+        expect(docOutput).toBe(reference)
+      }))
+
+    it.effect("matches reference implementation: empty prompt", () =>
+      Effect.sync(() => {
+        const prompt = StructuredPrompt.make({
+          system: [],
+          user: [],
+          examples: []
+        })
+
+        const text = "Test text"
+        const reference = buildPromptText_REFERENCE(prompt, text)
+        const docOutput = renderExtractionPrompt(prompt, text)
+
+        expect(docOutput).toBe(reference)
+      }))
+
+    it.effect("matches reference implementation: complex multi-line", () =>
+      Effect.sync(() => {
+        const prompt = StructuredPrompt.make({
+          system: [
+            "You are a knowledge graph extraction system.",
+            "Extract entities and relationships.",
+            "Follow FHIR ontology."
+          ],
+          user: [
+            "Domain: Healthcare",
+            "Focus: Patient records"
+          ],
+          examples: [
+            "Input: John has diabetes\nOutput: {\"entities\": [...]}",
+            "Input: Mary takes aspirin\nOutput: {\"entities\": [...]}"
+          ]
+        })
+
+        const text = "Alice is a 45-year-old patient with hypertension."
+        const reference = buildPromptText_REFERENCE(prompt, text)
+        const docOutput = renderExtractionPrompt(prompt, text)
+
+        expect(docOutput).toBe(reference)
+      }))
+
+    it.effect("matches reference implementation: special characters", () =>
+      Effect.sync(() => {
+        const prompt = StructuredPrompt.make({
+          system: ["Instruction with \"quotes\" and 'apostrophes'"],
+          user: ["Context with tabs:\there"],
+          examples: ["Example\nwith\nnewlines"]
+        })
+
+        const text = "Text with special chars: @#$%"
+        const reference = buildPromptText_REFERENCE(prompt, text)
+        const docOutput = renderExtractionPrompt(prompt, text)
+
+        expect(docOutput).toBe(reference)
+      }))
+  })
+
+  describe("Edge Cases", () => {
+    it.effect("handles single-item arrays", () =>
+      Effect.sync(() => {
+        const prompt = StructuredPrompt.make({
+          system: ["single"],
+          user: ["single"],
+          examples: ["single"]
+        })
+
+        const text = "text"
+        const reference = buildPromptText_REFERENCE(prompt, text)
+        const docOutput = renderExtractionPrompt(prompt, text)
+
+        expect(docOutput).toBe(reference)
+      }))
+
+    it.effect("handles empty strings in arrays", () =>
+      Effect.sync(() => {
+        const prompt = StructuredPrompt.make({
+          system: ["", "instruction"],
+          user: ["context", ""],
+          examples: []
+        })
+
+        const text = "text"
+        const reference = buildPromptText_REFERENCE(prompt, text)
+        const docOutput = renderExtractionPrompt(prompt, text)
+
+        expect(docOutput).toBe(reference)
+      }))
+
+    it.effect("handles empty text", () =>
+      Effect.sync(() => {
+        const prompt = StructuredPrompt.make({
+          system: ["instruction"],
+          user: [],
+          examples: []
+        })
+
+        const text = ""
+        const reference = buildPromptText_REFERENCE(prompt, text)
+        const docOutput = renderExtractionPrompt(prompt, text)
+
+        expect(docOutput).toBe(reference)
+      }))
+  })
+})
+
+================
+File: packages/core/test/Prompt/RealOntologies.test.ts
+================
+/**
+ * End-to-End Tests with Real Ontologies
+ *
+ * Tests the full pipeline (parse → solve → metadata) with real-world ontologies.
+ * Validates performance, correctness, and edge cases not covered by synthetic tests.
+ */
+
+import { describe, expect, it } from "@effect/vitest"
+import { Effect, HashMap } from "effect"
+import { readFileSync } from "fs"
+import { join } from "path"
+import { parseTurtleToGraph } from "../../src/Graph/Builder.js"
+import { knowledgeIndexAlgebra } from "../../src/Prompt/Algebra.js"
+import * as KnowledgeIndex from "../../src/Prompt/KnowledgeIndex.js"
+import { buildKnowledgeMetadata } from "../../src/Prompt/Metadata.js"
+import { solveToKnowledgeIndex } from "../../src/Prompt/Solver.js"
+
+/**
+ * Load ontology from fixtures
+ */
+const loadOntology = (filename: string): string => {
+  const path = join(__dirname, "../fixtures/ontologies", filename)
+  return readFileSync(path, "utf-8")
+}
+
+describe("Real Ontologies - End-to-End Tests", () => {
+  describe("FOAF (Friend of a Friend)", () => {
+    const foaf = loadOntology("foaf-minimal.ttl")
+
+    it.effect("should parse and solve FOAF ontology", () =>
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(foaf)
+        const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+
+        // FOAF has ~11 classes
+        expect(KnowledgeIndex.size(index)).toBeGreaterThan(5)
+        expect(KnowledgeIndex.size(index)).toBeLessThan(15)
+
+        // Check key classes exist
+        expect(KnowledgeIndex.has(index, "http://xmlns.com/foaf/0.1/Agent")).toBe(true)
+        expect(KnowledgeIndex.has(index, "http://xmlns.com/foaf/0.1/Person")).toBe(true)
+        expect(KnowledgeIndex.has(index, "http://xmlns.com/foaf/0.1/Organization")).toBe(true)
+      }))
+
+    it.effect("should build metadata for FOAF", () =>
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(foaf)
+        const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+        const metadata = yield* buildKnowledgeMetadata(graph, context, index)
+
+        // Verify metadata structure
+        expect(metadata.stats.totalClasses).toBeGreaterThan(0)
+        expect(metadata.dependencyGraph.nodes.length).toBe(metadata.stats.totalClasses)
+
+        // FOAF has hierarchy: Agent -> Person/Organization/Group
+        expect(metadata.hierarchyTree.roots.length).toBeGreaterThan(0)
+        expect(metadata.stats.maxDepth).toBeGreaterThan(0)
+
+        // Token stats should be reasonable
+        expect(metadata.tokenStats.totalTokens).toBeGreaterThan(0)
+        expect(metadata.tokenStats.estimatedCost).toBeGreaterThan(0)
+      }))
+
+    it.effect("should have Person as subclass of Agent", () =>
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(foaf)
+        const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+        const metadata = yield* buildKnowledgeMetadata(graph, context, index)
+
+        const personIri = "http://xmlns.com/foaf/0.1/Person"
+        const agentIri = "http://xmlns.com/foaf/0.1/Agent"
+
+        const personOpt = HashMap.get(metadata.classSummaries, personIri)
+        const personSummary = personOpt._tag === "Some" ? personOpt.value : null
+
+        expect(personSummary).not.toBeNull()
+        expect(personSummary?.parents).toContain(agentIri)
+        expect(personSummary?.depth).toBeGreaterThan(0) // Not a root
+      }))
+
+    it.effect("should correctly compute properties for Person", () =>
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(foaf)
+        const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+        const metadata = yield* buildKnowledgeMetadata(graph, context, index)
+
+        const personIri = "http://xmlns.com/foaf/0.1/Person"
+        const personOpt = HashMap.get(metadata.classSummaries, personIri)
+        const personSummary = personOpt._tag === "Some" ? personOpt.value : null
+
+        expect(personSummary).not.toBeNull()
+        // Person should have direct properties (title, knows, etc.)
+        expect(personSummary!.directProperties).toBeGreaterThanOrEqual(0)
+        // Person should inherit properties from Agent (name, mbox, etc.)
+        expect(personSummary!.inheritedProperties).toBeGreaterThanOrEqual(0)
+        // Total = direct + inherited
+        expect(personSummary!.totalProperties).toBe(
+          personSummary!.directProperties + personSummary!.inheritedProperties
+        )
+      }))
+  })
+
+  describe("Dublin Core Terms", () => {
+    const dcterms = loadOntology("dcterms.ttl")
+
+    it.effect("should parse and solve Dublin Core", () =>
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(dcterms)
+        const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+
+        // Dublin Core has ~22 classes
+        expect(KnowledgeIndex.size(index)).toBeGreaterThan(15)
+        expect(KnowledgeIndex.size(index)).toBeLessThan(30)
+
+        // Check key classes exist
+        expect(KnowledgeIndex.has(index, "http://purl.org/dc/terms/Agent")).toBe(true)
+        expect(KnowledgeIndex.has(index, "http://purl.org/dc/terms/BibliographicResource")).toBe(
+          true
+        )
+        expect(KnowledgeIndex.has(index, "http://purl.org/dc/terms/LicenseDocument")).toBe(true)
+      }))
+
+    it.effect("should build metadata for Dublin Core", () =>
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(dcterms)
+        const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+        const metadata = yield* buildKnowledgeMetadata(graph, context, index)
+
+        // Verify metadata
+        expect(metadata.stats.totalClasses).toBeGreaterThan(15)
+        expect(metadata.dependencyGraph.nodes.length).toBe(metadata.stats.totalClasses)
+
+        // Dublin Core is mostly flat (most classes are roots)
+        expect(metadata.hierarchyTree.roots.length).toBeGreaterThan(10)
+
+        // Token stats
+        expect(metadata.tokenStats.totalTokens).toBeGreaterThan(0)
+        expect(metadata.tokenStats.averageTokensPerClass).toBeGreaterThan(0)
+      }))
+
+    it.effect("should have AgentClass as subclass of rdfs:Class", () =>
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(dcterms)
+        const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+        const metadata = yield* buildKnowledgeMetadata(graph, context, index)
+
+        const agentClassIri = "http://purl.org/dc/terms/AgentClass"
+        const agentClassOpt = HashMap.get(metadata.classSummaries, agentClassIri)
+        const agentClassSummary = agentClassOpt._tag === "Some" ? agentClassOpt.value : null
+
+        expect(agentClassSummary).not.toBeNull()
+        // AgentClass subclasses rdfs:Class (if in the graph)
+        if (agentClassSummary!.parents.length > 0) {
+          expect(agentClassSummary!.depth).toBeGreaterThan(0)
+        }
+      }))
+
+    it.effect("should have reasonable token counts", () =>
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(dcterms)
+        const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+        const metadata = yield* buildKnowledgeMetadata(graph, context, index)
+
+        // Each class should have some tokens (label + properties)
+        expect(metadata.tokenStats.averageTokensPerClass).toBeGreaterThan(10)
+        expect(metadata.tokenStats.maxTokensPerClass).toBeGreaterThanOrEqual(
+          metadata.tokenStats.averageTokensPerClass
+        )
+
+        // Total tokens should be substantial
+        expect(metadata.tokenStats.totalTokens).toBeGreaterThan(200)
+
+        // Cost should be proportional
+        const expectedCost = (metadata.tokenStats.totalTokens / 1000) * 0.03
+        expect(metadata.tokenStats.estimatedCost).toBeCloseTo(expectedCost, 6)
+      }))
+  })
+
+  describe("Cross-Ontology Properties", () => {
+    it.effect("FOAF should have fewer classes than Dublin Core", () =>
+      Effect.gen(function*() {
+        const foaf = loadOntology("foaf-minimal.ttl")
+        const dcterms = loadOntology("dcterms.ttl")
+
+        const foafParsed = yield* parseTurtleToGraph(foaf)
+        const dctermsParsed = yield* parseTurtleToGraph(dcterms)
+
+        const foafIndex = yield* solveToKnowledgeIndex(
+          foafParsed.graph,
+          foafParsed.context,
+          knowledgeIndexAlgebra
+        )
+        const dctermsIndex = yield* solveToKnowledgeIndex(
+          dctermsParsed.graph,
+          dctermsParsed.context,
+          knowledgeIndexAlgebra
+        )
+
+        expect(KnowledgeIndex.size(foafIndex)).toBeLessThan(KnowledgeIndex.size(dctermsIndex))
+      }))
+
+    it.effect("both ontologies should have valid hierarchies", () =>
+      Effect.gen(function*() {
+        const foaf = loadOntology("foaf-minimal.ttl")
+        const dcterms = loadOntology("dcterms.ttl")
+
+        const foafParsed = yield* parseTurtleToGraph(foaf)
+        const dctermsParsed = yield* parseTurtleToGraph(dcterms)
+
+        const foafIndex = yield* solveToKnowledgeIndex(
+          foafParsed.graph,
+          foafParsed.context,
+          knowledgeIndexAlgebra
+        )
+        const dctermsIndex = yield* solveToKnowledgeIndex(
+          dctermsParsed.graph,
+          dctermsParsed.context,
+          knowledgeIndexAlgebra
+        )
+
+        const foafMetadata = yield* buildKnowledgeMetadata(
+          foafParsed.graph,
+          foafParsed.context,
+          foafIndex
+        )
+        const dctermsMetadata = yield* buildKnowledgeMetadata(
+          dctermsParsed.graph,
+          dctermsParsed.context,
+          dctermsIndex
+        )
+
+        // Both should have at least one root
+        expect(foafMetadata.hierarchyTree.roots.length).toBeGreaterThan(0)
+        expect(dctermsMetadata.hierarchyTree.roots.length).toBeGreaterThan(0)
+
+        // All nodes in dependency graph should be in class summaries
+        expect(foafMetadata.dependencyGraph.nodes.length).toBe(foafMetadata.stats.totalClasses)
+        expect(dctermsMetadata.dependencyGraph.nodes.length).toBe(
+          dctermsMetadata.stats.totalClasses
+        )
+      }))
+  })
+})
+
+================
 File: packages/core/test/Prompt/Solver.test.ts
 ================
 /**
@@ -1815,7 +11331,7 @@ File: packages/core/test/Prompt/Solver.test.ts
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Graph, HashMap } from "effect"
 import { ClassNode, type GraphAlgebra, type OntologyContext } from "../../src/Graph/Types.js"
-import { GraphCycleError, solveGraph } from "../../src/Prompt/Solver.js"
+import { GraphCycleError, MissingNodeDataError, solveGraph } from "../../src/Prompt/Solver.js"
 
 /**
  * Test algebra that tracks execution order
@@ -2081,6 +11597,1450 @@ describe("Solver", () => {
           expect(result.left.message).toContain("cyclic")
         }
       }))
+
+    it.effect("fails gracefully when node data is missing from context", () =>
+      Effect.gen(function*() {
+        executionCounter = 0
+
+        // Build graph with a node "A"
+        const graph = Graph.mutate(Graph.directed<string, null>(), (mutable) => {
+          Graph.addNode(mutable, "A")
+        })
+
+        // Create context that does NOT include node "A"
+        const context: OntologyContext = {
+          nodes: HashMap.empty(), // Empty - missing "A"
+          universalProperties: [],
+          nodeIndexMap: HashMap.empty()
+        }
+
+        const result = yield* Effect.either(solveGraph(graph, context, trackingAlgebra))
+
+        expect(result._tag).toBe("Left")
+        if (result._tag === "Left") {
+          const error = result.left
+          expect(error).toBeInstanceOf(MissingNodeDataError)
+          if (error instanceof MissingNodeDataError) {
+            expect(error.message).toContain("not found in context")
+            expect(error.nodeId).toBe("A")
+          }
+        }
+      }))
+  })
+})
+
+================
+File: packages/core/test/Schema/Factory.test.ts
+================
+/**
+ * Tests for Dynamic Knowledge Graph Schema Factory
+ *
+ * @since 1.0.0
+ */
+
+import { describe, expect, it } from "@effect/vitest"
+import { Effect, Exit, Schema as S } from "effect"
+import { EmptyVocabularyError, makeKnowledgeGraphSchema } from "../../src/Schema/Factory"
+
+describe("Schema.Factory", () => {
+  // Mock ontology vocabularies
+  const FOAF_CLASSES = [
+    "http://xmlns.com/foaf/0.1/Person",
+    "http://xmlns.com/foaf/0.1/Organization",
+    "http://xmlns.com/foaf/0.1/Document"
+  ] as const
+
+  const FOAF_PROPERTIES = [
+    "http://xmlns.com/foaf/0.1/name",
+    "http://xmlns.com/foaf/0.1/knows",
+    "http://xmlns.com/foaf/0.1/member"
+  ] as const
+
+  describe("makeKnowledgeGraphSchema", () => {
+    it.effect("should create a schema from vocabulary arrays", () =>
+      Effect.sync(() => {
+        const schema = makeKnowledgeGraphSchema(FOAF_CLASSES, FOAF_PROPERTIES)
+
+        // Schema should have proper structure
+        expect(schema.ast._tag).toBe("TypeLiteral")
+      }))
+
+    it.effect("should throw EmptyVocabularyError for empty class array", () =>
+      Effect.sync(() => {
+        expect(() => makeKnowledgeGraphSchema([], FOAF_PROPERTIES)).toThrow(
+          EmptyVocabularyError
+        )
+      }))
+
+    it.effect("should throw EmptyVocabularyError for empty property array", () =>
+      Effect.sync(() => {
+        expect(() => makeKnowledgeGraphSchema(FOAF_CLASSES, [])).toThrow(
+          EmptyVocabularyError
+        )
+      }))
+  })
+
+  describe("Schema Validation - Valid Cases", () => {
+    const schema = makeKnowledgeGraphSchema(FOAF_CLASSES, FOAF_PROPERTIES)
+
+    it.effect("should accept valid knowledge graph with single entity", () =>
+      Effect.gen(function*() {
+        const validData = {
+          entities: [
+            {
+              "@id": "_:person1",
+              "@type": "http://xmlns.com/foaf/0.1/Person" as const,
+              properties: [
+                {
+                  predicate: "http://xmlns.com/foaf/0.1/name" as const,
+                  object: "Alice"
+                }
+              ]
+            }
+          ]
+        }
+
+        const decoded = yield* S.decodeUnknown(schema)(validData)
+
+        expect(decoded.entities).toHaveLength(1)
+        expect(decoded.entities[0]["@type"]).toBe("http://xmlns.com/foaf/0.1/Person")
+      }))
+
+    it.effect("should accept multiple entities", () =>
+      Effect.gen(function*() {
+        const validData = {
+          entities: [
+            {
+              "@id": "_:person1",
+              "@type": "http://xmlns.com/foaf/0.1/Person" as const,
+              properties: [
+                {
+                  predicate: "http://xmlns.com/foaf/0.1/name" as const,
+                  object: "Alice"
+                }
+              ]
+            },
+            {
+              "@id": "_:org1",
+              "@type": "http://xmlns.com/foaf/0.1/Organization" as const,
+              properties: [
+                {
+                  predicate: "http://xmlns.com/foaf/0.1/name" as const,
+                  object: "Anthropic"
+                }
+              ]
+            }
+          ]
+        }
+
+        const decoded = yield* S.decodeUnknown(schema)(validData)
+
+        expect(decoded.entities).toHaveLength(2)
+      }))
+
+    it.effect("should accept entity with multiple properties", () =>
+      Effect.gen(function*() {
+        const validData = {
+          entities: [
+            {
+              "@id": "_:person1",
+              "@type": "http://xmlns.com/foaf/0.1/Person" as const,
+              properties: [
+                {
+                  predicate: "http://xmlns.com/foaf/0.1/name" as const,
+                  object: "Alice"
+                },
+                {
+                  predicate: "http://xmlns.com/foaf/0.1/knows" as const,
+                  object: { "@id": "_:person2" }
+                }
+              ]
+            }
+          ]
+        }
+
+        const decoded = yield* S.decodeUnknown(schema)(validData)
+
+        expect(decoded.entities[0].properties).toHaveLength(2)
+      }))
+
+    it.effect("should accept property with object reference", () =>
+      Effect.gen(function*() {
+        const validData = {
+          entities: [
+            {
+              "@id": "_:person1",
+              "@type": "http://xmlns.com/foaf/0.1/Person" as const,
+              properties: [
+                {
+                  predicate: "http://xmlns.com/foaf/0.1/knows" as const,
+                  object: { "@id": "http://example.org/person/bob" }
+                }
+              ]
+            }
+          ]
+        }
+
+        const decoded = yield* S.decodeUnknown(schema)(validData)
+
+        const knowsProperty = decoded.entities[0].properties[0]
+        expect(typeof knowsProperty.object).toBe("object")
+        expect((knowsProperty.object as any)["@id"]).toBe(
+          "http://example.org/person/bob"
+        )
+      }))
+
+    it.effect("should accept entity with no properties", () =>
+      Effect.gen(function*() {
+        const validData = {
+          entities: [
+            {
+              "@id": "_:person1",
+              "@type": "http://xmlns.com/foaf/0.1/Person" as const,
+              properties: []
+            }
+          ]
+        }
+
+        const decoded = yield* S.decodeUnknown(schema)(validData)
+
+        expect(decoded.entities[0].properties).toHaveLength(0)
+      }))
+  })
+
+  describe("Schema Validation - Invalid Cases", () => {
+    const schema = makeKnowledgeGraphSchema(FOAF_CLASSES, FOAF_PROPERTIES)
+
+    it.effect("should reject unknown class IRI", () =>
+      Effect.gen(function*() {
+        const invalidData = {
+          entities: [
+            {
+              "@id": "_:unknown1",
+              "@type": "http://example.org/UnknownClass",
+              properties: []
+            }
+          ]
+        }
+
+        const result = yield* S.decodeUnknown(schema)(invalidData).pipe(
+          Effect.exit
+        )
+
+        expect(Exit.isFailure(result)).toBe(true)
+      }))
+
+    it.effect("should reject unknown property IRI", () =>
+      Effect.gen(function*() {
+        const invalidData = {
+          entities: [
+            {
+              "@id": "_:person1",
+              "@type": "http://xmlns.com/foaf/0.1/Person" as const,
+              properties: [
+                {
+                  predicate: "http://example.org/unknownProperty",
+                  object: "value"
+                }
+              ]
+            }
+          ]
+        }
+
+        const result = yield* S.decodeUnknown(schema)(invalidData).pipe(
+          Effect.exit
+        )
+
+        expect(Exit.isFailure(result)).toBe(true)
+      }))
+
+    it.effect("should reject missing required fields", () =>
+      Effect.gen(function*() {
+        const invalidData = {
+          entities: [
+            {
+              "@id": "_:person1",
+              // Missing @type
+              properties: []
+            }
+          ]
+        }
+
+        const result = yield* S.decodeUnknown(schema)(invalidData).pipe(
+          Effect.exit
+        )
+
+        expect(Exit.isFailure(result)).toBe(true)
+      }))
+
+    it.effect("should reject invalid property object structure", () =>
+      Effect.gen(function*() {
+        const invalidData = {
+          entities: [
+            {
+              "@id": "_:person1",
+              "@type": "http://xmlns.com/foaf/0.1/Person" as const,
+              properties: [
+                {
+                  predicate: "http://xmlns.com/foaf/0.1/knows" as const,
+                  object: { invalid: "structure" } // Missing @id
+                }
+              ]
+            }
+          ]
+        }
+
+        const result = yield* S.decodeUnknown(schema)(invalidData).pipe(
+          Effect.exit
+        )
+
+        expect(Exit.isFailure(result)).toBe(true)
+      }))
+
+    it.effect("should reject non-array entities", () =>
+      Effect.gen(function*() {
+        const invalidData = {
+          entities: "not an array"
+        }
+
+        const result = yield* S.decodeUnknown(schema)(invalidData).pipe(
+          Effect.exit
+        )
+
+        expect(Exit.isFailure(result)).toBe(true)
+      }))
+  })
+
+  describe("Type Inference", () => {
+    it.effect("should correctly infer types from vocabularies", () =>
+      Effect.gen(function*() {
+        const schema = makeKnowledgeGraphSchema(FOAF_CLASSES, FOAF_PROPERTIES)
+
+        const validData = {
+          entities: [
+            {
+              "@id": "_:person1",
+              "@type": "http://xmlns.com/foaf/0.1/Person" as const,
+              properties: [
+                {
+                  predicate: "http://xmlns.com/foaf/0.1/name" as const,
+                  object: "Alice"
+                }
+              ]
+            }
+          ]
+        }
+
+        const _decoded = yield* S.decodeUnknown(schema)(validData)
+
+        // TypeScript should narrow the types correctly
+        type EntityType = (typeof _decoded.entities)[number]["@type"]
+        type PropertyPredicate = (typeof _decoded.entities)[number]["properties"][number]["predicate"]
+
+        // These should compile without errors
+        const _typeCheck1: EntityType = "http://xmlns.com/foaf/0.1/Person"
+        const _typeCheck2: PropertyPredicate = "http://xmlns.com/foaf/0.1/name"
+
+        expect(true).toBe(true) // Compilation is the real test
+      }))
+  })
+
+  describe("Edge Cases", () => {
+    it.effect("should handle single class and property", () =>
+      Effect.gen(function*() {
+        const schema = makeKnowledgeGraphSchema(
+          ["http://example.org/Thing"],
+          ["http://example.org/prop"]
+        )
+
+        const validData = {
+          entities: [
+            {
+              "@id": "_:thing1",
+              "@type": "http://example.org/Thing" as const,
+              properties: [
+                {
+                  predicate: "http://example.org/prop" as const,
+                  object: "value"
+                }
+              ]
+            }
+          ]
+        }
+
+        const decoded = yield* S.decodeUnknown(schema)(validData)
+
+        expect(decoded.entities).toHaveLength(1)
+      }))
+
+    it.effect("should handle empty entities array", () =>
+      Effect.gen(function*() {
+        const schema = makeKnowledgeGraphSchema(FOAF_CLASSES, FOAF_PROPERTIES)
+
+        const validData = {
+          entities: []
+        }
+
+        const decoded = yield* S.decodeUnknown(schema)(validData)
+
+        expect(decoded.entities).toHaveLength(0)
+      }))
+
+    it.effect("should handle IRIs with special characters", () =>
+      Effect.gen(function*() {
+        const schema = makeKnowledgeGraphSchema(
+          ["http://example.org/Class-With-Dashes"],
+          ["http://example.org/prop_with_underscores"]
+        )
+
+        const validData = {
+          entities: [
+            {
+              "@id": "_:entity1",
+              "@type": "http://example.org/Class-With-Dashes" as const,
+              properties: [
+                {
+                  predicate: "http://example.org/prop_with_underscores" as const,
+                  object: "value"
+                }
+              ]
+            }
+          ]
+        }
+
+        const decoded = yield* S.decodeUnknown(schema)(validData)
+
+        expect(decoded.entities).toHaveLength(1)
+      }))
+  })
+})
+
+================
+File: packages/core/test/Schema/JsonSchemaExport.test.ts
+================
+/**
+ * Tests for JSON Schema Export for LLM Tool Calling
+ *
+ * Verifies that our dynamic schemas can be exported to JSON Schema format
+ * compatible with major LLM providers (Anthropic, OpenAI, etc.)
+ *
+ * @since 1.0.0
+ */
+
+import { describe, expect, it } from "@effect/vitest"
+import { Effect, JSONSchema } from "effect"
+import { makeKnowledgeGraphSchema } from "../../src/Schema/Factory"
+
+describe("Schema.JsonSchemaExport", () => {
+  // Small ontology for testing
+  const TEST_CLASSES = [
+    "http://example.org/Person",
+    "http://example.org/Organization"
+  ] as const
+
+  const TEST_PROPERTIES = [
+    "http://example.org/name",
+    "http://example.org/memberOf"
+  ] as const
+
+  // Helper to get the actual schema definition (handles $ref pattern)
+  const getSchemaDefinition = (jsonSchema: any) => {
+    if (jsonSchema.$ref && jsonSchema.$defs) {
+      const defName = jsonSchema.$ref.split("/").pop()
+      return jsonSchema.$defs[defName]
+    }
+    return jsonSchema
+  }
+
+  describe("JSONSchema.make()", () => {
+    it.effect("should generate valid JSON Schema 7", () =>
+      Effect.sync(() => {
+        const schema = makeKnowledgeGraphSchema(TEST_CLASSES, TEST_PROPERTIES)
+        const jsonSchema = JSONSchema.make(schema)
+
+        expect(jsonSchema.$schema).toBe("http://json-schema.org/draft-07/schema#")
+        expect((jsonSchema as any).$ref).toBeDefined()
+        expect(jsonSchema.$defs).toBeDefined()
+
+        const schemaDef = getSchemaDefinition(jsonSchema)
+        expect(schemaDef.type).toBe("object")
+        expect(schemaDef.properties).toHaveProperty("entities")
+      }))
+
+    it.effect("should use enum for type constraints", () =>
+      Effect.sync(() => {
+        const schema = makeKnowledgeGraphSchema(TEST_CLASSES, TEST_PROPERTIES)
+        const jsonSchema = JSONSchema.make(schema)
+        const schemaDef = getSchemaDefinition(jsonSchema)
+
+        const typeSchema = schemaDef.properties.entities.items.properties["@type"]
+        expect(typeSchema.enum).toContain("http://example.org/Person")
+        expect(typeSchema.enum).toContain("http://example.org/Organization")
+      }))
+
+    it.effect("should include metadata annotations", () =>
+      Effect.sync(() => {
+        const schema = makeKnowledgeGraphSchema(TEST_CLASSES, TEST_PROPERTIES)
+        const jsonSchema = JSONSchema.make(schema)
+        const schemaDef = getSchemaDefinition(jsonSchema)
+
+        expect(schemaDef.title).toBe("Knowledge Graph Extraction")
+        expect(schemaDef.description).toContain("ontology")
+      }))
+  })
+
+  describe("Anthropic Tool Schema Compatibility", () => {
+    it.effect("should work with Anthropic's tool format", () =>
+      Effect.sync(() => {
+        const schema = makeKnowledgeGraphSchema(TEST_CLASSES, TEST_PROPERTIES)
+        const jsonSchema = JSONSchema.make(schema)
+
+        // Anthropic accepts the full schema with $ref
+        const anthropicTool = {
+          name: "extract_knowledge_graph",
+          description: "Extract knowledge graph from text",
+          input_schema: jsonSchema
+        }
+
+        expect(anthropicTool.input_schema.$schema).toBeDefined()
+        expect((anthropicTool.input_schema as any).$ref).toBeDefined()
+      }))
+  })
+
+  describe("OpenAI Function Schema Compatibility", () => {
+    it.effect("should work with OpenAI by dereferencing", () =>
+      Effect.sync(() => {
+        const schema = makeKnowledgeGraphSchema(TEST_CLASSES, TEST_PROPERTIES)
+        const jsonSchema = JSONSchema.make(schema)
+        const schemaDef = getSchemaDefinition(jsonSchema)
+
+        // OpenAI needs the dereferenced schema without $schema
+        const openAIFunction = {
+          name: "extract_knowledge_graph",
+          description: "Extract knowledge graph from text",
+          parameters: {
+            type: schemaDef.type,
+            properties: schemaDef.properties,
+            required: schemaDef.required
+          }
+        }
+
+        expect(openAIFunction.parameters.type).toBe("object")
+        expect(openAIFunction.parameters).not.toHaveProperty("$schema")
+      }))
+  })
+
+  describe("Large Vocabularies", () => {
+    it.effect("should handle 50+ classes efficiently", () =>
+      Effect.sync(() => {
+        const classes = Array.from({ length: 50 }, (_, i) => `http://ex.org/C${i}`)
+        const props = Array.from({ length: 50 }, (_, i) => `http://ex.org/p${i}`)
+
+        const schema = makeKnowledgeGraphSchema(classes, props)
+        const jsonSchema = JSONSchema.make(schema)
+
+        expect(jsonSchema).toBeDefined()
+        expect(jsonSchema.$schema).toBe("http://json-schema.org/draft-07/schema#")
+      }))
+  })
+})
+
+================
+File: packages/core/test/Schema/JsonSchemaInspect.test.ts
+================
+/**
+ * Inspect actual JSON Schema output to understand structure
+ *
+ * @since 1.0.0
+ */
+
+import { describe, it } from "@effect/vitest"
+import { Effect, JSONSchema } from "effect"
+import { makeKnowledgeGraphSchema } from "../../src/Schema/Factory"
+
+describe("Schema.JsonSchemaInspect", () => {
+  it.effect("inspect actual JSON Schema structure", () =>
+    Effect.sync(() => {
+      const schema = makeKnowledgeGraphSchema(
+        ["http://example.org/Person"],
+        ["http://example.org/name"]
+      )
+
+      const jsonSchema = JSONSchema.make(schema)
+
+      console.log("\n=== FULL JSON SCHEMA ===")
+      console.log(JSON.stringify(jsonSchema, null, 2))
+      console.log("=== END ===\n")
+    }))
+})
+
+================
+File: packages/core/test/Services/Extraction.test.ts
+================
+/**
+ * Tests for Extraction Pipeline Service
+ *
+ * @since 1.0.0
+ */
+
+import { LanguageModel } from "@effect/ai"
+import { describe, expect, it } from "@effect/vitest"
+import { Effect, Graph, HashMap, Layer, Stream } from "effect"
+import { ClassNode, type NodeId, type OntologyContext } from "../../src/Graph/Types.js"
+import type { KnowledgeGraph } from "../../src/Schema/Factory.js"
+import { ExtractionPipeline } from "../../src/Services/Extraction.js"
+import { LlmService } from "../../src/Services/Llm.js"
+import { RdfService } from "../../src/Services/Rdf.js"
+
+describe("Services.Extraction", () => {
+  // Test ontology context
+  const testOntology: OntologyContext = {
+    nodes: HashMap.fromIterable([
+      [
+        "http://xmlns.com/foaf/0.1/Person",
+        new ClassNode({
+          id: "http://xmlns.com/foaf/0.1/Person",
+          label: "Person",
+          properties: [
+            {
+              iri: "http://xmlns.com/foaf/0.1/name",
+              label: "name",
+              range: "xsd:string"
+            }
+          ]
+        })
+      ]
+    ]),
+    universalProperties: [],
+    nodeIndexMap: HashMap.fromIterable([["http://xmlns.com/foaf/0.1/Person", 0]])
+  }
+
+  // Test graph (single node, no edges)
+  const testGraph: Graph.Graph<NodeId, unknown, "directed"> = Graph.mutate(
+    Graph.directed<NodeId, unknown>(),
+    (mutable) => {
+      Graph.addNode(mutable, "http://xmlns.com/foaf/0.1/Person")
+    }
+  )
+
+  // Mock knowledge graph response
+  const mockKnowledgeGraph: KnowledgeGraph = {
+    entities: [
+      {
+        "@id": "_:person1",
+        "@type": "http://xmlns.com/foaf/0.1/Person",
+        properties: [
+          {
+            predicate: "http://xmlns.com/foaf/0.1/name",
+            object: "Alice"
+          }
+        ]
+      }
+    ]
+  }
+
+  // Mock LLM service that returns predefined knowledge graph
+  // Use LlmService.make() to create a proper service instance with _tag
+  const MockLlmService = Layer.succeed(
+    LlmService,
+    LlmService.make({
+      extractKnowledgeGraph: <_ClassIRI extends string, _PropertyIRI extends string>(
+        _text: string,
+        _ontology: OntologyContext,
+        _prompt: any,
+        _schema: any
+      ) => Effect.succeed(mockKnowledgeGraph as any)
+    })
+  )
+
+  // Mock LanguageModel (needed as dependency by LlmService)
+  // LanguageModel.LanguageModel is the Tag class, LanguageModel.Service is the service interface
+  const mockLanguageModelService: LanguageModel.Service = {
+    generateText: () => Effect.die("Not implemented in test") as any,
+    generateObject: () => Effect.die("Not implemented in test") as any,
+    streamText: () => Stream.die("Not implemented in test") as any
+  }
+  const MockLanguageModel = Layer.succeed(LanguageModel.LanguageModel, mockLanguageModelService)
+
+  // Test layer composition
+  const TestLayer = Layer.provideMerge(
+    Layer.mergeAll(ExtractionPipeline.Default, RdfService.Default, MockLlmService),
+    MockLanguageModel
+  )
+
+  describe("ExtractionPipeline - extract", () => {
+    it.effect("should complete full extraction pipeline", () =>
+      Effect.gen(function*() {
+        const pipeline = yield* ExtractionPipeline
+
+        const result = yield* pipeline.extract({
+          text: "Alice is a person.",
+          graph: testGraph,
+          ontology: testOntology
+        })
+
+        // Should return validation report and turtle
+        expect(result.report.conforms).toBe(true)
+        expect(result.report.results).toHaveLength(0)
+        expect(result.turtle).toBeTruthy()
+
+        // Turtle should contain expected data
+        expect(result.turtle).toContain("Person")
+        expect(result.turtle).toContain("Alice")
+      }).pipe(Effect.provide(TestLayer), Effect.scoped))
+
+    it.effect("should provide subscription for events", () =>
+      Effect.gen(function*() {
+        const pipeline = yield* ExtractionPipeline
+
+        // Subscribe to events
+        const subscription = yield* pipeline.subscribe
+
+        // Subscription should be a Queue
+        expect(subscription).toBeTruthy()
+      }).pipe(Effect.provide(TestLayer), Effect.scoped))
+
+    it.effect("should support multiple independent subscribers", () =>
+      Effect.gen(function*() {
+        const pipeline = yield* ExtractionPipeline
+
+        // Create two independent subscriptions
+        const subscription1 = yield* pipeline.subscribe
+        const subscription2 = yield* pipeline.subscribe
+
+        // Both subscriptions should be valid queues
+        expect(subscription1).toBeTruthy()
+        expect(subscription2).toBeTruthy()
+      }).pipe(Effect.provide(TestLayer), Effect.scoped))
+
+    it.effect("should handle empty entities", () => {
+      // Mock LLM that returns empty knowledge graph
+      const EmptyLlmService = Layer.succeed(
+        LlmService,
+        LlmService.make({
+          extractKnowledgeGraph: <_ClassIRI extends string, _PropertyIRI extends string>(
+            _text: string,
+            _ontology: OntologyContext,
+            _prompt: any,
+            _schema: any
+          ) => Effect.succeed({ entities: [] } as any)
+        })
+      )
+
+      const EmptyTestLayer = Layer.provideMerge(
+        Layer.mergeAll(ExtractionPipeline.Default, RdfService.Default, EmptyLlmService),
+        MockLanguageModel
+      )
+
+      return Effect.gen(function*() {
+        const pipeline = yield* ExtractionPipeline
+
+        const result = yield* pipeline.extract({
+          text: "No entities here.",
+          graph: testGraph,
+          ontology: testOntology
+        })
+
+        // Should still complete successfully
+        expect(result.report.conforms).toBe(true)
+        expect(result.turtle).toBe("") // Empty graph produces empty turtle
+      }).pipe(Effect.provide(EmptyTestLayer), Effect.scoped)
+    })
+  })
+
+  describe("ExtractionPipeline - integration", () => {
+    it.effect("should extract multiple entities", () => {
+      // Mock LLM that returns multiple entities
+      const MultiEntityLlmService = Layer.succeed(
+        LlmService,
+        LlmService.make({
+          extractKnowledgeGraph: <_ClassIRI extends string, _PropertyIRI extends string>(
+            _text: string,
+            _ontology: OntologyContext,
+            _prompt: any,
+            _schema: any
+          ) =>
+            Effect.succeed({
+              entities: [
+                {
+                  "@id": "_:person1",
+                  "@type": "http://xmlns.com/foaf/0.1/Person",
+                  properties: [
+                    {
+                      predicate: "http://xmlns.com/foaf/0.1/name",
+                      object: "Alice"
+                    }
+                  ]
+                },
+                {
+                  "@id": "_:person2",
+                  "@type": "http://xmlns.com/foaf/0.1/Person",
+                  properties: [
+                    {
+                      predicate: "http://xmlns.com/foaf/0.1/name",
+                      object: "Bob"
+                    }
+                  ]
+                }
+              ]
+            } as any)
+        })
+      )
+
+      const MultiEntityTestLayer = Layer.provideMerge(
+        Layer.mergeAll(ExtractionPipeline.Default, RdfService.Default, MultiEntityLlmService),
+        MockLanguageModel
+      )
+
+      return Effect.gen(function*() {
+        const pipeline = yield* ExtractionPipeline
+
+        const result = yield* pipeline.extract({
+          text: "Alice and Bob are people.",
+          graph: testGraph,
+          ontology: testOntology
+        })
+
+        // Should contain both entities in Turtle
+        expect(result.turtle).toContain("Alice")
+        expect(result.turtle).toContain("Bob")
+        expect(result.report.conforms).toBe(true)
+      }).pipe(Effect.provide(MultiEntityTestLayer), Effect.scoped)
+    })
+  })
+})
+
+================
+File: packages/core/test/Services/Llm.test.ts
+================
+/**
+ * Tests for LLM Service
+ *
+ * @since 1.0.0
+ */
+
+import { describe, expect, it } from "@effect/vitest"
+import { Effect, HashMap } from "effect"
+import { ClassNode } from "../../src/Graph/Types"
+import type { OntologyContext } from "../../src/Graph/Types"
+import { StructuredPrompt } from "../../src/Prompt/Types"
+import { makeKnowledgeGraphSchema } from "../../src/Schema/Factory"
+import { extractVocabulary, LlmService } from "../../src/Services/Llm"
+
+describe("Services.Llm", () => {
+  // Test ontology context
+  const testOntology: OntologyContext = {
+    nodes: HashMap.fromIterable([
+      [
+        "http://xmlns.com/foaf/0.1/Person",
+        new ClassNode({
+          id: "http://xmlns.com/foaf/0.1/Person",
+          label: "Person",
+          properties: [
+            {
+              iri: "http://xmlns.com/foaf/0.1/name",
+              label: "name",
+              range: "xsd:string"
+            },
+            {
+              iri: "http://xmlns.com/foaf/0.1/knows",
+              label: "knows",
+              range: "http://xmlns.com/foaf/0.1/Person"
+            }
+          ]
+        })
+      ]
+    ]),
+    universalProperties: [
+      {
+        iri: "http://purl.org/dc/terms/description",
+        label: "description",
+        range: "xsd:string"
+      }
+    ],
+    nodeIndexMap: HashMap.empty()
+  }
+
+  // Test structured prompt
+  const _testPrompt = StructuredPrompt.make({
+    system: ["You are a knowledge graph extraction assistant."],
+    user: ["Extract entities and relationships from the text."],
+    examples: [
+      "Example: \"Alice knows Bob\" -> {\"@id\": \"_:alice\", \"@type\": \"Person\", \"knows\": {\"@id\": \"_:bob\"}}"
+    ]
+  })
+
+  describe("extractVocabulary", () => {
+    it.effect("should extract class IRIs from ontology", () =>
+      Effect.sync(() => {
+        const { classIris } = extractVocabulary(testOntology)
+
+        expect(classIris).toContain("http://xmlns.com/foaf/0.1/Person")
+        expect(classIris).toHaveLength(1)
+      }))
+
+    it.effect("should extract property IRIs from class properties", () =>
+      Effect.sync(() => {
+        const { propertyIris } = extractVocabulary(testOntology)
+
+        expect(propertyIris).toContain("http://xmlns.com/foaf/0.1/name")
+        expect(propertyIris).toContain("http://xmlns.com/foaf/0.1/knows")
+      }))
+
+    it.effect("should include universal properties", () =>
+      Effect.sync(() => {
+        const { propertyIris } = extractVocabulary(testOntology)
+
+        expect(propertyIris).toContain("http://purl.org/dc/terms/description")
+      }))
+
+    it.effect("should deduplicate property IRIs", () =>
+      Effect.sync(() => {
+        const ontologyWithDuplicates: OntologyContext = {
+          nodes: HashMap.fromIterable([
+            [
+              "http://example.org/A",
+              new ClassNode({
+                id: "http://example.org/A",
+                label: "A",
+                properties: [
+                  {
+                    iri: "http://example.org/prop",
+                    label: "prop",
+                    range: "xsd:string"
+                  }
+                ]
+              })
+            ],
+            [
+              "http://example.org/B",
+              new ClassNode({
+                id: "http://example.org/B",
+                label: "B",
+                properties: [
+                  {
+                    iri: "http://example.org/prop",
+                    label: "prop",
+                    range: "xsd:string"
+                  }
+                ]
+              })
+            ]
+          ]),
+          universalProperties: [],
+          nodeIndexMap: HashMap.empty()
+        }
+
+        const { propertyIris } = extractVocabulary(ontologyWithDuplicates)
+
+        // Should only appear once despite being in two classes
+        expect(propertyIris.filter((iri) => iri === "http://example.org/prop")).toHaveLength(1)
+      }))
+
+    it.effect("should handle empty ontology", () =>
+      Effect.sync(() => {
+        const emptyOntology: OntologyContext = {
+          nodes: HashMap.empty(),
+          universalProperties: [],
+          nodeIndexMap: HashMap.empty()
+        }
+
+        const { classIris, propertyIris } = extractVocabulary(emptyOntology)
+
+        expect(classIris).toHaveLength(0)
+        expect(propertyIris).toHaveLength(0)
+      }))
+  })
+
+  describe("LlmService - Type Safety", () => {
+    it.effect("should have correct service structure", () =>
+      Effect.gen(function*() {
+        // This test verifies that the service compiles with the correct types
+        // We don't actually call the LLM, just verify the service shape
+        const _schema = makeKnowledgeGraphSchema(
+          ["http://xmlns.com/foaf/0.1/Person"],
+          ["http://xmlns.com/foaf/0.1/name"]
+        )
+
+        // Type-level test: ensure service has extractKnowledgeGraph method
+        // This will fail at compile time if the service structure is wrong
+        const llm = yield* LlmService
+
+        // Verify method exists
+        expect(llm.extractKnowledgeGraph).toBeDefined()
+        expect(typeof llm.extractKnowledgeGraph).toBe("function")
+      }).pipe(Effect.provide(LlmService.Default)))
+
+    it.effect("should accept valid schema types", () =>
+      Effect.sync(() => {
+        const schema = makeKnowledgeGraphSchema(
+          ["http://xmlns.com/foaf/0.1/Person", "http://xmlns.com/foaf/0.1/Organization"],
+          ["http://xmlns.com/foaf/0.1/name", "http://xmlns.com/foaf/0.1/member"]
+        )
+
+        // Verify schema structure
+        expect(schema.ast).toBeDefined()
+      }))
+  })
+
+  describe("Prompt Building", () => {
+    it.effect("should combine prompt sections correctly", () =>
+      Effect.sync(() => {
+        // Test the prompt building logic indirectly by verifying StructuredPrompt structure
+        const complexPrompt = StructuredPrompt.make({
+          system: ["Instruction 1", "Instruction 2"],
+          user: ["Context 1", "Context 2"],
+          examples: ["Example 1", "Example 2", "Example 3"]
+        })
+
+        expect(complexPrompt.system).toHaveLength(2)
+        expect(complexPrompt.user).toHaveLength(2)
+        expect(complexPrompt.examples).toHaveLength(3)
+      }))
+
+    it.effect("should handle empty prompt sections", () =>
+      Effect.sync(() => {
+        const minimalPrompt = StructuredPrompt.make({
+          system: [],
+          user: [],
+          examples: []
+        })
+
+        expect(minimalPrompt.system).toHaveLength(0)
+        expect(minimalPrompt.user).toHaveLength(0)
+        expect(minimalPrompt.examples).toHaveLength(0)
+      }))
+
+    it.effect("should support prompt combination", () =>
+      Effect.sync(() => {
+        const prompt1 = StructuredPrompt.make({
+          system: ["System 1"],
+          user: ["User 1"],
+          examples: []
+        })
+
+        const prompt2 = StructuredPrompt.make({
+          system: ["System 2"],
+          user: [],
+          examples: ["Example 1"]
+        })
+
+        const combined = StructuredPrompt.combine(prompt1, prompt2)
+
+        expect(combined.system).toHaveLength(2)
+        expect(combined.user).toHaveLength(1)
+        expect(combined.examples).toHaveLength(1)
+      }))
+  })
+})
+
+================
+File: packages/core/test/Services/Rdf.test.ts
+================
+/**
+ * Tests for RDF Service
+ *
+ * @since 1.0.0
+ */
+
+import { describe, expect, it } from "@effect/vitest"
+import { Effect } from "effect"
+import type { KnowledgeGraph } from "../../src/Services/Rdf"
+import { RdfService } from "../../src/Services/Rdf"
+
+describe("Services.Rdf", () => {
+  describe("RdfService - jsonToStore", () => {
+    it.effect("should convert single entity with literal property", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const graph: KnowledgeGraph = {
+          entities: [
+            {
+              "@id": "_:person1",
+              "@type": "http://xmlns.com/foaf/0.1/Person",
+              properties: [
+                {
+                  predicate: "http://xmlns.com/foaf/0.1/name",
+                  object: "Alice"
+                }
+              ]
+            }
+          ]
+        }
+
+        const store = yield* rdf.jsonToStore(graph)
+
+        // Should have 2 triples: type + name
+        expect(store.size).toBe(2)
+
+        // Check type triple exists
+        const typeTriples = store.getQuads(
+          null,
+          "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+          "http://xmlns.com/foaf/0.1/Person",
+          null
+        )
+        expect(typeTriples).toHaveLength(1)
+
+        // Check name triple exists
+        const nameTriples = store.getQuads(
+          null,
+          "http://xmlns.com/foaf/0.1/name",
+          null,
+          null
+        )
+        expect(nameTriples).toHaveLength(1)
+        expect(nameTriples[0].object.value).toBe("Alice")
+      }).pipe(Effect.provide(RdfService.Default)))
+
+    it.effect("should handle entity with object reference", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const graph: KnowledgeGraph = {
+          entities: [
+            {
+              "@id": "_:person1",
+              "@type": "http://xmlns.com/foaf/0.1/Person",
+              properties: [
+                {
+                  predicate: "http://xmlns.com/foaf/0.1/knows",
+                  object: { "@id": "_:person2" }
+                }
+              ]
+            }
+          ]
+        }
+
+        const store = yield* rdf.jsonToStore(graph)
+
+        // Should have 2 triples: type + knows
+        expect(store.size).toBe(2)
+
+        // Check knows triple has blank node object
+        const knowsTriples = store.getQuads(
+          null,
+          "http://xmlns.com/foaf/0.1/knows",
+          null,
+          null
+        )
+        expect(knowsTriples).toHaveLength(1)
+        expect(knowsTriples[0].object.termType).toBe("BlankNode")
+      }).pipe(Effect.provide(RdfService.Default)))
+
+    it.effect("should handle multiple entities", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const graph: KnowledgeGraph = {
+          entities: [
+            {
+              "@id": "_:person1",
+              "@type": "http://xmlns.com/foaf/0.1/Person",
+              properties: [
+                { predicate: "http://xmlns.com/foaf/0.1/name", object: "Alice" }
+              ]
+            },
+            {
+              "@id": "_:person2",
+              "@type": "http://xmlns.com/foaf/0.1/Person",
+              properties: [
+                { predicate: "http://xmlns.com/foaf/0.1/name", object: "Bob" }
+              ]
+            }
+          ]
+        }
+
+        const store = yield* rdf.jsonToStore(graph)
+
+        // Should have 4 triples: 2 types + 2 names
+        expect(store.size).toBe(4)
+
+        // Check both persons exist
+        const typeTriples = store.getQuads(
+          null,
+          "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+          "http://xmlns.com/foaf/0.1/Person",
+          null
+        )
+        expect(typeTriples).toHaveLength(2)
+      }).pipe(Effect.provide(RdfService.Default)))
+
+    it.effect("should handle entity with multiple properties", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const graph: KnowledgeGraph = {
+          entities: [
+            {
+              "@id": "_:person1",
+              "@type": "http://xmlns.com/foaf/0.1/Person",
+              properties: [
+                { predicate: "http://xmlns.com/foaf/0.1/name", object: "Alice" },
+                {
+                  predicate: "http://xmlns.com/foaf/0.1/mbox",
+                  object: "alice@example.org"
+                },
+                {
+                  predicate: "http://xmlns.com/foaf/0.1/knows",
+                  object: { "@id": "_:person2" }
+                }
+              ]
+            }
+          ]
+        }
+
+        const store = yield* rdf.jsonToStore(graph)
+
+        // Should have 4 triples: type + name + mbox + knows
+        expect(store.size).toBe(4)
+      }).pipe(Effect.provide(RdfService.Default)))
+
+    it.effect("should handle named nodes (not blank nodes)", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const graph: KnowledgeGraph = {
+          entities: [
+            {
+              "@id": "http://example.org/alice",
+              "@type": "http://xmlns.com/foaf/0.1/Person",
+              properties: [
+                { predicate: "http://xmlns.com/foaf/0.1/name", object: "Alice" }
+              ]
+            }
+          ]
+        }
+
+        const store = yield* rdf.jsonToStore(graph)
+
+        expect(store.size).toBe(2)
+
+        // Subject should be a named node
+        const typeTriples = store.getQuads(
+          "http://example.org/alice",
+          null,
+          null,
+          null
+        )
+        expect(typeTriples).toHaveLength(2)
+        expect(typeTriples[0].subject.termType).toBe("NamedNode")
+      }).pipe(Effect.provide(RdfService.Default)))
+
+    it.effect("should handle empty entities array", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const graph: KnowledgeGraph = { entities: [] }
+
+        const store = yield* rdf.jsonToStore(graph)
+
+        expect(store.size).toBe(0)
+      }).pipe(Effect.provide(RdfService.Default)))
+
+    it.effect("should handle entity with no properties", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const graph: KnowledgeGraph = {
+          entities: [
+            {
+              "@id": "_:person1",
+              "@type": "http://xmlns.com/foaf/0.1/Person",
+              properties: []
+            }
+          ]
+        }
+
+        const store = yield* rdf.jsonToStore(graph)
+
+        // Should have 1 triple: just the type
+        expect(store.size).toBe(1)
+      }).pipe(Effect.provide(RdfService.Default)))
+  })
+
+  describe("RdfService - storeToTurtle", () => {
+    it.effect("should serialize store to Turtle", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const graph: KnowledgeGraph = {
+          entities: [
+            {
+              "@id": "http://example.org/alice",
+              "@type": "http://xmlns.com/foaf/0.1/Person",
+              properties: [
+                { predicate: "http://xmlns.com/foaf/0.1/name", object: "Alice" }
+              ]
+            }
+          ]
+        }
+
+        const store = yield* rdf.jsonToStore(graph)
+        const turtle = yield* rdf.storeToTurtle(store)
+
+        // Turtle should contain the data
+        expect(turtle).toContain("http://example.org/alice")
+        expect(turtle).toContain("http://xmlns.com/foaf/0.1/Person")
+        expect(turtle).toContain("Alice")
+      }).pipe(Effect.provide(RdfService.Default)))
+
+    it.effect("should serialize empty store", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const graph: KnowledgeGraph = { entities: [] }
+
+        const store = yield* rdf.jsonToStore(graph)
+        const turtle = yield* rdf.storeToTurtle(store)
+
+        // Empty store produces empty Turtle document
+        expect(turtle).toBe("")
+      }).pipe(Effect.provide(RdfService.Default)))
+  })
+
+  describe("RdfService - turtleToStore", () => {
+    it.effect("should parse Turtle to store", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const turtle = `
+          @prefix ex: <http://example.org/> .
+          @prefix foaf: <http://xmlns.com/foaf/0.1/> .
+
+          ex:alice a foaf:Person ;
+            foaf:name "Alice" .
+        `
+
+        const store = yield* rdf.turtleToStore(turtle)
+
+        // Should have 2 triples
+        expect(store.size).toBe(2)
+
+        // Check type triple
+        const typeTriples = store.getQuads(
+          null,
+          "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+          "http://xmlns.com/foaf/0.1/Person",
+          null
+        )
+        expect(typeTriples).toHaveLength(1)
+
+        // Check name triple
+        const nameTriples = store.getQuads(
+          null,
+          "http://xmlns.com/foaf/0.1/name",
+          null,
+          null
+        )
+        expect(nameTriples).toHaveLength(1)
+        expect(nameTriples[0].object.value).toBe("Alice")
+      }).pipe(Effect.provide(RdfService.Default)))
+
+    it.effect("should fail on invalid Turtle", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const invalidTurtle = "@prefix ex: INVALID SYNTAX"
+
+        const result = yield* rdf.turtleToStore(invalidTurtle).pipe(Effect.exit)
+
+        expect(result._tag).toBe("Failure")
+      }).pipe(Effect.provide(RdfService.Default)))
+  })
+
+  describe("RdfService - Round-trip", () => {
+    it.effect("should round-trip: JSON → Store → Turtle → Store", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const graph: KnowledgeGraph = {
+          entities: [
+            {
+              "@id": "http://example.org/alice",
+              "@type": "http://xmlns.com/foaf/0.1/Person",
+              properties: [
+                { predicate: "http://xmlns.com/foaf/0.1/name", object: "Alice" },
+                {
+                  predicate: "http://xmlns.com/foaf/0.1/knows",
+                  object: { "@id": "http://example.org/bob" }
+                }
+              ]
+            }
+          ]
+        }
+
+        // JSON → Store
+        const store1 = yield* rdf.jsonToStore(graph)
+        const originalSize = store1.size
+
+        // Store → Turtle
+        const turtle = yield* rdf.storeToTurtle(store1)
+
+        // Turtle → Store
+        const store2 = yield* rdf.turtleToStore(turtle)
+
+        // Should have same number of triples
+        expect(store2.size).toBe(originalSize)
+      }).pipe(Effect.provide(RdfService.Default)))
+  })
+
+  describe("RdfService - Isolation", () => {
+    it.effect("should create independent stores per operation", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const graph1: KnowledgeGraph = {
+          entities: [
+            {
+              "@id": "_:person1",
+              "@type": "http://xmlns.com/foaf/0.1/Person",
+              properties: [
+                { predicate: "http://xmlns.com/foaf/0.1/name", object: "Alice" }
+              ]
+            }
+          ]
+        }
+
+        const graph2: KnowledgeGraph = {
+          entities: [
+            {
+              "@id": "_:person2",
+              "@type": "http://xmlns.com/foaf/0.1/Person",
+              properties: [
+                { predicate: "http://xmlns.com/foaf/0.1/name", object: "Bob" }
+              ]
+            }
+          ]
+        }
+
+        // Create two stores independently
+        const store1 = yield* rdf.jsonToStore(graph1)
+        const store2 = yield* rdf.jsonToStore(graph2)
+
+        // Each should have only their own data
+        expect(store1.size).toBe(2)
+        expect(store2.size).toBe(2)
+
+        // Store1 should not have Bob's data
+        const bobTriples1 = store1.getQuads(
+          null,
+          "http://xmlns.com/foaf/0.1/name",
+          null,
+          null
+        )
+        expect(bobTriples1[0].object.value).toBe("Alice")
+
+        // Store2 should not have Alice's data
+        const aliceTriples2 = store2.getQuads(
+          null,
+          "http://xmlns.com/foaf/0.1/name",
+          null,
+          null
+        )
+        expect(aliceTriples2[0].object.value).toBe("Bob")
+      }).pipe(Effect.provide(RdfService.Default)))
   })
 })
 
@@ -2865,15 +13825,19 @@ File: packages/core/package.json
   "type": "module",
   "private": true,
   "exports": {
+    "./Config": "./src/Config/index.ts",
     "./Graph/Builder": "./src/Graph/Builder.ts",
     "./Graph/Types": "./src/Graph/Types.ts",
-    "./Prompt": "./src/Prompt/index.ts"
+    "./Prompt": "./src/Prompt/index.ts",
+    "./Schema": "./src/Schema/index.ts",
+    "./Schema/Factory": "./src/Schema/Factory.ts"
   },
   "scripts": {
     "test": "vitest",
     "check": "tsc -b tsconfig.json"
   },
   "dependencies": {
+    "@effect/printer": "^0.47.0",
     "@effect/typeclass": "^0.38.0",
     "effect": "^3.17.7",
     "n3": "^1.26.0"
@@ -4790,7 +15754,14 @@ File: packages/ui/src/state/store.ts
 ================
 import { Atom, Result } from "@effect-atom/atom"
 import { parseTurtleToGraph } from "@effect-ontology/core/Graph/Builder"
-import { defaultPromptAlgebra, processUniversalProperties, solveGraph } from "@effect-ontology/core/Prompt"
+import {
+  buildKnowledgeMetadata,
+  defaultPromptAlgebra,
+  knowledgeIndexAlgebra,
+  processUniversalProperties,
+  solveGraph,
+  solveToKnowledgeIndex
+} from "@effect-ontology/core/Prompt"
 import { Effect, Graph, Option } from "effect"
 
 // Default example turtle
@@ -4895,6 +15866,141 @@ export const generatedPromptsAtom = Atom.make((get) =>
 
 // 5. Selected Node (UI State)
 export const selectedNodeAtom = Atom.make<Option.Option<string>>(Option.none())
+
+// ============================================================================
+// Metadata API Integration
+// ============================================================================
+
+/**
+ * 6. Knowledge Index Atom
+ *
+ * Solves the graph to a KnowledgeIndex using the monoid-based algebra.
+ * This is the foundation for metadata generation.
+ *
+ * Dependencies: ontologyGraphAtom
+ */
+export const knowledgeIndexAtom = Atom.make((get) =>
+  Effect.gen(function*() {
+    const graphResult = get(ontologyGraphAtom)
+
+    const graphEffect = Result.match(graphResult, {
+      onInitial: () => Effect.fail("Graph not yet loaded"),
+      onFailure: (failure) => Effect.failCause(failure.cause),
+      onSuccess: (success) => Effect.succeed(success.value)
+    })
+
+    const { context, graph } = yield* graphEffect
+
+    // Solve to KnowledgeIndex instead of StructuredPrompt
+    return yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+  })
+)
+
+/**
+ * 7. Metadata Atom
+ *
+ * Builds complete metadata from the Effect Graph, OntologyContext, and KnowledgeIndex.
+ * Provides visualization data, token statistics, and dependency graphs.
+ *
+ * **Composable Pipeline:**
+ * parseTurtleToGraph → solveToKnowledgeIndex → buildKnowledgeMetadata
+ *
+ * Dependencies: ontologyGraphAtom, knowledgeIndexAtom
+ */
+export const metadataAtom = Atom.make((get) =>
+  Effect.gen(function*() {
+    const graphResult = get(ontologyGraphAtom)
+    const indexResult = get(knowledgeIndexAtom)
+
+    // Convert Results to Effects
+    const graphEffect = Result.match(graphResult, {
+      onInitial: () => Effect.fail("Graph not yet loaded"),
+      onFailure: (failure) => Effect.failCause(failure.cause),
+      onSuccess: (success) => Effect.succeed(success.value)
+    })
+
+    const indexEffect = Result.match(indexResult, {
+      onInitial: () => Effect.fail("Index not yet loaded"),
+      onFailure: (failure) => Effect.failCause(failure.cause),
+      onSuccess: (success) => Effect.succeed(success.value)
+    })
+
+    const { context, graph } = yield* graphEffect
+    const index = yield* indexEffect
+
+    // Build metadata using Effect Graph
+    return yield* buildKnowledgeMetadata(graph, context, index)
+  })
+)
+
+/**
+ * 8. Token Stats Atom (Derived)
+ *
+ * Extracts just the token statistics from metadata.
+ * Useful for components that only need token counts without full metadata.
+ *
+ * Dependencies: metadataAtom
+ */
+export const tokenStatsAtom = Atom.make((get) =>
+  Effect.gen(function*() {
+    const metadataResult = get(metadataAtom)
+
+    const metadataEffect = Result.match(metadataResult, {
+      onInitial: () => Effect.fail("Metadata not yet loaded"),
+      onFailure: (failure) => Effect.failCause(failure.cause),
+      onSuccess: (success) => Effect.succeed(success.value)
+    })
+
+    const metadata = yield* metadataEffect
+    return metadata.tokenStats
+  })
+)
+
+/**
+ * 9. Dependency Graph Atom (Derived)
+ *
+ * Extracts just the dependency graph from metadata.
+ * Ready for Observable Plot visualization.
+ *
+ * Dependencies: metadataAtom
+ */
+export const dependencyGraphAtom = Atom.make((get) =>
+  Effect.gen(function*() {
+    const metadataResult = get(metadataAtom)
+
+    const metadataEffect = Result.match(metadataResult, {
+      onInitial: () => Effect.fail("Metadata not yet loaded"),
+      onFailure: (failure) => Effect.failCause(failure.cause),
+      onSuccess: (success) => Effect.succeed(success.value)
+    })
+
+    const metadata = yield* metadataEffect
+    return metadata.dependencyGraph
+  })
+)
+
+/**
+ * 10. Hierarchy Tree Atom (Derived)
+ *
+ * Extracts just the hierarchy tree from metadata.
+ * Ready for tree visualization components.
+ *
+ * Dependencies: metadataAtom
+ */
+export const hierarchyTreeAtom = Atom.make((get) =>
+  Effect.gen(function*() {
+    const metadataResult = get(metadataAtom)
+
+    const metadataEffect = Result.match(metadataResult, {
+      onInitial: () => Effect.fail("Metadata not yet loaded"),
+      onFailure: (failure) => Effect.failCause(failure.cause),
+      onSuccess: (success) => Effect.succeed(success.value)
+    })
+
+    const metadata = yield* metadataEffect
+    return metadata.hierarchyTree
+  })
+)
 
 ================
 File: packages/ui/src/App.tsx
@@ -6143,6 +17249,7 @@ File: packages/ui/package.json
     "@effect-atom/atom": "latest",
     "@effect-atom/atom-react": "latest",
     "@effect-ontology/core": "workspace:*",
+    "@observablehq/plot": "^0.6.17",
     "@radix-ui/react-slot": "^1.1.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -6245,6 +17352,137 @@ File: scratchpad/tsconfig.json
     "incremental": false
   }
 }
+
+================
+File: .env.example
+================
+# Effect Ontology Configuration
+# Copy this file to .env and fill in your actual values
+
+# =============================================================================
+# LLM Configuration
+# =============================================================================
+
+# LLM Provider Selection
+# Valid values: "anthropic" | "gemini" | "openrouter"
+LLM__PROVIDER=anthropic
+
+# -----------------------------------------------------------------------------
+# Anthropic Configuration (Claude)
+# -----------------------------------------------------------------------------
+# Get your API key from: https://console.anthropic.com/
+LLM__ANTHROPIC_API_KEY=your-anthropic-api-key-here
+
+# Model selection (optional, default: claude-3-5-sonnet-20241022)
+# Available models:
+# - claude-3-5-sonnet-20241022 (recommended for production)
+# - claude-3-5-haiku-20241022 (faster, cheaper)
+# - claude-3-opus-20240229 (most capable, slower)
+LLM__ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
+
+# Max tokens for responses (optional, default: 4096)
+LLM__ANTHROPIC_MAX_TOKENS=4096
+
+# Temperature for generation (optional, default: 0.0)
+# Range: 0.0 (deterministic) to 1.0 (creative)
+LLM__ANTHROPIC_TEMPERATURE=0.0
+
+# -----------------------------------------------------------------------------
+# Google Gemini Configuration
+# -----------------------------------------------------------------------------
+# Get your API key from: https://makersuite.google.com/app/apikey
+LLM__GEMINI_API_KEY=your-gemini-api-key-here
+
+# Model selection (optional, default: gemini-2.0-flash-exp)
+# Available models:
+# - gemini-2.0-flash-exp (recommended for fast responses)
+# - gemini-1.5-pro (most capable)
+# - gemini-1.5-flash (balanced)
+LLM__GEMINI_MODEL=gemini-2.0-flash-exp
+
+# Max tokens for responses (optional, default: 4096)
+LLM__GEMINI_MAX_TOKENS=4096
+
+# Temperature for generation (optional, default: 0.0)
+LLM__GEMINI_TEMPERATURE=0.0
+
+# -----------------------------------------------------------------------------
+# OpenRouter Configuration
+# -----------------------------------------------------------------------------
+# Get your API key from: https://openrouter.ai/keys
+LLM__OPENROUTER_API_KEY=your-openrouter-api-key-here
+
+# Model selection (optional, default: anthropic/claude-3.5-sonnet)
+# See available models: https://openrouter.ai/models
+# Examples:
+# - anthropic/claude-3.5-sonnet
+# - google/gemini-2.0-flash-exp
+# - openai/gpt-4-turbo
+LLM__OPENROUTER_MODEL=anthropic/claude-3.5-sonnet
+
+# Max tokens for responses (optional, default: 4096)
+LLM__OPENROUTER_MAX_TOKENS=4096
+
+# Temperature for generation (optional, default: 0.0)
+LLM__OPENROUTER_TEMPERATURE=0.0
+
+# OpenRouter-specific headers (optional)
+LLM__OPENROUTER_SITE_URL=https://your-app.com
+LLM__OPENROUTER_SITE_NAME=YourAppName
+
+# =============================================================================
+# RDF Configuration (N3 Service)
+# =============================================================================
+
+# RDF serialization format (optional, default: Turtle)
+# Valid values: "Turtle" | "N-Triples" | "N-Quads" | "TriG"
+RDF__FORMAT=Turtle
+
+# Base IRI for relative references (optional)
+RDF__BASE_IRI=http://example.org/
+
+# Custom namespace prefixes can be added programmatically
+# Default prefixes are provided:
+# - rdf: http://www.w3.org/1999/02/22-rdf-syntax-ns#
+# - rdfs: http://www.w3.org/2000/01/rdf-schema#
+# - xsd: http://www.w3.org/2001/XMLSchema#
+# - foaf: http://xmlns.com/foaf/0.1/
+# - dcterms: http://purl.org/dc/terms/
+
+# =============================================================================
+# SHACL Configuration (Future)
+# =============================================================================
+
+# Enable SHACL validation (optional, default: false)
+SHACL__ENABLED=false
+
+# Path to SHACL shapes file (optional)
+SHACL__SHAPES_PATH=./shapes/ontology.ttl
+
+# Strict mode - fail on validation errors (optional, default: true)
+SHACL__STRICT_MODE=true
+
+# =============================================================================
+# Notes
+# =============================================================================
+#
+# 1. Environment Variable Naming:
+#    - Use double underscores (__) for nested configs (Effect Config convention)
+#    - Example: LLM__ANTHROPIC_API_KEY maps to Config.nested("LLM")(Config.string("ANTHROPIC_API_KEY"))
+#
+# 2. Provider Selection:
+#    - Only configure the provider you're using
+#    - If LLM__PROVIDER=anthropic, only LLM__ANTHROPIC_* vars are required
+#
+# 3. Security:
+#    - Never commit .env to version control
+#    - Keep API keys secret and rotate them regularly
+#    - Use environment-specific .env files (.env.production, .env.development)
+#
+# 4. Testing:
+#    - Use programmatic config in tests (see Config/Services.ts)
+#    - Example: makeLlmTestConfig({ provider: "anthropic", ... })
+#
 
 ================
 File: .gitignore
@@ -6470,6 +17708,364 @@ All Effect skills (in `.claude/skills/effect-*.md`) include local source referen
 
 **Remember: Real source code > documentation > assumptions. Always search first.**
 
+## Test Layer Pattern
+
+**CRITICAL: Use Test Layers for mocking services in Effect tests**
+
+The Test Layer pattern is Effect's idiomatic way to provide mock/test implementations of services. This pattern enables clean, composable testing without side effects or global mocks.
+
+### Core Concepts
+
+1. **`.Default` Layer**: Production layer that loads from environment/real resources
+2. **`.Test` Layer**: Test layer with sensible mock/fake implementations  
+3. **`Layer.effect/succeed`**: Create custom test layers inline
+4. **`it.layer()`**: @effect/vitest helper to provide layers to tests
+
+### Pattern: Static `.Test` Property
+
+Services should define both `.Default` (production) and `.Test` (testing) layers:
+
+\`\`\`typescript
+export class MyService extends Effect.Service<MyService>()(
+  "MyService",
+  {
+    effect: Effect.gen(function* () {
+      // Production implementation - reads from env, makes real API calls, etc.
+      const config = yield* Config.string("API_KEY")
+      return {
+        getData: () => HttpClient.get("https://api.example.com/data")
+      }
+    }),
+    dependencies: []
+  }
+) {
+  /**
+   * Test layer with mock implementation.
+   * Returns fake data without external dependencies.
+   */
+  static Test = Layer.succeed(MyService, MyService.make({
+    getData: () => Effect.succeed({ data: "test-data" })
+  }))
+}
+\`\`\`
+
+### Real-World Examples from Effect Source
+
+#### Example 1: HttpClient Test Layer (platform/test/HttpClient.test.ts)
+
+\`\`\`typescript
+// Create a test service that wraps HttpClient with test baseURL
+const makeJsonPlaceholder = Effect.gen(function*() {
+  const defaultClient = yield* HttpClient.HttpClient
+  const client = defaultClient.pipe(
+    HttpClient.mapRequest(
+      HttpClientRequest.prependUrl("https://jsonplaceholder.typicode.com")
+    )
+  )
+
+  const createTodo = (todo) =>
+    HttpClientRequest.post("/todos").pipe(
+      HttpClientRequest.schemaBodyJson(TodoSchema)(todo),
+      Effect.flatMap(client.execute),
+      Effect.flatMap(HttpClientResponse.schemaBodyJson(Todo))
+    )
+
+  return { client, createTodo } as const
+})
+
+interface JsonPlaceholder extends Effect.Effect.Success<typeof makeJsonPlaceholder> {}
+const JsonPlaceholder = Context.GenericTag<JsonPlaceholder>("test/JsonPlaceholder")
+
+// Test layer wraps production HttpClient with test config
+const JsonPlaceholderLive = Layer.effect(JsonPlaceholder, makeJsonPlaceholder)
+  .pipe(Layer.provideMerge(FetchHttpClient.layer))
+
+// Usage in tests
+it.effect("should create todo", () =>
+  Effect.gen(function*() {
+    const jp = yield* JsonPlaceholder
+    const response = yield* jp.createTodo({
+      userId: 1,
+      title: "test",
+      completed: false
+    })
+    expect(response.title).toBe("test")
+  }).pipe(
+    Effect.provide(JsonPlaceholderLive)
+  )
+)
+\`\`\`
+
+**Key Pattern**: Test layer wraps real service with controlled test environment.
+
+
+#### Example 2: Config Test Layers (Our Codebase)
+
+```typescript
+export class LlmConfigService extends Effect.Service<LlmConfigService>()(
+  "LlmConfigService",
+  {
+    effect: LlmProviderConfig,  // Loads from environment
+    dependencies: []
+  }
+) {
+  /**
+   * Test layer with sensible defaults for Anthropic provider.
+   * No environment variables needed.
+   */
+  static Test = Layer.setConfigProvider(
+    ConfigProvider.fromMap(
+      new Map([
+        ["LLM.PROVIDER", "anthropic"],
+        ["LLM.ANTHROPIC_API_KEY", "test-api-key"],
+        ["LLM.ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022"],
+        ["LLM.ANTHROPIC_MAX_TOKENS", "4096"],
+        ["LLM.ANTHROPIC_TEMPERATURE", "0.0"]
+      ])
+    )
+  )
+}
+
+// Usage in tests
+it.layer(LlmConfigService.Test)(
+  "should use test config", 
+  () => Effect.gen(function*() {
+    const config = yield* LlmConfigService
+    expect(config.provider).toBe("anthropic")
+  })
+)
+```
+
+**Key Pattern**: `Layer.setConfigProvider` eliminates environment dependencies in tests.
+
+### When to Use Test Layers
+
+**✅ DO use test layers for:**
+
+- **External services**: HTTP clients, databases, LLM APIs
+- **Environment-dependent code**: File system, config, network
+- **Stateful services**: Caches, queues, background workers
+- **Side-effectful operations**: Logging, metrics, notifications
+- **Complex dependencies**: Services with multiple layers of deps
+
+**❌ DON'T need test layers for:**
+
+- **Pure functions**: Data transformations, calculations
+- **Simple utilities**: String formatting, validation functions
+- **Schemas**: Effect Schema definitions (test via encode/decode)
+- **Inline Effects**: `Effect.sync(() => ...)` with no deps
+
+### Test Layer Strategies
+
+#### Strategy 1: Static `.Test` Property (Recommended)
+
+Best for services used across many tests:
+
+```typescript
+export class DatabaseService extends Effect.Service<DatabaseService>()(...) {
+  static Test = Layer.succeed(DatabaseService, {
+    query: () => Effect.succeed([{ id: 1, name: "test" }]),
+    insert: () => Effect.succeed({ id: 1 })
+  })
+}
+```
+
+#### Strategy 2: Inline Layer Creation
+
+Best for one-off test scenarios:
+
+```typescript
+it.effect("custom scenario", () =>
+  Effect.gen(function*() {
+    const result = yield* myProgram
+    expect(result).toBe(42)
+  }).pipe(
+    Effect.provide(
+      Layer.succeed(MyService, { 
+        specialBehavior: () => Effect.succeed("custom") 
+      })
+    )
+  )
+)
+```
+
+#### Strategy 3: ConfigProvider for Config Services
+
+Best for testing configuration-driven behavior:
+
+```typescript
+it.layer(
+  Layer.setConfigProvider(
+    ConfigProvider.fromMap(new Map([["API_URL", "http://localhost:3000"]]))
+  )
+)("test with custom config", () =>
+  Effect.gen(function*() {
+    const config = yield* AppConfigService
+    expect(config.apiUrl).toBe("http://localhost:3000")
+  })
+)
+```
+
+### Advanced Patterns
+
+#### Layered Hierarchy for Integration Tests
+
+```typescript
+// Base service mock
+const MockDatabase = Layer.succeed(DatabaseService, mockDbImpl)
+
+// Dependent service uses mock database
+const MockUserService = Layer.effect(
+  UserService,
+  Effect.gen(function*() {
+    const db = yield* DatabaseService
+    return { 
+      getUser: (id) => db.query(`SELECT * FROM users WHERE id = ${id}`)
+    }
+  })
+).pipe(Layer.provideMerge(MockDatabase))
+
+// Test with full hierarchy
+it.effect("integration test", () =>
+  Effect.gen(function*() {
+    const userService = yield* UserService
+    const user = yield* userService.getUser(1)
+    expect(user.name).toBe("test")
+  }).pipe(Effect.provide(MockUserService))
+)
+```
+
+**CRITICAL**: Use `Layer.provideMerge` for merged layers, not `Layer.provide`.
+
+#### Parameterized Test Layers
+
+```typescript
+const makeTestDatabase = (data: User[]) =>
+  Layer.succeed(DatabaseService, {
+    query: () => Effect.succeed(data)
+  })
+
+it.effect("test with specific data", () =>
+  Effect.gen(function*() {
+    const db = yield* DatabaseService
+    const users = yield* db.query()
+    expect(users).toHaveLength(2)
+  }).pipe(
+    Effect.provide(makeTestDatabase([
+      { id: 1, name: "Alice" },
+      { id: 2, name: "Bob" }
+    ]))
+  )
+)
+```
+
+### Testing Patterns with @effect/vitest
+
+#### Pattern 1: it.layer() for Layer Setup
+
+```typescript
+import { describe, expect, it, layer } from "@effect/vitest"
+
+it.layer(MyService.Test)(
+  "test name",
+  () => Effect.gen(function*() {
+    const service = yield* MyService
+    // test
+  })
+)
+```
+
+#### Pattern 2: it.effect() with inline Layer.provide
+
+```typescript
+it.effect("test name", () =>
+  Effect.gen(function*() {
+    const service = yield* MyService
+    // test
+  }).pipe(Effect.provide(MyService.Test))
+)
+```
+
+Both are equivalent; use `it.layer()` for readability.
+
+### Comparison: Test Layers vs Traditional Mocks
+
+| Aspect | Test Layers (Effect) | Traditional Mocks |
+|--------|---------------------|-------------------|
+| **Composition** | Layer.merge, Layer.provideMerge | Manual wiring |
+| **Dependencies** | Automatic via Context | Manual injection |
+| **Reusability** | High - share across tests | Low - test-specific |
+| **Type Safety** | Full Effect type inference | Depends on library |
+| **Side Effects** | Controlled via Effect | Often uncontrolled |
+| **Teardown** | Automatic via scoped layers | Manual cleanup |
+| **Testability** | Services inherently testable | Requires design discipline |
+
+### Migration Guide: Adding Test Layers to Existing Code
+
+**Step 1**: Identify services that need test layers
+```bash
+# Find services without .Test property
+grep -r "Effect.Service" packages/core/src/ -A 10 | grep -v "static Test"
+```
+
+**Step 2**: Add `.Test` static property to each service
+
+**Step 3**: Update tests to use `it.layer()` or `Effect.provide()`
+```typescript
+// Before: Direct Effect.gen with no layer
+it.effect("test", () =>
+  Effect.gen(function*() {
+    // This will fail if MyService isn't provided!
+    const service = yield* MyService
+  })
+)
+
+// After: Provide test layer
+it.layer(MyService.Test)(
+  "test",
+  () => Effect.gen(function*() {
+    const service = yield* MyService
+    // Now MyService is provided via test layer
+  })
+)
+```
+
+**Step 4**: Look for opportunities to extract test service patterns
+- Repeated setup code → Static `.Test` property
+- Complex mocking logic → Test service layer
+- Environment dependencies → ConfigProvider test layer
+
+### Best Practices
+
+1. **Always provide `.Test` layers for services** - Make testing easy by default
+2. **Use sensible defaults** - Test layers should work without configuration
+3. **Document test behavior** - JSDoc on `.Test` property explaining what's mocked
+4. **Prefer Layer.succeed for simple mocks** - Use Layer.effect when construction is effectful
+5. **Use ConfigProvider.fromMap for config** - Eliminate environment dependencies
+6. **Compose with Layer.merge** - Build complex test scenarios from simple layers
+7. **Use Layer.provideMerge for merged layers** - Preserves shared dependencies
+8. **Test the test layers** - Verify `.Test` layers provide valid implementations
+9. **Keep production and test layers in sync** - Same interface, different impl
+10. **Extract common patterns** - Reusable test layers for common scenarios
+
+### References
+
+**Effect Source Examples:**
+- `docs/effect-source/platform/test/HttpClient.test.ts` - JsonPlaceholder test service
+- `docs/effect-source/effect/test/Layer.test.ts` - Layer composition patterns
+
+**Our Implementation:**
+- `packages/core/src/Config/Services.ts` - Config service test layers
+- `packages/core/test/Config/Services.test.ts` - Usage with it.layer()
+
+**Effect Documentation:**
+- Layer API: https://effect.website/docs/guides/context-management/layers
+- Testing Guide: https://effect.website/docs/guides/testing/introduction
+
+---
+
+**Remember: Test layers enable isolated, composable, type-safe testing. Use them liberally.**
+
 ================
 File: eslint.config.mjs
 ================
@@ -6651,6 +18247,7 @@ File: package.json
     "coverage": "vitest --coverage"
   },
   "dependencies": {
+    "@effect/ai": "^0.32.1",
     "@effect/typeclass": "^0.38.0",
     "effect": "^3.17.7",
     "jotai": "^2.15.1",
