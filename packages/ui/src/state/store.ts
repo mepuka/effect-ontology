@@ -1,6 +1,13 @@
 import { Atom, Result } from "@effect-atom/atom"
 import { parseTurtleToGraph } from "@effect-ontology/core/Graph/Builder"
-import { defaultPromptAlgebra, processUniversalProperties, solveGraph } from "@effect-ontology/core/Prompt"
+import {
+  buildKnowledgeMetadata,
+  defaultPromptAlgebra,
+  knowledgeIndexAlgebra,
+  processUniversalProperties,
+  solveGraph,
+  solveToKnowledgeIndex
+} from "@effect-ontology/core/Prompt"
 import { Effect, Graph, Option } from "effect"
 
 // Default example turtle
@@ -105,3 +112,138 @@ export const generatedPromptsAtom = Atom.make((get) =>
 
 // 5. Selected Node (UI State)
 export const selectedNodeAtom = Atom.make<Option.Option<string>>(Option.none())
+
+// ============================================================================
+// Metadata API Integration
+// ============================================================================
+
+/**
+ * 6. Knowledge Index Atom
+ *
+ * Solves the graph to a KnowledgeIndex using the monoid-based algebra.
+ * This is the foundation for metadata generation.
+ *
+ * Dependencies: ontologyGraphAtom
+ */
+export const knowledgeIndexAtom = Atom.make((get) =>
+  Effect.gen(function*() {
+    const graphResult = get(ontologyGraphAtom)
+
+    const graphEffect = Result.match(graphResult, {
+      onInitial: () => Effect.fail("Graph not yet loaded"),
+      onFailure: (failure) => Effect.failCause(failure.cause),
+      onSuccess: (success) => Effect.succeed(success.value)
+    })
+
+    const { graph, context } = yield* graphEffect
+
+    // Solve to KnowledgeIndex instead of StructuredPrompt
+    return yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+  })
+)
+
+/**
+ * 7. Metadata Atom
+ *
+ * Builds complete metadata from the Effect Graph, OntologyContext, and KnowledgeIndex.
+ * Provides visualization data, token statistics, and dependency graphs.
+ *
+ * **Composable Pipeline:**
+ * parseTurtleToGraph → solveToKnowledgeIndex → buildKnowledgeMetadata
+ *
+ * Dependencies: ontologyGraphAtom, knowledgeIndexAtom
+ */
+export const metadataAtom = Atom.make((get) =>
+  Effect.gen(function*() {
+    const graphResult = get(ontologyGraphAtom)
+    const indexResult = get(knowledgeIndexAtom)
+
+    // Convert Results to Effects
+    const graphEffect = Result.match(graphResult, {
+      onInitial: () => Effect.fail("Graph not yet loaded"),
+      onFailure: (failure) => Effect.failCause(failure.cause),
+      onSuccess: (success) => Effect.succeed(success.value)
+    })
+
+    const indexEffect = Result.match(indexResult, {
+      onInitial: () => Effect.fail("Index not yet loaded"),
+      onFailure: (failure) => Effect.failCause(failure.cause),
+      onSuccess: (success) => Effect.succeed(success.value)
+    })
+
+    const { graph, context } = yield* graphEffect
+    const index = yield* indexEffect
+
+    // Build metadata using Effect Graph
+    return yield* buildKnowledgeMetadata(graph, context, index)
+  })
+)
+
+/**
+ * 8. Token Stats Atom (Derived)
+ *
+ * Extracts just the token statistics from metadata.
+ * Useful for components that only need token counts without full metadata.
+ *
+ * Dependencies: metadataAtom
+ */
+export const tokenStatsAtom = Atom.make((get) =>
+  Effect.gen(function*() {
+    const metadataResult = get(metadataAtom)
+
+    const metadataEffect = Result.match(metadataResult, {
+      onInitial: () => Effect.fail("Metadata not yet loaded"),
+      onFailure: (failure) => Effect.failCause(failure.cause),
+      onSuccess: (success) => Effect.succeed(success.value)
+    })
+
+    const metadata = yield* metadataEffect
+    return metadata.tokenStats
+  })
+)
+
+/**
+ * 9. Dependency Graph Atom (Derived)
+ *
+ * Extracts just the dependency graph from metadata.
+ * Ready for Observable Plot visualization.
+ *
+ * Dependencies: metadataAtom
+ */
+export const dependencyGraphAtom = Atom.make((get) =>
+  Effect.gen(function*() {
+    const metadataResult = get(metadataAtom)
+
+    const metadataEffect = Result.match(metadataResult, {
+      onInitial: () => Effect.fail("Metadata not yet loaded"),
+      onFailure: (failure) => Effect.failCause(failure.cause),
+      onSuccess: (success) => Effect.succeed(success.value)
+    })
+
+    const metadata = yield* metadataEffect
+    return metadata.dependencyGraph
+  })
+)
+
+/**
+ * 10. Hierarchy Tree Atom (Derived)
+ *
+ * Extracts just the hierarchy tree from metadata.
+ * Ready for tree visualization components.
+ *
+ * Dependencies: metadataAtom
+ */
+export const hierarchyTreeAtom = Atom.make((get) =>
+  Effect.gen(function*() {
+    const metadataResult = get(metadataAtom)
+
+    const metadataEffect = Result.match(metadataResult, {
+      onInitial: () => Effect.fail("Metadata not yet loaded"),
+      onFailure: (failure) => Effect.failCause(failure.cause),
+      onSuccess: (success) => Effect.succeed(success.value)
+    })
+
+    const metadata = yield* metadataEffect
+    return metadata.hierarchyTree
+  })
+)
