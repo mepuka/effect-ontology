@@ -7,7 +7,6 @@
  */
 
 import { describe, expect, it } from "@effect/vitest"
-import { Order, Equivalence } from "effect"
 import type { PropertyData } from "../../src/Graph/Types.js"
 import * as Ast from "../../src/Prompt/Ast.js"
 
@@ -54,8 +53,8 @@ describe("Ast Typeclass Instances", () => {
     }
     const propB: PropertyData = {
       iri: "http://example.org/same",
-      label: "Label B",  // Different label
-      range: "number"    // Different range
+      label: "Label B", // Different label
+      range: "number" // Different range
     }
 
     // Test will FAIL initially - PropertyDataEqual doesn't exist yet
