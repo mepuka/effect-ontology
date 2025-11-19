@@ -28,7 +28,7 @@ describe("InheritanceService", () => {
       Effect.gen(function*() {
         // Build graph: D -> C -> B -> A
         const { context, graph } = buildLinearChain()
-        const service = Inheritance.make(graph, context)
+        const service = yield* Inheritance.make(graph, context)
 
         // Test D
         const dAncestors = yield* service.getAncestors("http://example.org/D")
@@ -56,7 +56,7 @@ describe("InheritanceService", () => {
     it("should get immediate parents", () =>
       Effect.gen(function*() {
         const { context, graph } = buildLinearChain()
-        const service = Inheritance.make(graph, context)
+        const service = yield* Inheritance.make(graph, context)
 
         const dParents = yield* service.getParents("http://example.org/D")
         expect(dParents).toContain("http://example.org/C")
@@ -69,7 +69,7 @@ describe("InheritanceService", () => {
     it("should get immediate children", () =>
       Effect.gen(function*() {
         const { context, graph } = buildLinearChain()
-        const service = Inheritance.make(graph, context)
+        const service = yield* Inheritance.make(graph, context)
 
         const cChildren = yield* service.getChildren("http://example.org/C")
         expect(cChildren).toContain("http://example.org/D")
@@ -94,7 +94,7 @@ describe("InheritanceService", () => {
     it("should resolve ancestors in diamond", () =>
       Effect.gen(function*() {
         const { context, graph } = buildDiamond()
-        const service = Inheritance.make(graph, context)
+        const service = yield* Inheritance.make(graph, context)
 
         const dAncestors = yield* service.getAncestors("http://example.org/D")
 
@@ -110,7 +110,7 @@ describe("InheritanceService", () => {
     it("should get multiple parents", () =>
       Effect.gen(function*() {
         const { context, graph } = buildDiamond()
-        const service = Inheritance.make(graph, context)
+        const service = yield* Inheritance.make(graph, context)
 
         const dParents = yield* service.getParents("http://example.org/D")
 
@@ -122,7 +122,7 @@ describe("InheritanceService", () => {
     it("should get multiple children", () =>
       Effect.gen(function*() {
         const { context, graph } = buildDiamond()
-        const service = Inheritance.make(graph, context)
+        const service = yield* Inheritance.make(graph, context)
 
         const aChildren = yield* service.getChildren("http://example.org/A")
 
@@ -136,7 +136,7 @@ describe("InheritanceService", () => {
     it("should combine own and inherited properties", () =>
       Effect.gen(function*() {
         const { context, graph } = buildWithProperties()
-        const service = Inheritance.make(graph, context)
+        const service = yield* Inheritance.make(graph, context)
 
         // Employee extends Person
         // Employee should have: hasSalary (own) + hasName (inherited from Person)
@@ -153,7 +153,7 @@ describe("InheritanceService", () => {
     it("should handle properties at multiple levels", () =>
       Effect.gen(function*() {
         const { context, graph } = buildMultiLevelProperties()
-        const service = Inheritance.make(graph, context)
+        const service = yield* Inheritance.make(graph, context)
 
         // Manager extends Employee extends Person
         // Manager should have:
@@ -176,7 +176,7 @@ describe("InheritanceService", () => {
     it("should fail for non-existent class", () =>
       Effect.gen(function*() {
         const { context, graph } = buildLinearChain()
-        const service = Inheritance.make(graph, context)
+        const service = yield* Inheritance.make(graph, context)
 
         const result = yield* service
           .getAncestors("http://example.org/NonExistent")
