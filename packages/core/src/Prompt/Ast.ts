@@ -154,6 +154,7 @@ export type PromptAST =
 /**
  * EmptyNode - Identity element for AST composition
  */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export class EmptyNode extends Data.TaggedClass("Empty")<{}> {
   static readonly instance = new EmptyNode()
 }
