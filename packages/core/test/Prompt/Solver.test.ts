@@ -12,7 +12,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Graph, HashMap } from "effect"
 import { ClassNode, type GraphAlgebra, type OntologyContext } from "../../src/Graph/Types.js"
-import { GraphCycleError, solveGraph } from "../../src/Prompt/Solver.js"
+import { GraphCycleError, MissingNodeDataError, solveGraph } from "../../src/Prompt/Solver.js"
 
 /**
  * Test algebra that tracks execution order
@@ -276,6 +276,35 @@ describe("Solver", () => {
         if (result._tag === "Left") {
           expect(result.left).toBeInstanceOf(GraphCycleError)
           expect(result.left.message).toContain("cyclic")
+        }
+      }))
+
+    it.effect("fails gracefully when node data is missing from context", () =>
+      Effect.gen(function*() {
+        executionCounter = 0
+
+        // Build graph with a node "A"
+        const graph = Graph.mutate(Graph.directed<string, null>(), (mutable) => {
+          Graph.addNode(mutable, "A")
+        })
+
+        // Create context that does NOT include node "A"
+        const context: OntologyContext = {
+          nodes: HashMap.empty(), // Empty - missing "A"
+          universalProperties: [],
+          nodeIndexMap: HashMap.empty()
+        }
+
+        const result = yield* Effect.either(solveGraph(graph, context, trackingAlgebra))
+
+        expect(result._tag).toBe("Left")
+        if (result._tag === "Left") {
+          const error = result.left
+          expect(error).toBeInstanceOf(MissingNodeDataError)
+          if (error instanceof MissingNodeDataError) {
+            expect(error.message).toContain("not found in context")
+            expect(error.nodeId).toBe("A")
+          }
         }
       }))
   })
