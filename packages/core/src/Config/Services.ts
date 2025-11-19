@@ -25,12 +25,7 @@
  */
 
 import { ConfigProvider, Effect, Layer } from "effect"
-import {
-  AppConfigSchema,
-  LlmProviderConfig,
-  RdfConfigSchema,
-  ShaclConfigSchema
-} from "./Schema.js"
+import { AppConfigSchema, LlmProviderConfig, RdfConfigSchema, ShaclConfigSchema } from "./Schema.js"
 
 /**
  * LLM Configuration Service

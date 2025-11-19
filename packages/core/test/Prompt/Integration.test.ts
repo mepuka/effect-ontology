@@ -18,11 +18,11 @@ import { Effect } from "effect"
 import { parseTurtleToGraph } from "../../src/Graph/Builder.js"
 import * as Inheritance from "../../src/Ontology/Inheritance.js"
 import { knowledgeIndexAlgebra } from "../../src/Prompt/Algebra.js"
+import { enrichKnowledgeIndex, generateEnrichedIndex } from "../../src/Prompt/Enrichment.js"
 import * as Focus from "../../src/Prompt/Focus.js"
 import * as KnowledgeIndex from "../../src/Prompt/KnowledgeIndex.js"
 import * as Render from "../../src/Prompt/Render.js"
 import { solveToKnowledgeIndex } from "../../src/Prompt/Solver.js"
-import { enrichKnowledgeIndex, generateEnrichedIndex } from "../../src/Prompt/Enrichment.js"
 
 describe("KnowledgeIndex Integration", () => {
   const ontology = `

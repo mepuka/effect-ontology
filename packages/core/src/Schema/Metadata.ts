@@ -13,7 +13,8 @@
  * @since 1.0.0
  */
 
-import { Option, Schema } from "effect"
+import type { Schema } from "effect"
+import { Option } from "effect"
 
 /**
  * OntologyMetadata - Metadata about the ontology source

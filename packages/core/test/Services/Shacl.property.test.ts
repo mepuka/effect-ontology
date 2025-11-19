@@ -14,18 +14,13 @@
  * @since 1.0.0
  */
 
-import { describe, expect, test } from "@effect/vitest"
+import { describe, test } from "@effect/vitest"
 import { HashMap } from "effect"
 import fc from "fast-check"
 import { Parser } from "n3"
 import { isClassNode, type OntologyContext } from "../../src/Graph/Types.js"
 import { generateShaclShapes } from "../../src/Services/Shacl.js"
-import {
-  arbOntologyContext,
-  arbOntologyContextWithUniversalProps,
-  countClasses,
-  getAllProperties
-} from "../arbitraries/index.js"
+import { arbOntologyContext, arbOntologyContextWithUniversalProps, countClasses } from "../arbitraries/index.js"
 
 // ============================================================================
 // Helper Functions for Assertions
@@ -197,7 +192,9 @@ describe("ShaclService - Property-Based Tests", () => {
           const allProperties: Array<string> = []
           for (const node of HashMap.values(ontology.nodes)) {
             if (isClassNode(node)) {
-              allProperties.push(...node.properties.map((p) => p.iri))
+              for (const prop of node.properties.map((p) => p.iri)) {
+                allProperties.push(prop)
+              }
             }
           }
 

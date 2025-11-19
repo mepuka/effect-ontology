@@ -6,12 +6,7 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { ConfigProvider, Effect, Layer } from "effect"
-import {
-  AppConfigService,
-  LlmConfigService,
-  RdfConfigService,
-  ShaclConfigService
-} from "../../src/Config/Services.js"
+import { AppConfigService, LlmConfigService, RdfConfigService, ShaclConfigService } from "../../src/Config/Services.js"
 
 describe("Config.Services", () => {
   describe("LlmConfigService", () => {

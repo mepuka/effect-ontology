@@ -15,12 +15,7 @@
 import { Arbitrary, HashMap } from "effect"
 import fc from "fast-check"
 import type { OntologyContext, PropertyData, PropertyNode } from "../../src/Graph/Types.js"
-import {
-  ClassNode,
-  NodeIdSchema,
-  PropertyDataSchema,
-  PropertyNode as PropertyNodeClass
-} from "../../src/Graph/Types.js"
+import { ClassNode, NodeIdSchema, PropertyDataSchema } from "../../src/Graph/Types.js"
 
 // ============================================================================
 // Primitive Arbitraries
@@ -309,7 +304,9 @@ export const getAllProperties = (ontology: OntologyContext): ReadonlyArray<Prope
 
   for (const node of HashMap.values(ontology.nodes)) {
     if ("properties" in node) {
-      directProperties.push(...node.properties)
+      for (const prop of node.properties) {
+        directProperties.push(prop)
+      }
     }
   }
 

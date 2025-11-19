@@ -4,6 +4,7 @@
  * @since 1.0.0
  */
 
+import { Doc } from "@effect/printer"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import { bulletList, header, numberedList, renderDoc, section } from "../../src/Prompt/DocBuilder.js"
@@ -164,7 +165,6 @@ no indent
 
     it.effect("handles empty doc", () =>
       Effect.sync(() => {
-        const { Doc } = require("@effect/printer")
         const doc = Doc.empty
         const output = renderDoc(doc)
         expect(output).toBe("")
@@ -174,8 +174,6 @@ no indent
   describe("integration", () => {
     it.effect("can compose multiple sections", () =>
       Effect.sync(() => {
-        const { Doc } = require("@effect/printer")
-
         const systemSection = section("SYSTEM", ["instruction 1", "instruction 2"])
         const contextSection = section("CONTEXT", ["context 1"])
 
@@ -193,8 +191,6 @@ context 1
 
     it.effect("can nest bullet lists in sections", () =>
       Effect.sync(() => {
-        const { Doc } = require("@effect/printer")
-
         const bullets = bulletList(["option 1", "option 2"])
         const doc = Doc.vcat([
           header("CHOICES"),

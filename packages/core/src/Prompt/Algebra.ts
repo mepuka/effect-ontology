@@ -7,7 +7,6 @@
  * Based on: docs/effect_ontology_engineering_spec.md
  */
 
-import { HashMap } from "effect"
 import { isClassNode, isPropertyNode, type PropertyData } from "../Graph/Types.js"
 import { KnowledgeUnit } from "./Ast.js"
 import * as KnowledgeIndex from "./KnowledgeIndex.js"
