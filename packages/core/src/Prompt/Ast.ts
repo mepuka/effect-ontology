@@ -7,8 +7,54 @@
  * Based on: docs/higher_order_monoid_implementation.md
  */
 
-import { Data } from "effect"
+import { Data, Equivalence, Order, String as EffectString } from "effect"
 import type { PropertyData } from "../Graph/Types.js"
+
+/**
+ * Order instance for PropertyData - sorts by IRI
+ *
+ * Enables deterministic array sorting using Effect's Array.sort.
+ *
+ * **Typeclass Laws (Order):**
+ * 1. Totality: compare(a, b) always returns -1, 0, or 1
+ * 2. Antisymmetry: if compare(a, b) = -1, then compare(b, a) = 1
+ * 3. Transitivity: if a < b and b < c, then a < c
+ *
+ * **Implementation:** Delegates to EffectString.Order for IRI comparison.
+ * EffectString.Order uses lexicographic ordering (dictionary order).
+ *
+ * **Why Not JavaScript .sort()?**
+ * JavaScript .sort() coerces to strings and uses implementation-defined
+ * comparison. Different JS engines → different orders. Effect Order is
+ * portable and lawful.
+ */
+export const PropertyDataOrder: Order.Order<PropertyData> = Order.mapInput(
+  EffectString.Order,
+  (prop: PropertyData) => prop.iri
+)
+
+/**
+ * Equivalence instance for PropertyData - compares by IRI only
+ *
+ * Enables deduplication using Effect's Array.dedupeWith.
+ *
+ * **Typeclass Laws (Equivalence):**
+ * 1. Reflexivity: equals(a, a) = true
+ * 2. Symmetry: if equals(a, b) = true, then equals(b, a) = true
+ * 3. Transitivity: if equals(a, b) and equals(b, c), then equals(a, c)
+ *
+ * **Implementation:** Two properties are equal iff they have the same IRI.
+ * Label and range don't affect identity (they're metadata).
+ *
+ * **Why Not JavaScript `===`?**
+ * JavaScript === checks reference equality (same object in memory).
+ * Two PropertyData objects with same IRI but different object identity
+ * would fail === check. Equivalence checks structural equality.
+ */
+export const PropertyDataEqual: Equivalence.Equivalence<PropertyData> = Equivalence.mapInput(
+  EffectString.Equivalence,
+  (prop: PropertyData) => prop.iri
+)
 
 /**
  * KnowledgeUnit - A single ontology class definition with metadata
@@ -83,6 +129,16 @@ export class KnowledgeUnit extends Data.Class<{
     })
   }
 }
+
+/**
+ * Order instance for KnowledgeUnit - sorts by IRI
+ *
+ * Used for sorting units in KnowledgeIndex HashMap for deterministic iteration.
+ */
+export const KnowledgeUnitOrder: Order.Order<KnowledgeUnit> = Order.mapInput(
+  EffectString.Order,
+  (unit: KnowledgeUnit) => unit.iri
+)
 
 /**
  * PromptAST - Abstract Syntax Tree for prompts
