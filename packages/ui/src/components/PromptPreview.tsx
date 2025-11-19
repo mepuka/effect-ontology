@@ -24,7 +24,7 @@ export const PromptPreview = (): React.ReactElement => {
   // Show loading if either graph or prompts are loading
   if (Result.isInitial(graphResult) || Result.isInitial(promptsResult)) {
     return (
-      <div className="flex items-center justify-center h-full bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="flex items-center justify-center h-full bg-linear-to-br from-slate-50 to-slate-100">
         <div className="text-center">
           <motion.div
             animate={{ rotate: 360 }}
@@ -213,7 +213,7 @@ const FullOntologyPrompt = ({
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="h-full flex flex-col bg-gradient-to-br from-slate-900 to-slate-800 text-slate-100"
+      className="h-full flex flex-col bg-linear-to-br from-slate-900 to-slate-800 text-slate-100"
     >
       {/* Header */}
       <div className="px-6 py-4 border-b border-slate-700">

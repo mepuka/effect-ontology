@@ -1,12 +1,7 @@
 import { Atom, Result } from "@effect-atom/atom"
 import { parseTurtleToGraph } from "@effect-ontology/core/Graph/Builder"
-import {
-  defaultPromptAlgebra,
-  processUniversalProperties,
-  solveGraph,
-  type StructuredPrompt
-} from "@effect-ontology/core/Prompt"
-import { Effect, Graph, HashMap, Option } from "effect"
+import { defaultPromptAlgebra, processUniversalProperties, solveGraph } from "@effect-ontology/core/Prompt"
+import { Effect, Graph, Option } from "effect"
 
 // Default example turtle
 const DEFAULT_TURTLE = `@prefix : <http://example.org/zoo#> .
@@ -92,7 +87,7 @@ export const generatedPromptsAtom = Atom.make((get) =>
       onSuccess: (success) => Effect.succeed(success.value)
     })
 
-    const { graph, context } = yield* graphEffect
+    const { context, graph } = yield* graphEffect
 
     // Solve the graph to get prompts for each node
     const prompts = yield* solveGraph(graph, context, defaultPromptAlgebra)

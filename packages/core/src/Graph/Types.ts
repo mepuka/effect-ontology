@@ -74,6 +74,12 @@ export const OntologyNodeSchema = Schema.Union(ClassNode, PropertyNode)
 export type OntologyNode = typeof OntologyNodeSchema.Type
 
 /**
+ * Type guards for OntologyNode variants using instanceof
+ */
+export const isClassNode = (node: OntologyNode): node is ClassNode => node instanceof ClassNode
+export const isPropertyNode = (node: OntologyNode): node is PropertyNode => node instanceof PropertyNode
+
+/**
  * OntologyContext - The data store mapping NodeId to Node data
  *
  * The Graph structure (Effect.Graph) holds relationships.
