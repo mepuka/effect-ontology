@@ -13,10 +13,11 @@ import type { Graph } from "effect"
 import type { GraphAlgebra } from "../Graph/Types.js"
 import type { NodeId, OntologyContext } from "../Graph/Types.js"
 import * as Inheritance from "../Ontology/Inheritance.js"
+import type { CircularInheritanceError, InheritanceError } from "../Ontology/Inheritance.js"
 import { PropertyDataOrder } from "./Ast.js"
 import { KnowledgeUnit } from "./Ast.js"
 import type { KnowledgeIndex } from "./KnowledgeIndex.js"
-import { solveToKnowledgeIndex } from "./Solver.js"
+import { solveToKnowledgeIndex, type SolverError } from "./Solver.js"
 
 /**
  * Enrich a KnowledgeIndex with inherited properties
@@ -48,7 +49,7 @@ export const enrichKnowledgeIndex = (
   rawIndex: KnowledgeIndex,
   graph: Graph.Graph<NodeId, unknown, "directed">,
   context: OntologyContext
-): Effect.Effect<KnowledgeIndex, never, never> =>
+): Effect.Effect<KnowledgeIndex, InheritanceError | CircularInheritanceError, never> =>
   Effect.gen(function*() {
     // Create cached inheritance service
     // Effect.cachedFunction ensures each IRI is computed once max
@@ -110,7 +111,7 @@ export const generateEnrichedIndex = (
   graph: Graph.Graph<NodeId, unknown, "directed">,
   context: OntologyContext,
   algebra: GraphAlgebra<KnowledgeIndex>
-): Effect.Effect<KnowledgeIndex, never, never> =>
+): Effect.Effect<KnowledgeIndex, SolverError | InheritanceError | CircularInheritanceError, never> =>
   Effect.gen(function*() {
     // Phase 1: Pure fold creates raw index
     const rawIndex = yield* solveToKnowledgeIndex(graph, context, algebra)
