@@ -29,9 +29,11 @@
   "dependencies": {
     "@effect/ai": "^0.32.1",
     "@effect/typeclass": "^0.38.0",
+    "@zazuko/env": "^3.0.1",
     "effect": "^3.17.7",
     "jotai": "^2.15.1",
     "n3": "^1.26.0",
+    "rdf-validate-shacl": "^0.6.5",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
