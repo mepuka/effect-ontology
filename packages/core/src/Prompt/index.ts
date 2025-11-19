@@ -21,6 +21,35 @@ export * as Focus from "./Focus.js"
 export * as KnowledgeIndex from "./KnowledgeIndex.js"
 export type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
 export {
+  buildClassSummary,
+  buildDependencyGraph,
+  buildHierarchyTree,
+  buildKnowledgeMetadata,
+  buildTokenStats,
+  ClassSummary,
+  DependencyGraph,
+  getClassSummary,
+  getClassTokens,
+  GraphEdge,
+  GraphNode,
+  HierarchyTree,
+  KnowledgeMetadata,
+  MetadataError,
+  TokenStats,
+  TreeNode
+} from "./Metadata.js"
+export {
+  classSummaryToMarkdown,
+  createSummaryReport,
+  type DependencyGraphPlotData,
+  type HierarchyTreePlotData,
+  metadataToJSON,
+  toDependencyGraphPlotData,
+  toHierarchyTreePlotData,
+  toTokenStatsPlotData,
+  type TokenStatsPlotData
+} from "./Visualization.js"
+export {
   buildExtractionPromptDoc,
   buildPromptDoc,
   renderExtractionPrompt,
