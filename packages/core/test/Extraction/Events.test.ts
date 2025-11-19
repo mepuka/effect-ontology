@@ -194,46 +194,72 @@ describe("Extraction.Events", () => {
   })
 
   describe("Extraction Errors - Constructors", () => {
-    it.effect("should create LLMError with cause", () =>
-      Effect.sync(() => {
-        const error = new LLMError({ cause: new Error("API timeout") })
-
-        expect(error._tag).toBe("LLMError")
-        expect(error.cause).toBeInstanceOf(Error)
-      }))
-
-    it.effect("should create LLMError with message", () =>
+    it.effect("should create LLMError with required fields", () =>
       Effect.sync(() => {
         const error = new LLMError({
-          cause: new Error("API error"),
-          message: "Anthropic API call failed"
+          module: "Anthropic",
+          method: "generateText",
+          reason: "ApiTimeout"
         })
 
         expect(error._tag).toBe("LLMError")
-        expect(error.message).toBe("Anthropic API call failed")
+        expect(error.module).toBe("Anthropic")
+        expect(error.method).toBe("generateText")
+        expect(error.reason).toBe("ApiTimeout")
       }))
 
-    it.effect("should create RdfError", () =>
+    it.effect("should create LLMError with description and cause", () =>
       Effect.sync(() => {
-        const error = new RdfError({ cause: new Error("Invalid quad") })
+        const error = new LLMError({
+          module: "Anthropic",
+          method: "generateText",
+          reason: "ApiError",
+          description: "Request timeout after 30 seconds",
+          cause: new Error("Network error")
+        })
+
+        expect(error._tag).toBe("LLMError")
+        expect(error.description).toBe("Request timeout after 30 seconds")
+        expect(error.cause).toBeInstanceOf(Error)
+      }))
+
+    it.effect("should create RdfError with required fields", () =>
+      Effect.sync(() => {
+        const error = new RdfError({
+          module: "RdfService",
+          method: "jsonToStore",
+          reason: "InvalidQuad"
+        })
 
         expect(error._tag).toBe("RdfError")
-        expect(error.cause).toBeInstanceOf(Error)
+        expect(error.module).toBe("RdfService")
+        expect(error.reason).toBe("InvalidQuad")
       }))
 
-    it.effect("should create ShaclError", () =>
+    it.effect("should create ShaclError with required fields", () =>
       Effect.sync(() => {
-        const error = new ShaclError({ cause: new Error("Validator crash") })
+        const error = new ShaclError({
+          module: "ShaclService",
+          method: "validate",
+          reason: "ValidatorCrash"
+        })
 
         expect(error._tag).toBe("ShaclError")
-        expect(error.cause).toBeInstanceOf(Error)
+        expect(error.module).toBe("ShaclService")
+        expect(error.reason).toBe("ValidatorCrash")
       }))
   })
 
   describe("Extraction Errors - Effect Integration", () => {
     it.effect("should fail Effect with LLMError", () =>
       Effect.gen(function*() {
-        const program = Effect.fail(new LLMError({ cause: "timeout" }))
+        const program = Effect.fail(
+          new LLMError({
+            module: "Anthropic",
+            method: "generateText",
+            reason: "ApiTimeout"
+          })
+        )
 
         const result = yield* program.pipe(Effect.exit)
 
@@ -242,43 +268,66 @@ describe("Extraction.Events", () => {
 
     it.effect("should catch LLMError with catchTag", () =>
       Effect.gen(function*() {
-        const program = Effect.fail(new LLMError({ cause: "timeout" }))
+        const program = Effect.fail(
+          new LLMError({
+            module: "Anthropic",
+            method: "generateText",
+            reason: "ApiTimeout",
+            description: "Request timed out"
+          })
+        )
 
         const recovered = program.pipe(
           Effect.catchTag("LLMError", (e) =>
-            Effect.succeed(`Handled: ${e.cause}`)
+            Effect.succeed(`Handled: ${e.module}.${e.method} - ${e.reason}`)
           )
         )
 
         const result = yield* recovered
 
-        expect(result).toBe("Handled: timeout")
+        expect(result).toBe("Handled: Anthropic.generateText - ApiTimeout")
       }))
 
     it.effect("should catch multiple error types with catchTags", () =>
       Effect.gen(function*() {
-        const llmProgram = Effect.fail(new LLMError({ cause: "timeout" }))
-        const rdfProgram = Effect.fail(new RdfError({ cause: "invalid" }))
+        const llmProgram = Effect.fail(
+          new LLMError({
+            module: "Anthropic",
+            method: "generateText",
+            reason: "ApiTimeout"
+          })
+        )
+        const rdfProgram = Effect.fail(
+          new RdfError({
+            module: "RdfService",
+            method: "jsonToStore",
+            reason: "InvalidQuad"
+          })
+        )
 
         const handleErrors = <A>(program: Effect.Effect<A, LLMError | RdfError>) =>
           program.pipe(
             Effect.catchTags({
-              LLMError: (e) => Effect.succeed(`LLM error: ${e.cause}`),
-              RdfError: (e) => Effect.succeed(`RDF error: ${e.cause}`)
+              LLMError: (e) => Effect.succeed(`LLM error: ${e.reason}`),
+              RdfError: (e) => Effect.succeed(`RDF error: ${e.reason}`)
             })
           )
 
         const result1 = yield* handleErrors(llmProgram)
         const result2 = yield* handleErrors(rdfProgram)
 
-        expect(result1).toBe("LLM error: timeout")
-        expect(result2).toBe("RDF error: invalid")
+        expect(result1).toBe("LLM error: ApiTimeout")
+        expect(result2).toBe("RDF error: InvalidQuad")
       }))
 
     it.effect("should preserve unmatched error tags", () =>
       Effect.gen(function*() {
         const program: Effect.Effect<never, LLMError | ShaclError> = Effect.fail(
-          new ShaclError({ cause: "crash" })
+          new ShaclError({
+            module: "ShaclService",
+            method: "validate",
+            reason: "ValidatorCrash"
+          })
         )
 
         const partialCatch = program.pipe(
@@ -312,8 +361,16 @@ describe("Extraction.Events", () => {
 
     it.effect("should infer correct error types", () =>
       Effect.sync(() => {
-        const error1 = new LLMError({ cause: "test" })
-        const error2 = new RdfError({ cause: "test" })
+        const error1 = new LLMError({
+          module: "Anthropic",
+          method: "generateText",
+          reason: "ApiTimeout"
+        })
+        const error2 = new RdfError({
+          module: "RdfService",
+          method: "jsonToStore",
+          reason: "InvalidQuad"
+        })
 
         // TypeScript should provide correct types
         type Error1Tag = typeof error1._tag
