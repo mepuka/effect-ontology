@@ -80,13 +80,43 @@ export const isClassNode = (node: OntologyNode): node is ClassNode => node insta
 export const isPropertyNode = (node: OntologyNode): node is PropertyNode => node instanceof PropertyNode
 
 /**
- * OntologyContext - The data store mapping NodeId to Node data
+ * OntologyContext Schema - The data store mapping NodeId to Node data
  *
  * The Graph structure (Effect.Graph) holds relationships.
  * This context holds the actual data for each node.
+ *
+ * **Effect Schema Integration:**
+ * - Uses Schema.Struct for validation and transformation
+ * - Provides Schema.make() factory for type-safe construction
+ * - Enables functional transformations via Schema.transform
+ *
+ * @since 1.0.0
+ * @category models
+ *
+ * @example
+ * ```typescript
+ * import { OntologyContext } from "./Graph/Types.js"
+ * import { HashMap } from "effect"
+ *
+ * // Create using factory (validates structure)
+ * const context = OntologyContext.make({
+ *   nodes: HashMap.empty(),
+ *   universalProperties: [],
+ *   nodeIndexMap: HashMap.empty()
+ * })
+ * ```
  */
-export interface OntologyContext {
-  readonly nodes: HashMap.HashMap<NodeId, OntologyNode>
+export const OntologyContextSchema = Schema.Struct({
+  /**
+   * Mapping from NodeId (IRI) to OntologyNode (ClassNode | PropertyNode)
+   *
+   * Uses Effect HashMap for efficient immutable operations.
+   */
+  nodes: Schema.HashMap({
+    key: NodeIdSchema,
+    value: OntologyNodeSchema
+  }),
+
   /**
    * Universal Properties - Properties without explicit rdfs:domain
    *
@@ -96,12 +126,75 @@ export interface OntologyContext {
    * - Maintain graph hygiene (strict dependencies only)
    * - Improve LLM comprehension (global context)
    */
-  readonly universalProperties: ReadonlyArray<PropertyData>
+  universalProperties: Schema.Array(PropertyDataSchema),
+
   /**
    * Mapping from NodeId (IRI) to Graph NodeIndex (number)
-   * Needed because Effect.Graph uses numeric indices internally
+   *
+   * Needed because Effect.Graph uses numeric indices internally.
    */
-  readonly nodeIndexMap: HashMap.HashMap<NodeId, number>
+  nodeIndexMap: Schema.HashMap({
+    key: NodeIdSchema,
+    value: Schema.Number
+  })
+})
+
+/**
+ * OntologyContext Type - Inferred from Schema
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export type OntologyContext = typeof OntologyContextSchema.Type
+
+/**
+ * OntologyContext Factory - Type-safe constructor with validation
+ *
+ * Creates an OntologyContext instance with automatic validation.
+ * Throws if the structure doesn't match the schema.
+ *
+ * @since 1.0.0
+ * @category constructors
+ *
+ * @example
+ * ```typescript
+ * import { OntologyContext } from "./Graph/Types.js"
+ * import { HashMap } from "effect"
+ *
+ * const context = OntologyContext.make({
+ *   nodes: HashMap.empty(),
+ *   universalProperties: [],
+ *   nodeIndexMap: HashMap.empty()
+ * })
+ * ```
+ */
+export const OntologyContext = {
+  /**
+   * Schema definition for OntologyContext
+   */
+  schema: OntologyContextSchema,
+
+  /**
+   * Create OntologyContext with validation
+   *
+   * @param input - Raw ontology context data
+   * @returns Validated OntologyContext
+   * @throws ParseError if validation fails
+   */
+  make: Schema.make(OntologyContextSchema),
+
+  /**
+   * Create empty OntologyContext
+   *
+   * Convenience factory for creating an empty ontology context.
+   *
+   * @returns Empty OntologyContext with no nodes or properties
+   */
+  empty: (): OntologyContext => ({
+    nodes: HashMap.empty(),
+    universalProperties: [],
+    nodeIndexMap: HashMap.empty()
+  })
 }
 
 /**
