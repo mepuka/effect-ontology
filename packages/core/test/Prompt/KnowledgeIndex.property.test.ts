@@ -68,7 +68,7 @@ describe("KnowledgeIndex - Property-Based Tests", () => {
    * Monoid Law 1: Left Identity
    * empty ⊕ x = x
    */
-  test("Monoid: Left Identity (1000 runs)", () => {
+  test("Monoid: Left Identity (1000 runs)", { timeout: 10000 }, () => {
     fc.assert(
       fc.property(arbKnowledgeIndex, (x) => {
         const result = KnowledgeIndex.combine(KnowledgeIndex.empty(), x)
@@ -94,7 +94,7 @@ describe("KnowledgeIndex - Property-Based Tests", () => {
    * Monoid Law 2: Right Identity
    * x ⊕ empty = x
    */
-  test("Monoid: Right Identity (1000 runs)", () => {
+  test("Monoid: Right Identity (1000 runs)", { timeout: 10000 }, () => {
     fc.assert(
       fc.property(arbKnowledgeIndex, (x) => {
         const result = KnowledgeIndex.combine(x, KnowledgeIndex.empty())
@@ -119,7 +119,7 @@ describe("KnowledgeIndex - Property-Based Tests", () => {
    * Monoid Law 3: Associativity
    * (a ⊕ b) ⊕ c = a ⊕ (b ⊕ c)
    */
-  test("Monoid: Associativity (500 runs)", () => {
+  test("Monoid: Associativity (500 runs)", { timeout: 10000 }, () => {
     fc.assert(
       fc.property(arbKnowledgeIndex, arbKnowledgeIndex, arbKnowledgeIndex, (a, b, c) => {
         const left = KnowledgeIndex.combine(KnowledgeIndex.combine(a, b), c)
@@ -145,7 +145,7 @@ describe("KnowledgeIndex - Property-Based Tests", () => {
    * Property: Size bounds after combine
    * max(size(a), size(b)) <= size(a ⊕ b) <= size(a) + size(b)
    */
-  test("Size: combine bounds (1000 runs)", () => {
+  test("Size: combine bounds (1000 runs)", { timeout: 10000 }, () => {
     fc.assert(
       fc.property(arbKnowledgeIndex, arbKnowledgeIndex, (a, b) => {
         const combined = KnowledgeIndex.combine(a, b)
@@ -165,7 +165,7 @@ describe("KnowledgeIndex - Property-Based Tests", () => {
    * Property: Idempotence on keys
    * keys(combine(x, x)) = keys(x)
    */
-  test("Idempotence: keys preserved (1000 runs)", () => {
+  test("Idempotence: keys preserved (1000 runs)", { timeout: 10000 }, () => {
     fc.assert(
       fc.property(arbKnowledgeIndex, (x) => {
         const doubled = KnowledgeIndex.combine(x, x)

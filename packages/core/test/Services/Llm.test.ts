@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, HashMap } from "effect"
+import { Effect, HashMap, Layer } from "effect"
 import { ClassNode } from "../../src/Graph/Types"
 import type { OntologyContext } from "../../src/Graph/Types"
 import { StructuredPrompt } from "../../src/Prompt/Types"
@@ -154,7 +154,11 @@ describe("Services.Llm", () => {
         // Verify method exists
         expect(llm.extractKnowledgeGraph).toBeDefined()
         expect(typeof llm.extractKnowledgeGraph).toBe("function")
-      }).pipe(Effect.provide(LlmService.Default)))
+      }).pipe(
+        Effect.provide(
+          Layer.provideMerge(LlmService.Default, LlmService.Test)
+        )
+      ))
 
     it.effect("should accept valid schema types", () =>
       Effect.sync(() => {

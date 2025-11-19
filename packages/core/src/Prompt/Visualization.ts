@@ -12,14 +12,8 @@
  * @since 1.0.0
  */
 
-import { HashMap } from "effect"
-import type {
-  ClassSummary,
-  DependencyGraph,
-  HierarchyTree,
-  KnowledgeMetadata,
-  TokenStats
-} from "./Metadata.js"
+import { HashMap, Option, pipe } from "effect"
+import type { ClassSummary, DependencyGraph, HierarchyTree, KnowledgeMetadata, TokenStats } from "./Metadata.js"
 
 /**
  * PlotData for dependency graph visualization
@@ -225,8 +219,13 @@ export const toTokenStatsPlotData = (
 
   // Convert HashMap to array with labels
   for (const [iri, tokens] of HashMap.entries(stats.byClass)) {
-    const summary = HashMap.get(metadata.classSummaries, iri)
-    const label = summary._tag === "Some" ? summary.value.label : iri
+    const label = pipe(
+      HashMap.get(metadata.classSummaries, iri),
+      Option.match({
+        onNone: () => iri,
+        onSome: (summary) => summary.label
+      })
+    )
 
     data.push({ iri, label, tokens })
   }

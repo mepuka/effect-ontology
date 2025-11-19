@@ -1,6 +1,7 @@
 import { useAtomValue, Result } from "@effect-atom/atom-react"
 import { HashMap, Option } from "effect"
 import type { ParsedOntologyGraph } from "@effect-ontology/core/Graph/Builder"
+import { isClassNode } from "@effect-ontology/core/Graph/Types"
 import { ontologyGraphAtom, selectedNodeAtom } from "../state/store"
 
 export const NodeInspector = (): React.ReactElement | null => {
@@ -31,7 +32,7 @@ export const NodeInspector = (): React.ReactElement | null => {
       const { context } = graphSuccess.value
       const nodeOption = HashMap.get(context.nodes, selectedNode.value)
 
-      if (nodeOption._tag !== "Some") {
+      if (Option.isNone(nodeOption)) {
         return (
           <div className="flex items-center justify-center h-full bg-white">
             <div className="text-red-500 text-sm">Node not found</div>
@@ -40,7 +41,7 @@ export const NodeInspector = (): React.ReactElement | null => {
       }
 
       const node = nodeOption.value
-      if (node._tag !== "Class") {
+      if (!isClassNode(node)) {
         return (
           <div className="flex items-center justify-center h-full bg-white">
             <div className="text-slate-400 text-sm">Not a class node</div>

@@ -123,16 +123,22 @@ export class KnowledgeUnit extends Data.Class<{
     // Label: Deterministic selection
     // 1. Longest wins (more complete)
     // 2. Alphabetical tie-breaker (for commutativity)
-    const label =
-      a.label.length > b.label.length ? a.label :
-      b.label.length > a.label.length ? b.label :
-      Order.lessThanOrEqualTo(EffectString.Order)(a.label, b.label) ? a.label : b.label
+    const label = a.label.length > b.label.length ?
+      a.label :
+      b.label.length > a.label.length ?
+      b.label :
+      Order.lessThanOrEqualTo(EffectString.Order)(a.label, b.label)
+      ? a.label
+      : b.label
 
     // Definition: Same logic
-    const definition =
-      a.definition.length > b.definition.length ? a.definition :
-      b.definition.length > a.definition.length ? b.definition :
-      Order.lessThanOrEqualTo(EffectString.Order)(a.definition, b.definition) ? a.definition : b.definition
+    const definition = a.definition.length > b.definition.length ?
+      a.definition :
+      b.definition.length > a.definition.length ?
+      b.definition :
+      Order.lessThanOrEqualTo(EffectString.Order)(a.definition, b.definition)
+      ? a.definition
+      : b.definition
 
     // Children: Union + dedupe + sort
     // Sorting ensures commutativity: [A,B] = [B,A] after sort
