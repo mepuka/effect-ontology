@@ -1,25 +1,38 @@
-import { useAtomValue } from "@effect-atom/atom-react"
-import { HashMap, Option } from "effect"
-import type { ParsedOntologyGraph } from "@effect-ontology/core/Graph/Builder"
-import { ontologyGraphAtom, selectedNodeAtom } from "../state/store"
-import { Result } from "@effect-atom/atom-react"
+import { useAtomValue, Result } from "@effect-atom/atom-react"
+import { Option } from "effect"
+import { fullPromptAtom, nodePromptMapAtom, selectedNodeAtom } from "../state/store"
+import type { PromptPackage, PromptFragment } from "../types/PromptTypes"
+import { renderPrompt } from "../types/PromptTypes"
 import { motion, AnimatePresence } from "framer-motion"
-import { Sparkles, Code2, FileText, Layers } from "lucide-react"
+import {
+  Sparkles,
+  Code2,
+  FileText,
+  Layers,
+  Loader2,
+  Workflow,
+  Binary,
+  Zap
+} from "lucide-react"
 
 /**
- * PromptPreview - Right panel component that shows generated prompts
+ * PromptPreview - Right panel showing generated prompts
+ *
+ * UPDATED: Now uses real StructuredPrompt from prompt generation service
+ * Visualizes the monoid structure and fragment composition
  *
  * Features:
- * - Displays class-specific prompt sections when a node is selected
- * - Shows the full ontology context
- * - Visualizes how properties accumulate
- * - Bidirectional linking ready (highlight source on click)
+ * - Shows PromptFragments with source metadata
+ * - Visualizes monoid combination (fragments stack/combine)
+ * - Displays metadata about prompt generation
+ * - Evidence pattern badges
  */
 export const PromptPreview = (): React.ReactElement => {
-  const graphResult = useAtomValue(ontologyGraphAtom) as Result.Result<ParsedOntologyGraph, any>
+  const fullPromptResult = useAtomValue(fullPromptAtom) as Result.Result<PromptPackage, any>
+  const nodePromptMapResult = useAtomValue(nodePromptMapAtom) as Result.Result<Map<string, PromptPackage>, any>
   const selectedNode = useAtomValue(selectedNodeAtom)
 
-  return Result.match(graphResult, {
+  return Result.match(fullPromptResult, {
     onInitial: () => (
       <div className="flex items-center justify-center h-full bg-gradient-to-br from-slate-50 to-slate-100">
         <div className="text-center">
@@ -28,9 +41,10 @@ export const PromptPreview = (): React.ReactElement => {
             transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
             className="inline-block mb-4"
           >
-            <Sparkles className="w-8 h-8 text-slate-400" />
+            <Workflow className="w-8 h-8 text-blue-500" />
           </motion.div>
-          <div className="text-sm text-slate-500">Generating prompts...</div>
+          <div className="text-sm text-slate-600 font-medium">Generating prompts...</div>
+          <div className="text-xs text-slate-400 mt-1">Folding ontology structure</div>
         </div>
       </div>
     ),
@@ -38,38 +52,71 @@ export const PromptPreview = (): React.ReactElement => {
       <div className="flex items-center justify-center h-full bg-red-50">
         <div className="text-center max-w-md p-6">
           <div className="text-4xl mb-2">⚠️</div>
-          <div className="text-sm font-semibold text-red-700 mb-2">Prompt Generation Failed</div>
+          <div className="text-sm font-semibold text-red-700 mb-2">
+            Prompt Generation Failed
+          </div>
           <div className="text-xs text-red-600 font-mono bg-red-100 p-3 rounded">
             {String(failure.cause)}
           </div>
         </div>
       </div>
     ),
-    onSuccess: (graphSuccess) => {
-      const { context, graph } = graphSuccess.value
+    onSuccess: (fullPromptSuccess) => {
+      const fullPackage = fullPromptSuccess.value
 
       // If a node is selected, show its specific prompt
       if (Option.isSome(selectedNode)) {
-        const nodeOption = HashMap.get(context.nodes, selectedNode.value)
-        if (nodeOption._tag === "Some" && nodeOption.value._tag === "Class") {
-          const node = nodeOption.value
-          return <SelectedNodePrompt node={node} />
-        }
+        return Result.match(nodePromptMapResult, {
+          onInitial: () => <LoadingState />,
+          onFailure: () => <FullOntologyView promptPackage={fullPackage} />,
+          onSuccess: (mapSuccess) => {
+            const promptMap = mapSuccess.value
+            const nodePackage = promptMap.get(selectedNode.value)
+
+            if (nodePackage) {
+              return <NodeSpecificView promptPackage={nodePackage} nodeId={selectedNode.value} />
+            }
+
+            return <FullOntologyView promptPackage={fullPackage} />
+          }
+        })
       }
 
-      // Otherwise show the full ontology overview
-      return <FullOntologyPrompt context={context} />
+      return <FullOntologyView promptPackage={fullPackage} />
     }
   })
 }
 
 /**
- * Display prompt for a selected class node
+ * Loading state component
  */
-const SelectedNodePrompt = ({ node }: { node: any }) => {
+const LoadingState = () => (
+  <div className="flex items-center justify-center h-full bg-slate-900">
+    <motion.div
+      animate={{ rotate: 360 }}
+      transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+    >
+      <Loader2 className="w-6 h-6 text-blue-400" />
+    </motion.div>
+  </div>
+)
+
+/**
+ * Node-specific prompt view
+ */
+const NodeSpecificView = ({
+  promptPackage,
+  nodeId
+}: {
+  promptPackage: PromptPackage
+  nodeId: string
+}) => {
+  const { prompt, metadata } = promptPackage
+  const rendered = renderPrompt(prompt)
+
   return (
     <motion.div
-      key={node.id}
+      key={nodeId}
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
@@ -78,72 +125,59 @@ const SelectedNodePrompt = ({ node }: { node: any }) => {
       {/* Header */}
       <div className="px-6 py-4 border-b border-slate-700 bg-slate-800">
         <div className="flex items-center gap-2 mb-2">
-          <Code2 className="w-4 h-4 text-blue-400" />
+          <Binary className="w-4 h-4 text-green-400" />
           <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">
             Prompt Fragment
           </h2>
+          <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full">
+            Monoid Element
+          </span>
         </div>
         <div className="text-xs text-slate-400">
-          Generated from: <span className="text-blue-400 font-semibold">{node.label}</span>
+          {metadata.fragmentCount} fragments • {metadata.characterCount} chars
         </div>
       </div>
 
-      {/* Prompt Content */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 font-mono text-sm">
-        {/* System Section */}
-        <PromptSection
-          title="SYSTEM"
-          icon={<Layers className="w-4 h-4" />}
-          color="purple"
-          lines={[
-            `# Class: ${node.label}`,
-            `# IRI: ${node.id}`,
-            `# Properties: ${node.properties.length}`,
-            "",
-            "This class represents:",
-            `- ${node.label}`,
-            "",
-            "Available properties:",
-            ...node.properties.map((p: any) => `  - ${p.label} (${extractLabel(p.range)})`)
-          ]}
-        />
+      {/* Fragment Sections */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* System Fragments */}
+        {prompt.systemFragments.length > 0 && (
+          <FragmentSection
+            title="System Context"
+            icon={<Layers className="w-4 h-4" />}
+            color="purple"
+            fragments={prompt.systemFragments}
+          />
+        )}
 
-        {/* User Context Section */}
-        <PromptSection
-          title="USER CONTEXT"
-          icon={<FileText className="w-4 h-4" />}
-          color="green"
-          lines={[
-            "When creating instances of this class, ensure:",
-            ...node.properties.map((p: any) =>
-              `- ${p.label} is of type: ${extractLabel(p.range)}`
-            )
-          ]}
-        />
+        {/* User Fragments */}
+        {prompt.userFragments.length > 0 && (
+          <FragmentSection
+            title="User Instructions"
+            icon={<FileText className="w-4 h-4" />}
+            color="blue"
+            fragments={prompt.userFragments}
+          />
+        )}
 
-        {/* Examples Section */}
-        {node.properties.length > 0 && (
-          <PromptSection
-            title="EXAMPLE"
+        {/* Example Fragments */}
+        {prompt.exampleFragments.length > 0 && (
+          <FragmentSection
+            title="Examples"
             icon={<Sparkles className="w-4 h-4" />}
             color="amber"
-            lines={[
-              "Example instance:",
-              "{",
-              `  "type": "${node.label}",`,
-              ...node.properties.slice(0, 3).map((p: any, idx: number) =>
-                `  "${p.label}": "<${extractLabel(p.range)}>"${idx < Math.min(node.properties.length, 3) - 1 ? ',' : ''}`
-              ),
-              "}"
-            ]}
+            fragments={prompt.exampleFragments}
           />
         )}
       </div>
 
-      {/* Footer Stats */}
-      <div className="px-6 py-3 border-t border-slate-700 bg-slate-800 text-xs text-slate-400">
-        <div className="flex items-center justify-between">
-          <span>{node.properties.length} properties defined</span>
+      {/* Footer Metadata */}
+      <div className="px-6 py-3 border-t border-slate-700 bg-slate-800 text-xs">
+        <div className="flex items-center justify-between text-slate-400">
+          <span>
+            {metadata.processedElements.classes} classes •{" "}
+            {metadata.processedElements.properties} properties
+          </span>
           <span className="text-blue-400">Click another node to compare</span>
         </div>
       </div>
@@ -152,12 +186,11 @@ const SelectedNodePrompt = ({ node }: { node: any }) => {
 }
 
 /**
- * Display full ontology overview
+ * Full ontology prompt view
  */
-const FullOntologyPrompt = ({ context }: { context: any }) => {
-  const classCount = Array.from(context.nodes).filter(
-    ([_, node]: any) => node._tag === "Class"
-  ).length
+const FullOntologyView = ({ promptPackage }: { promptPackage: PromptPackage }) => {
+  const { prompt, metadata } = promptPackage
+  const rendered = renderPrompt(prompt)
 
   return (
     <motion.div
@@ -168,72 +201,81 @@ const FullOntologyPrompt = ({ context }: { context: any }) => {
       {/* Header */}
       <div className="px-6 py-4 border-b border-slate-700">
         <div className="flex items-center gap-2 mb-2">
-          <Sparkles className="w-4 h-4 text-violet-400" />
+          <Workflow className="w-4 h-4 text-violet-400" />
           <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-300">
-            Ontology Overview
+            Complete Ontology Prompt
           </h2>
+          <span className="text-xs bg-violet-500/20 text-violet-400 px-2 py-0.5 rounded-full">
+            Catamorphism Result
+          </span>
         </div>
         <div className="text-xs text-slate-400">
-          Complete system prompt for this ontology
+          {metadata.fragmentCount} total fragments combined via monoid
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 font-mono text-sm">
-        {/* System Section */}
-        <PromptSection
-          title="ONTOLOGY METADATA"
-          icon={<Layers className="w-4 h-4" />}
-          color="purple"
-          lines={[
-            "# Ontology Structure",
-            "",
-            `Total Classes: ${classCount}`,
-            `Universal Properties: ${context.universalProperties.length}`,
-            "",
-            "This ontology defines a hierarchical class structure",
-            "for domain modeling and knowledge representation."
-          ]}
-        />
+      {/* Metadata Cards */}
+      <div className="px-6 py-4 bg-slate-800/50 border-b border-slate-700">
+        <div className="grid grid-cols-3 gap-4 text-center">
+          <MetadataCard
+            label="Classes"
+            value={metadata.processedElements.classes}
+            icon={<Layers className="w-4 h-4" />}
+          />
+          <MetadataCard
+            label="Fragments"
+            value={metadata.fragmentCount}
+            icon={<Binary className="w-4 h-4" />}
+          />
+          <MetadataCard
+            label="Characters"
+            value={metadata.characterCount.toLocaleString()}
+            icon={<Code2 className="w-4 h-4" />}
+          />
+        </div>
+      </div>
 
-        {/* Universal Properties */}
-        {context.universalProperties.length > 0 && (
-          <PromptSection
-            title="UNIVERSAL PROPERTIES"
-            icon={<Sparkles className="w-4 h-4" />}
-            color="violet"
-            lines={[
-              "Domain-agnostic properties available to all classes:",
-              "",
-              ...context.universalProperties.map((p: any) =>
-                `- ${p.label} (${extractLabel(p.range)}): ${p.iri}`
-              )
-            ]}
+      {/* Fragment Sections */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {prompt.systemFragments.length > 0 && (
+          <FragmentSection
+            title="System Context"
+            icon={<Layers className="w-4 h-4" />}
+            color="purple"
+            fragments={prompt.systemFragments}
+            showMonoidBadge
           />
         )}
 
-        {/* Guidance Section */}
-        <PromptSection
-          title="USAGE GUIDANCE"
-          icon={<FileText className="w-4 h-4" />}
-          color="blue"
-          lines={[
-            "To explore specific classes:",
-            "1. Click on a node in the Topological Rail",
-            "2. View its properties in the inspector",
-            "3. See its generated prompt here",
-            "",
-            "The prompt fragments combine to form complete",
-            "context for language model interactions."
-          ]}
-        />
+        {prompt.userFragments.length > 0 && (
+          <FragmentSection
+            title="User Instructions"
+            icon={<FileText className="w-4 h-4" />}
+            color="blue"
+            fragments={prompt.userFragments}
+            showMonoidBadge
+          />
+        )}
+
+        {prompt.exampleFragments.length > 0 && (
+          <FragmentSection
+            title="Examples"
+            icon={<Sparkles className="w-4 h-4" />}
+            color="amber"
+            fragments={prompt.exampleFragments}
+            showMonoidBadge
+          />
+        )}
       </div>
 
       {/* Footer */}
       <div className="px-6 py-3 border-t border-slate-700 bg-slate-800/50 text-xs text-slate-400">
         <div className="flex items-center justify-between">
-          <span>{classCount} classes ready for prompt generation</span>
-          <span className="text-violet-400">Select a node to see details</span>
+          <div className="flex items-center gap-2">
+            <Zap className="w-3 h-3" />
+            <span>Patterns: {metadata.patternsApplied.join(", ")}</span>
+          </div>
+          <span className="text-violet-400">Select a node for details</span>
         </div>
       </div>
     </motion.div>
@@ -241,50 +283,91 @@ const FullOntologyPrompt = ({ context }: { context: any }) => {
 }
 
 /**
- * Reusable prompt section component
+ * Metadata card component
  */
-const PromptSection = ({
+const MetadataCard = ({
+  label,
+  value,
+  icon
+}: {
+  label: string
+  value: number | string
+  icon: React.ReactNode
+}) => (
+  <div className="bg-slate-900/50 rounded-lg p-3">
+    <div className="flex items-center justify-center gap-2 text-slate-400 mb-1">
+      {icon}
+      <span className="text-xs">{label}</span>
+    </div>
+    <div className="text-2xl font-bold text-white">{value}</div>
+  </div>
+)
+
+/**
+ * Fragment section component - shows a collection of fragments
+ */
+const FragmentSection = ({
   title,
   icon,
   color,
-  lines
+  fragments,
+  showMonoidBadge = false
 }: {
   title: string
   icon: React.ReactNode
-  color: 'purple' | 'green' | 'amber' | 'violet' | 'blue'
-  lines: string[]
+  color: "purple" | "blue" | "amber"
+  fragments: ReadonlyArray<PromptFragment>
+  showMonoidBadge?: boolean
 }) => {
   const colorMap = {
-    purple: 'border-purple-500 bg-purple-500/10',
-    green: 'border-green-500 bg-green-500/10',
-    amber: 'border-amber-500 bg-amber-500/10',
-    violet: 'border-violet-500 bg-violet-500/10',
-    blue: 'border-blue-500 bg-blue-500/10',
+    purple: {
+      border: "border-purple-500",
+      bg: "bg-purple-500/10",
+      text: "text-purple-400",
+      badge: "bg-purple-500/20 text-purple-400"
+    },
+    blue: {
+      border: "border-blue-500",
+      bg: "bg-blue-500/10",
+      text: "text-blue-400",
+      badge: "bg-blue-500/20 text-blue-400"
+    },
+    amber: {
+      border: "border-amber-500",
+      bg: "bg-amber-500/10",
+      text: "text-amber-400",
+      badge: "bg-amber-500/20 text-amber-400"
+    }
   }
 
-  const headerColorMap = {
-    purple: 'text-purple-400',
-    green: 'text-green-400',
-    amber: 'text-amber-400',
-    violet: 'text-violet-400',
-    blue: 'text-blue-400',
-  }
+  const colors = colorMap[color]
 
   return (
     <motion.section
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`border-l-4 ${colorMap[color]} p-4 rounded-r`}
+      className={`border-l-4 ${colors.border} ${colors.bg} p-4 rounded-r`}
     >
-      <div className={`flex items-center gap-2 mb-3 ${headerColorMap[color]} font-semibold`}>
-        {icon}
-        <h3>### {title} ###</h3>
+      <div className={`flex items-center justify-between mb-3`}>
+        <div className={`flex items-center gap-2 ${colors.text} font-semibold`}>
+          {icon}
+          <h3>### {title} ###</h3>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`text-xs px-2 py-0.5 rounded ${colors.badge} font-semibold`}>
+            {fragments.length} {fragments.length === 1 ? "fragment" : "fragments"}
+          </span>
+          {showMonoidBadge && (
+            <span className="text-xs px-2 py-0.5 rounded bg-green-500/20 text-green-400 font-semibold">
+              ⊕
+            </span>
+          )}
+        </div>
       </div>
-      <div className="space-y-1 text-slate-300">
-        {lines.map((line, i) => (
-          <div key={i} className={line === "" ? "h-2" : ""}>
-            {line}
-          </div>
+
+      <div className="space-y-4">
+        {fragments.map((fragment, idx) => (
+          <FragmentCard key={idx} fragment={fragment} index={idx} />
         ))}
       </div>
     </motion.section>
@@ -292,8 +375,51 @@ const PromptSection = ({
 }
 
 /**
- * Extract readable label from IRI
+ * Individual fragment card with metadata
  */
-function extractLabel(iri: string): string {
-  return iri.split('#').pop() || iri.split('/').pop() || iri
+const FragmentCard = ({
+  fragment,
+  index
+}: {
+  fragment: PromptFragment
+  index: number
+}) => {
+  const patternColors: Record<string, string> = {
+    "schema-context": "bg-blue-500/20 text-blue-300",
+    "format-constraint": "bg-green-500/20 text-green-300",
+    "example-template": "bg-amber-500/20 text-amber-300",
+    "few-shot": "bg-purple-500/20 text-purple-300"
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: index * 0.05 }}
+      className="bg-slate-800/50 rounded p-3 border border-slate-700/50"
+    >
+      {/* Fragment metadata */}
+      {(fragment.source || fragment.pattern) && (
+        <div className="flex items-center gap-2 mb-2 text-xs">
+          {fragment.source && (
+            <span className="text-slate-400">
+              <span className="text-slate-500">from:</span> {fragment.source.label}
+            </span>
+          )}
+          {fragment.pattern && (
+            <span
+              className={`px-2 py-0.5 rounded font-mono ${patternColors[fragment.pattern] || "bg-slate-700 text-slate-300"}`}
+            >
+              {fragment.pattern}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Fragment content */}
+      <div className="text-sm text-slate-300 font-mono whitespace-pre-wrap">
+        {fragment.content}
+      </div>
+    </motion.div>
+  )
 }

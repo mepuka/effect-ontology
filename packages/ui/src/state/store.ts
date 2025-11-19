@@ -1,6 +1,8 @@
 import { Atom, Result } from "@effect-atom/atom"
 import { parseTurtleToGraph } from "@effect-ontology/core/Graph/Builder"
 import { Effect, Graph, Option } from "effect"
+import { generateFullOntologyPrompt, generateNodePromptMap } from "../services/PromptGenerationService"
+import type { PromptPackage } from "../types/PromptTypes"
 
 // Default example turtle
 const DEFAULT_TURTLE = `@prefix : <http://example.org/zoo#> .
@@ -76,3 +78,59 @@ export const topologicalOrderAtom = Atom.make((get) =>
 
 // 4. Selected Node (UI State)
 export const selectedNodeAtom = Atom.make<Option.Option<string>>(Option.none())
+
+// 5. Generated Prompts (Derived from graph + topological order)
+export const fullPromptAtom = Atom.make((get) =>
+  Effect.gen(function*() {
+    const graphResult = get(ontologyGraphAtom)
+    const topoResult = get(topologicalOrderAtom)
+
+    // Convert Results to Effects
+    const graphEffect = Result.match(graphResult, {
+      onInitial: () => Effect.fail("Graph not yet loaded"),
+      onFailure: (failure) => Effect.failCause(failure.cause),
+      onSuccess: (success) => Effect.succeed(success.value)
+    })
+
+    const topoEffect = Result.match(topoResult, {
+      onInitial: () => Effect.fail("Topology not yet computed"),
+      onFailure: (failure) => Effect.failCause(failure.cause),
+      onSuccess: (success) => Effect.succeed(success.value)
+    })
+
+    const graph = yield* graphEffect
+    const topologicalOrder = yield* topoEffect
+
+    // Generate the full prompt using the service
+    const promptPackage = generateFullOntologyPrompt(graph, topologicalOrder)
+
+    return promptPackage
+  })
+)
+
+// 6. Per-Node Prompt Map (Derived from graph + topological order)
+export const nodePromptMapAtom = Atom.make((get) =>
+  Effect.gen(function*() {
+    const graphResult = get(ontologyGraphAtom)
+    const topoResult = get(topologicalOrderAtom)
+
+    const graphEffect = Result.match(graphResult, {
+      onInitial: () => Effect.fail("Graph not yet loaded"),
+      onFailure: (failure) => Effect.failCause(failure.cause),
+      onSuccess: (success) => Effect.succeed(success.value)
+    })
+
+    const topoEffect = Result.match(topoResult, {
+      onInitial: () => Effect.fail("Topology not yet computed"),
+      onFailure: (failure) => Effect.failCause(failure.cause),
+      onSuccess: (success) => Effect.succeed(success.value)
+    })
+
+    const graph = yield* graphEffect
+    const topologicalOrder = yield* topoEffect
+
+    const promptMap = generateNodePromptMap(graph, topologicalOrder)
+
+    return promptMap
+  })
+)
