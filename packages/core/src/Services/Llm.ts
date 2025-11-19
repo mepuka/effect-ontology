@@ -18,6 +18,7 @@ import { LanguageModel } from "@effect/ai"
 import { Effect, HashMap } from "effect"
 import { LLMError } from "../Extraction/Events.js"
 import { isClassNode, type OntologyContext } from "../Graph/Types.js"
+import { renderExtractionPrompt } from "../Prompt/PromptDoc.js"
 import type { StructuredPrompt } from "../Prompt/Types.js"
 import type { KnowledgeGraphSchema } from "../Schema/Factory.js"
 
@@ -61,52 +62,14 @@ export const extractVocabulary = (ontology: OntologyContext) => {
 }
 
 /**
- * Build a complete prompt string from StructuredPrompt components
+ * NOTE: buildPromptText has been replaced with renderExtractionPrompt
+ * from Prompt/PromptDoc.ts for better maintainability and semantic structure.
  *
- * Combines system instructions, user context, and examples into a single
- * coherent prompt string for the LLM.
+ * The new implementation uses @effect/printer for declarative document
+ * construction while maintaining identical output format.
  *
- * @param prompt - Structured prompt from Prompt service
- * @param text - Input text to extract knowledge from
- * @returns Complete prompt string
- *
- * @since 1.0.0
- * @category helpers
+ * See: packages/core/src/Prompt/PromptDoc.ts
  */
-const buildPromptText = (prompt: StructuredPrompt, text: string): string => {
-  const parts: Array<string> = []
-
-  // Add system instructions
-  if (prompt.system.length > 0) {
-    parts.push("SYSTEM INSTRUCTIONS:")
-    parts.push(prompt.system.join("\n\n"))
-    parts.push("")
-  }
-
-  // Add user context
-  if (prompt.user.length > 0) {
-    parts.push("CONTEXT:")
-    parts.push(prompt.user.join("\n"))
-    parts.push("")
-  }
-
-  // Add examples
-  if (prompt.examples.length > 0) {
-    parts.push("EXAMPLES:")
-    parts.push(prompt.examples.join("\n\n"))
-    parts.push("")
-  }
-
-  // Add the actual extraction task
-  parts.push("TASK:")
-  parts.push("Extract knowledge graph from the following text:")
-  parts.push("")
-  parts.push(text)
-  parts.push("")
-  parts.push("Return a valid JSON object matching the schema with all extracted entities and their relationships.")
-
-  return parts.join("\n")
-}
 
 /**
  * LLM Service for knowledge graph extraction
@@ -174,8 +137,8 @@ export class LlmService extends Effect.Service<LlmService>()("LlmService", {
       schema: KnowledgeGraphSchema<ClassIRI, PropertyIRI>
     ) =>
       Effect.gen(function*() {
-        // Build the complete prompt
-        const promptText = buildPromptText(prompt, text)
+        // Build the complete prompt using @effect/printer
+        const promptText = renderExtractionPrompt(prompt, text)
 
         // Call LLM with structured output using the exported function
         const response = yield* LanguageModel.generateObject({
