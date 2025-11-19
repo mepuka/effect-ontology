@@ -130,7 +130,7 @@ ex:hasBreed a owl:DatatypeProperty ;
         const { context, graph } = yield* parseTurtleToGraph(ontology)
         const fullIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
 
-        const inheritanceService = Inheritance.make(graph, context)
+        const inheritanceService = yield* Inheritance.make(graph, context)
 
         // Focus on Person and Manager only
         const focusedIndex = yield* Focus.selectFocused(
@@ -161,7 +161,7 @@ ex:hasBreed a owl:DatatypeProperty ;
         const { context, graph } = yield* parseTurtleToGraph(ontology)
         const fullIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
 
-        const inheritanceService = Inheritance.make(graph, context)
+        const inheritanceService = yield* Inheritance.make(graph, context)
 
         // Focus on just Employee
         const focusedIndex = yield* Focus.selectFocused(
@@ -184,7 +184,7 @@ ex:hasBreed a owl:DatatypeProperty ;
     it("should compute effective properties", () =>
       Effect.gen(function*() {
         const { context, graph } = yield* parseTurtleToGraph(ontology)
-        const inheritanceService = Inheritance.make(graph, context)
+        const inheritanceService = yield* Inheritance.make(graph, context)
 
         // Manager should inherit from Employee and Person
         const effectiveProperties = yield* inheritanceService.getEffectiveProperties(
@@ -228,7 +228,7 @@ ex:hasBreed a owl:DatatypeProperty ;
         const { context, graph } = yield* parseTurtleToGraph(ontology)
         const fullIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
 
-        const inheritanceService = Inheritance.make(graph, context)
+        const inheritanceService = yield* Inheritance.make(graph, context)
 
         const prompt = yield* Render.renderWithInheritance(fullIndex, inheritanceService)
 
@@ -259,7 +259,7 @@ ex:hasBreed a owl:DatatypeProperty ;
         const { context, graph } = yield* parseTurtleToGraph(ontology)
         const fullIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
 
-        const inheritanceService = Inheritance.make(graph, context)
+        const inheritanceService = yield* Inheritance.make(graph, context)
 
         // Focus on Person with neighborhood strategy
         const neighborhoodIndex = yield* Focus.selectNeighborhood(
