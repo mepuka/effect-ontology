@@ -12,6 +12,8 @@
 
 import { Data, Effect, Graph, HashMap, Option } from "effect"
 import type { NodeId, OntologyContext } from "../Graph/Types.js"
+import * as KnowledgeIndex from "./KnowledgeIndex.js"
+import type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
 import type { GraphAlgebra } from "./Types.js"
 
 /**
@@ -178,4 +180,90 @@ export const solveGraph = <R>(
     }
 
     return finalResults
+  })
+
+/**
+ * Find root nodes in the graph
+ *
+ * Root nodes are those with no outgoing edges (no parents in subClassOf hierarchy).
+ *
+ * @param graph - The dependency graph
+ * @returns Effect with array of root node indices
+ */
+const findRoots = <N, E>(
+  graph: Graph.Graph<N, E, "directed">
+): Effect.Effect<ReadonlyArray<Graph.NodeIndex>> =>
+  Effect.sync(() => {
+    const roots: Array<Graph.NodeIndex> = []
+
+    for (const [nodeIndex, _] of graph) {
+      const neighbors = Graph.neighbors(graph, nodeIndex)
+      // If node has no neighbors, it's a root (no parents)
+      if (Array.from(neighbors).length === 0) {
+        roots.push(nodeIndex)
+      }
+    }
+
+    return roots
+  })
+
+/**
+ * Solve graph to KnowledgeIndex and return combined result
+ *
+ * Convenience function that:
+ * 1. Solves the graph using knowledgeIndexAlgebra
+ * 2. Finds all root nodes
+ * 3. Combines their results into a single KnowledgeIndex
+ *
+ * This is the primary entry point for the new KnowledgeIndex-based pipeline.
+ *
+ * @param graph - The dependency graph
+ * @param context - The ontology context
+ * @param algebra - The algebra to use (typically knowledgeIndexAlgebra)
+ * @returns Effect with combined knowledge index from all roots
+ */
+export const solveToKnowledgeIndex = (
+  graph: Graph.Graph<NodeId, unknown, "directed">,
+  context: OntologyContext,
+  algebra: GraphAlgebra<KnowledgeIndexType>
+): Effect.Effect<KnowledgeIndexType, SolverError> =>
+  Effect.gen(function*() {
+    // Solve graph to get HashMap<NodeId, KnowledgeIndex>
+    const indexMap = yield* solveGraph(graph, context, algebra)
+
+    // Find root nodes
+    const rootIndices = yield* findRoots(graph)
+
+    // Collect root node IDs
+    const rootIds: Array<NodeId> = []
+    for (const rootIndex of rootIndices) {
+      const rootId = yield* Graph.getNode(graph, rootIndex).pipe(
+        Effect.mapError(
+          () =>
+            new MissingNodeDataError({
+              nodeId: `node-${rootIndex}`,
+              message: `Root node index ${rootIndex} not found in graph`
+            })
+        )
+      )
+      rootIds.push(rootId)
+    }
+
+    // Combine all root indexes
+    const rootIndexes: Array<KnowledgeIndexType> = []
+    for (const rootId of rootIds) {
+      const rootIndex = yield* HashMap.get(indexMap, rootId).pipe(
+        Effect.mapError(
+          () =>
+            new MissingNodeDataError({
+              nodeId: rootId,
+              message: `Root node ${rootId} not found in result map`
+            })
+        )
+      )
+      rootIndexes.push(rootIndex)
+    }
+
+    // Combine all root results using the Monoid operation
+    return KnowledgeIndex.combineAll(rootIndexes)
   })
