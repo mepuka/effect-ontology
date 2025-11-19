@@ -1,6 +1,8 @@
 import { useAtomValue } from "@effect-atom/atom-react"
-import { HashMap, Graph as EffectGraph } from "effect"
+import { HashMap, Graph as EffectGraph, Option, Array as EffectArray, pipe } from "effect"
 import type { ParsedOntologyGraph } from "@effect-ontology/core/Graph/Builder"
+import type { ClassNode as ClassNodeType, NodeId } from "@effect-ontology/core/Graph/Types"
+import { isClassNode } from "@effect-ontology/core/Graph/Types"
 import { ontologyGraphAtom, topologicalOrderAtom } from "../state/store"
 import { Result } from "@effect-atom/atom-react"
 import { motion } from "framer-motion"
@@ -106,31 +108,32 @@ export const ClassHierarchyGraph = ({
 
               {/* Node layer */}
               <div className="relative" style={{ height: "100%", minWidth: START_X * 2 + topologicalOrder.length * NODE_SPACING }}>
-                {topologicalOrder.map((nodeId, index) => {
-                  const nodeOption = HashMap.get(context.nodes, nodeId)
-                  if (nodeOption._tag !== "Some") return null
+                {topologicalOrder.flatMap((nodeId) => {
+                  return pipe(
+                    HashMap.get(context.nodes, nodeId),
+                    Option.filter(isClassNode),
+                    Option.map((node: ClassNodeType) => {
+                      const position = nodePositions.get(nodeId)!
+                      const isSelected = selectedNodeId === nodeId
+                      const isHovered = hoveredNode === nodeId
 
-                  const node = nodeOption.value
-                  if (node._tag !== "Class") return null
-
-                  const position = nodePositions.get(nodeId)!
-                  const isSelected = selectedNodeId === nodeId
-                  const isHovered = hoveredNode === nodeId
-
-                  return (
-                    <ClassNode
-                      key={nodeId}
-                      nodeId={nodeId}
-                      label={node.label}
-                      propertyCount={node.properties.length}
-                      x={position.x}
-                      y={position.y}
-                      isSelected={isSelected}
-                      isHovered={isHovered}
-                      onMouseEnter={() => setHoveredNode(nodeId)}
-                      onMouseLeave={() => setHoveredNode(null)}
-                      onClick={() => onNodeClick(nodeId)}
-                    />
+                      return (
+                        <ClassNode
+                          key={nodeId}
+                          nodeId={nodeId}
+                          label={node.label}
+                          propertyCount={node.properties.length}
+                          x={position.x}
+                          y={position.y}
+                          isSelected={isSelected}
+                          isHovered={isHovered}
+                          onMouseEnter={() => setHoveredNode(nodeId)}
+                          onMouseLeave={() => setHoveredNode(null)}
+                          onClick={() => onNodeClick(nodeId)}
+                        />
+                      )
+                    }),
+                    Option.toArray
                   )
                 })}
               </div>
@@ -305,23 +308,23 @@ const DependencyArc = ({
 }
 
 /**
- * Extract edges from Effect Graph
+ * Extract edges from Effect Graph using proper Effect patterns
  */
 function extractEdges(graph: any, context: any): Array<{ from: string; to: string }> {
   const edges: Array<{ from: string; to: string }> = []
 
-  // Iterate through all nodes and their successors
-  for (const [nodeId, _] of context.nodes) {
-    try {
-      // Get successors (parents in subClassOf relationship)
-      const successors = EffectGraph.successors(graph, context.nodeIndexMap.get(nodeId).value)
-
-      for (const [_, parentId] of successors) {
-        edges.push({ from: nodeId, to: parentId })
+  for (const [nodeIdRaw, _] of HashMap.entries(context.nodes)) {
+    const nodeId = nodeIdRaw as string
+    const nodeIndexOption = HashMap.get(context.nodeIndexMap, nodeId) as Option.Option<number>
+    if (Option.isSome(nodeIndexOption)) {
+      const nodeIndex = nodeIndexOption.value as number
+      const neighbors = EffectGraph.neighbors(graph, nodeIndex)
+      for (const parentIndex of neighbors) {
+        const parentIdOption = EffectGraph.getNode(graph, parentIndex) as Option.Option<string>
+        if (Option.isSome(parentIdOption)) {
+          edges.push({ from: nodeId, to: (parentIdOption.value as unknown) as string })
+        }
       }
-    } catch (e) {
-      // Node might not be in graph (e.g., PropertyNodes)
-      continue
     }
   }
 

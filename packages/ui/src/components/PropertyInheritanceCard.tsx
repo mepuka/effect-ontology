@@ -1,8 +1,9 @@
-import { HashMap, Graph as EffectGraph, Option } from "effect"
+import { HashMap, Graph as EffectGraph, Option, Array as EffectArray, pipe } from "effect"
 import { motion, AnimatePresence } from "framer-motion"
 import { Layers, ChevronDown, ChevronUp, Database, Link2 } from "lucide-react"
 import { useState } from "react"
-import type { PropertyData } from "@effect-ontology/core/Graph/Types"
+import type { PropertyData, NodeId, ClassNode as ClassNodeType } from "@effect-ontology/core/Graph/Types"
+import { isClassNode } from "@effect-ontology/core/Graph/Types"
 
 /**
  * PropertyInheritanceCard - Visualizes property accumulation through inheritance
@@ -36,7 +37,7 @@ export const PropertyInheritanceCard = ({
   return (
     <div className={`bg-white rounded-lg shadow-lg overflow-hidden ${className || ''}`}>
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-4">
+      <div className="bg-linear-to-r from-blue-500 to-blue-600 text-white px-6 py-4">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-xl font-bold">{node.label}</h3>
           <div className="flex items-center gap-2 text-sm bg-white/20 px-3 py-1 rounded-full">
@@ -265,44 +266,36 @@ const PropertyCard = ({
 }
 
 /**
- * Get inherited properties from parent classes
+ * Get inherited properties from parent classes using proper Effect patterns
  */
-function getInheritedProperties(nodeId: string, graph: any, context: any): PropertyData[] {
+function getInheritedProperties(nodeId: NodeId, graph: any, context: any): PropertyData[] {
+  const visited = new Set<NodeId>()
   const inherited: PropertyData[] = []
-  const visited = new Set<string>()
 
-  const collectFromParents = (currentNodeId: string) => {
+  const collectFromParents = (currentNodeId: NodeId): void => {
     if (visited.has(currentNodeId)) return
     visited.add(currentNodeId)
 
-    try {
-      const nodeIndexOption = HashMap.get(context.nodeIndexMap, currentNodeId)
-      if (nodeIndexOption._tag !== "Some") return
-
-      const nodeIndex = nodeIndexOption.value
-
-      // Get parent nodes (successors in the graph)
-      const successors = EffectGraph.successors(graph, nodeIndex)
-
-      for (const [_, parentId] of successors) {
-        const parentNodeOption = HashMap.get(context.nodes, parentId)
-        if (parentNodeOption._tag === "Some" && parentNodeOption.value._tag === "Class") {
-          const parentNode = parentNodeOption.value
-
-          // Add parent's properties
-          inherited.push(...parentNode.properties)
-
-          // Recursively collect from parent's parents
-          collectFromParents(parentId)
+    const nodeIndexOption = HashMap.get(context.nodeIndexMap, currentNodeId) as Option.Option<number>
+    if (Option.isSome(nodeIndexOption)) {
+      const nodeIndex = nodeIndexOption.value as number
+      const neighbors = EffectGraph.neighbors(graph, nodeIndex)
+      for (const parentIndex of neighbors) {
+        const parentIdOption = EffectGraph.getNode(graph, parentIndex) as Option.Option<string>
+        if (Option.isSome(parentIdOption)) {
+          const parentId = parentIdOption.value as string
+          const parentNodeOption = HashMap.get(context.nodes, parentId)
+          if (Option.isSome(parentNodeOption) && isClassNode(parentNodeOption.value as any)) {
+            const parentNode = parentNodeOption.value as ClassNodeType
+            inherited.push(...parentNode.properties)
+            collectFromParents(parentId)
+          }
         }
       }
-    } catch (e) {
-      // Node might not be in graph
     }
   }
 
   collectFromParents(nodeId)
-
   return inherited
 }
 

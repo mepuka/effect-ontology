@@ -14,7 +14,7 @@ export const App = () => {
   const universalProperties = Result.match(graphResult, {
     onInitial: () => [],
     onFailure: () => [],
-    onSuccess: (graphSuccess) => graphSuccess.value.context.universalProperties
+    onSuccess: (graphSuccess) => [...graphSuccess.value.context.universalProperties]
   })
 
   return (
