@@ -31,7 +31,8 @@ const createChainOntology = (numClasses: number): string => {
     classes.push(`
 ${iri} a owl:Class ;
     rdfs:label "${name}" ;
-    rdfs:comment "A ${name.toLowerCase()}" ${parent ? `;\n    rdfs:subClassOf ${parent}` : ""} .
+    rdfs:comment "A ${name.toLowerCase()}" ${parent ? `;
+    rdfs:subClassOf ${parent}` : ""} .
 `)
   }
 

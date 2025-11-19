@@ -39,17 +39,6 @@ export {
   TreeNode
 } from "./Metadata.js"
 export {
-  classSummaryToMarkdown,
-  createSummaryReport,
-  type DependencyGraphPlotData,
-  type HierarchyTreePlotData,
-  metadataToJSON,
-  toDependencyGraphPlotData,
-  toHierarchyTreePlotData,
-  toTokenStatsPlotData,
-  type TokenStatsPlotData
-} from "./Visualization.js"
-export {
   buildExtractionPromptDoc,
   buildPromptDoc,
   renderExtractionPrompt,
@@ -58,3 +47,14 @@ export {
 export * as Render from "./Render.js"
 export { GraphCycleError, MissingNodeDataError, solveGraph, type SolverError, solveToKnowledgeIndex } from "./Solver.js"
 export { type GraphAlgebra, type PromptAlgebra, StructuredPrompt } from "./Types.js"
+export {
+  classSummaryToMarkdown,
+  createSummaryReport,
+  type DependencyGraphPlotData,
+  type HierarchyTreePlotData,
+  metadataToJSON,
+  toDependencyGraphPlotData,
+  toHierarchyTreePlotData,
+  type TokenStatsPlotData,
+  toTokenStatsPlotData
+} from "./Visualization.js"

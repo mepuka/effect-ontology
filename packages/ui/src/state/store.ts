@@ -135,7 +135,7 @@ export const knowledgeIndexAtom = Atom.make((get) =>
       onSuccess: (success) => Effect.succeed(success.value)
     })
 
-    const { graph, context } = yield* graphEffect
+    const { context, graph } = yield* graphEffect
 
     // Solve to KnowledgeIndex instead of StructuredPrompt
     return yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
@@ -171,7 +171,7 @@ export const metadataAtom = Atom.make((get) =>
       onSuccess: (success) => Effect.succeed(success.value)
     })
 
-    const { graph, context } = yield* graphEffect
+    const { context, graph } = yield* graphEffect
     const index = yield* indexEffect
 
     // Build metadata using Effect Graph
