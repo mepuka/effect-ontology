@@ -4,13 +4,23 @@
  * Provides generators for OntologyContext, ClassNode, PropertyData, and related types.
  * Used across property-based tests to generate random but valid ontology structures.
  *
+ * **Architecture:**
+ * - Uses Effect Schema's Arbitrary.make() for automatic constraint following
+ * - Custom annotations in schemas provide realistic data (see Graph/Types.ts)
+ * - Specialized arbitraries for edge cases (empty ontologies, focused scenarios)
+ *
  * @since 1.0.0
  */
 
-import { HashMap } from "effect"
+import { Arbitrary, HashMap } from "effect"
 import fc from "fast-check"
 import type { OntologyContext, PropertyData, PropertyNode } from "../../src/Graph/Types.js"
-import { ClassNode } from "../../src/Graph/Types.js"
+import {
+  ClassNode,
+  NodeIdSchema,
+  PropertyDataSchema,
+  PropertyNode as PropertyNodeClass
+} from "../../src/Graph/Types.js"
 
 // ============================================================================
 // Primitive Arbitraries
@@ -19,10 +29,12 @@ import { ClassNode } from "../../src/Graph/Types.js"
 /**
  * Generate random IRIs (Internationalized Resource Identifiers)
  *
- * Uses webUrl with fragments to create realistic IRIs.
- * Examples: "http://xmlns.com/foaf/0.1/Person", "http://schema.org/Article#123"
+ * **Now uses Schema-based generation** from NodeIdSchema with realistic
+ * ontology IRIs (FOAF, Schema.org, Dublin Core, XSD).
+ *
+ * See Graph/Types.ts for custom arbitrary annotations.
  */
-export const arbIri = fc.webUrl({ withFragments: true })
+export const arbIri = Arbitrary.make(NodeIdSchema)
 
 /**
  * Generate XSD datatype IRIs
@@ -59,119 +71,108 @@ export const arbXsdDatatypeShort = fc.constantFrom(
 // ============================================================================
 
 /**
+ * Generate PropertyData using Schema-based generation
+ *
+ * **Now uses Arbitrary.make(PropertyDataSchema)** which automatically:
+ * - Generates realistic property IRIs (FOAF, Dublin Core, Schema.org)
+ * - Generates realistic property labels (name, description, author, etc.)
+ * - Generates mixed ranges (60% datatype, 40% class IRIs)
+ *
+ * See Graph/Types.ts for custom arbitrary annotations.
+ */
+export const arbPropertyData = Arbitrary.make(PropertyDataSchema)
+
+/**
  * Generate PropertyData with XSD datatype ranges
  *
- * These properties have datatype ranges (not class ranges).
- * Used to test sh:datatype constraint generation.
+ * Specialized arbitrary for testing sh:datatype constraint generation.
+ * Filters schema-generated data to only include XSD datatypes.
  */
-export const arbPropertyDataWithDatatype: fc.Arbitrary<PropertyData> = fc.record({
-  iri: arbIri,
-  label: fc.string({ minLength: 1, maxLength: 50 }),
-  range: arbXsdDatatype
-})
+export const arbPropertyDataWithDatatype: fc.Arbitrary<PropertyData> = arbPropertyData.filter(
+  (prop) => prop.range.includes("XMLSchema#") || prop.range.startsWith("xsd:")
+)
 
 /**
  * Generate PropertyData with class ranges
  *
- * These properties have class IRIs as ranges (object properties).
- * Used to test sh:class constraint generation.
+ * Specialized arbitrary for testing sh:class constraint generation.
+ * Filters schema-generated data to only include class IRIs (not XSD datatypes).
  */
-export const arbPropertyDataWithClassRange: fc.Arbitrary<PropertyData> = fc.record({
-  iri: arbIri,
-  label: fc.string({ minLength: 1, maxLength: 50 }),
-  range: arbIri // Class IRI
-})
+export const arbPropertyDataWithClassRange: fc.Arbitrary<PropertyData> = arbPropertyData.filter(
+  (prop) => !prop.range.includes("XMLSchema#") && !prop.range.startsWith("xsd:")
+)
 
 /**
  * Generate PropertyData with mixed ranges (datatypes or class IRIs)
  *
- * Mix of datatype and class range properties.
- * Used for general-purpose testing.
+ * Same as arbPropertyData - kept for backwards compatibility.
  */
-export const arbPropertyDataMixedRange: fc.Arbitrary<PropertyData> = fc.record({
-  iri: arbIri,
-  label: fc.string({ minLength: 1, maxLength: 50 }),
-  range: fc.oneof(arbXsdDatatype, arbIri)
-})
-
-/**
- * General PropertyData arbitrary (mix of datatypes and class ranges)
- *
- * Default arbitrary for property data.
- */
-export const arbPropertyData: fc.Arbitrary<PropertyData> = fc.oneof(
-  arbPropertyDataWithDatatype,
-  arbPropertyDataWithClassRange,
-  arbPropertyDataMixedRange
-)
+export const arbPropertyDataMixedRange = arbPropertyData
 
 // ============================================================================
 // ClassNode Arbitraries
 // ============================================================================
 
 /**
- * Generate ClassNode with 0-10 properties
+ * Generate ClassNode using Schema-based generation
  *
- * Realistic class nodes with varied property counts.
+ * **Now uses Arbitrary.make(ClassNode)** which automatically:
+ * - Generates realistic class IRIs (FOAF, Schema.org, etc.)
+ * - Generates realistic class labels (Person, Organization, Article, etc.)
+ * - Generates 0-10 properties per class (using PropertyDataSchema arbitrary)
+ *
+ * See Graph/Types.ts for custom arbitrary annotations.
  */
-export const arbClassNode: fc.Arbitrary<ClassNode> = fc
-  .record({
-    id: arbIri,
-    label: fc.string({ minLength: 1, maxLength: 100 }),
-    properties: fc.array(arbPropertyData, { maxLength: 10 })
-  })
-  .map((data) => new ClassNode(data))
+export const arbClassNode = Arbitrary.make(ClassNode)
 
 /**
  * Generate ClassNode with at least 1 property
  *
  * Used for tests that require non-empty vocabularies (e.g., Extraction tests).
+ * Filters schema-generated nodes to ensure properties array is non-empty.
  */
-export const arbClassNodeNonEmpty: fc.Arbitrary<ClassNode> = fc
-  .record({
-    id: arbIri,
-    label: fc.string({ minLength: 1, maxLength: 100 }),
-    properties: fc.array(arbPropertyData, { minLength: 1, maxLength: 10 })
-  })
-  .map((data) => new ClassNode(data))
+export const arbClassNodeNonEmpty: fc.Arbitrary<ClassNode> = arbClassNode.filter(
+  (node) => node.properties.length > 0
+)
 
 /**
  * Generate ClassNode with only datatype properties
  *
  * Used to test sh:datatype constraint generation specifically.
+ * Filters properties to only include XSD datatypes.
  */
-export const arbClassNodeDatatypeOnly: fc.Arbitrary<ClassNode> = fc
-  .record({
-    id: arbIri,
-    label: fc.string({ minLength: 1, maxLength: 100 }),
-    properties: fc.array(arbPropertyDataWithDatatype, { maxLength: 10 })
-  })
+export const arbClassNodeDatatypeOnly: fc.Arbitrary<ClassNode> = arbClassNode
+  .map((node) => ({
+    ...node,
+    properties: node.properties.filter(
+      (prop) => prop.range.includes("XMLSchema#") || prop.range.startsWith("xsd:")
+    )
+  }))
   .map((data) => new ClassNode(data))
 
 /**
  * Generate ClassNode with only class-range properties
  *
  * Used to test sh:class constraint generation specifically.
+ * Filters properties to only include class IRIs (not XSD datatypes).
  */
-export const arbClassNodeClassRangeOnly: fc.Arbitrary<ClassNode> = fc
-  .record({
-    id: arbIri,
-    label: fc.string({ minLength: 1, maxLength: 100 }),
-    properties: fc.array(arbPropertyDataWithClassRange, { maxLength: 10 })
-  })
+export const arbClassNodeClassRangeOnly: fc.Arbitrary<ClassNode> = arbClassNode
+  .map((node) => ({
+    ...node,
+    properties: node.properties.filter(
+      (prop) => !prop.range.includes("XMLSchema#") && !prop.range.startsWith("xsd:")
+    )
+  }))
   .map((data) => new ClassNode(data))
 
 /**
  * Generate ClassNode with no properties
  *
  * Edge case: classes without direct properties (may have inherited).
+ * Filters schema-generated nodes to ensure properties array is empty.
  */
-export const arbClassNodeEmpty: fc.Arbitrary<ClassNode> = fc
-  .record({
-    id: arbIri,
-    label: fc.string({ minLength: 1, maxLength: 100 }),
-    properties: fc.constant([])
-  })
+export const arbClassNodeEmpty: fc.Arbitrary<ClassNode> = arbClassNode
+  .map((node) => ({ ...node, properties: [] }))
   .map((data) => new ClassNode(data))
 
 // ============================================================================

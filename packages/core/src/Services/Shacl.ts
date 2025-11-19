@@ -36,6 +36,7 @@ import { Parser, Store } from "n3"
 import SHACLValidator from "rdf-validate-shacl"
 import { ShaclError, type ValidationReport } from "../Extraction/Events.js"
 import {
+  ClassNode,
   isClassNode,
   OntologyContextSchema,
   type OntologyContext,
