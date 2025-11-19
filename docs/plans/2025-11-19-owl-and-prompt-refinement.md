@@ -127,6 +127,7 @@ Build on `Prompt/PromptDoc` and `DocBuilder` to support richer templates:
    - Explicitly describe allowed classes and properties:
      - “You may only emit classes from this set: …”
      - “Each property has constraints; do not hallucinate unknown predicates.”
+     - “Treat the provided schema as **closed‑world** for this task: do not emit unknown properties, even if they might exist in the ontology.”
    - Include short constraint summaries derived from the effective property view.
 
 2. **Context section**
@@ -165,7 +166,7 @@ Integrate constraints into `KnowledgeGraphSchema` and the LLM call:
 3. **Testing**
    - Extend `Llm.test.ts` with:
      - Schema generation unit tests (no actual model calls).
-     - “Prompt + schema snapshot” tests ensuring formatting stability.
+     - “Prompt + schema snapshot” tests ensuring formatting stability and that any `minCardinality ≥ 1` constraint appears as “required” (or equivalent wording) in the text.
 
 ---
 
@@ -235,6 +236,10 @@ Extend `parseTurtleToGraph`:
      - `owl:hasValue ?v`
    - For now, support the **simple, common patterns**:
      - Single `owl:onProperty` and at most one of `someValuesFrom` / `allValuesFrom` / `hasValue` / cardinality.
+   - For restrictions whose fillers are **lists or anonymous class expressions**:
+     - Add a small helper `parseRdfList(store, headNode)` that walks `rdf:first` / `rdf:rest` to an array of terms.
+     - In the *initial* implementation, we may conservatively skip these complex cases (log/debug only) so that Phase 1 remains small and well‑tested.
+     - In a later phase (Section 4.4), reuse `parseRdfList` to support `owl:unionOf` and `owl:intersectionOf` as explicit union / intersection constructs.
    - Return `Option<PropertyRestriction>`; ignore blank nodes that do not match a supported pattern.
 
 3. **Attach restrictions to ClassNode**
@@ -270,6 +275,7 @@ These should be added **after** the basic restriction pipeline is tested end‑t
 This section connects OWL restrictions and inheritance resolution to a mathematically rigorous model.
 
 ### 5.1 Constraint Model
+We explicitly model **Top** (unconstrained) and **Bottom** (inconsistent) states.
 
 Define a **PropertyConstraint** as the aggregate state of all constraints on a single property for a given class:
 
@@ -283,7 +289,9 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>("Proper
   minCardinality: Schema.Number,              // default 0
   maxCardinality: Schema.Number.pipe(Schema.optional), // default = unbounded
   // Optional value‑level constraints (from owl:hasValue, enums, etc.)
-  allowedValues: Schema.Array(Schema.String)
+  allowedValues: Schema.Array(Schema.String),
+  // Lattice "bottom" flag – false means constraints are inconsistent
+  isConsistent: Schema.Boolean
 }) {}
 ```
 
@@ -294,6 +302,7 @@ Intuition:
   - Adds or narrows `ranges`.
   - Increases `minCardinality` or decreases `maxCardinality`.
   - Potentially narrows `allowedValues`.
+  - If refinement yields an impossible interval (e.g. `minCardinality > maxCardinality`) or other obvious contradiction, we set `isConsistent = false` to represent **Bottom**.
 
 ### 5.2 Refinement Operation (Meet / Intersection)
 
@@ -302,10 +311,15 @@ Define a pure `refine` function:
 ```ts
 export const refine = (a: PropertyConstraint, b: PropertyConstraint): PropertyConstraint => ({
   propertyIri: a.propertyIri, // assume both same, enforce via constructor
-  ranges: /* intersection/accumulation strategy */,
+  // Interpret ranges as an intersection (allOf semantics):
+  // - empty in both = unconstrained
+  // - non‑empty in one side = at least that constraint
+  // - non‑empty on both = intersection (for now, keep both IRIs; schema generator treats this as allOf)
+  ranges: intersectRanges(a.ranges, b.ranges),
   minCardinality: Math.max(a.minCardinality, b.minCardinality),
   maxCardinality: minOption(a.maxCardinality, b.maxCardinality),
-  allowedValues: intersect(a.allowedValues, b.allowedValues)
+  allowedValues: intersect(a.allowedValues, b.allowedValues),
+  isConsistent: checkConsistency(a, b)
 })
 ```
 
@@ -317,12 +331,16 @@ Properties to enforce in tests:
 - **Monotone:** The refined constraint is never *less* restrictive than its inputs:
   - `minCardinality` never decreases.
   - `maxCardinality` never increases (where defined).
+  - `isConsistent` can only flip from `true` → `false`, never back to `true`.
 
-Implementation note:
+Implementation notes:
 
 - Because we do **not** (yet) have a full DL reasoner, range handling should be conservative:
-  - For now treat `ranges` as a multiset / list of IRIs or a simple intersection of sets.
-  - Later, intersect ranges using explicit subclass relations when available.
+  - For now treat `ranges` as representing an **intersection** of allowed types (allOf semantics).
+  - Later, intersect ranges using explicit subclass relations when available, and distinguish explicit `unionOf` in the model.
+- `checkConsistency` should conservatively detect obvious bottom cases:
+  - Cardinality: `minCardinality > maxCardinality` (once both are known).
+  - Other contradictions we can cheaply detect without full DL reasoning.
 
 ### 5.3 Integration with InheritanceService
 
@@ -338,7 +356,7 @@ Implementation note:
 1. For the query class `C`:
    - Start with an empty `Map<PropertyIRI, PropertyConstraint>`.
 2. Walk ancestors and `C` itself:
-   - For each declared property `p` on an ancestor:
+   - For each declared property `p` on an ancestor (including `C`):
      - Convert it to a base `PropertyConstraint` (range, default cardinality).
      - `refine` it into the existing constraint for `p` if present.
    - For each `PropertyRestriction` on an ancestor or `C`:
@@ -349,6 +367,7 @@ Implementation note:
      - Picks a representative label and refined range.
      - Marks required vs optional vs repeated.
      - Tags whether it was constrained by restrictions.
+     - Carries `isConsistent` flag (and optional diagnostic) so the render layer can decide how to present or omit it.
 
 4. Expose:
    - `getEffectiveProperties` → `ReadonlyArray<EffectiveProperty>` (backwards‑compatible wrapper can still project to plain `PropertyData` where needed).
@@ -362,10 +381,20 @@ Tests should live alongside existing ones:
   - Simple parent/child refinement cases.
   - Synthetic property from restriction only.
   - Cardinality narrowing (0 → 1, ∞ → 3).
+  - Bottom cases (e.g. contradictory min/max cardinalities) leading to `isConsistent = false`.
 - `Prompt/KnowledgeIndex.property.test.ts`:
   - Verify that definition text and inherited property view align with constraints.
 - Property‑based tests:
   - For `refine` laws (idempotence, commutativity, associativity, monotonicity).
+  - **Liskov‑style check**: For any `(parent, child, property)`, the child’s constraint implies (is at least as restrictive as) the parent’s constraint.
+  - **Conservation of restrictions**: If the Turtle contains `minCardinality 1` or a `someValuesFrom` restriction, the final rendered prompt must surface this fact (e.g. via “required” or “at least one …” wording).
+
+End‑to‑end tests should include:
+
+- A small OWL fixture where we know the intended effective constraints and verify:
+  - Parsed restrictions in `Graph/Builder`.
+  - Constraints in `InheritanceService`.
+  - Presence of those constraints in prompt text and (where implemented) generated schemas.
 
 ---
 
@@ -395,6 +424,7 @@ These changes are optional for the first backend‑only iteration but should be 
   - Detect blank‑node restrictions in `rdfs:subClassOf`.
   - Parse simple `owl:Restriction` patterns into `PropertyRestriction`.
   - Attach restrictions to `ClassNode`.
+  - Introduce `parseRdfList` helper, but initially gate its use behind explicit tests; complex list‑based constructs can be logged and skipped in the very first increment.
 - Tests:
   - New Turtle fixtures in `test/fixtures/ontologies`.
   - Extend `Graph/Builder.test.ts`.
@@ -406,14 +436,14 @@ These changes are optional for the first backend‑only iteration but should be 
   - Add internal constraint folding logic.
   - Expose effective property view (while keeping current API usable).
 - Tests:
-  - Unit + property‑based tests for refinement laws.
-  - `Inheritance.property.test.ts` scenarios for common OWL patterns.
+  - Unit + property‑based tests for refinement laws and `isConsistent` behavior.
+  - `Inheritance.property.test.ts` scenarios for common OWL patterns and contradiction detection.
 
 ### Phase 3 – Prompt & Schema Enhancements
 
 - Update `Prompt/Render`:
   - Use effective property view for formatting.
-  - Add flags to control whether to show constraint annotations.
+  - Add flags to control whether to show constraint annotations and whether to omit unsatisfiable properties.
 - Update `Prompt/PromptDoc`:
   - Introduce a constraint‑aware extraction template.
 - Update schema factory and LLM tests:
@@ -442,4 +472,3 @@ These changes are optional for the first backend‑only iteration but should be 
     - `Graph/Types.test.ts`, `Graph/Builder.test.ts`
     - `Ontology/Inheritance*.test.ts`
   - continue to pass with only expected, documented changes in formatting or behavior.
-
