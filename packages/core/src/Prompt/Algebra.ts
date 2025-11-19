@@ -7,8 +7,12 @@
  * Based on: docs/effect_ontology_engineering_spec.md
  */
 
+import { HashMap } from "effect"
 import { isClassNode, isPropertyNode, type PropertyData } from "../Graph/Types.js"
-import type { PromptAlgebra } from "./Types.js"
+import { KnowledgeUnit } from "./Ast.js"
+import * as KnowledgeIndex from "./KnowledgeIndex.js"
+import type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
+import type { GraphAlgebra, PromptAlgebra } from "./Types.js"
 import { StructuredPrompt } from "./Types.js"
 
 /**
@@ -130,4 +134,150 @@ export const combineWithUniversal = (
 ): StructuredPrompt => {
   const graphPrompt = StructuredPrompt.combineAll(graphResults)
   return StructuredPrompt.combine(universalPrompt, graphPrompt)
+}
+
+// ============================================================================
+// Knowledge Index Algebra (New Higher-Order Monoid)
+// ============================================================================
+
+/**
+ * Smart algebra using HashMap-based KnowledgeIndex Monoid
+ *
+ * Replaces string concatenation with queryable structure.
+ * Solves the Context Explosion problem by deferring rendering
+ * and enabling focused context selection.
+ *
+ * Key differences from defaultPromptAlgebra:
+ * 1. Result type: KnowledgeIndex (HashMap) instead of StructuredPrompt (arrays)
+ * 2. Monoid operation: HashMap.union instead of array concatenation
+ * 3. No string formatting here - deferred to render time
+ * 4. Captures graph structure (parents/children relationships)
+ *
+ * @param nodeData - The ontology node (ClassNode or PropertyNode)
+ * @param childrenResults - Knowledge indexes from all direct subclasses
+ * @returns A KnowledgeIndex containing this node + all descendants
+ */
+export const knowledgeIndexAlgebra: GraphAlgebra<KnowledgeIndexType> = (
+  nodeData,
+  childrenResults
+): KnowledgeIndexType => {
+  // Handle ClassNode
+  if (isClassNode(nodeData)) {
+    // Extract child IRIs from children's indexes
+    const childIris = childrenResults.flatMap((childIndex) => Array.from(KnowledgeIndex.keys(childIndex)))
+
+    // Note: Parents will be populated during graph traversal
+    // Each child's result is pushed to parent, so we know our children,
+    // but not our parents yet (they come from the graph structure)
+
+    // Create definition for this class
+    const definition = [
+      `Class: ${nodeData.label}`,
+      `Properties:`,
+      formatProperties(nodeData.properties)
+    ].join("\n")
+
+    // Create KnowledgeUnit for this node
+    const unit = new KnowledgeUnit({
+      iri: nodeData.id,
+      label: nodeData.label,
+      definition,
+      properties: nodeData.properties,
+      inheritedProperties: [], // Will be computed by InheritanceService
+      children: childIris,
+      parents: [] // Will be populated when needed (reverse lookup from graph)
+    })
+
+    // Create index with this unit
+    let index = KnowledgeIndex.fromUnit(unit)
+
+    // Union with all children's indexes
+    // This is the key Monoid operation: HashMap.union
+    for (const childIndex of childrenResults) {
+      index = KnowledgeIndex.combine(index, childIndex)
+    }
+
+    return index
+  }
+
+  // Handle PropertyNode (if used as first-class entity)
+  if (isPropertyNode(nodeData)) {
+    const definition = [
+      `Property: ${nodeData.label}`,
+      `  Domain: ${nodeData.domain}`,
+      `  Range: ${nodeData.range}`,
+      `  Functional: ${nodeData.functional}`
+    ].join("\n")
+
+    const unit = new KnowledgeUnit({
+      iri: nodeData.id,
+      label: nodeData.label,
+      definition,
+      properties: [], // Properties don't have properties
+      inheritedProperties: [],
+      children: [],
+      parents: []
+    })
+
+    // Combine with children (though properties typically don't have subproperties)
+    return KnowledgeIndex.combineAll([
+      KnowledgeIndex.fromUnit(unit),
+      ...childrenResults
+    ])
+  }
+
+  // Fallback for unknown node types
+  return KnowledgeIndex.empty()
+}
+
+/**
+ * Process universal properties into KnowledgeIndex
+ *
+ * Creates a special "UniversalProperties" unit that can be combined
+ * with the main ontology index.
+ *
+ * @param universalProperties - Array of properties without explicit domains
+ * @returns A KnowledgeIndex with a synthetic universal properties unit
+ */
+export const processUniversalPropertiesToIndex = (
+  universalProperties: ReadonlyArray<PropertyData>
+): KnowledgeIndexType => {
+  if (universalProperties.length === 0) {
+    return KnowledgeIndex.empty()
+  }
+
+  const definition = [
+    "Universal Properties (applicable to any resource):",
+    formatProperties(universalProperties)
+  ].join("\n")
+
+  const unit = new KnowledgeUnit({
+    iri: "urn:x-ontology:UniversalProperties",
+    label: "Universal Properties",
+    definition,
+    properties: universalProperties,
+    inheritedProperties: [],
+    children: [],
+    parents: []
+  })
+
+  return KnowledgeIndex.fromUnit(unit)
+}
+
+/**
+ * Combine universal properties index with graph results
+ *
+ * Final composition using the KnowledgeIndex Monoid:
+ * K_final = K_universal ⊕ (⊕_{v ∈ Roots(G)} Results(v))
+ *
+ * @param universalIndex - Index from universal properties
+ * @param graphResults - Indexes from all root nodes in the graph
+ * @returns Combined final knowledge index
+ */
+export const combineWithUniversalIndex = (
+  universalIndex: KnowledgeIndexType,
+  graphResults: ReadonlyArray<KnowledgeIndexType>
+): KnowledgeIndexType => {
+  const graphIndex = KnowledgeIndex.combineAll(graphResults)
+  return KnowledgeIndex.combine(universalIndex, graphIndex)
 }
