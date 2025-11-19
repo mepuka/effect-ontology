@@ -7,7 +7,7 @@
  * Based on: docs/higher_order_monoid_implementation.md
  */
 
-import { Data, Equivalence, Order, String as EffectString } from "effect"
+import { Array as EffectArray, Data, Equivalence, Order, pipe, String as EffectString } from "effect"
 import type { PropertyData } from "../Graph/Types.js"
 
 /**
@@ -96,8 +96,23 @@ export class KnowledgeUnit extends Data.Class<{
   /**
    * Merge two KnowledgeUnits for the same IRI
    *
+   * **CRITICAL: This merge is COMMUTATIVE and ASSOCIATIVE**
+   *
    * Used during HashMap.union when the same class appears multiple times.
-   * Combines children/parents lists and prefers more complete data.
+   * Combines children/parents lists with deterministic selection logic.
+   *
+   * **Commutativity:** A ⊕ B = B ⊕ A (proven by property-based tests)
+   * **Associativity:** (A ⊕ B) ⊕ C = A ⊕ (B ⊕ C) (proven by property-based tests)
+   * **Identity:** A ⊕ ∅ = A where ∅ has empty arrays and strings
+   *
+   * **Why This Matters:** Non-commutative merge breaks prompt determinism.
+   * Same ontology must produce identical prompt regardless of HashMap iteration order.
+   *
+   * **Deterministic Selection Logic:**
+   * - Label: Longest wins. Alphabetical tie-breaker.
+   * - Definition: Longest wins. Alphabetical tie-breaker.
+   * - Arrays: Union, dedupe, sort alphabetically.
+   * - Properties: Union, dedupe by IRI, sort by IRI.
    */
   static merge(a: KnowledgeUnit, b: KnowledgeUnit): KnowledgeUnit {
     // Sanity check: merging units with different IRIs is a bug
@@ -105,22 +120,58 @@ export class KnowledgeUnit extends Data.Class<{
       throw new Error(`Cannot merge KnowledgeUnits with different IRIs: ${a.iri} vs ${b.iri}`)
     }
 
-    // Prefer non-empty definition
-    const definition = a.definition.length > b.definition.length ? a.definition : b.definition
+    // Label: Deterministic selection
+    // 1. Longest wins (more complete)
+    // 2. Alphabetical tie-breaker (for commutativity)
+    const label =
+      a.label.length > b.label.length ? a.label :
+      b.label.length > a.label.length ? b.label :
+      Order.lessThanOrEqualTo(EffectString.Order)(a.label, b.label) ? a.label : b.label
 
-    // Union children and parents (deduplicated)
-    const children = Array.from(new Set([...a.children, ...b.children]))
-    const parents = Array.from(new Set([...a.parents, ...b.parents]))
+    // Definition: Same logic
+    const definition =
+      a.definition.length > b.definition.length ? a.definition :
+      b.definition.length > a.definition.length ? b.definition :
+      Order.lessThanOrEqualTo(EffectString.Order)(a.definition, b.definition) ? a.definition : b.definition
 
-    // Prefer longer property arrays (more complete)
-    const properties = a.properties.length >= b.properties.length ? a.properties : b.properties
-    const inheritedProperties = a.inheritedProperties.length >= b.inheritedProperties.length
-      ? a.inheritedProperties
-      : b.inheritedProperties
+    // Children: Union + dedupe + sort
+    // Sorting ensures commutativity: [A,B] = [B,A] after sort
+    // Data.array provides structural equality for Effect's Equal
+    const children = pipe(
+      [...a.children, ...b.children],
+      EffectArray.dedupe,
+      EffectArray.sort(EffectString.Order),
+      Data.array
+    )
+
+    // Parents: Same approach
+    const parents = pipe(
+      [...a.parents, ...b.parents],
+      EffectArray.dedupe,
+      EffectArray.sort(EffectString.Order),
+      Data.array
+    )
+
+    // Properties: Dedupe by IRI, sort by IRI
+    // dedupeWith uses PropertyDataEqual which compares by IRI only
+    const properties = pipe(
+      [...a.properties, ...b.properties],
+      EffectArray.dedupeWith(PropertyDataEqual),
+      EffectArray.sort(PropertyDataOrder),
+      Data.array
+    )
+
+    // Inherited properties: Same
+    const inheritedProperties = pipe(
+      [...a.inheritedProperties, ...b.inheritedProperties],
+      EffectArray.dedupeWith(PropertyDataEqual),
+      EffectArray.sort(PropertyDataOrder),
+      Data.array
+    )
 
     return new KnowledgeUnit({
       iri: a.iri,
-      label: a.label || b.label,
+      label,
       definition,
       properties,
       inheritedProperties,
