@@ -6,13 +6,7 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Equal } from "effect"
-import {
-  ExtractionEvent,
-  LLMError,
-  RdfError,
-  ShaclError,
-  type ValidationReport
-} from "../../src/Extraction/Events"
+import { ExtractionEvent, LLMError, RdfError, ShaclError, type ValidationReport } from "../../src/Extraction/Events"
 
 describe("Extraction.Events", () => {
   describe("ExtractionEvent - Constructors", () => {
@@ -116,8 +110,7 @@ describe("Extraction.Events", () => {
           LLMThinking: () => "wrong",
           JSONParsed: () => "wrong",
           RDFConstructed: () => "wrong",
-          ValidationComplete: (e) =>
-            e.report.conforms ? "valid" : `${e.report.results.length} violations`
+          ValidationComplete: (e) => e.report.conforms ? "valid" : `${e.report.results.length} violations`
         })
 
         expect(result).toBe("1 violations")
@@ -278,9 +271,7 @@ describe("Extraction.Events", () => {
         )
 
         const recovered = program.pipe(
-          Effect.catchTag("LLMError", (e) =>
-            Effect.succeed(`Handled: ${e.module}.${e.method} - ${e.reason}`)
-          )
+          Effect.catchTag("LLMError", (e) => Effect.succeed(`Handled: ${e.module}.${e.method} - ${e.reason}`))
         )
 
         const result = yield* recovered
@@ -346,12 +337,12 @@ describe("Extraction.Events", () => {
   describe("Type Inference", () => {
     it.effect("should infer correct event types", () =>
       Effect.sync(() => {
-        const event1 = ExtractionEvent.LLMThinking()
-        const event2 = ExtractionEvent.JSONParsed({ count: 5 })
+        const _event1 = ExtractionEvent.LLMThinking()
+        const _event2 = ExtractionEvent.JSONParsed({ count: 5 })
 
         // TypeScript should narrow these types correctly
-        type Event1Tag = typeof event1._tag
-        type Event2Tag = typeof event2._tag
+        type Event1Tag = typeof _event1._tag
+        type Event2Tag = typeof _event2._tag
 
         const _typeCheck1: Event1Tag = "LLMThinking"
         const _typeCheck2: Event2Tag = "JSONParsed"
@@ -361,20 +352,20 @@ describe("Extraction.Events", () => {
 
     it.effect("should infer correct error types", () =>
       Effect.sync(() => {
-        const error1 = new LLMError({
+        const _error1 = new LLMError({
           module: "Anthropic",
           method: "generateText",
           reason: "ApiTimeout"
         })
-        const error2 = new RdfError({
+        const _error2 = new RdfError({
           module: "RdfService",
           method: "jsonToStore",
           reason: "InvalidQuad"
         })
 
         // TypeScript should provide correct types
-        type Error1Tag = typeof error1._tag
-        type Error2Tag = typeof error2._tag
+        type Error1Tag = typeof _error1._tag
+        type Error2Tag = typeof _error2._tag
 
         const _typeCheck1: Error1Tag = "LLMError"
         const _typeCheck2: Error2Tag = "RdfError"

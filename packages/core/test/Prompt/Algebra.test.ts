@@ -10,11 +10,7 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { ClassNode, PropertyNode } from "../../src/Graph/Types.js"
-import {
-  combineWithUniversal,
-  defaultPromptAlgebra,
-  processUniversalProperties
-} from "../../src/Prompt/Algebra.js"
+import { combineWithUniversal, defaultPromptAlgebra, processUniversalProperties } from "../../src/Prompt/Algebra.js"
 import { StructuredPrompt } from "../../src/Prompt/Types.js"
 
 describe("Prompt Algebra", () => {

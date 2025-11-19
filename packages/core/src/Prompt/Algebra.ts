@@ -7,8 +7,7 @@
  * Based on: docs/effect_ontology_engineering_spec.md
  */
 
-import type { PropertyData } from "../Graph/Types.js"
-import type { OntologyNode } from "../Graph/Types.js"
+import { isClassNode, isPropertyNode, type PropertyData } from "../Graph/Types.js"
 import type { PromptAlgebra } from "./Types.js"
 import { StructuredPrompt } from "./Types.js"
 
@@ -45,7 +44,7 @@ export const defaultPromptAlgebra: PromptAlgebra = (
   childrenResults
 ): StructuredPrompt => {
   // Handle ClassNode
-  if (nodeData._tag === "Class") {
+  if (isClassNode(nodeData)) {
     const classDefinition = [
       `Class: ${nodeData.label}`,
       `Properties:`,
@@ -66,7 +65,7 @@ export const defaultPromptAlgebra: PromptAlgebra = (
   }
 
   // Handle PropertyNode (if used as first-class entity)
-  if (nodeData._tag === "Property") {
+  if (isPropertyNode(nodeData)) {
     const propertyDefinition = [
       `Property: ${nodeData.label}`,
       `  Domain: ${nodeData.domain}`,
