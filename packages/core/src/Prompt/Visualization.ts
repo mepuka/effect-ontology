@@ -342,11 +342,9 @@ export const toHierarchyTreePlotData = (tree: HierarchyTree): HierarchyTreePlotD
       name: node.label,
       value: node.propertyCount,
       depth: node.depth,
-      children: pipe(
-        node.children,
-        EffectArray.isNonEmptyArray,
-        (hasChildren) => (hasChildren ? EffectArray.map(node.children, convertNode) : undefined)
-      )
+      children: node.children.length > 0
+        ? pipe(node.children, EffectArray.map(convertNode))
+        : undefined
     })
 
   // If there's a single root, return it directly
