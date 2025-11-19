@@ -4,6 +4,7 @@
     "": {
       "name": "@template/basic",
       "dependencies": {
+        "@effect/ai": "^0.32.1",
         "@effect/typeclass": "^0.38.0",
         "effect": "^3.17.7",
         "jotai": "^2.15.1",
@@ -151,6 +152,8 @@
     "@effect-ontology/core": ["@effect-ontology/core@workspace:packages/core"],
 
     "@effect-ontology/ui": ["@effect-ontology/ui@workspace:packages/ui"],
+
+    "@effect/ai": ["@effect/ai@0.32.1", "", { "dependencies": { "find-my-way-ts": "^0.1.6" }, "peerDependencies": { "@effect/experimental": "^0.57.0", "@effect/platform": "^0.93.0", "@effect/rpc": "^0.72.1", "effect": "^3.19.3" } }, "sha512-6qedQhnHigkRjNsUGaXKqvsbwhvQH3Ez3aePeROBRJi0c8q9tnR1E8qhQrTSjVPWcrv9AFtP0NRTr6iAHujGWQ=="],
 
     "@effect/build-utils": ["@effect/build-utils@0.8.9", "", { "dependencies": { "micromatch": "^4.0.8", "pkg-entry-points": "^1.1.1" }, "bin": { "build-utils": "main.js" } }, "sha512-wzunjr8pyNjghLueo5ePQD7vaM3qeO2H/jF57hNYbQM/rxfipBWYKukoqWyp04qGZ+V86FyOHb8zD5+PMZvH2A=="],
 

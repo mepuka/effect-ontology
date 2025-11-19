@@ -4,10 +4,13 @@
  * This module defines the event types emitted during the extraction pipeline
  * and the error types that can occur at each stage.
  *
+ * Follows @effect/ai patterns for error handling using Schema.TaggedError
+ * for serializable, well-structured errors with rich context.
+ *
  * @since 1.0.0
  */
 
-import { Data } from "effect"
+import { Data, Schema as S } from "effect"
 
 /**
  * Events emitted during the extraction pipeline.
@@ -97,6 +100,11 @@ export const ExtractionEvent = Data.taggedEnum<ExtractionEvent>()
  * Each stage of the pipeline can emit specific error types that are tagged
  * for precise error handling with Effect.catchTags().
  *
+ * Following @effect/ai patterns, these errors use Schema.TaggedError for:
+ * - Automatic encoding/decoding
+ * - Rich context (module, method, description)
+ * - Serialization support
+ *
  * @since 1.0.0
  * @category errors
  */
@@ -106,31 +114,75 @@ export const ExtractionEvent = Data.taggedEnum<ExtractionEvent>()
  *
  * @since 1.0.0
  * @category errors
+ * @example
+ * ```ts
+ * new LLMError({
+ *   module: "Anthropic",
+ *   method: "generateText",
+ *   reason: "ApiTimeout",
+ *   description: "Request timed out after 30 seconds"
+ * })
+ * ```
  */
-export class LLMError extends Data.TaggedError("LLMError")<{
-  readonly cause: unknown
-  readonly message?: string
-}> {}
+export class LLMError extends S.TaggedError<LLMError>(
+  "@effect-ontology/Extraction/LLMError"
+)("LLMError", {
+  module: S.String,
+  method: S.String,
+  reason: S.Literal("ApiError", "ApiTimeout", "InvalidResponse", "ValidationFailed"),
+  description: S.optional(S.String),
+  cause: S.optional(S.Unknown)
+}) {}
 
 /**
  * Error emitted when RDF conversion fails.
  *
  * @since 1.0.0
  * @category errors
+ * @example
+ * ```ts
+ * new RdfError({
+ *   module: "RdfService",
+ *   method: "jsonToStore",
+ *   reason: "InvalidQuad",
+ *   description: "Blank node format invalid"
+ * })
+ * ```
  */
-export class RdfError extends Data.TaggedError("RdfError")<{
-  readonly cause: unknown
-}> {}
+export class RdfError extends S.TaggedError<RdfError>(
+  "@effect-ontology/Extraction/RdfError"
+)("RdfError", {
+  module: S.String,
+  method: S.String,
+  reason: S.Literal("InvalidQuad", "ParseError", "StoreError"),
+  description: S.optional(S.String),
+  cause: S.optional(S.Unknown)
+}) {}
 
 /**
  * Error emitted when SHACL validation process fails (not validation violations).
  *
  * @since 1.0.0
  * @category errors
+ * @example
+ * ```ts
+ * new ShaclError({
+ *   module: "ShaclService",
+ *   method: "validate",
+ *   reason: "ValidatorCrash",
+ *   description: "SHACL validator threw exception"
+ * })
+ * ```
  */
-export class ShaclError extends Data.TaggedError("ShaclError")<{
-  readonly cause: unknown
-}> {}
+export class ShaclError extends S.TaggedError<ShaclError>(
+  "@effect-ontology/Extraction/ShaclError"
+)("ShaclError", {
+  module: S.String,
+  method: S.String,
+  reason: S.Literal("ValidatorCrash", "InvalidShapesGraph", "LoadError"),
+  description: S.optional(S.String),
+  cause: S.optional(S.Unknown)
+}) {}
 
 /**
  * Union type of all extraction errors.
