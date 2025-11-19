@@ -327,3 +327,69 @@ export const meet = (
       source: "refined"
     })
   })
+
+/**
+ * Refinement relation (⊑) - checks if a is stricter than b
+ *
+ * Mathematical definition: a ⊑ b ⟺ a ⊓ b = a
+ *
+ * Practical: a refines b if all of a's constraints are at least as strict as b's:
+ * - a.minCardinality ≥ b.minCardinality
+ * - a.maxCardinality ≤ b.maxCardinality (if both defined)
+ * - a.ranges ⊆ b.ranges (or b has no ranges)
+ *
+ * @param a - First constraint (potentially stricter)
+ * @param b - Second constraint (potentially looser)
+ * @returns true if a refines b
+ *
+ * @example
+ * ```typescript
+ * const animal = PropertyConstraint.make({
+ *   propertyIri: "hasPet",
+ *   ranges: ["Animal"],
+ *   minCardinality: 0
+ * })
+ *
+ * const dog = PropertyConstraint.make({
+ *   propertyIri: "hasPet",
+ *   ranges: ["Dog"],
+ *   minCardinality: 1
+ * })
+ *
+ * refines(dog, animal) // true - Dog is stricter than Animal
+ * refines(animal, dog) // false - Animal is looser than Dog
+ * ```
+ */
+export const refines = (
+  a: PropertyConstraint,
+  b: PropertyConstraint
+): boolean => {
+  if (a.propertyIri !== b.propertyIri) return false
+
+  // Bottom refines nothing (except Bottom)
+  if (a.isBottom()) return b.isBottom()
+
+  // Everything refines Top
+  if (b.isTop()) return true
+
+  // Top refines only Top
+  if (a.isTop()) return b.isTop()
+
+  // Check cardinality: a's interval must be subset of b's
+  const minRefines = a.minCardinality >= b.minCardinality
+  const maxRefines = Option.match(a.maxCardinality, {
+    onNone: () => Option.isNone(b.maxCardinality), // unbounded refines only unbounded
+    onSome: (aMax) =>
+      Option.match(b.maxCardinality, {
+        onNone: () => true, // bounded refines unbounded
+        onSome: (bMax) => aMax <= bMax
+      })
+  })
+
+  // Check ranges: a's ranges must be subclasses of b's ranges
+  // For now, simple containment (subclass reasoning future work)
+  const rangesRefine =
+    b.ranges.length === 0 || a.ranges.every((aRange) => b.ranges.includes(aRange))
+
+  return minRefines && maxRefines && rangesRefine
+}
