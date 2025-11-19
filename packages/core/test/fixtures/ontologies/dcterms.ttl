@@ -1,0 +1,172 @@
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Dublin Core Metadata Terms (Simplified)
+# Standard for cross-domain information resource description
+
+### Classes
+
+dcterms:Agent a owl:Class ;
+    rdfs:label "Agent" ;
+    rdfs:comment "A resource that acts or has the power to act." .
+
+dcterms:AgentClass a owl:Class ;
+    rdfs:subClassOf rdfs:Class ;
+    rdfs:label "Agent Class" ;
+    rdfs:comment "A group of agents." .
+
+dcterms:BibliographicResource a owl:Class ;
+    rdfs:label "Bibliographic Resource" ;
+    rdfs:comment "A book, article, or other documentary resource." .
+
+dcterms:FileFormat a owl:Class ;
+    rdfs:label "File Format" ;
+    rdfs:comment "A digital resource format." .
+
+dcterms:Frequency a owl:Class ;
+    rdfs:label "Frequency" ;
+    rdfs:comment "A rate at which something recurs." .
+
+dcterms:Jurisdiction a owl:Class ;
+    rdfs:label "Jurisdiction" ;
+    rdfs:comment "The extent or range of judicial, law enforcement, or other authority." .
+
+dcterms:LicenseDocument a owl:Class ;
+    rdfs:label "License Document" ;
+    rdfs:comment "A legal document giving official permission to do something with a resource." .
+
+dcterms:LinguisticSystem a owl:Class ;
+    rdfs:label "Linguistic System" ;
+    rdfs:comment "A system of signs, symbols, sounds, gestures, or rules used in communication." .
+
+dcterms:Location a owl:Class ;
+    rdfs:label "Location" ;
+    rdfs:comment "A spatial region or named place." .
+
+dcterms:LocationPeriodOrJurisdiction a owl:Class ;
+    rdfs:label "Location, Period, or Jurisdiction" ;
+    rdfs:comment "A location, period of time, or jurisdiction." .
+
+dcterms:MediaType a owl:Class ;
+    rdfs:label "Media Type" ;
+    rdfs:comment "A file format or physical medium." .
+
+dcterms:MediaTypeOrExtent a owl:Class ;
+    rdfs:label "Media Type or Extent" ;
+    rdfs:comment "A media type or extent." .
+
+dcterms:MethodOfAccrual a owl:Class ;
+    rdfs:label "Method of Accrual" ;
+    rdfs:comment "A method by which resources are added to a collection." .
+
+dcterms:MethodOfInstruction a owl:Class ;
+    rdfs:label "Method Of Instruction" ;
+    rdfs:comment "A process that is used to engender knowledge, attitudes, and skills." .
+
+dcterms:PeriodOfTime a owl:Class ;
+    rdfs:label "Period of Time" ;
+    rdfs:comment "An interval of time that is named or defined by its start and end dates." .
+
+dcterms:PhysicalMedium a owl:Class ;
+    rdfs:label "Physical Medium" ;
+    rdfs:comment "A physical material or carrier." .
+
+dcterms:PhysicalResource a owl:Class ;
+    rdfs:label "Physical Resource" ;
+    rdfs:comment "A material thing." .
+
+dcterms:Policy a owl:Class ;
+    rdfs:label "Policy" ;
+    rdfs:comment "A plan or course of action by an authority, intended to influence decisions, actions, and other matters." .
+
+dcterms:ProvenanceStatement a owl:Class ;
+    rdfs:label "Provenance Statement" ;
+    rdfs:comment "A statement of any changes in ownership and custody of a resource since its creation." .
+
+dcterms:RightsStatement a owl:Class ;
+    rdfs:label "Rights Statement" ;
+    rdfs:comment "A statement about the intellectual property rights (IPR) held in or over a resource." .
+
+dcterms:SizeOrDuration a owl:Class ;
+    rdfs:label "Size or Duration" ;
+    rdfs:comment "A dimension or extent, or a time taken to play or execute." .
+
+dcterms:Standard a owl:Class ;
+    rdfs:label "Standard" ;
+    rdfs:comment "A reference point against which other things can be evaluated." .
+
+### Properties (Examples - Dublin Core has many)
+
+dcterms:title a owl:DatatypeProperty ;
+    rdfs:label "Title" ;
+    rdfs:comment "A name given to the resource." ;
+    rdfs:range rdfs:Literal .
+
+dcterms:creator a owl:ObjectProperty ;
+    rdfs:label "Creator" ;
+    rdfs:comment "An entity responsible for making the resource." ;
+    rdfs:range dcterms:Agent .
+
+dcterms:subject a owl:ObjectProperty ;
+    rdfs:label "Subject" ;
+    rdfs:comment "A topic of the resource." .
+
+dcterms:description a owl:DatatypeProperty ;
+    rdfs:label "Description" ;
+    rdfs:comment "An account of the resource." ;
+    rdfs:range rdfs:Literal .
+
+dcterms:publisher a owl:ObjectProperty ;
+    rdfs:label "Publisher" ;
+    rdfs:comment "An entity responsible for making the resource available." ;
+    rdfs:range dcterms:Agent .
+
+dcterms:contributor a owl:ObjectProperty ;
+    rdfs:label "Contributor" ;
+    rdfs:comment "An entity responsible for making contributions to the resource." ;
+    rdfs:range dcterms:Agent .
+
+dcterms:date a owl:DatatypeProperty ;
+    rdfs:label "Date" ;
+    rdfs:comment "A point or period of time associated with an event in the lifecycle of the resource." ;
+    rdfs:range rdfs:Literal .
+
+dcterms:type a owl:ObjectProperty ;
+    rdfs:label "Type" ;
+    rdfs:comment "The nature or genre of the resource." .
+
+dcterms:format a owl:ObjectProperty ;
+    rdfs:label "Format" ;
+    rdfs:comment "The file format, physical medium, or dimensions of the resource." ;
+    rdfs:range dcterms:MediaTypeOrExtent .
+
+dcterms:identifier a owl:DatatypeProperty ;
+    rdfs:label "Identifier" ;
+    rdfs:comment "An unambiguous reference to the resource within a given context." ;
+    rdfs:range rdfs:Literal .
+
+dcterms:source a owl:ObjectProperty ;
+    rdfs:label "Source" ;
+    rdfs:comment "A related resource from which the described resource is derived." .
+
+dcterms:language a owl:ObjectProperty ;
+    rdfs:label "Language" ;
+    rdfs:comment "A language of the resource." ;
+    rdfs:range dcterms:LinguisticSystem .
+
+dcterms:relation a owl:ObjectProperty ;
+    rdfs:label "Relation" ;
+    rdfs:comment "A related resource." .
+
+dcterms:coverage a owl:ObjectProperty ;
+    rdfs:label "Coverage" ;
+    rdfs:comment "The spatial or temporal topic of the resource." ;
+    rdfs:range dcterms:LocationPeriodOrJurisdiction .
+
+dcterms:rights a owl:ObjectProperty ;
+    rdfs:label "Rights" ;
+    rdfs:comment "Information about rights held in and over the resource." ;
+    rdfs:range dcterms:RightsStatement .
