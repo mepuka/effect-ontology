@@ -22,6 +22,7 @@ import * as Focus from "../../src/Prompt/Focus.js"
 import * as KnowledgeIndex from "../../src/Prompt/KnowledgeIndex.js"
 import * as Render from "../../src/Prompt/Render.js"
 import { solveToKnowledgeIndex } from "../../src/Prompt/Solver.js"
+import { enrichKnowledgeIndex, generateEnrichedIndex } from "../../src/Prompt/Enrichment.js"
 
 describe("KnowledgeIndex Integration", () => {
   const ontology = `
@@ -283,6 +284,106 @@ ex:hasBreed a owl:DatatypeProperty ;
         // Should NOT include unrelated (Animal, Vehicle)
         expect(KnowledgeIndex.has(neighborhoodIndex, "http://example.org/Animal")).toBe(false)
         expect(KnowledgeIndex.has(neighborhoodIndex, "http://example.org/Vehicle")).toBe(false)
+      }).pipe(Effect.runPromise))
+  })
+
+  describe("Enrichment Phase", () => {
+    it("should populate inherited properties in Manager from Person and Employee", () =>
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(ontology)
+
+        // Phase 1: Pure algebra fold creates raw index with empty inheritedProperties
+        const rawIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+
+        // Verify Manager exists but has empty inheritedProperties (algebra creates this)
+        const rawManager = KnowledgeIndex.get(rawIndex, "http://example.org/Manager")
+        expect(rawManager._tag).toBe("Some")
+        if (rawManager._tag === "Some") {
+          // Should have own property (hasTeamSize)
+          const ownPropIris = rawManager.value.properties.map((p) => p.iri)
+          expect(ownPropIris).toContain("http://example.org/hasTeamSize")
+
+          // Algebra creates empty inheritedProperties
+          expect(rawManager.value.inheritedProperties).toHaveLength(0)
+        }
+
+        // Phase 2: Enrichment populates inheritedProperties using InheritanceService
+        const enrichedIndex = yield* enrichKnowledgeIndex(rawIndex, graph, context)
+
+        // Verify Manager now has inherited properties
+        const enrichedManager = KnowledgeIndex.get(enrichedIndex, "http://example.org/Manager")
+        expect(enrichedManager._tag).toBe("Some")
+        if (enrichedManager._tag === "Some") {
+          const inheritedIris = enrichedManager.value.inheritedProperties.map((p) => p.iri)
+
+          // From Employee
+          expect(inheritedIris).toContain("http://example.org/hasSalary")
+
+          // From Person
+          expect(inheritedIris).toContain("http://example.org/hasName")
+
+          // Should NOT include own property in inherited
+          expect(inheritedIris).not.toContain("http://example.org/hasTeamSize")
+
+          // Should have exactly 2 inherited properties
+          expect(enrichedManager.value.inheritedProperties).toHaveLength(2)
+
+          // Inherited properties should be sorted by IRI (deterministic)
+          const sorted = [...inheritedIris].sort()
+          expect(inheritedIris).toEqual(sorted)
+        }
+      }).pipe(Effect.runPromise))
+
+    it("should use bounded concurrency during enrichment", () =>
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(ontology)
+        const rawIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
+
+        // Enrichment should complete successfully with bounded concurrency
+        const enrichedIndex = yield* enrichKnowledgeIndex(rawIndex, graph, context)
+
+        // Verify all classes are still present after enrichment
+        expect(KnowledgeIndex.size(enrichedIndex)).toBe(KnowledgeIndex.size(rawIndex))
+
+        // Verify structure is preserved (labels unchanged)
+        const person = KnowledgeIndex.get(enrichedIndex, "http://example.org/Person")
+        expect(person._tag).toBe("Some")
+        if (person._tag === "Some") {
+          expect(person.value.label).toBe("Person")
+        }
+      }).pipe(Effect.runPromise))
+
+    it("should work with complete pipeline generateEnrichedIndex", () =>
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(ontology)
+
+        // Complete pipeline: Parse → Solve → Enrich
+        const enrichedIndex = yield* generateEnrichedIndex(
+          graph,
+          context,
+          knowledgeIndexAlgebra
+        )
+
+        // Verify Employee has inherited properties from Person
+        const employee = KnowledgeIndex.get(enrichedIndex, "http://example.org/Employee")
+        expect(employee._tag).toBe("Some")
+        if (employee._tag === "Some") {
+          const inheritedIris = employee.value.inheritedProperties.map((p) => p.iri)
+
+          // From Person
+          expect(inheritedIris).toContain("http://example.org/hasName")
+
+          // Should have 1 inherited property
+          expect(employee.value.inheritedProperties).toHaveLength(1)
+        }
+
+        // Verify Person has no inherited properties (root class, only has Thing as parent which has no properties)
+        const person = KnowledgeIndex.get(enrichedIndex, "http://example.org/Person")
+        expect(person._tag).toBe("Some")
+        if (person._tag === "Some") {
+          // Person should have no inherited properties (Thing has no properties)
+          expect(person.value.inheritedProperties).toHaveLength(0)
+        }
       }).pipe(Effect.runPromise))
   })
 })
