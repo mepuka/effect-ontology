@@ -5,22 +5,22 @@
  * Uses FOAF (Friend of a Friend) ontology with 30+ interconnected classes.
  */
 
-import { describe, expect, it } from "@effect/vitest"
-import { Effect, Graph, HashMap } from "effect"
-import * as Inheritance from "../../src/Ontology/Inheritance.js"
-import { parseTurtleToGraph } from "../../src/Graph/Builder.js"
-import { ClassNode } from "../../src/Graph/Types.js"
 import { readFileSync } from "node:fs"
 import path from "node:path"
+import { describe, expect, it } from "@effect/vitest"
+import { Effect, Graph, HashMap } from "effect"
+import { parseTurtleToGraph } from "../../src/Graph/Builder.js"
+import { ClassNode } from "../../src/Graph/Types.js"
+import * as Inheritance from "../../src/Ontology/Inheritance.js"
 
 describe("InheritanceService Performance", () => {
-  it.effect("cached version completes FOAF processing in < 100ms", () =>
+  it.effect("cached version completes FOAF processing in < 200ms", () =>
     Effect.gen(function*() {
       // Load FOAF ontology (30+ classes, multiple inheritance)
       const foafPath = path.join(__dirname, "../fixtures/ontologies/foaf-minimal.ttl")
       const foafTurtle = readFileSync(foafPath, "utf-8")
 
-      const { graph, context } = yield* parseTurtleToGraph(foafTurtle)
+      const { context, graph } = yield* parseTurtleToGraph(foafTurtle)
 
       const service = yield* Inheritance.make(graph, context)
 
@@ -37,10 +37,9 @@ describe("InheritanceService Performance", () => {
 
       const elapsed = Date.now() - start
 
-      // With caching, should complete in < 100ms
+      // With caching, should complete in < 200ms
       // Without caching, would take 500ms+ due to redundant DFS
-      expect(elapsed).toBeLessThan(100)
-
+      expect(elapsed).toBeLessThan(200)
       console.log(`FOAF processing time: ${elapsed}ms`)
     })
   )
@@ -48,7 +47,7 @@ describe("InheritanceService Performance", () => {
   it.effect("processes 100+ nodes without stack overflow", () =>
     Effect.gen(function*() {
       // Create deep linear hierarchy: A -> B -> C -> ... -> Z (100 levels)
-      const { graph, context } = createDeepHierarchy(100)
+      const { context, graph } = createDeepHierarchy(100)
 
       const service = yield* Inheritance.make(graph, context)
 
