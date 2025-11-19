@@ -1,0 +1,143 @@
+/**
+ * Extraction Pipeline Events and Errors
+ *
+ * This module defines the event types emitted during the extraction pipeline
+ * and the error types that can occur at each stage.
+ *
+ * @since 1.0.0
+ */
+
+import { Data } from "effect"
+
+/**
+ * Events emitted during the extraction pipeline.
+ *
+ * These events are emitted as a Stream to provide real-time progress updates
+ * to the UI layer.
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export type ExtractionEvent = Data.TaggedEnum<{
+  /**
+   * Emitted when the LLM is processing the input text.
+   *
+   * @since 1.0.0
+   */
+  LLMThinking: {}
+
+  /**
+   * Emitted after the LLM returns JSON and it has been successfully parsed.
+   *
+   * @since 1.0.0
+   */
+  JSONParsed: {
+    /** Number of entities extracted */
+    readonly count: number
+  }
+
+  /**
+   * Emitted after JSON entities have been converted to RDF quads.
+   *
+   * @since 1.0.0
+   */
+  RDFConstructed: {
+    /** Number of RDF triples in the graph */
+    readonly triples: number
+  }
+
+  /**
+   * Emitted after SHACL validation completes.
+   *
+   * @since 1.0.0
+   */
+  ValidationComplete: {
+    /** SHACL validation report */
+    readonly report: ValidationReport
+  }
+}>
+
+/**
+ * SHACL validation report structure.
+ *
+ * This is a simplified representation of the rdf-validate-shacl ValidationReport.
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export interface ValidationReport {
+  readonly conforms: boolean
+  readonly results: ReadonlyArray<ValidationResult>
+}
+
+/**
+ * Individual SHACL validation result.
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export interface ValidationResult {
+  readonly severity: "Violation" | "Warning" | "Info"
+  readonly message: string
+  readonly path?: string
+  readonly focusNode?: string
+}
+
+/**
+ * Extraction event constructors and matchers.
+ *
+ * @since 1.0.0
+ * @category constructors
+ */
+export const ExtractionEvent = Data.taggedEnum<ExtractionEvent>()
+
+/**
+ * Errors that can occur during the extraction pipeline.
+ *
+ * Each stage of the pipeline can emit specific error types that are tagged
+ * for precise error handling with Effect.catchTags().
+ *
+ * @since 1.0.0
+ * @category errors
+ */
+
+/**
+ * Error emitted when LLM API call fails or returns invalid response.
+ *
+ * @since 1.0.0
+ * @category errors
+ */
+export class LLMError extends Data.TaggedError("LLMError")<{
+  readonly cause: unknown
+  readonly message?: string
+}> {}
+
+/**
+ * Error emitted when RDF conversion fails.
+ *
+ * @since 1.0.0
+ * @category errors
+ */
+export class RdfError extends Data.TaggedError("RdfError")<{
+  readonly cause: unknown
+}> {}
+
+/**
+ * Error emitted when SHACL validation process fails (not validation violations).
+ *
+ * @since 1.0.0
+ * @category errors
+ */
+export class ShaclError extends Data.TaggedError("ShaclError")<{
+  readonly cause: unknown
+}> {}
+
+/**
+ * Union type of all extraction errors.
+ *
+ * Use this type with Effect.catchTags() for precise error recovery.
+ *
+ * @since 1.0.0
+ * @category errors
+ */
+export type ExtractionError = LLMError | RdfError | ShaclError
