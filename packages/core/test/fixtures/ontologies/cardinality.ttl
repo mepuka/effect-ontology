@@ -1,0 +1,140 @@
+@prefix : <http://example.org/test#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ============================================================================
+# Test Ontology: Cardinality Refinement
+#
+# Purpose: Test that cardinality constraints refine correctly down hierarchy
+#
+# Expected Behavior:
+#   Item.hasTag → MinCard(0), MaxCard(∞)
+#   SpecialItem.hasTag → MinCard(2), MaxCard(∞)  ← REFINED (min increased)
+#   LimitedItem.hasTag → MinCard(2), MaxCard(5)  ← REFINED (max decreased)
+#
+# Mathematical Model:
+#   SpecialItem ≡ Item ⊓ (≥2 hasTag)
+#   LimitedItem ≡ SpecialItem ⊓ (≤5 hasTag)
+#
+# Test Scenario:
+#   1. Item has hasTag property (optional, unbounded)
+#   2. SpecialItem adds minCardinality 2
+#   3. LimitedItem adds maxCardinality 5
+#   4. Expected: Interval intersection [2, 5]
+# ============================================================================
+
+# Ontology declaration
+: a owl:Ontology ;
+  rdfs:label "Cardinality Test Ontology" ;
+  rdfs:comment "Tests cardinality bound refinement" .
+
+# ============================================================================
+# Classes
+# ============================================================================
+
+:Item a owl:Class ;
+  rdfs:label "Item" ;
+  rdfs:comment "Base class for tagged items" .
+
+:Tag a owl:Class ;
+  rdfs:label "Tag" ;
+  rdfs:comment "A label or category" .
+
+# ============================================================================
+# Properties
+# ============================================================================
+
+:hasTag a owl:ObjectProperty ;
+  rdfs:label "has tag" ;
+  rdfs:comment "Associates an item with tags" ;
+  rdfs:domain :Item ;
+  rdfs:range :Tag .
+
+# ============================================================================
+# Specialized Classes with Cardinality Restrictions
+# ============================================================================
+
+:SpecialItem a owl:Class ;
+  rdfs:label "Special Item" ;
+  rdfs:comment "An item that must have at least 2 tags" ;
+  rdfs:subClassOf :Item ;
+  rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :hasTag ;
+    owl:minCardinality "2"^^xsd:nonNegativeInteger
+  ] .
+
+:LimitedItem a owl:Class ;
+  rdfs:label "Limited Item" ;
+  rdfs:comment "A special item that can have at most 5 tags" ;
+  rdfs:subClassOf :SpecialItem ;
+  rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :hasTag ;
+    owl:maxCardinality "5"^^xsd:nonNegativeInteger
+  ] .
+
+:ExactlyThree a owl:Class ;
+  rdfs:label "Exactly Three Tags" ;
+  rdfs:comment "An item with exactly 3 tags (tests owl:cardinality)" ;
+  rdfs:subClassOf :Item ;
+  rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :hasTag ;
+    owl:cardinality "3"^^xsd:nonNegativeInteger
+  ] .
+
+# ============================================================================
+# Additional Test Cases
+# ============================================================================
+
+# Test functional property (max cardinality 1)
+:hasId a owl:FunctionalProperty, owl:DatatypeProperty ;
+  rdfs:label "has ID" ;
+  rdfs:comment "Unique identifier (functional property)" ;
+  rdfs:domain :Item ;
+  rdfs:range xsd:string .
+
+:UniqueItem a owl:Class ;
+  rdfs:label "Unique Item" ;
+  rdfs:comment "Item with required unique ID" ;
+  rdfs:subClassOf :Item ;
+  rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :hasId ;
+    owl:minCardinality "1"^^xsd:nonNegativeInteger
+  ] .
+
+# ============================================================================
+# Expected Test Results
+# ============================================================================
+
+# Item.hasTag:
+#   minCardinality: 0
+#   maxCardinality: None (unbounded)
+
+# SpecialItem.hasTag:
+#   minCardinality: 2  ← REFINED from 0
+#   maxCardinality: None
+
+# LimitedItem.hasTag:
+#   minCardinality: 2  ← Inherited from SpecialItem
+#   maxCardinality: Some(5)  ← REFINED from None
+
+# ExactlyThree.hasTag:
+#   minCardinality: 3  ← owl:cardinality sets both
+#   maxCardinality: Some(3)
+
+# Item.hasId:
+#   minCardinality: 0
+#   maxCardinality: Some(1)  ← From owl:FunctionalProperty
+
+# UniqueItem.hasId:
+#   minCardinality: 1  ← REFINED from 0
+#   maxCardinality: Some(1)  ← Inherited from functional
+
+# Verification (lattice property):
+#   For all classes C in hierarchy:
+#     C.minCardinality >= Parent.minCardinality (monotonic increase)
+#     C.maxCardinality <= Parent.maxCardinality (monotonic decrease)
