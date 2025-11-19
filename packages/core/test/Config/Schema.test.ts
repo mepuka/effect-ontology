@@ -64,7 +64,7 @@ describe("Config.Schema", () => {
           Effect.flip
         )
 
-        expect(result._tag).toBe("MissingData")
+        expect(result._tag).toBe("ConfigError")
       }))
   })
 
@@ -201,7 +201,7 @@ describe("Config.Schema", () => {
           Effect.flip
         )
 
-        expect(result._tag).toBe("And")
+        expect(result._tag).toBe("ConfigError")
       }))
   })
 
@@ -258,7 +258,7 @@ describe("Config.Schema", () => {
           Effect.flip
         )
 
-        expect(result._tag).toBe("And")
+        expect(result._tag).toBe("ConfigError")
       }))
   })
 
