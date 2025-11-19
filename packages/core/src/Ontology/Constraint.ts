@@ -13,13 +13,22 @@
  * @module Ontology/Constraint
  */
 
-import { Option, Schema } from "effect"
+import { Data, Effect, Option, Schema } from "effect"
 
 /**
  * Source of a constraint
  */
 const ConstraintSource = Schema.Literal("domain", "restriction", "refined")
 export type ConstraintSource = typeof ConstraintSource.Type
+
+/**
+ * Error when meet operation fails
+ */
+export class MeetError extends Data.TaggedError("MeetError")<{
+  readonly propertyA: string
+  readonly propertyB: string
+  readonly message: string
+}> {}
 
 /**
  * Intersect two range arrays (set intersection)
@@ -239,8 +248,7 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
  *
  * @param a - First constraint
  * @param b - Second constraint
- * @returns Refined constraint (greatest lower bound)
- * @throws Error if property IRIs differ
+ * @returns Effect containing refined constraint (greatest lower bound), or MeetError if property IRIs differ
  *
  * @example
  * ```typescript
@@ -256,53 +264,66 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
  *   minCardinality: 1
  * })
  *
- * const result = meet(animal, dog)
+ * const result = yield* meet(animal, dog)
  * // Result: ranges = ["Dog"], minCardinality = 1
  * ```
  */
 export const meet = (
   a: PropertyConstraint,
   b: PropertyConstraint
-): PropertyConstraint => {
-  // Precondition: same property IRI
-  if (a.propertyIri !== b.propertyIri) {
-    throw new Error(
-      `Cannot meet constraints for different properties: ${a.propertyIri} vs ${b.propertyIri}`
-    )
-  }
+): Effect.Effect<PropertyConstraint, MeetError> =>
+  Effect.gen(function* () {
+    // Precondition: same property IRI
+    if (a.propertyIri !== b.propertyIri) {
+      return yield* Effect.fail(
+        new MeetError({
+          propertyA: a.propertyIri,
+          propertyB: b.propertyIri,
+          message: `Cannot meet constraints for different properties: ${a.propertyIri} vs ${b.propertyIri}`
+        })
+      )
+    }
 
-  // Short-circuit: Bottom absorbs everything
-  if (a.isBottom() || b.isBottom()) {
-    return PropertyConstraint.bottom(a.propertyIri, a.label)
-  }
+    // Short-circuit: Bottom absorbs everything
+    if (a.isBottom() || b.isBottom()) {
+      return PropertyConstraint.bottom(a.propertyIri, a.label)
+    }
 
-  // Refine ranges (intersection semantics)
-  const refinedRanges = intersectRanges(a.ranges, b.ranges)
+    // Refine ranges (intersection semantics)
+    const refinedRanges = intersectRanges(a.ranges, b.ranges)
 
-  // Refine cardinality (take stricter bounds)
-  const minCard = Math.max(a.minCardinality, b.minCardinality)
-  const maxCard = minOption(a.maxCardinality, b.maxCardinality)
+    // Refine cardinality (take stricter bounds)
+    const minCard = Math.max(a.minCardinality, b.minCardinality)
+    const maxCard = minOption(a.maxCardinality, b.maxCardinality)
 
-  // Refine allowed values (intersection)
-  const refinedValues = intersectArrays(a.allowedValues, b.allowedValues)
+    // Refine allowed values (intersection)
+    const refinedValues = intersectArrays(a.allowedValues, b.allowedValues)
 
-  // Check for contradictions
-  const isBottom = Option.match(maxCard, {
-    onNone: () => false,
-    onSome: (max) => minCard > max
+    // Check for cardinality contradictions
+    const hasCardinalityContradiction = Option.match(maxCard, {
+      onNone: () => false,
+      onSome: (max) => minCard > max
+    })
+
+    // Check for allowedValues contradictions:
+    // If both constraints have non-empty allowedValues and their intersection is empty,
+    // this is unsatisfiable (no value can satisfy both constraints)
+    const hasAllowedValuesContradiction =
+      a.allowedValues.length > 0 &&
+      b.allowedValues.length > 0 &&
+      refinedValues.length === 0
+
+    if (hasCardinalityContradiction || hasAllowedValuesContradiction) {
+      return PropertyConstraint.bottom(a.propertyIri, a.label)
+    }
+
+    return PropertyConstraint.make({
+      propertyIri: a.propertyIri,
+      label: a.label,
+      ranges: refinedRanges,
+      minCardinality: minCard,
+      maxCardinality: maxCard,
+      allowedValues: refinedValues,
+      source: "refined"
+    })
   })
-
-  if (isBottom) {
-    return PropertyConstraint.bottom(a.propertyIri, a.label)
-  }
-
-  return PropertyConstraint.make({
-    propertyIri: a.propertyIri,
-    label: a.label,
-    ranges: refinedRanges,
-    minCardinality: minCard,
-    maxCardinality: maxCard,
-    allowedValues: refinedValues,
-    source: "refined"
-  })
-}
