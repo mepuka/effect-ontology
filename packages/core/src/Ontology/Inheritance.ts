@@ -7,7 +7,7 @@
  * Based on: docs/higher_order_monoid_implementation.md
  */
 
-import { Context, Data, Effect, Graph, HashMap, Option } from "effect"
+import { Context, Data, Effect, Graph, HashMap } from "effect"
 import type { NodeId, OntologyContext, PropertyData } from "../Graph/Types.js"
 
 /**
@@ -245,7 +245,7 @@ const getAncestorsImpl = (
  */
 const getEffectivePropertiesImpl = (
   classIri: string,
-  graph: Graph.Graph<NodeId, unknown, "directed">,
+  _graph: Graph.Graph<NodeId, unknown, "directed">,
   context: OntologyContext,
   getAncestorsCached: (iri: string) => Effect.Effect<ReadonlyArray<string>, InheritanceError | CircularInheritanceError>
 ): Effect.Effect<ReadonlyArray<PropertyData>, InheritanceError | CircularInheritanceError> =>
@@ -281,7 +281,9 @@ const getEffectivePropertiesImpl = (
       )
 
       if ("properties" in ancestorNode) {
-        ancestorProperties.push(...ancestorNode.properties)
+        for (const prop of ancestorNode.properties) {
+          ancestorProperties.push(prop)
+        }
       }
     }
 
