@@ -70,9 +70,14 @@ const generatePropertyShape = (property: PropertyData): string => {
   // Property path (required)
   constraints.push(`sh:path <${property.iri}>`)
 
-  // Label for better error messages (escape quotes and special chars)
+  // Label for better error messages (escape quotes, backslashes, and special chars)
   if (property.label) {
-    const escapedLabel = property.label.replace(/"/g, '\\"').replace(/\n/g, '\\n')
+    const escapedLabel = property.label
+      .replace(/\\/g, '\\\\')  // Escape backslashes first
+      .replace(/"/g, '\\"')     // Escape quotes
+      .replace(/\n/g, '\\n')    // Escape newlines
+      .replace(/\r/g, '\\r')    // Escape carriage returns
+      .replace(/\t/g, '\\t')    // Escape tabs
     constraints.push(`sh:name "${escapedLabel}"`)
   }
 
@@ -128,8 +133,13 @@ const generateNodeShape = (classNode: ClassNode, shapePrefix: string = "shape"):
   // Generate property shapes
   const propertyShapes = classNode.properties.map(generatePropertyShape).join(" ;")
 
-  // Escape quotes in labels
-  const escapedLabel = (classNode.label || localName).replace(/"/g, '\\"')
+  // Escape quotes, backslashes, and special chars in labels
+  const escapedLabel = (classNode.label || localName)
+    .replace(/\\/g, '\\\\')  // Escape backslashes first
+    .replace(/"/g, '\\"')     // Escape quotes
+    .replace(/\n/g, '\\n')    // Escape newlines
+    .replace(/\r/g, '\\r')    // Escape carriage returns
+    .replace(/\t/g, '\\t')    // Escape tabs
 
   return `
 ${shapeIri}
