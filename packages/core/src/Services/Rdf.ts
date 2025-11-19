@@ -122,7 +122,7 @@ export class RdfService extends Effect.Service<RdfService>()("RdfService", {
     jsonToStore: (graph: KnowledgeGraph) =>
       Effect.sync(() => {
         const store = new N3.Store()
-        const { quad, namedNode, blankNode, literal } = N3.DataFactory
+        const { blankNode, literal, namedNode, quad } = N3.DataFactory
 
         // Helper to create subject term (blank node or named node)
         const createSubject = (id: string): N3.NamedNode | N3.BlankNode =>
@@ -146,10 +146,9 @@ export class RdfService extends Effect.Service<RdfService>()("RdfService", {
             const predicate = namedNode(prop.predicate)
 
             // Object can be literal or reference
-            const object =
-              typeof prop.object === "string"
-                ? literal(prop.object)
-                : createSubject(prop.object["@id"])
+            const object = typeof prop.object === "string"
+              ? literal(prop.object)
+              : createSubject(prop.object["@id"])
 
             store.addQuad(quad(subject, predicate, object))
           }

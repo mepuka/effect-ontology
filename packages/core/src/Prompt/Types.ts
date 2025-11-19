@@ -8,7 +8,7 @@
  */
 
 import { Schema } from "effect"
-import type { NodeId, OntologyNode } from "../Graph/Types.js"
+import type { OntologyNode } from "../Graph/Types.js"
 
 /**
  * StructuredPrompt - The result type for the catamorphism
