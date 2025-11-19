@@ -13,7 +13,7 @@
  * @module Ontology/Constraint
  */
 
-import { Data, Effect, Option, Schema } from "effect"
+import { Data, Effect, Equal, Option, Schema } from "effect"
 
 /**
  * Source of a constraint
@@ -136,9 +136,9 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
    * Empty array = unconstrained (Top behavior)
    * Non-empty = allowed class IRIs
    */
-  ranges: Schema.Array(Schema.String).pipe(
+  ranges: Schema.DataFromSelf(Schema.Array(Schema.String)).pipe(
     Schema.optional,
-    Schema.withDefaults({ constructor: () => [], decoding: () => [] })
+    Schema.withDefaults({ constructor: () => Data.array([]), decoding: () => Data.array([]) })
   ),
 
   /**
@@ -158,9 +158,9 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
   /**
    * Allowed values (for owl:hasValue or enumerations)
    */
-  allowedValues: Schema.Array(Schema.String).pipe(
+  allowedValues: Schema.DataFromSelf(Schema.Array(Schema.String)).pipe(
     Schema.optional,
-    Schema.withDefaults({ constructor: () => [], decoding: () => [] })
+    Schema.withDefaults({ constructor: () => Data.array([]), decoding: () => Data.array([]) })
   ),
 
   /**
@@ -185,10 +185,10 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
     return PropertyConstraint.make({
       propertyIri: iri,
       label,
-      ranges: [],
+      ranges: Data.array([]),
       minCardinality: 0,
       maxCardinality: Option.none(),
-      allowedValues: [],
+      allowedValues: Data.array([]),
       source: "domain"
     })
   }
@@ -204,10 +204,10 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
     return PropertyConstraint.make({
       propertyIri: iri,
       label,
-      ranges: [],
+      ranges: Data.array([]),
       minCardinality: 1,
       maxCardinality: Option.some(0), // Contradiction: min > max
-      allowedValues: [],
+      allowedValues: Data.array([]),
       source: "refined"
     })
   }
@@ -275,17 +275,51 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
 export const meet = (
   a: PropertyConstraint,
   b: PropertyConstraint
-): Effect.Effect<PropertyConstraint, MeetError> =>
-  Effect.gen(function*() {
-    // Precondition: same property IRI
-    if (a.propertyIri !== b.propertyIri) {
-      return yield* Effect.fail(
-        new MeetError({
-          propertyA: a.propertyIri,
-          propertyB: b.propertyIri,
-          message: `Cannot meet constraints for different properties: ${a.propertyIri} vs ${b.propertyIri}`
-        })
-      )
+): Effect.Effect<PropertyConstraint, MeetError> => {
+  // Precondition: same property IRI
+  if (a.propertyIri !== b.propertyIri) {
+    return Effect.fail(
+      new MeetError({
+        propertyA: a.propertyIri,
+        propertyB: b.propertyIri,
+        message: `Cannot meet constraints for different properties: ${a.propertyIri} vs ${b.propertyIri}`
+      })
+    )
+  }
+
+  // Pure computation from here - wrap in Effect.sync for lazy evaluation
+  return Effect.sync(() => {
+    // Short-circuit: Idempotence (a ⊓ a = a)
+    // Compare only semantic fields (exclude label/source metadata)
+    if (
+      Equal.equals(a.ranges, b.ranges) &&
+      a.minCardinality === b.minCardinality &&
+      Equal.equals(a.maxCardinality, b.maxCardinality) &&
+      Equal.equals(a.allowedValues, b.allowedValues)
+    ) {
+      // Semantic equality, but may differ in label/source
+      // If fully equal (including metadata), return as-is
+      if (Equal.equals(a, b)) {
+        return a
+      }
+      // Otherwise normalize label for commutativity
+      const canonicalLabel = a.label.length < b.label.length
+        ? a.label
+        : a.label.length > b.label.length
+        ? b.label
+        : a.label < b.label
+        ? a.label
+        : b.label
+
+      return PropertyConstraint.make({
+        propertyIri: a.propertyIri,
+        label: canonicalLabel,
+        ranges: a.ranges, // Already Data.array
+        minCardinality: a.minCardinality,
+        maxCardinality: a.maxCardinality,
+        allowedValues: a.allowedValues, // Already Data.array
+        source: "refined"
+      })
     }
 
     // Short-circuit: Bottom absorbs everything
@@ -320,16 +354,26 @@ export const meet = (
       return PropertyConstraint.bottom(a.propertyIri, a.label)
     }
 
+    // Choose canonical label (prefer shorter, then lexicographically smaller)
+    const canonicalLabel = a.label.length < b.label.length
+      ? a.label
+      : a.label.length > b.label.length
+      ? b.label
+      : a.label < b.label
+      ? a.label
+      : b.label
+
     return PropertyConstraint.make({
       propertyIri: a.propertyIri,
-      label: a.label,
-      ranges: refinedRanges,
+      label: canonicalLabel,
+      ranges: Data.array(refinedRanges),
       minCardinality: minCard,
       maxCardinality: maxCard,
-      allowedValues: refinedValues,
+      allowedValues: Data.array(refinedValues),
       source: "refined"
     })
   })
+}
 
 /**
  * Refinement relation (⊑) - checks if a is stricter than b
