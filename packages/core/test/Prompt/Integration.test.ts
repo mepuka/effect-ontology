@@ -82,9 +82,9 @@ ex:hasBreed a owl:DatatypeProperty ;
 
   describe("Full Pipeline", () => {
     it("should build complete knowledge index from ontology", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         // Step 1: Parse ontology
-        const { graph, context } = yield* parseTurtleToGraph(ontology)
+        const { context, graph } = yield* parseTurtleToGraph(ontology)
 
         // Step 2: Solve to KnowledgeIndex
         const fullIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
@@ -102,8 +102,8 @@ ex:hasBreed a owl:DatatypeProperty ;
       }).pipe(Effect.runPromise))
 
     it("should capture properties correctly", () =>
-      Effect.gen(function* () {
-        const { graph, context } = yield* parseTurtleToGraph(ontology)
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(ontology)
         const fullIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
 
         // Check Employee has hasSalary property
@@ -126,8 +126,8 @@ ex:hasBreed a owl:DatatypeProperty ;
 
   describe("Context Pruning", () => {
     it("should reduce context size with focused strategy", () =>
-      Effect.gen(function* () {
-        const { graph, context } = yield* parseTurtleToGraph(ontology)
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(ontology)
         const fullIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
 
         const inheritanceService = Inheritance.make(graph, context)
@@ -157,8 +157,8 @@ ex:hasBreed a owl:DatatypeProperty ;
       }).pipe(Effect.runPromise))
 
     it("should measure context reduction", () =>
-      Effect.gen(function* () {
-        const { graph, context } = yield* parseTurtleToGraph(ontology)
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(ontology)
         const fullIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
 
         const inheritanceService = Inheritance.make(graph, context)
@@ -182,8 +182,8 @@ ex:hasBreed a owl:DatatypeProperty ;
 
   describe("Inheritance Resolution", () => {
     it("should compute effective properties", () =>
-      Effect.gen(function* () {
-        const { graph, context } = yield* parseTurtleToGraph(ontology)
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(ontology)
         const inheritanceService = Inheritance.make(graph, context)
 
         // Manager should inherit from Employee and Person
@@ -208,8 +208,8 @@ ex:hasBreed a owl:DatatypeProperty ;
 
   describe("Rendering", () => {
     it("should render index to structured prompt", () =>
-      Effect.gen(function* () {
-        const { graph, context } = yield* parseTurtleToGraph(ontology)
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(ontology)
         const fullIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
 
         const prompt = Render.renderToStructuredPrompt(fullIndex)
@@ -224,8 +224,8 @@ ex:hasBreed a owl:DatatypeProperty ;
       }).pipe(Effect.runPromise))
 
     it("should render with inherited properties", () =>
-      Effect.gen(function* () {
-        const { graph, context } = yield* parseTurtleToGraph(ontology)
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(ontology)
         const fullIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
 
         const inheritanceService = Inheritance.make(graph, context)
@@ -241,8 +241,8 @@ ex:hasBreed a owl:DatatypeProperty ;
       }).pipe(Effect.runPromise))
 
     it("should render statistics", () =>
-      Effect.gen(function* () {
-        const { graph, context } = yield* parseTurtleToGraph(ontology)
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(ontology)
         const fullIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
 
         const statsText = Render.renderStats(fullIndex)
@@ -255,8 +255,8 @@ ex:hasBreed a owl:DatatypeProperty ;
 
   describe("Neighborhood Strategy", () => {
     it("should include children in neighborhood", () =>
-      Effect.gen(function* () {
-        const { graph, context } = yield* parseTurtleToGraph(ontology)
+      Effect.gen(function*() {
+        const { context, graph } = yield* parseTurtleToGraph(ontology)
         const fullIndex = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
 
         const inheritanceService = Inheritance.make(graph, context)
