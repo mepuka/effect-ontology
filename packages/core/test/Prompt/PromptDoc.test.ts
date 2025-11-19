@@ -8,12 +8,7 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
-import {
-  buildExtractionPromptDoc,
-  buildPromptDoc,
-  renderExtractionPrompt,
-  renderStructuredPrompt
-} from "../../src/Prompt/PromptDoc.js"
+import { renderExtractionPrompt, renderStructuredPrompt } from "../../src/Prompt/PromptDoc.js"
 import { StructuredPrompt } from "../../src/Prompt/Types.js"
 
 /**

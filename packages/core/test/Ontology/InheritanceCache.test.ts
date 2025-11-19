@@ -28,7 +28,7 @@ describe("InheritanceService Caching", () => {
       // Without caching: A computed twice
       // With caching: A computed once, result reused
 
-      const { graph, context } = createDiamondGraph()
+      const { context, graph } = createDiamondGraph()
 
       const service = yield* Inheritance.make(graph, context)
 
@@ -42,8 +42,7 @@ describe("InheritanceService Caching", () => {
 
       // Test will initially FAIL - we need to verify caching via call counting
       // For now, verify correct ancestors are returned
-    })
-  )
+    }))
 })
 
 /**

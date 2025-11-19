@@ -8,8 +8,8 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, HashMap } from "effect"
 import { parseTurtleToGraph } from "../../src/Graph/Builder.js"
-import * as KnowledgeIndex from "../../src/Prompt/KnowledgeIndex.js"
 import { knowledgeIndexAlgebra } from "../../src/Prompt/Algebra.js"
+import * as KnowledgeIndex from "../../src/Prompt/KnowledgeIndex.js"
 import { buildKnowledgeMetadata, type KnowledgeMetadata } from "../../src/Prompt/Metadata.js"
 import { solveToKnowledgeIndex } from "../../src/Prompt/Solver.js"
 
@@ -31,8 +31,12 @@ const createChainOntology = (numClasses: number): string => {
     classes.push(`
 ${iri} a owl:Class ;
     rdfs:label "${name}" ;
-    rdfs:comment "A ${name.toLowerCase()}" ${parent ? `;
-    rdfs:subClassOf ${parent}` : ""} .
+    rdfs:comment "A ${name.toLowerCase()}" ${
+      parent ?
+        `;
+    rdfs:subClassOf ${parent}` :
+        ""
+    } .
 `)
   }
 
@@ -50,7 +54,7 @@ ${classes.join("\n")}
  */
 const buildMetadataFromTurtle = (turtle: string) =>
   Effect.gen(function*() {
-    const { graph, context } = yield* parseTurtleToGraph(turtle)
+    const { context, graph } = yield* parseTurtleToGraph(turtle)
     const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
     return yield* buildKnowledgeMetadata(graph, context, index)
   })
@@ -62,13 +66,12 @@ describe("Metadata API - Property-Based Tests", () => {
   it.effect("metadata.stats.totalClasses equals KnowledgeIndex.size", () =>
     Effect.gen(function*() {
       const ontology = createChainOntology(4)
-      const { graph, context } = yield* parseTurtleToGraph(ontology)
+      const { context, graph } = yield* parseTurtleToGraph(ontology)
       const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
       const metadata = yield* buildKnowledgeMetadata(graph, context, index)
 
       expect(metadata.stats.totalClasses).toBe(KnowledgeIndex.size(index))
-    })
-  )
+    }))
 
   /**
    * Property 2: Number of nodes in dependency graph equals total classes
@@ -79,8 +82,7 @@ describe("Metadata API - Property-Based Tests", () => {
       const metadata = yield* buildMetadataFromTurtle(ontology)
 
       expect(metadata.dependencyGraph.nodes.length).toBe(metadata.stats.totalClasses)
-    })
-  )
+    }))
 
   /**
    * Property 3: Edges in chain ontology should be N-1 (linear chain)
@@ -92,8 +94,7 @@ describe("Metadata API - Property-Based Tests", () => {
       const metadata = yield* buildMetadataFromTurtle(ontology)
 
       expect(metadata.dependencyGraph.edges.length).toBe(numClasses - 1)
-    })
-  )
+    }))
 
   /**
    * Property 4: All edges should have valid source and target in nodes
@@ -109,8 +110,7 @@ describe("Metadata API - Property-Based Tests", () => {
         expect(nodeIds.has(edge.source)).toBe(true)
         expect(nodeIds.has(edge.target)).toBe(true)
       }
-    })
-  )
+    }))
 
   /**
    * Property 5: Hierarchy tree should have exactly one root for chain
@@ -121,8 +121,7 @@ describe("Metadata API - Property-Based Tests", () => {
       const metadata = yield* buildMetadataFromTurtle(ontology)
 
       expect(metadata.hierarchyTree.roots.length).toBe(1)
-    })
-  )
+    }))
 
   /**
    * Property 6: Root node in tree should have depth 0
@@ -134,8 +133,7 @@ describe("Metadata API - Property-Based Tests", () => {
 
       const root = metadata.hierarchyTree.roots[0]
       expect(root.depth).toBe(0)
-    })
-  )
+    }))
 
   /**
    * Property 7: Depth increases by 1 for each level in chain
@@ -160,8 +158,7 @@ describe("Metadata API - Property-Based Tests", () => {
 
       // Depths should be [0, 1, 2, 3] for 4-class chain
       expect(depths).toEqual([0, 1, 2, 3])
-    })
-  )
+    }))
 
   /**
    * Property 8: Token stats should sum correctly
@@ -178,8 +175,7 @@ describe("Metadata API - Property-Based Tests", () => {
       }
 
       expect(sumFromByClass).toBe(metadata.tokenStats.totalTokens)
-    })
-  )
+    }))
 
   /**
    * Property 9: Average tokens per class is total / count
@@ -191,8 +187,7 @@ describe("Metadata API - Property-Based Tests", () => {
 
       const expectedAverage = metadata.tokenStats.totalTokens / metadata.stats.totalClasses
       expect(metadata.tokenStats.averageTokensPerClass).toBeCloseTo(expectedAverage, 2)
-    })
-  )
+    }))
 
   /**
    * Property 10: Max tokens should be >= average tokens
@@ -205,8 +200,7 @@ describe("Metadata API - Property-Based Tests", () => {
       expect(metadata.tokenStats.maxTokensPerClass).toBeGreaterThanOrEqual(
         metadata.tokenStats.averageTokensPerClass
       )
-    })
-  )
+    }))
 
   /**
    * Property 11: All ClassSummaries should have non-negative property counts
@@ -221,8 +215,7 @@ describe("Metadata API - Property-Based Tests", () => {
         expect(summary.inheritedProperties).toBeGreaterThanOrEqual(0)
         expect(summary.totalProperties).toBeGreaterThanOrEqual(0)
       }
-    })
-  )
+    }))
 
   /**
    * Property 12: totalProperties = directProperties + inheritedProperties
@@ -237,8 +230,7 @@ describe("Metadata API - Property-Based Tests", () => {
           summary.directProperties + summary.inheritedProperties
         )
       }
-    })
-  )
+    }))
 
   /**
    * Property 13: Estimated cost should be proportional to tokens
@@ -251,8 +243,7 @@ describe("Metadata API - Property-Based Tests", () => {
       // Cost formula: (tokens / 1000) * 0.03
       const expectedCost = (metadata.tokenStats.totalTokens / 1000) * 0.03
       expect(metadata.tokenStats.estimatedCost).toBeCloseTo(expectedCost, 6)
-    })
-  )
+    }))
 
   /**
    * Property 14: Max depth should be at most totalClasses - 1 (for chain)
@@ -264,13 +255,12 @@ describe("Metadata API - Property-Based Tests", () => {
 
       // In a chain of 4 classes: depths are 0,1,2,3 so maxDepth = 3
       expect(metadata.stats.maxDepth).toBeLessThanOrEqual(metadata.stats.totalClasses)
-    })
-  )
+    }))
 
   /**
    * Property 15: All edge types should be "subClassOf"
    */
-  it.effect('all edges have type "subClassOf"', () =>
+  it.effect("all edges have type \"subClassOf\"", () =>
     Effect.gen(function*() {
       const ontology = createChainOntology(3)
       const metadata = yield* buildMetadataFromTurtle(ontology)
@@ -278,13 +268,12 @@ describe("Metadata API - Property-Based Tests", () => {
       for (const edge of metadata.dependencyGraph.edges) {
         expect(edge.type).toBe("subClassOf")
       }
-    })
-  )
+    }))
 
   /**
    * Property 16: All node types should be "class"
    */
-  it.effect('all nodes have type "class"', () =>
+  it.effect("all nodes have type \"class\"", () =>
     Effect.gen(function*() {
       const ontology = createChainOntology(3)
       const metadata = yield* buildMetadataFromTurtle(ontology)
@@ -292,8 +281,7 @@ describe("Metadata API - Property-Based Tests", () => {
       for (const node of metadata.dependencyGraph.nodes) {
         expect(node.type).toBe("class")
       }
-    })
-  )
+    }))
 
   /**
    * Property 17: Empty ontology should produce empty metadata
@@ -310,8 +298,7 @@ describe("Metadata API - Property-Based Tests", () => {
       expect(metadata.dependencyGraph.nodes.length).toBe(0)
       expect(metadata.dependencyGraph.edges.length).toBe(0)
       expect(metadata.tokenStats.totalTokens).toBe(0)
-    })
-  )
+    }))
 
   /**
    * Property 18: Single class ontology should have no edges
@@ -323,8 +310,7 @@ describe("Metadata API - Property-Based Tests", () => {
 
       expect(metadata.stats.totalClasses).toBe(1)
       expect(metadata.dependencyGraph.edges.length).toBe(0)
-    })
-  )
+    }))
 
   /**
    * Property 19: HashMap sizes should match stats
@@ -336,8 +322,7 @@ describe("Metadata API - Property-Based Tests", () => {
 
       expect(HashMap.size(metadata.classSummaries)).toBe(metadata.stats.totalClasses)
       expect(HashMap.size(metadata.tokenStats.byClass)).toBe(metadata.stats.totalClasses)
-    })
-  )
+    }))
 
   /**
    * Property 20: Parent-child relationships are consistent
@@ -359,6 +344,5 @@ describe("Metadata API - Property-Based Tests", () => {
           expect(parentSummary.value.children).toContain(edge.source)
         }
       }
-    })
-  )
+    }))
 })

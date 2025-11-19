@@ -5,10 +5,10 @@
  * Uses FOAF (Friend of a Friend) ontology with 30+ interconnected classes.
  */
 
-import { readFileSync } from "node:fs"
-import path from "node:path"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Graph, HashMap } from "effect"
+import { readFileSync } from "node:fs"
+import path from "node:path"
 import { parseTurtleToGraph } from "../../src/Graph/Builder.js"
 import { ClassNode } from "../../src/Graph/Types.js"
 import * as Inheritance from "../../src/Ontology/Inheritance.js"
@@ -41,8 +41,7 @@ describe("InheritanceService Performance", () => {
       // Without caching, would take 500ms+ due to redundant DFS
       expect(elapsed).toBeLessThan(200)
       console.log(`FOAF processing time: ${elapsed}ms`)
-    })
-  )
+    }))
 
   it.effect("processes 100+ nodes without stack overflow", () =>
     Effect.gen(function*() {
@@ -60,8 +59,7 @@ describe("InheritanceService Performance", () => {
       // Test verifies Effect.gen trampolining prevents stack overflow
       // JavaScript call stack limited to ~10k frames
       // Effect.gen converts recursion to iteration via yield*
-    })
-  )
+    }))
 })
 
 /**

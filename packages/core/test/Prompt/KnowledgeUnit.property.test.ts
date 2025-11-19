@@ -8,7 +8,7 @@
  * Same ontology MUST produce identical prompt regardless of graph traversal order.
  */
 
-import { describe, expect, test } from "@effect/vitest"
+import { describe, test } from "@effect/vitest"
 import { Equal } from "effect"
 import fc from "fast-check"
 import type { PropertyData } from "../../src/Graph/Types.js"

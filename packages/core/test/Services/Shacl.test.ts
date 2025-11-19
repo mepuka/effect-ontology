@@ -45,7 +45,7 @@ describe("ShaclService", () => {
   describe("validate", () => {
     it.effect("should validate conforming RDF data", () =>
       Effect.gen(function*() {
-        const shacl = yield* ShaclService
+        const _shacl = yield* ShaclService
 
         // SHACL shapes: Person must have a name
         const shapesText = `
@@ -73,7 +73,7 @@ describe("ShaclService", () => {
         const dataStore = new Store(parser.parse(dataText))
 
         // Create minimal ontology (shapes already defined)
-        const ontology: OntologyContext = {
+        const _ontology: OntologyContext = {
           nodes: HashMap.empty(),
           universalProperties: [],
           nodeIndexMap: HashMap.empty()
@@ -101,7 +101,7 @@ describe("ShaclService", () => {
 
     it.effect("should detect validation violations", () =>
       Effect.gen(function*() {
-        const shacl = yield* ShaclService
+        const _shacl = yield* ShaclService
 
         // SHACL shapes: Person must have a name
         const shapesText = `
@@ -155,13 +155,13 @@ describe("ShaclService", () => {
 
     it.effect("should handle invalid SHACL shapes gracefully", () =>
       Effect.gen(function*() {
-        const shacl = yield* ShaclService
+        const _shacl = yield* ShaclService
 
         // Create invalid shapes that won't parse
         const invalidShapes = "this is not valid turtle syntax @@@"
 
         // Create minimal store
-        const dataStore = new Store()
+        const _dataStore = new Store()
 
         // Attempt to parse invalid shapes
         const result = yield* Effect.sync(() => {
@@ -190,7 +190,7 @@ describe("ShaclService", () => {
 
     it.effect("should handle empty data store", () =>
       Effect.gen(function*() {
-        const shacl = yield* ShaclService
+        const _shacl = yield* ShaclService
 
         // Valid shapes
         const shapesText = `
@@ -233,7 +233,7 @@ describe("ShaclService", () => {
 
     it.effect("should handle multiple violations", () =>
       Effect.gen(function*() {
-        const shacl = yield* ShaclService
+        const _shacl = yield* ShaclService
 
         // SHACL shapes: Person must have name AND email
         const shapesText = `
@@ -294,7 +294,7 @@ describe("ShaclService", () => {
   describe("ValidationReport format", () => {
     it.effect("should convert SHACL report to ValidationReport format", () =>
       Effect.gen(function*() {
-        const shacl = yield* ShaclService
+        const _shacl = yield* ShaclService
 
         // Shapes with severity levels
         const shapesText = `

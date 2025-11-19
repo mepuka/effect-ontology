@@ -15,7 +15,7 @@
  */
 
 import { LanguageModel } from "@effect/ai"
-import { describe, expect, test } from "@effect/vitest"
+import { describe, test } from "@effect/vitest"
 import { Effect, Layer, Stream } from "effect"
 import fc from "fast-check"
 import type { KnowledgeGraph } from "../../src/Schema/Factory.js"
@@ -23,11 +23,7 @@ import { ExtractionPipeline } from "../../src/Services/Extraction.js"
 import { LlmService } from "../../src/Services/Llm.js"
 import { RdfService } from "../../src/Services/Rdf.js"
 import { ShaclService } from "../../src/Services/Shacl.js"
-import {
-  arbExtractionRequest,
-  arbExtractionRequestEmptyOntology,
-  arbMalformedRequest
-} from "../arbitraries/index.js"
+import { arbExtractionRequest, arbExtractionRequestEmptyOntology, arbMalformedRequest } from "../arbitraries/index.js"
 
 // ============================================================================
 // Test Layer Setup
@@ -99,7 +95,7 @@ describe("ExtractionPipeline - Property-Based Tests", () => {
     () => {
       fc.assert(
         fc.asyncProperty(arbExtractionRequest, async (request) =>
-          Effect.gen(function* () {
+          Effect.gen(function*() {
             const pipeline = yield* ExtractionPipeline
 
             // Create mock LLM that returns empty entities (simplest case)
@@ -112,8 +108,7 @@ describe("ExtractionPipeline - Property-Based Tests", () => {
               typeof result.report.conforms === "boolean" &&
               Array.isArray(result.report.results)
             )
-          }).pipe(Effect.provide(EmptyTestLayer), Effect.scoped, Effect.runPromise)
-        ),
+          }).pipe(Effect.provide(EmptyTestLayer), Effect.scoped, Effect.runPromise)),
         { numRuns: 100 }
       )
     }
@@ -141,7 +136,7 @@ describe("ExtractionPipeline - Property-Based Tests", () => {
     () => {
       fc.assert(
         fc.asyncProperty(arbMalformedRequest, async (request) =>
-          Effect.gen(function* () {
+          Effect.gen(function*() {
             const pipeline = yield* ExtractionPipeline
 
             const exitResult = yield* pipeline.extract(request).pipe(Effect.exit)
@@ -154,8 +149,7 @@ describe("ExtractionPipeline - Property-Based Tests", () => {
 
             // If it succeeded, that's also valid (some edge cases may succeed)
             return true
-          }).pipe(Effect.provide(EmptyTestLayer), Effect.scoped, Effect.runPromise)
-        ),
+          }).pipe(Effect.provide(EmptyTestLayer), Effect.scoped, Effect.runPromise)),
         { numRuns: 100 }
       )
     }
@@ -183,7 +177,7 @@ describe("ExtractionPipeline - Property-Based Tests", () => {
     () => {
       fc.assert(
         fc.asyncProperty(arbExtractionRequest, async (request) =>
-          Effect.gen(function* () {
+          Effect.gen(function*() {
             const pipeline = yield* ExtractionPipeline
             const result = yield* pipeline.extract(request)
 
@@ -198,8 +192,7 @@ describe("ExtractionPipeline - Property-Based Tests", () => {
 
             // Store size should be at least 0 (valid even if empty)
             return store.size >= 0
-          }).pipe(Effect.provide(EmptyTestLayer), Effect.scoped, Effect.runPromise)
-        ),
+          }).pipe(Effect.provide(EmptyTestLayer), Effect.scoped, Effect.runPromise)),
         { numRuns: 100 }
       )
     }
@@ -226,7 +219,7 @@ describe("ExtractionPipeline - Property-Based Tests", () => {
     () => {
       fc.assert(
         fc.asyncProperty(arbExtractionRequestEmptyOntology, async (request) =>
-          Effect.gen(function* () {
+          Effect.gen(function*() {
             const pipeline = yield* ExtractionPipeline
 
             const exitResult = yield* pipeline.extract(request).pipe(Effect.exit)
@@ -243,8 +236,7 @@ describe("ExtractionPipeline - Property-Based Tests", () => {
 
             // Should be LLMError with EmptyVocabularyError cause
             return true
-          }).pipe(Effect.provide(EmptyTestLayer), Effect.scoped, Effect.runPromise)
-        ),
+          }).pipe(Effect.provide(EmptyTestLayer), Effect.scoped, Effect.runPromise)),
         { numRuns: 100 }
       )
     }
@@ -272,7 +264,7 @@ describe("ExtractionPipeline - Property-Based Tests", () => {
     () => {
       fc.assert(
         fc.asyncProperty(arbExtractionRequest, async (request) =>
-          Effect.gen(function* () {
+          Effect.gen(function*() {
             const pipeline = yield* ExtractionPipeline
             const result = yield* pipeline.extract(request)
 
@@ -287,8 +279,7 @@ describe("ExtractionPipeline - Property-Based Tests", () => {
 
             // If we got here without error, parsing succeeded
             return store !== null
-          }).pipe(Effect.provide(EmptyTestLayer), Effect.scoped, Effect.runPromise)
-        ),
+          }).pipe(Effect.provide(EmptyTestLayer), Effect.scoped, Effect.runPromise)),
         { numRuns: 100 }
       )
     }
@@ -311,7 +302,7 @@ describe("ExtractionPipeline - Property-Based Tests", () => {
     () => {
       fc.assert(
         fc.asyncProperty(arbExtractionRequest, async (request) =>
-          Effect.gen(function* () {
+          Effect.gen(function*() {
             const pipeline = yield* ExtractionPipeline
 
             // Run extraction twice
@@ -320,8 +311,7 @@ describe("ExtractionPipeline - Property-Based Tests", () => {
 
             // Validation reports should have same conformance
             return result1.report.conforms === result2.report.conforms
-          }).pipe(Effect.provide(EmptyTestLayer), Effect.scoped, Effect.runPromise)
-        ),
+          }).pipe(Effect.provide(EmptyTestLayer), Effect.scoped, Effect.runPromise)),
         { numRuns: 50 }
       )
     }

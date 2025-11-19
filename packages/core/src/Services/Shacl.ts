@@ -35,13 +35,8 @@ import { Effect, HashMap, Schema } from "effect"
 import { Parser, Store } from "n3"
 import SHACLValidator from "rdf-validate-shacl"
 import { ShaclError, type ValidationReport } from "../Extraction/Events.js"
-import {
-  ClassNode,
-  isClassNode,
-  OntologyContextSchema,
-  type OntologyContext,
-  type PropertyData
-} from "../Graph/Types.js"
+import type { ClassNode, OntologyContext, PropertyData } from "../Graph/Types.js"
+import { isClassNode, OntologyContextSchema } from "../Graph/Types.js"
 import { rdfEnvironment } from "./RdfEnvironment.js"
 
 /**
@@ -65,8 +60,7 @@ export type RdfStore = Store
  * @internal
  */
 const generatePropertyShape = (property: PropertyData): string => {
-  const propName = property.iri.split(/[/#]/).pop() || property.iri
-  const constraints: string[] = []
+  const constraints: Array<string> = []
 
   // Property path (required)
   constraints.push(`sh:path <${property.iri}>`)
@@ -74,11 +68,11 @@ const generatePropertyShape = (property: PropertyData): string => {
   // Label for better error messages (escape quotes, backslashes, and special chars)
   if (property.label) {
     const escapedLabel = property.label
-      .replace(/\\/g, '\\\\')  // Escape backslashes first
-      .replace(/"/g, '\\"')     // Escape quotes
-      .replace(/\n/g, '\\n')    // Escape newlines
-      .replace(/\r/g, '\\r')    // Escape carriage returns
-      .replace(/\t/g, '\\t')    // Escape tabs
+      .replace(/\\/g, "\\\\") // Escape backslashes first
+      .replace(/"/g, "\\\"") // Escape quotes
+      .replace(/\n/g, "\\n") // Escape newlines
+      .replace(/\r/g, "\\r") // Escape carriage returns
+      .replace(/\t/g, "\\t") // Escape tabs
     constraints.push(`sh:name "${escapedLabel}"`)
   }
 
@@ -109,24 +103,19 @@ ${constraintStr.slice(0, -2)} # Remove trailing ' ;'
  * Each property on the class becomes a sh:property shape.
  *
  * @param classNode - Class node from ontology
- * @param shapePrefix - Prefix for shape IRIs (default: "shape")
+ * @param _shapePrefix - Prefix for shape IRIs (default: "shape")
  * @returns Turtle string for node shape
  *
  * @since 1.1.0
  * @category utilities
  * @internal
  */
-const generateNodeShape = (classNode: ClassNode, shapePrefix: string = "shape"): string => {
+const generateNodeShape = (classNode: ClassNode, _shapePrefix: string = "shape"): string => {
   // Extract local name from IRI, handling edge cases:
   // - IRIs ending with # or / (e.g., "http://example.org#" → use full IRI hash)
   // - IRIs with special characters that aren't valid in Turtle local names
   const parts = classNode.id.split(/[/#]/).filter(Boolean)
   const localName = parts[parts.length - 1] || "Shape"
-
-  // Create a safe local name by hashing the class IRI if it contains problematic characters
-  // Turtle local names must match: PN_LOCAL = (PN_CHARS_U | ':' | [0-9] | PLX) ((PN_CHARS | '.' | ':' | PLX)* (PN_CHARS | ':' | PLX))?
-  // For simplicity, use blank node if local name is unsafe, then give it a label
-  const isSafeLocalName = /^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(localName)
 
   // Use full IRI in angle brackets for the shape IRI to avoid Turtle prefix issues
   const shapeIri = `<${classNode.id}Shape>`
@@ -136,11 +125,11 @@ const generateNodeShape = (classNode: ClassNode, shapePrefix: string = "shape"):
 
   // Escape quotes, backslashes, and special chars in labels
   const escapedLabel = (classNode.label || localName)
-    .replace(/\\/g, '\\\\')  // Escape backslashes first
-    .replace(/"/g, '\\"')     // Escape quotes
-    .replace(/\n/g, '\\n')    // Escape newlines
-    .replace(/\r/g, '\\r')    // Escape carriage returns
-    .replace(/\t/g, '\\t')    // Escape tabs
+    .replace(/\\/g, "\\\\") // Escape backslashes first
+    .replace(/"/g, "\\\"") // Escape quotes
+    .replace(/\n/g, "\\n") // Escape newlines
+    .replace(/\r/g, "\\r") // Escape carriage returns
+    .replace(/\t/g, "\\t") // Escape tabs
 
   return `
 ${shapeIri}
@@ -263,6 +252,7 @@ export type ShaclShapes = typeof ShaclShapesSchema.Type
  * @since 1.1.0
  * @category transformations
  */
+// TODO: this is an anti pattern should be using transformorfail with one way transformation
 export const OwlToShaclTransform = Schema.transform(
   // Source: OntologyContext schema
   OntologyContextSchema,
@@ -275,7 +265,7 @@ export const OwlToShaclTransform = Schema.transform(
     // Encode: SHACL Shapes (string) → OntologyContext
     // Note: This is a one-way transformation - encoding is not supported
     // We use the input ontology as-is since we can't reverse SHACL → OWL
-    encode: (shapes) => {
+    encode: (_shapes) => {
       throw new Error(
         "ShaclShapes → OntologyContext encoding not supported (one-way transformation)"
       )
@@ -350,8 +340,7 @@ export class ShaclService extends Effect.Service<ShaclService>()("ShaclService",
      * @since 1.1.0
      * @category utilities
      */
-    generateShaclShapes: (ontology: OntologyContext): string =>
-      generateShaclShapes(ontology),
+    generateShaclShapes: (ontology: OntologyContext): string => generateShaclShapes(ontology),
 
     /**
      * Validate RDF store against ontology-derived SHACL shapes

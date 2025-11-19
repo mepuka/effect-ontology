@@ -66,9 +66,4 @@ export {
 } from "./Schema.js"
 
 // Export services
-export {
-  AppConfigService,
-  LlmConfigService,
-  RdfConfigService,
-  ShaclConfigService
-} from "./Services.js"
+export { AppConfigService, LlmConfigService, RdfConfigService, ShaclConfigService } from "./Services.js"
