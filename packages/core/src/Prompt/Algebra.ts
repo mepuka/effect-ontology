@@ -9,11 +9,11 @@
 
 import { HashMap } from "effect"
 import { isClassNode, isPropertyNode, type PropertyData } from "../Graph/Types.js"
-import type { GraphAlgebra, PromptAlgebra } from "./Types.js"
-import { StructuredPrompt } from "./Types.js"
 import { KnowledgeUnit } from "./Ast.js"
 import * as KnowledgeIndex from "./KnowledgeIndex.js"
 import type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
+import type { GraphAlgebra, PromptAlgebra } from "./Types.js"
+import { StructuredPrompt } from "./Types.js"
 
 /**
  * Formats properties into a human-readable list
@@ -164,9 +164,7 @@ export const knowledgeIndexAlgebra: GraphAlgebra<KnowledgeIndexType> = (
   // Handle ClassNode
   if (isClassNode(nodeData)) {
     // Extract child IRIs from children's indexes
-    const childIris = childrenResults.flatMap((childIndex) =>
-      Array.from(KnowledgeIndex.keys(childIndex))
-    )
+    const childIris = childrenResults.flatMap((childIndex) => Array.from(KnowledgeIndex.keys(childIndex)))
 
     // Note: Parents will be populated during graph traversal
     // Each child's result is pushed to parent, so we know our children,
