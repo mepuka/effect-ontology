@@ -1,9 +1,9 @@
 import { useAtomValue } from "@effect-atom/atom-react"
-import { HashMap, Graph as EffectGraph, Option, Array as EffectArray, pipe } from "effect"
+import { HashMap, Option, pipe } from "effect"
 import type { ParsedOntologyGraph } from "@effect-ontology/core/Graph/Builder"
-import type { ClassNode as ClassNodeType, NodeId } from "@effect-ontology/core/Graph/Types"
+import type { ClassNode as ClassNodeType } from "@effect-ontology/core/Graph/Types"
 import { isClassNode } from "@effect-ontology/core/Graph/Types"
-import { ontologyGraphAtom, topologicalOrderAtom } from "../state/store"
+import { ontologyGraphAtom, topologicalOrderAtom, dependencyGraphAtom } from "../state/store"
 import { Result } from "@effect-atom/atom-react"
 import { motion } from "framer-motion"
 import { useRef, useEffect, useState } from "react"
@@ -26,6 +26,7 @@ export const ClassHierarchyGraph = ({
 }): React.ReactElement => {
   const graphResult = useAtomValue(ontologyGraphAtom) as Result.Result<ParsedOntologyGraph, any>
   const topologicalOrderResult = useAtomValue(topologicalOrderAtom) as Result.Result<string[], any>
+  const dependencyGraphResult = useAtomValue(dependencyGraphAtom) as Result.Result<any, any>
   const [hoveredNode, setHoveredNode] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -56,24 +57,40 @@ export const ClassHierarchyGraph = ({
           </div>
         ),
         onSuccess: (topoSuccess) => {
-          const { context, graph } = graphSuccess.value
-          const topologicalOrder = topoSuccess.value
+          return Result.match(dependencyGraphResult, {
+            onInitial: () => (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-slate-400 text-sm">Loading dependency graph...</div>
+              </div>
+            ),
+            onFailure: () => (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-red-500 text-sm">Error loading dependency graph</div>
+              </div>
+            ),
+            onSuccess: (depGraphSuccess) => {
+              const { context } = graphSuccess.value
+              const topologicalOrder = topoSuccess.value
+              const dependencyGraph = depGraphSuccess.value
 
-          // Build position map for nodes
-          const nodePositions = new Map<string, { x: number; y: number; index: number }>()
-          const NODE_SPACING = 140
-          const START_X = 80
+              // Build position map for nodes
+              const nodePositions = new Map<string, { x: number; y: number; index: number }>()
+              const NODE_SPACING = 140
+              const START_X = 80
 
-          topologicalOrder.forEach((nodeId, index) => {
-            nodePositions.set(nodeId, {
-              x: START_X + index * NODE_SPACING,
-              y: 100, // Center Y position
-              index
-            })
-          })
+              topologicalOrder.forEach((nodeId, index) => {
+                nodePositions.set(nodeId, {
+                  x: START_X + index * NODE_SPACING,
+                  y: 100, // Center Y position
+                  index
+                })
+              })
 
-          // Extract edges from the graph
-          const edges = extractEdges(graph, context)
+              // Use edges from dependency graph (already computed in Metadata)
+              const edges = dependencyGraph.edges.map((edge: any) => ({
+                from: edge.source,
+                to: edge.target
+              }))
 
           return (
             <div ref={containerRef} className="relative h-full bg-gradient-to-b from-slate-50 to-white overflow-x-auto overflow-y-hidden">
@@ -84,18 +101,18 @@ export const ClassHierarchyGraph = ({
                 style={{ minWidth: "100%" }}
               >
                 {/* Draw dependency arcs */}
-                {edges.map(({ from, to }, idx) => {
-                  const fromPos = nodePositions.get(from)
-                  const toPos = nodePositions.get(to)
+                {edges.map((edge: { from: string; to: string }, idx: number) => {
+                  const fromPos = nodePositions.get(edge.from)
+                  const toPos = nodePositions.get(edge.to)
 
                   if (!fromPos || !toPos) return null
 
                   const isHighlighted =
-                    hoveredNode === from || hoveredNode === to
+                    hoveredNode === edge.from || hoveredNode === edge.to
 
                   return (
                     <DependencyArc
-                      key={`${from}-${to}-${idx}`}
+                      key={`${edge.from}-${edge.to}-${idx}`}
                       x1={fromPos.x}
                       y1={fromPos.y}
                       x2={toPos.x}
@@ -139,6 +156,8 @@ export const ClassHierarchyGraph = ({
               </div>
             </div>
           )
+            }
+          })
         }
       })
     }
@@ -307,26 +326,3 @@ const DependencyArc = ({
   )
 }
 
-/**
- * Extract edges from Effect Graph using proper Effect patterns
- */
-function extractEdges(graph: any, context: any): Array<{ from: string; to: string }> {
-  const edges: Array<{ from: string; to: string }> = []
-
-  for (const [nodeIdRaw, _] of HashMap.entries(context.nodes)) {
-    const nodeId = nodeIdRaw as string
-    const nodeIndexOption = HashMap.get(context.nodeIndexMap, nodeId) as Option.Option<number>
-    if (Option.isSome(nodeIndexOption)) {
-      const nodeIndex = nodeIndexOption.value as number
-      const neighbors = EffectGraph.neighbors(graph, nodeIndex)
-      for (const parentIndex of neighbors) {
-        const parentIdOption = EffectGraph.getNode(graph, parentIndex) as Option.Option<string>
-        if (Option.isSome(parentIdOption)) {
-          edges.push({ from: nodeId, to: (parentIdOption.value as unknown) as string })
-        }
-      }
-    }
-  }
-
-  return edges
-}

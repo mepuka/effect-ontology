@@ -2,7 +2,8 @@ import { useAtomValue, Result } from "@effect-atom/atom-react"
 import { HashMap, Option } from "effect"
 import type { ParsedOntologyGraph } from "@effect-ontology/core/Graph/Builder"
 import { isClassNode } from "@effect-ontology/core/Graph/Types"
-import { ontologyGraphAtom, selectedNodeAtom } from "../state/store"
+import { KnowledgeIndex } from "@effect-ontology/core/Prompt"
+import { ontologyGraphAtom, selectedNodeAtom, knowledgeIndexAtom } from "../state/store"
 import { PropertyInheritanceCard } from "./PropertyInheritanceCard"
 import { motion } from "framer-motion"
 import { MousePointer2 } from "lucide-react"
@@ -19,6 +20,7 @@ import { MousePointer2 } from "lucide-react"
  */
 export const EnhancedNodeInspector = (): React.ReactElement | null => {
   const graphResult = useAtomValue(ontologyGraphAtom) as Result.Result<ParsedOntologyGraph, any>
+  const indexResult = useAtomValue(knowledgeIndexAtom) as Result.Result<any, any>
   const selectedNode = useAtomValue(selectedNodeAtom)
 
   // Handle no selection first
@@ -49,7 +51,7 @@ export const EnhancedNodeInspector = (): React.ReactElement | null => {
     )
   }
 
-  // Handle graph Result states
+  // Handle graph and index Result states
   return Result.match(graphResult, {
     onInitial: () => (
       <div className="flex items-center justify-center h-full bg-white">
@@ -58,41 +60,66 @@ export const EnhancedNodeInspector = (): React.ReactElement | null => {
     ),
     onFailure: () => null,
     onSuccess: (graphSuccess) => {
-      const { context, graph } = graphSuccess.value
-      const nodeOption = HashMap.get(context.nodes, selectedNode.value)
-
-      if (Option.isNone(nodeOption)) {
-        return (
+      return Result.match(indexResult, {
+        onInitial: () => (
           <div className="flex items-center justify-center h-full bg-white">
-            <div className="text-red-500 text-sm">Node not found</div>
+            <div className="text-slate-400 text-sm">Building knowledge index...</div>
           </div>
-        )
-      }
+        ),
+        onFailure: () => null,
+        onSuccess: (indexSuccess) => {
+          const { context } = graphSuccess.value
+          const index = indexSuccess.value
 
-      const node = nodeOption.value
-      if (!isClassNode(node)) {
-        return (
-          <div className="flex items-center justify-center h-full bg-white">
-            <div className="text-slate-400 text-sm">Not a class node</div>
-          </div>
-        )
-      }
+          // Get ClassNode from context for validation
+          const nodeOption = HashMap.get(context.nodes, selectedNode.value)
 
-      return (
-        <motion.div
-          className="h-full bg-white overflow-y-auto p-6"
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -20 }}
-          transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        >
-          <PropertyInheritanceCard
-            node={node}
-            graph={graph}
-            context={context}
-          />
-        </motion.div>
-      )
+          if (Option.isNone(nodeOption)) {
+            return (
+              <div className="flex items-center justify-center h-full bg-white">
+                <div className="text-red-500 text-sm">Node not found</div>
+              </div>
+            )
+          }
+
+          const node = nodeOption.value
+          if (!isClassNode(node)) {
+            return (
+              <div className="flex items-center justify-center h-full bg-white">
+                <div className="text-slate-400 text-sm">Not a class node</div>
+              </div>
+            )
+          }
+
+          // Get KnowledgeUnit from index (has inheritedProperties computed)
+          const unitOption = KnowledgeIndex.get(index, selectedNode.value)
+
+          if (Option.isNone(unitOption)) {
+            return (
+              <div className="flex items-center justify-center h-full bg-white">
+                <div className="text-red-500 text-sm">Knowledge unit not found</div>
+              </div>
+            )
+          }
+
+          const unit = unitOption.value
+
+          return (
+            <motion.div
+              className="h-full bg-white overflow-y-auto p-6"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            >
+              <PropertyInheritanceCard
+                unit={unit}
+                universalProperties={context.universalProperties}
+              />
+            </motion.div>
+          )
+        }
+      })
     }
   })
 }
