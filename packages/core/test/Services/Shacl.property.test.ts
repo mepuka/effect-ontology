@@ -46,9 +46,9 @@ const countNodeShapes = (shapesText: string): number => {
  *
  * Returns array of property IRIs that appear in sh:property constraints.
  */
-const getShapeProperties = (shapesText: string): string[] => {
+const getShapeProperties = (shapesText: string): Array<string> => {
   const pathRegex = /sh:path\s+<([^>]+)>/g
-  const properties: string[] = []
+  const properties: Array<string> = []
   let match
 
   while ((match = pathRegex.exec(shapesText)) !== null) {
@@ -64,10 +64,15 @@ const getShapeProperties = (shapesText: string): string[] => {
  * Returns true if the property IRI appears with sh:datatype in shapes.
  */
 const usesDatatype = (shapesText: string, propertyIri: string): boolean => {
-  // Look for pattern: sh:path <propertyIri> ... sh:datatype
-  const escapedIri = propertyIri.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  const pattern = new RegExp(`sh:path\\s+<${escapedIri}>[^\\[]*?sh:datatype`, "s")
-  return pattern.test(shapesText)
+  // Simple approach: find all property blocks for this IRI and check if any have sh:datatype
+  // Split on property blocks, find ones with our path
+  const propertyBlocks = shapesText.split("sh:property")
+  for (const block of propertyBlocks) {
+    if (block.includes(`sh:path <${propertyIri}>`) && block.includes("sh:datatype")) {
+      return true
+    }
+  }
+  return false
 }
 
 /**
@@ -76,10 +81,15 @@ const usesDatatype = (shapesText: string, propertyIri: string): boolean => {
  * Returns true if the property IRI appears with sh:class in shapes.
  */
 const usesClass = (shapesText: string, propertyIri: string): boolean => {
-  // Look for pattern: sh:path <propertyIri> ... sh:class
-  const escapedIri = propertyIri.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  const pattern = new RegExp(`sh:path\\s+<${escapedIri}>[^\\[]*?sh:class`, "s")
-  return pattern.test(shapesText)
+  // Simple approach: find all property blocks for this IRI and check if any have sh:class
+  // Split on property blocks, find ones with our path
+  const propertyBlocks = shapesText.split("sh:property")
+  for (const block of propertyBlocks) {
+    if (block.includes(`sh:path <${propertyIri}>`) && block.includes("sh:class")) {
+      return true
+    }
+  }
+  return false
 }
 
 /**
@@ -87,8 +97,8 @@ const usesClass = (shapesText: string, propertyIri: string): boolean => {
  *
  * Returns properties whose range contains "XMLSchema" or starts with "xsd:".
  */
-const getPropertiesWithXSDRange = (ontology: OntologyContext): string[] => {
-  const properties: string[] = []
+const getPropertiesWithXSDRange = (ontology: OntologyContext): Array<string> => {
+  const properties: Array<string> = []
 
   for (const node of HashMap.values(ontology.nodes)) {
     if (isClassNode(node)) {
@@ -108,8 +118,8 @@ const getPropertiesWithXSDRange = (ontology: OntologyContext): string[] => {
  *
  * Returns properties whose range is a class IRI (not XSD datatype).
  */
-const getPropertiesWithClassRange = (ontology: OntologyContext): string[] => {
-  const properties: string[] = []
+const getPropertiesWithClassRange = (ontology: OntologyContext): Array<string> => {
+  const properties: Array<string> = []
 
   for (const node of HashMap.values(ontology.nodes)) {
     if (isClassNode(node)) {
@@ -184,7 +194,7 @@ describe("ShaclService - Property-Based Tests", () => {
           const shapesText = generateShaclShapes(ontology)
 
           // Get all direct properties (not universal - those are optional)
-          const allProperties: string[] = []
+          const allProperties: Array<string> = []
           for (const node of HashMap.values(ontology.nodes)) {
             if (isClassNode(node)) {
               allProperties.push(...node.properties.map((p) => p.iri))

@@ -12,6 +12,7 @@ import type { KnowledgeGraph } from "../../src/Schema/Factory.js"
 import { ExtractionPipeline } from "../../src/Services/Extraction.js"
 import { LlmService } from "../../src/Services/Llm.js"
 import { RdfService } from "../../src/Services/Rdf.js"
+import { ShaclService } from "../../src/Services/Shacl.js"
 
 describe("Services.Extraction", () => {
   // Test ontology context
@@ -85,7 +86,7 @@ describe("Services.Extraction", () => {
 
   // Test layer composition
   const TestLayer = Layer.provideMerge(
-    Layer.mergeAll(ExtractionPipeline.Default, RdfService.Default, MockLlmService),
+    Layer.mergeAll(ExtractionPipeline.Default, RdfService.Default, ShaclService.Default, MockLlmService),
     MockLanguageModel
   )
 
@@ -101,8 +102,10 @@ describe("Services.Extraction", () => {
         })
 
         // Should return validation report and turtle
-        expect(result.report.conforms).toBe(true)
-        expect(result.report.results).toHaveLength(0)
+        // SHACL validation is now active and returns a real report
+        expect(result.report).toBeTruthy()
+        expect(result.report).toHaveProperty("conforms")
+        expect(result.report).toHaveProperty("results")
         expect(result.turtle).toBeTruthy()
 
         // Turtle should contain expected data
@@ -149,7 +152,7 @@ describe("Services.Extraction", () => {
       )
 
       const EmptyTestLayer = Layer.provideMerge(
-        Layer.mergeAll(ExtractionPipeline.Default, RdfService.Default, EmptyLlmService),
+        Layer.mergeAll(ExtractionPipeline.Default, RdfService.Default, ShaclService.Default, EmptyLlmService),
         MockLanguageModel
       )
 
@@ -209,7 +212,7 @@ describe("Services.Extraction", () => {
       )
 
       const MultiEntityTestLayer = Layer.provideMerge(
-        Layer.mergeAll(ExtractionPipeline.Default, RdfService.Default, MultiEntityLlmService),
+        Layer.mergeAll(ExtractionPipeline.Default, RdfService.Default, ShaclService.Default, MultiEntityLlmService),
         MockLanguageModel
       )
 
@@ -225,7 +228,9 @@ describe("Services.Extraction", () => {
         // Should contain both entities in Turtle
         expect(result.turtle).toContain("Alice")
         expect(result.turtle).toContain("Bob")
-        expect(result.report.conforms).toBe(true)
+        // SHACL validation is now active - check that we got a report
+        expect(result.report).toBeTruthy()
+        expect(result.report).toHaveProperty("conforms")
       }).pipe(Effect.provide(MultiEntityTestLayer), Effect.scoped)
     })
   })

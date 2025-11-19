@@ -123,6 +123,19 @@ export const arbClassNode: fc.Arbitrary<ClassNode> = fc
   .map((data) => new ClassNode(data))
 
 /**
+ * Generate ClassNode with at least 1 property
+ *
+ * Used for tests that require non-empty vocabularies (e.g., Extraction tests).
+ */
+export const arbClassNodeNonEmpty: fc.Arbitrary<ClassNode> = fc
+  .record({
+    id: arbIri,
+    label: fc.string({ minLength: 1, maxLength: 100 }),
+    properties: fc.array(arbPropertyData, { minLength: 1, maxLength: 10 })
+  })
+  .map((data) => new ClassNode(data))
+
+/**
  * Generate ClassNode with only datatype properties
  *
  * Used to test sh:datatype constraint generation specifically.
@@ -189,6 +202,30 @@ export const arbOntologyContext: fc.Arbitrary<OntologyContext> = fc
     const nodes = HashMap.fromIterable(classes.map((cls) => [cls.id, cls as ClassNode | PropertyNode] as const))
 
     // Build nodeIndexMap
+    const nodeIndexMap = HashMap.fromIterable(
+      classes.map((cls, index) => [cls.id as string, index as number] as const)
+    )
+
+    return {
+      nodes,
+      universalProperties,
+      nodeIndexMap
+    }
+  })
+
+/**
+ * Generate OntologyContext with classes that have at least 1 property each
+ *
+ * Used for Extraction tests which require non-empty vocabularies.
+ * Ensures every class has at least one property to avoid EmptyVocabularyError.
+ */
+export const arbOntologyContextNonEmpty: fc.Arbitrary<OntologyContext> = fc
+  .record({
+    classes: fc.array(arbClassNodeNonEmpty, { minLength: 1, maxLength: 20 }),
+    universalProperties: fc.array(arbPropertyData, { maxLength: 5 })
+  })
+  .map(({ classes, universalProperties }) => {
+    const nodes = HashMap.fromIterable(classes.map((cls) => [cls.id, cls as ClassNode | PropertyNode] as const))
     const nodeIndexMap = HashMap.fromIterable(
       classes.map((cls, index) => [cls.id as string, index as number] as const)
     )

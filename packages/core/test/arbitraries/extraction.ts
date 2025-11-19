@@ -11,7 +11,7 @@ import { Graph } from "effect"
 import fc from "fast-check"
 import type { NodeId } from "../../src/Graph/Types.js"
 import type { ExtractionRequest } from "../../src/Services/Extraction.js"
-import { arbEmptyOntology, arbOntologyContext } from "./ontology.js"
+import { arbEmptyOntology, arbOntologyContext, arbOntologyContextNonEmpty } from "./ontology.js"
 
 // ============================================================================
 // Graph Arbitraries
@@ -122,7 +122,7 @@ export const arbContextStrategy = fc.constantFrom("Full", "Focused", "Neighborho
  * - fast-check shrinks to simpler requests (fewer classes, shorter text)
  * - Helps identify minimal failing cases in extraction pipeline
  */
-export const arbExtractionRequest: fc.Arbitrary<ExtractionRequest> = arbOntologyContext.chain(
+export const arbExtractionRequest: fc.Arbitrary<ExtractionRequest> = arbOntologyContextNonEmpty.chain(
   (ontology) => {
     // Extract class IRIs from ontology
     const classIris = Array.from(ontology.nodes).map(([iri, _node]) => iri)
