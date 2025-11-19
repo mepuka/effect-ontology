@@ -15,6 +15,7 @@ export {
   processUniversalProperties,
   processUniversalPropertiesToIndex
 } from "./Algebra.js"
+export { enrichKnowledgeIndex, generateEnrichedIndex } from "./Enrichment.js"
 export { KnowledgeUnit, type PromptAST } from "./Ast.js"
 export { bulletList, header, numberedList, renderDoc, renderDocWithWidth, section } from "./DocBuilder.js"
 export * as Focus from "./Focus.js"
