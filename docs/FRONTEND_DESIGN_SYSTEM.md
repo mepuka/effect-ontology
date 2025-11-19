@@ -1097,6 +1097,462 @@ export const ThemeProvider = ({ children }) => {
 
 ---
 
+## Extraction Pipeline UI Patterns
+
+### Overview
+
+The new extraction pipeline (see `EXTRACTION_ARCHITECTURE.md`) provides real-time event broadcasting via PubSub for UI consumption. This section defines patterns for visualizing extraction progress, handling events, and building responsive extraction interfaces.
+
+**Pipeline Events:**
+- `LLMThinking` - LLM processing started
+- `JSONParsed` - Structured entities extracted
+- `RDFConstructed` - RDF triples generated
+- `ValidationComplete` - SHACL validation finished
+
+### Event Subscription Pattern
+
+**Pattern: Subscribe to ExtractionPipeline events**
+
+```tsx
+import { ExtractionPipeline } from '@effect-ontology/core/Services/Extraction'
+import { useAtom } from '@effect-atom/atom-react'
+import { Atom, Effect, Stream } from '@effect-atom/atom'
+
+// Atom that runs extraction and collects events
+const extractionEventsAtom = Atom.make((get) =>
+  Effect.gen(function* () {
+    const pipeline = yield* ExtractionPipeline
+    const subscription = yield* pipeline.subscribe
+
+    // Run extraction
+    const result = yield* pipeline.extract({
+      text: get(inputTextAtom),
+      graph: get(ontologyGraphAtom),
+      ontology: get(ontologyContextAtom)
+    })
+
+    // Collect events from subscription
+    const events = yield* Stream.fromQueue(subscription).pipe(
+      Stream.runCollect
+    )
+
+    return { result, events }
+  })
+)
+
+// Component
+const ExtractionView = () => {
+  const extractionResult = useAtomValue(extractionEventsAtom)
+
+  return Result.match(extractionResult, {
+    onInitial: () => <ReadyState />,
+    onFailure: (error) => <ErrorState error={error} />,
+    onSuccess: ({ result, events }) => (
+      <div>
+        <EventTimeline events={events} />
+        <ResultView result={result} />
+      </div>
+    )
+  })
+}
+```
+
+### Real-Time Progress Components
+
+**Pattern: Live extraction progress with event streaming**
+
+```tsx
+import { ExtractionEvent } from '@effect-ontology/core/Extraction/Events'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Loader, CheckCircle, AlertCircle } from 'lucide-react'
+
+const ExtractionProgress = ({ events }: { events: ExtractionEvent[] }) => {
+  const stages = [
+    { type: 'LLMThinking', label: 'Calling LLM...', icon: Loader },
+    { type: 'JSONParsed', label: 'Parsing entities...', icon: CheckCircle },
+    { type: 'RDFConstructed', label: 'Building RDF graph...', icon: CheckCircle },
+    { type: 'ValidationComplete', label: 'Validating with SHACL...', icon: CheckCircle }
+  ]
+
+  const getStageStatus = (stageType: string) => {
+    const event = events.find(e => e._tag === stageType)
+    if (!event) return 'pending'
+    if (event._tag === 'LLMThinking') return 'in_progress'
+    return 'completed'
+  }
+
+  return (
+    <div className="space-y-4">
+      {stages.map((stage, idx) => {
+        const status = getStageStatus(stage.type)
+        const Icon = stage.icon
+
+        return (
+          <motion.div
+            key={stage.type}
+            className={`
+              flex items-center gap-3 p-4 rounded-lg border-2 transition-all
+              ${status === 'completed' ? 'bg-primary-50 border-primary-400' : ''}
+              ${status === 'in_progress' ? 'bg-amber-50 border-amber-400' : ''}
+              ${status === 'pending' ? 'bg-slate-50 border-slate-200' : ''}
+            `}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: idx * 0.1 }}
+          >
+            <motion.div
+              animate={status === 'in_progress' ? { rotate: 360 } : {}}
+              transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+            >
+              <Icon className={`
+                w-5 h-5
+                ${status === 'completed' ? 'text-primary-600' : ''}
+                ${status === 'in_progress' ? 'text-amber-600' : ''}
+                ${status === 'pending' ? 'text-slate-400' : ''}
+              `} />
+            </motion.div>
+            <span className="font-medium">{stage.label}</span>
+          </motion.div>
+        )
+      })}
+    </div>
+  )
+}
+```
+
+### Event Timeline Visualization
+
+**Pattern: Animated timeline showing extraction stages**
+
+```tsx
+const EventTimeline = ({ events }: { events: ExtractionEvent[] }) => {
+  return (
+    <div className="relative">
+      {/* Timeline connector line */}
+      <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-slate-200" />
+
+      <AnimatePresence>
+        {events.map((event, idx) => (
+          <EventTimelineItem
+            key={idx}
+            event={event}
+            index={idx}
+          />
+        ))}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+const EventTimelineItem = ({
+  event,
+  index
+}: {
+  event: ExtractionEvent
+  index: number
+}) => {
+  const getEventDetails = (event: ExtractionEvent) => {
+    switch (event._tag) {
+      case 'LLMThinking':
+        return { icon: Loader, color: 'amber', label: 'LLM Processing' }
+      case 'JSONParsed':
+        return {
+          icon: CheckCircle,
+          color: 'primary',
+          label: `Parsed ${event.entityCount} entities`
+        }
+      case 'RDFConstructed':
+        return {
+          icon: Database,
+          color: 'primary',
+          label: `Generated ${event.tripleCount} triples`
+        }
+      case 'ValidationComplete':
+        return {
+          icon: event.isValid ? CheckCircle : AlertCircle,
+          color: event.isValid ? 'success' : 'error',
+          label: event.isValid ? 'Valid RDF' : 'Validation failed'
+        }
+    }
+  }
+
+  const { icon: Icon, color, label } = getEventDetails(event)
+
+  return (
+    <motion.div
+      className="flex items-start gap-4 mb-6 relative"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ delay: index * 0.1 }}
+    >
+      {/* Timeline node */}
+      <div className={`
+        z-10 w-8 h-8 rounded-full flex items-center justify-center
+        bg-${color}-500 text-white shadow-lg
+      `}>
+        <Icon className="w-4 h-4" />
+      </div>
+
+      {/* Event content */}
+      <div className="flex-1 bg-white rounded-lg p-4 shadow-md border border-slate-200">
+        <div className="font-semibold text-slate-900">{label}</div>
+        <div className="text-xs text-slate-500 mt-1">
+          {new Date(event.timestamp).toLocaleTimeString()}
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+```
+
+### Extraction Error Handling
+
+**Pattern: Display extraction errors with recovery options**
+
+```tsx
+import { LLMError, RdfError, SolverError } from '@effect-ontology/core/Extraction/Events'
+
+const ExtractionErrorView = ({ error }: { error: LLMError | RdfError | SolverError }) => {
+  const getErrorDetails = (error: any) => {
+    if (error._tag === 'LLMError') {
+      return {
+        title: 'LLM Extraction Failed',
+        message: error.message,
+        recovery: 'Try simplifying your input text or ontology',
+        icon: AlertCircle,
+        color: 'error'
+      }
+    }
+    if (error._tag === 'RdfError') {
+      return {
+        title: 'RDF Conversion Failed',
+        message: error.message,
+        recovery: 'Check that extracted entities match ontology schema',
+        icon: Database,
+        color: 'error'
+      }
+    }
+    // SolverError
+    return {
+      title: 'Prompt Generation Failed',
+      message: error.message,
+      recovery: 'Verify your ontology has valid class hierarchy',
+      icon: AlertCircle,
+      color: 'error'
+    }
+  }
+
+  const { title, message, recovery, icon: Icon, color } = getErrorDetails(error)
+
+  return (
+    <motion.div
+      className="bg-error-50 border-2 border-error-400 rounded-lg p-6"
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+    >
+      <div className="flex items-start gap-4">
+        <div className="w-10 h-10 rounded-full bg-error-500 text-white flex items-center justify-center flex-shrink-0">
+          <Icon className="w-5 h-5" />
+        </div>
+        <div className="flex-1">
+          <h3 className="text-lg font-bold text-error-900 mb-2">{title}</h3>
+          <p className="text-sm text-error-700 mb-3">{message}</p>
+          <div className="bg-error-100 border border-error-300 rounded p-3">
+            <div className="text-xs font-semibold text-error-800 mb-1">
+              Recovery Suggestion:
+            </div>
+            <div className="text-sm text-error-700">{recovery}</div>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+```
+
+### PubSub Integration in Components
+
+**Pattern: Subscribe to live extraction events**
+
+```tsx
+import { Queue, Stream, Scope } from 'effect'
+import { useEffect, useState } from 'react'
+
+const LiveExtractionMonitor = () => {
+  const [events, setEvents] = useState<ExtractionEvent[]>([])
+  const [isExtracting, setIsExtracting] = useState(false)
+
+  const runExtraction = () => {
+    setIsExtracting(true)
+    setEvents([])
+
+    Effect.gen(function* () {
+      const pipeline = yield* ExtractionPipeline
+      const subscription = yield* pipeline.subscribe
+
+      // Start extraction in background
+      Effect.fork(
+        pipeline.extract({
+          text: inputText,
+          graph,
+          ontology
+        })
+      )
+
+      // Stream events in real-time
+      yield* Stream.fromQueue(subscription).pipe(
+        Stream.tap((event) => Effect.sync(() => {
+          setEvents(prev => [...prev, event])
+        })),
+        Stream.runDrain
+      )
+
+      setIsExtracting(false)
+    }).pipe(
+      Effect.scoped,
+      Effect.runPromise
+    )
+  }
+
+  return (
+    <div>
+      <button onClick={runExtraction} disabled={isExtracting}>
+        Start Extraction
+      </button>
+
+      {isExtracting && <ExtractionProgress events={events} />}
+      {!isExtracting && events.length > 0 && <EventTimeline events={events} />}
+    </div>
+  )
+}
+```
+
+### Extraction Result Display
+
+**Pattern: Show validated RDF output**
+
+```tsx
+import type { ExtractionResult } from '@effect-ontology/core/Services/Extraction'
+
+const ExtractionResultView = ({ result }: { result: ExtractionResult }) => {
+  const { report, turtle } = result
+
+  return (
+    <div className="space-y-6">
+      {/* Validation Report */}
+      <div className="bg-white rounded-lg shadow-lg p-6">
+        <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+          {report.isValid ? (
+            <>
+              <CheckCircle className="w-6 h-6 text-success" />
+              <span className="text-success">Valid RDF Graph</span>
+            </>
+          ) : (
+            <>
+              <AlertCircle className="w-6 h-6 text-error" />
+              <span className="text-error">Validation Failed</span>
+            </>
+          )}
+        </h3>
+
+        <div className="grid grid-cols-3 gap-4 text-center">
+          <div>
+            <div className="text-3xl font-bold text-primary-600">
+              {report.tripleCount}
+            </div>
+            <div className="text-sm text-slate-600">Triples</div>
+          </div>
+          <div>
+            <div className="text-3xl font-bold text-secondary-600">
+              {report.classCount}
+            </div>
+            <div className="text-sm text-slate-600">Classes</div>
+          </div>
+          <div>
+            <div className="text-3xl font-bold text-accent-600">
+              {report.propertyCount}
+            </div>
+            <div className="text-sm text-slate-600">Properties</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Turtle Output */}
+      <div className="bg-slate-900 rounded-lg shadow-lg p-6">
+        <h3 className="text-lg font-bold text-white mb-4">Turtle Output</h3>
+        <pre className="font-mono text-sm text-primary-300 overflow-x-auto">
+          {turtle}
+        </pre>
+      </div>
+    </div>
+  )
+}
+```
+
+### Component Composition Example
+
+**Complete extraction interface:**
+
+```tsx
+const ExtractionInterface = () => {
+  return (
+    <ThreeColumnLayout
+      left={
+        <div className="p-6">
+          <h2 className="text-2xl font-bold mb-4">Input</h2>
+          <TextareaInput
+            placeholder="Enter text to extract knowledge from..."
+            atom={inputTextAtom}
+          />
+        </div>
+      }
+      center={
+        <div className="p-6">
+          <h2 className="text-2xl font-bold mb-4">Extraction Progress</h2>
+          <LiveExtractionMonitor />
+        </div>
+      }
+      right={
+        <div className="p-6">
+          <h2 className="text-2xl font-bold mb-4">Results</h2>
+          <ExtractionResultView />
+        </div>
+      }
+    />
+  )
+}
+```
+
+### Best Practices
+
+**1. Event Stream Management**
+- Always use `Effect.scoped` when subscribing to PubSub
+- Clean up subscriptions on component unmount
+- Handle late subscribers with replay buffers if needed
+
+**2. Progress Visualization**
+- Show all pipeline stages upfront (pending → in_progress → completed)
+- Use animated loaders for in-progress stages
+- Celebrate completion with success animations
+
+**3. Error Recovery**
+- Display specific error types with actionable recovery suggestions
+- Provide retry buttons with exponential backoff
+- Log errors for telemetry/debugging
+
+**4. Performance**
+- Stream events don't re-render entire UI - update incrementally
+- Use `memo` for event list items to prevent re-renders
+- Virtualize long event timelines (>100 events)
+
+**5. Testing**
+- Mock ExtractionPipeline service with test events
+- Test each event type rendering
+- Verify error states for all error types (LLMError, RdfError, SolverError)
+
+---
+
 ## Appendix: Quick Reference
 
 ### Common Patterns
@@ -1168,10 +1624,14 @@ const OptionalNode = ({ nodeId }: { nodeId: Option.Option<string> }) =>
 
 ---
 
-**Version**: 1.0.0
+**Version**: 1.1.0
 **Last Updated**: 2025-11-19
 **Maintainer**: Effect Ontology Team
 **Status**: Living Document
+
+**Changelog:**
+- v1.1.0 (2025-11-19): Added Extraction Pipeline UI Patterns section with PubSub integration, event visualization, and real-time progress components
+- v1.0.0 (2025-11-19): Initial design system release
 
 ---
 
