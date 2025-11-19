@@ -4,140 +4,168 @@
  * @since 1.0.0
  */
 
-import { describe, expect, it } from "@effect/vitest"
+import { describe, expect, it, layer } from "@effect/vitest"
 import { ConfigProvider, Effect, Layer } from "effect"
 import {
   AppConfigService,
-  DefaultTestConfig,
   LlmConfigService,
-  makeAppTestConfig,
-  makeLlmTestConfig,
-  makeRdfTestConfig,
-  makeShaclTestConfig,
   RdfConfigService,
   ShaclConfigService
 } from "../../src/Config/Services.js"
 
 describe("Config.Services", () => {
   describe("LlmConfigService", () => {
-    it.effect("should provide config from environment", () =>
+    it.layer(
+      Layer.setConfigProvider(
+        ConfigProvider.fromMap(
+          new Map([
+            ["LLM.PROVIDER", "anthropic"],
+            ["LLM.ANTHROPIC_API_KEY", "test-key"],
+            ["LLM.ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022"]
+          ])
+        )
+      )
+    )("should load Anthropic config from environment", () =>
       Effect.gen(function*() {
-        const testConfig = ConfigProvider.fromMap(
+        const config = yield* LlmConfigService
+
+        expect(config.provider).toBe("anthropic")
+        if (config.anthropic?._tag === "Some") {
+          expect(config.anthropic.value.apiKey).toBe("test-key")
+          expect(config.anthropic.value.model).toBe("claude-3-5-sonnet-20241022")
+        }
+      }))
+
+    it.layer(
+      Layer.setConfigProvider(
+        ConfigProvider.fromMap(
+          new Map([
+            ["LLM.PROVIDER", "gemini"],
+            ["LLM.GEMINI_API_KEY", "gemini-key"],
+            ["LLM.GEMINI_MODEL", "gemini-1.5-pro"]
+          ])
+        )
+      )
+    )("should load Gemini config from environment", () =>
+      Effect.gen(function*() {
+        const config = yield* LlmConfigService
+
+        expect(config.provider).toBe("gemini")
+        if (config.gemini?._tag === "Some") {
+          expect(config.gemini.value.apiKey).toBe("gemini-key")
+          expect(config.gemini.value.model).toBe("gemini-1.5-pro")
+        }
+      }))
+
+    it.layer(
+      Layer.setConfigProvider(
+        ConfigProvider.fromMap(
+          new Map([
+            ["LLM.PROVIDER", "openrouter"],
+            ["LLM.OPENROUTER_API_KEY", "or-key"],
+            ["LLM.OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet"],
+            ["LLM.OPENROUTER_SITE_URL", "https://test.com"]
+          ])
+        )
+      )
+    )("should load OpenRouter config from environment", () =>
+      Effect.gen(function*() {
+        const config = yield* LlmConfigService
+
+        expect(config.provider).toBe("openrouter")
+        if (config.openrouter?._tag === "Some") {
+          expect(config.openrouter.value.apiKey).toBe("or-key")
+          expect(config.openrouter.value.siteUrl?._tag).toBe("Some")
+        }
+      }))
+
+    it.layer(
+      Layer.setConfigProvider(
+        ConfigProvider.fromMap(
           new Map([
             ["LLM.PROVIDER", "anthropic"],
             ["LLM.ANTHROPIC_API_KEY", "test-key"]
           ])
         )
-
-        const config = yield* LlmConfigService.pipe(
-          Effect.provide(Layer.setConfigProvider(testConfig))
-        )
-
-        expect(config.provider).toBe("anthropic")
-      }))
-
-    it.effect("should work with test helper", () => {
-      const testLayer = makeLlmTestConfig({
-        provider: "anthropic",
-        anthropic: {
-          apiKey: "test-api-key",
-          model: "claude-3-5-sonnet-20241022",
-          maxTokens: 4096,
-          temperature: 0.0
-        }
-      })
-
-      return Effect.gen(function*() {
-        const config = yield* LlmConfigService
-
-        expect(config.provider).toBe("anthropic")
-        if (config.anthropic?._tag === "Some") {
-          expect(config.anthropic.value.apiKey).toBe("test-api-key")
-        }
-      }).pipe(Effect.provide(testLayer))
-    })
-
-    it.effect("should use default test config", () =>
+      )
+    )("should use default values when optional fields missing", () =>
       Effect.gen(function*() {
         const config = yield* LlmConfigService
 
-        expect(config.provider).toBe("anthropic")
         if (config.anthropic?._tag === "Some") {
-          expect(config.anthropic.value.apiKey).toBe("test-api-key")
+          expect(config.anthropic.value.model).toBe("claude-3-5-sonnet-20241022")
+          expect(config.anthropic.value.maxTokens).toBe(4096)
+          expect(config.anthropic.value.temperature).toBe(0.0)
         }
-      }).pipe(Effect.provide(DefaultTestConfig)))
+      }))
   })
 
   describe("RdfConfigService", () => {
-    it.effect("should provide config from environment", () =>
+    it.layer(
+      Layer.setConfigProvider(
+        ConfigProvider.fromMap(
+          new Map([
+            ["RDF.FORMAT", "N-Triples"],
+            ["RDF.BASE_IRI", "http://example.org/"]
+          ])
+        )
+      )
+    )("should load RDF config from environment", () =>
       Effect.gen(function*() {
-        const testConfig = ConfigProvider.fromMap(
-          new Map([["RDF.FORMAT", "N-Triples"]])
-        )
-
-        const config = yield* RdfConfigService.pipe(
-          Effect.provide(Layer.setConfigProvider(testConfig))
-        )
+        const config = yield* RdfConfigService
 
         expect(config.format).toBe("N-Triples")
+        expect(config.baseIri?._tag).toBe("Some")
         expect(config.prefixes).toHaveProperty("rdf")
+        expect(config.prefixes).toHaveProperty("rdfs")
       }))
 
-    it.effect("should work with test helper", () => {
-      const testLayer = makeRdfTestConfig({
-        format: "Turtle",
-        prefixes: {
-          ex: "http://example.org/",
-          foaf: "http://xmlns.com/foaf/0.1/"
-        }
-      })
-
-      return Effect.gen(function*() {
+    it.layer(
+      Layer.setConfigProvider(ConfigProvider.fromMap(new Map()))
+    )("should use default format when not specified", () =>
+      Effect.gen(function*() {
         const config = yield* RdfConfigService
 
         expect(config.format).toBe("Turtle")
-        expect(config.prefixes).toHaveProperty("ex")
-      }).pipe(Effect.provide(testLayer))
-    })
+        expect(config.prefixes).toHaveProperty("foaf")
+      }))
   })
 
   describe("ShaclConfigService", () => {
-    it.effect("should provide config from environment", () =>
-      Effect.gen(function*() {
-        const testConfig = ConfigProvider.fromMap(
+    it.layer(
+      Layer.setConfigProvider(
+        ConfigProvider.fromMap(
           new Map([
             ["SHACL.ENABLED", "true"],
-            ["SHACL.SHAPES_PATH", "./shapes/test.ttl"]
+            ["SHACL.SHAPES_PATH", "./shapes/test.ttl"],
+            ["SHACL.STRICT_MODE", "false"]
           ])
         )
-
-        const config = yield* ShaclConfigService.pipe(
-          Effect.provide(Layer.setConfigProvider(testConfig))
-        )
-
-        expect(config.enabled).toBe(true)
-      }))
-
-    it.effect("should work with test helper", () => {
-      const testLayer = makeShaclTestConfig({
-        enabled: true,
-        shapesPath: "./test-shapes.ttl",
-        strictMode: false
-      })
-
-      return Effect.gen(function*() {
+      )
+    )("should load SHACL config from environment", () =>
+      Effect.gen(function*() {
         const config = yield* ShaclConfigService
 
         expect(config.enabled).toBe(true)
+        expect(config.shapesPath?._tag).toBe("Some")
         expect(config.strictMode).toBe(false)
-      }).pipe(Effect.provide(testLayer))
-    })
+      }))
+
+    it.layer(
+      Layer.setConfigProvider(ConfigProvider.fromMap(new Map()))
+    )("should use defaults when not specified", () =>
+      Effect.gen(function*() {
+        const config = yield* ShaclConfigService
+
+        expect(config.enabled).toBe(false)
+        expect(config.strictMode).toBe(true)
+      }))
   })
 
   describe("AppConfigService", () => {
-    it.effect("should provide complete app config", () =>
-      Effect.gen(function*() {
-        const testConfig = ConfigProvider.fromMap(
+    it.layer(
+      Layer.setConfigProvider(
+        ConfigProvider.fromMap(
           new Map([
             ["LLM.PROVIDER", "gemini"],
             ["LLM.GEMINI_API_KEY", "gemini-key"],
@@ -145,148 +173,55 @@ describe("Config.Services", () => {
             ["SHACL.ENABLED", "false"]
           ])
         )
-
-        const config = yield* AppConfigService.pipe(
-          Effect.provide(Layer.setConfigProvider(testConfig))
-        )
+      )
+    )("should provide complete app config from environment", () =>
+      Effect.gen(function*() {
+        const config = yield* AppConfigService
 
         expect(config.llm.provider).toBe("gemini")
         expect(config.rdf.format).toBe("Turtle")
         expect(config.shacl.enabled).toBe(false)
       }))
 
-    it.effect("should work with test helper", () => {
-      const testLayer = makeAppTestConfig({
-        llm: {
-          provider: "openrouter",
-          openrouter: {
-            apiKey: "or-key",
-            model: "anthropic/claude-3.5-sonnet",
-            maxTokens: 8192,
-            temperature: 0.5
-          }
-        },
-        rdf: {
-          format: "N-Triples",
-          prefixes: {
-            ex: "http://example.org/"
-          }
-        },
-        shacl: {
-          enabled: true,
-          shapesPath: "./shapes/test.ttl",
-          strictMode: true
-        }
-      })
-
-      return Effect.gen(function*() {
+    it.layer(
+      Layer.setConfigProvider(
+        ConfigProvider.fromMap(
+          new Map([
+            ["LLM.PROVIDER", "anthropic"],
+            ["LLM.ANTHROPIC_API_KEY", "test-key"],
+            ["RDF.FORMAT", "N-Triples"],
+            ["SHACL.ENABLED", "true"]
+          ])
+        )
+      )
+    )("should compose all config services", () =>
+      Effect.gen(function*() {
         const config = yield* AppConfigService
 
-        expect(config.llm.provider).toBe("openrouter")
+        expect(config.llm.provider).toBe("anthropic")
         expect(config.rdf.format).toBe("N-Triples")
         expect(config.shacl.enabled).toBe(true)
-      }).pipe(Effect.provide(testLayer))
-    })
-  })
-
-  describe("Test Helpers", () => {
-    it.effect("should create Anthropic test config", () => {
-      const testLayer = makeLlmTestConfig({
-        provider: "anthropic",
-        anthropic: {
-          apiKey: "sk-ant-test",
-          model: "claude-3-opus-20240229",
-          maxTokens: 8192,
-          temperature: 0.7
-        }
-      })
-
-      return Effect.gen(function*() {
-        const config = yield* LlmConfigService
-
-        expect(config.provider).toBe("anthropic")
-        if (config.anthropic?._tag === "Some") {
-          expect(config.anthropic.value.model).toBe("claude-3-opus-20240229")
-          expect(config.anthropic.value.maxTokens).toBe(8192)
-          expect(config.anthropic.value.temperature).toBe(0.7)
-        }
-      }).pipe(Effect.provide(testLayer))
-    })
-
-    it.effect("should create Gemini test config", () => {
-      const testLayer = makeLlmTestConfig({
-        provider: "gemini",
-        gemini: {
-          apiKey: "gemini-test-key",
-          model: "gemini-1.5-pro",
-          maxTokens: 2048,
-          temperature: 0.3
-        }
-      })
-
-      return Effect.gen(function*() {
-        const config = yield* LlmConfigService
-
-        expect(config.provider).toBe("gemini")
-        if (config.gemini?._tag === "Some") {
-          expect(config.gemini.value.model).toBe("gemini-1.5-pro")
-          expect(config.gemini.value.maxTokens).toBe(2048)
-        }
-      }).pipe(Effect.provide(testLayer))
-    })
-
-    it.effect("should create OpenRouter test config", () => {
-      const testLayer = makeLlmTestConfig({
-        provider: "openrouter",
-        openrouter: {
-          apiKey: "or-test-key",
-          model: "google/gemini-2.0-flash-exp",
-          maxTokens: 4096,
-          temperature: 0.0,
-          siteUrl: "https://test.com",
-          siteName: "Test App"
-        }
-      })
-
-      return Effect.gen(function*() {
-        const config = yield* LlmConfigService
-
-        expect(config.provider).toBe("openrouter")
-        if (config.openrouter?._tag === "Some") {
-          expect(config.openrouter.value.model).toBe("google/gemini-2.0-flash-exp")
-          expect(config.openrouter.value.siteUrl).toBe("https://test.com")
-        }
-      }).pipe(Effect.provide(testLayer))
-    })
+      }))
   })
 
   describe("Layer Composition", () => {
-    it.effect("should compose multiple config services", () => {
-      const combinedLayer = Layer.merge(
-        makeLlmTestConfig({
-          provider: "anthropic",
-          anthropic: {
-            apiKey: "test-key",
-            model: "claude-3-5-sonnet-20241022",
-            maxTokens: 4096,
-            temperature: 0.0
-          }
-        }),
-        makeRdfTestConfig({
-          format: "Turtle",
-          prefixes: {
-            ex: "http://example.org/"
-          }
-        })
+    it.layer(
+      Layer.setConfigProvider(
+        ConfigProvider.fromMap(
+          new Map([
+            ["LLM.PROVIDER", "anthropic"],
+            ["LLM.ANTHROPIC_API_KEY", "test-key"],
+            ["RDF.FORMAT", "Turtle"]
+          ])
+        )
       )
-
-      return Effect.gen(function*() {
+    )("should use individual service layers", () =>
+      Effect.gen(function*() {
         const llmConfig = yield* LlmConfigService
         const rdfConfig = yield* RdfConfigService
 
         expect(llmConfig.provider).toBe("anthropic")
         expect(rdfConfig.format).toBe("Turtle")
-      }).pipe(Effect.provide(combinedLayer))
-    })
+      }))
   })
 })

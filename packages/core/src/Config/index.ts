@@ -27,17 +27,19 @@
  * @example
  * **Creating test configuration:**
  * ```typescript
- * import { makeLlmTestConfig } from "@effect-ontology/core/Config"
+ * import { ConfigProvider, Layer } from "effect"
+ * import { LlmConfigService } from "@effect-ontology/core/Config"
  *
- * const testConfig = makeLlmTestConfig({
- *   provider: "anthropic",
- *   anthropic: {
- *     apiKey: "test-key",
- *     model: "claude-3-5-sonnet-20241022",
- *     maxTokens: 4096,
- *     temperature: 0.0
- *   }
- * })
+ * const testConfig = ConfigProvider.fromMap(
+ *   new Map([
+ *     ["LLM.PROVIDER", "anthropic"],
+ *     ["LLM.ANTHROPIC_API_KEY", "test-key"]
+ *   ])
+ * )
+ *
+ * const program = Effect.gen(function* () {
+ *   const config = yield* LlmConfigService
+ * }).pipe(Effect.provide(Layer.setConfigProvider(testConfig)))
  * ```
  */
 
@@ -66,12 +68,7 @@ export {
 // Export services
 export {
   AppConfigService,
-  DefaultTestConfig,
   LlmConfigService,
-  makeAppTestConfig,
-  makeLlmTestConfig,
-  makeRdfTestConfig,
-  makeShaclTestConfig,
   RdfConfigService,
   ShaclConfigService
 } from "./Services.js"
