@@ -137,6 +137,7 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
    * Non-empty = allowed class IRIs
    */
   ranges: Schema.Array(Schema.String).pipe(
+    Schema.optional,
     Schema.withDefaults({ constructor: () => [], decoding: () => [] })
   ),
 
@@ -145,18 +146,20 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
    */
   minCardinality: Schema.Number.pipe(
     Schema.nonNegative(),
+    Schema.optional,
     Schema.withDefaults({ constructor: () => 0, decoding: () => 0 })
   ),
 
   /**
    * Maximum cardinality (undefined = unbounded)
    */
-  maxCardinality: Schema.Number.pipe(Schema.nonNegative(), Schema.optional),
+  maxCardinality: Schema.OptionFromUndefinedOr(Schema.Number.pipe(Schema.nonNegative())),
 
   /**
    * Allowed values (for owl:hasValue or enumerations)
    */
   allowedValues: Schema.Array(Schema.String).pipe(
+    Schema.optional,
     Schema.withDefaults({ constructor: () => [], decoding: () => [] })
   ),
 
@@ -164,6 +167,7 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
    * Source of this constraint
    */
   source: ConstraintSource.pipe(
+    Schema.optional,
     Schema.withDefaults({
       constructor: () => "domain" as const,
       decoding: () => "domain" as const
@@ -183,7 +187,7 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
       label,
       ranges: [],
       minCardinality: 0,
-      maxCardinality: undefined,
+      maxCardinality: Option.none(),
       allowedValues: [],
       source: "domain"
     })
@@ -202,7 +206,7 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
       label,
       ranges: [],
       minCardinality: 1,
-      maxCardinality: 0, // Contradiction: min > max
+      maxCardinality: Option.some(0), // Contradiction: min > max
       allowedValues: [],
       source: "refined"
     })
@@ -272,7 +276,7 @@ export const meet = (
   a: PropertyConstraint,
   b: PropertyConstraint
 ): Effect.Effect<PropertyConstraint, MeetError> =>
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     // Precondition: same property IRI
     if (a.propertyIri !== b.propertyIri) {
       return yield* Effect.fail(
@@ -308,8 +312,7 @@ export const meet = (
     // Check for allowedValues contradictions:
     // If both constraints have non-empty allowedValues and their intersection is empty,
     // this is unsatisfiable (no value can satisfy both constraints)
-    const hasAllowedValuesContradiction =
-      a.allowedValues.length > 0 &&
+    const hasAllowedValuesContradiction = a.allowedValues.length > 0 &&
       b.allowedValues.length > 0 &&
       refinedValues.length === 0
 
@@ -388,8 +391,7 @@ export const refines = (
 
   // Check ranges: a's ranges must be subclasses of b's ranges
   // For now, simple containment (subclass reasoning future work)
-  const rangesRefine =
-    b.ranges.length === 0 || a.ranges.every((aRange) => b.ranges.includes(aRange))
+  const rangesRefine = b.ranges.length === 0 || a.ranges.every((aRange) => b.ranges.includes(aRange))
 
   return minRefines && maxRefines && rangesRefine
 }
