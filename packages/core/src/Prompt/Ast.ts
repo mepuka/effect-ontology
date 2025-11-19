@@ -16,7 +16,7 @@ import type { PropertyData } from "../Graph/Types.js"
  * This is the atomic unit stored in the KnowledgeIndex.
  * Contains all information needed to render a class definition.
  */
-export class KnowledgeUnit extends Data.Class<KnowledgeUnit>("KnowledgeUnit")<{
+export class KnowledgeUnit extends Data.Class<{
   /** The IRI of the class */
   readonly iri: string
   /** Human-readable label */
@@ -68,10 +68,9 @@ export class KnowledgeUnit extends Data.Class<KnowledgeUnit>("KnowledgeUnit")<{
 
     // Prefer longer property arrays (more complete)
     const properties = a.properties.length >= b.properties.length ? a.properties : b.properties
-    const inheritedProperties =
-      a.inheritedProperties.length >= b.inheritedProperties.length
-        ? a.inheritedProperties
-        : b.inheritedProperties
+    const inheritedProperties = a.inheritedProperties.length >= b.inheritedProperties.length
+      ? a.inheritedProperties
+      : b.inheritedProperties
 
     return new KnowledgeUnit({
       iri: a.iri,
@@ -100,7 +99,7 @@ export type PromptAST =
  * EmptyNode - Identity element for AST composition
  */
 export class EmptyNode extends Data.TaggedClass("Empty")<{}> {
-  static readonly instance = new EmptyNode({})
+  static readonly instance = new EmptyNode()
 }
 
 /**
@@ -122,7 +121,7 @@ export class CompositeNode extends Data.TaggedClass("Composite")<{
    * Flatten a CompositeNode into a list of DefinitionNodes
    */
   flatten(): ReadonlyArray<DefinitionNode> {
-    const result: DefinitionNode[] = []
+    const result: Array<DefinitionNode> = []
 
     const visit = (node: PromptAST): void => {
       if (node instanceof EmptyNode) {
@@ -143,7 +142,5 @@ export class CompositeNode extends Data.TaggedClass("Composite")<{
  * Type guard for PromptAST variants
  */
 export const isEmptyNode = (ast: PromptAST): ast is EmptyNode => ast instanceof EmptyNode
-export const isDefinitionNode = (ast: PromptAST): ast is DefinitionNode =>
-  ast instanceof DefinitionNode
-export const isCompositeNode = (ast: PromptAST): ast is CompositeNode =>
-  ast instanceof CompositeNode
+export const isDefinitionNode = (ast: PromptAST): ast is DefinitionNode => ast instanceof DefinitionNode
+export const isCompositeNode = (ast: PromptAST): ast is CompositeNode => ast instanceof CompositeNode

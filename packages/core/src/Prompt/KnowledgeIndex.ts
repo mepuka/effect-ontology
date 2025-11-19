@@ -28,7 +28,7 @@ export const empty = (): KnowledgeIndex => HashMap.empty<string, KnowledgeUnit>(
 /**
  * Monoid: Combine operation
  *
- * Uses HashMap.union with custom merge strategy for duplicate keys.
+ * Merges two KnowledgeIndex instances with custom merge strategy for duplicate keys.
  * This is the core operation that makes KnowledgeIndex a Monoid.
  *
  * Properties:
@@ -41,8 +41,19 @@ export const empty = (): KnowledgeIndex => HashMap.empty<string, KnowledgeUnit>(
  * @param right - Second knowledge index
  * @returns Merged knowledge index
  */
-export const combine = (left: KnowledgeIndex, right: KnowledgeIndex): KnowledgeIndex =>
-  HashMap.union(left, right, (leftUnit, rightUnit) => KnowledgeUnit.merge(leftUnit, rightUnit))
+export const combine = (left: KnowledgeIndex, right: KnowledgeIndex): KnowledgeIndex => {
+  // Start with left and merge in entries from right
+  return HashMap.reduce(right, left, (acc, rightUnit, iri) => {
+    const leftUnit = HashMap.get(acc, iri)
+    if (Option.isSome(leftUnit)) {
+      // Both have this key - merge them
+      return HashMap.set(acc, iri, KnowledgeUnit.merge(leftUnit.value, rightUnit))
+    } else {
+      // Only right has this key - add it
+      return HashMap.set(acc, iri, rightUnit)
+    }
+  })
+}
 
 /**
  * Monoid: Combine multiple indexes
@@ -53,8 +64,7 @@ export const combine = (left: KnowledgeIndex, right: KnowledgeIndex): KnowledgeI
  * @param indexes - Array of knowledge indexes to combine
  * @returns Single combined index
  */
-export const combineAll = (indexes: ReadonlyArray<KnowledgeIndex>): KnowledgeIndex =>
-  indexes.reduce(combine, empty())
+export const combineAll = (indexes: ReadonlyArray<KnowledgeIndex>): KnowledgeIndex => indexes.reduce(combine, empty())
 
 /**
  * Create a KnowledgeIndex from a single KnowledgeUnit
@@ -64,8 +74,7 @@ export const combineAll = (indexes: ReadonlyArray<KnowledgeIndex>): KnowledgeInd
  * @param unit - The knowledge unit to wrap
  * @returns Index containing only this unit
  */
-export const fromUnit = (unit: KnowledgeUnit): KnowledgeIndex =>
-  HashMap.make([unit.iri, unit])
+export const fromUnit = (unit: KnowledgeUnit): KnowledgeIndex => HashMap.make([unit.iri, unit])
 
 /**
  * Create a KnowledgeIndex from multiple units
@@ -73,8 +82,7 @@ export const fromUnit = (unit: KnowledgeUnit): KnowledgeIndex =>
  * @param units - Array of knowledge units
  * @returns Index containing all units
  */
-export const fromUnits = (units: ReadonlyArray<KnowledgeUnit>): KnowledgeIndex =>
-  combineAll(units.map(fromUnit))
+export const fromUnits = (units: ReadonlyArray<KnowledgeUnit>): KnowledgeIndex => combineAll(units.map(fromUnit))
 
 /**
  * Get a KnowledgeUnit by IRI
@@ -83,8 +91,7 @@ export const fromUnits = (units: ReadonlyArray<KnowledgeUnit>): KnowledgeIndex =
  * @param iri - The IRI to look up
  * @returns Option containing the unit if found
  */
-export const get = (index: KnowledgeIndex, iri: string): Option.Option<KnowledgeUnit> =>
-  HashMap.get(index, iri)
+export const get = (index: KnowledgeIndex, iri: string): Option.Option<KnowledgeUnit> => HashMap.get(index, iri)
 
 /**
  * Check if an IRI exists in the index
@@ -117,8 +124,7 @@ export const values = (index: KnowledgeIndex): Iterable<KnowledgeUnit> => HashMa
  * @param index - The knowledge index
  * @returns Iterable of [IRI, Unit] tuples
  */
-export const entries = (index: KnowledgeIndex): Iterable<readonly [string, KnowledgeUnit]> =>
-  HashMap.entries(index)
+export const entries = (index: KnowledgeIndex): Iterable<readonly [string, KnowledgeUnit]> => HashMap.entries(index)
 
 /**
  * Get the size of the index
@@ -158,8 +164,7 @@ export const map = (
  * @param index - The knowledge index
  * @returns Array of all units
  */
-export const toArray = (index: KnowledgeIndex): ReadonlyArray<KnowledgeUnit> =>
-  Array.from(values(index))
+export const toArray = (index: KnowledgeIndex): ReadonlyArray<KnowledgeUnit> => Array.from(values(index))
 
 /**
  * Statistics about the index

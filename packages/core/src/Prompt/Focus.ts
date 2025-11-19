@@ -8,7 +8,7 @@
  */
 
 import { Effect, HashMap, HashSet } from "effect"
-import type { InheritanceService } from "../Ontology/Inheritance.js"
+import type { CircularInheritanceError, InheritanceError, InheritanceService } from "../Ontology/Inheritance.js"
 import * as KnowledgeIndex from "./KnowledgeIndex.js"
 import type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
 
@@ -58,8 +58,8 @@ export const selectContext = (
   index: KnowledgeIndexType,
   config: FocusConfig,
   inheritanceService: InheritanceService
-): Effect.Effect<KnowledgeIndexType> =>
-  Effect.gen(function* () {
+): Effect.Effect<KnowledgeIndexType, InheritanceError | CircularInheritanceError> =>
+  Effect.gen(function*() {
     // Strategy: Full - no pruning
     if (config.strategy === "Full") {
       return index
@@ -67,9 +67,6 @@ export const selectContext = (
 
     // Initialize result index
     let result = KnowledgeIndex.empty()
-
-    // Track visited nodes to avoid duplicates
-    const visited = HashSet.empty<string>()
 
     // Process each focus node
     for (const focusIri of config.focusNodes) {
@@ -120,7 +117,7 @@ export const selectFocused = (
   index: KnowledgeIndexType,
   focusNodes: ReadonlyArray<string>,
   inheritanceService: InheritanceService
-): Effect.Effect<KnowledgeIndexType> =>
+): Effect.Effect<KnowledgeIndexType, InheritanceError | CircularInheritanceError> =>
   selectContext(index, { focusNodes, strategy: "Focused" }, inheritanceService)
 
 /**
@@ -138,7 +135,7 @@ export const selectNeighborhood = (
   index: KnowledgeIndexType,
   focusNodes: ReadonlyArray<string>,
   inheritanceService: InheritanceService
-): Effect.Effect<KnowledgeIndexType> =>
+): Effect.Effect<KnowledgeIndexType, InheritanceError | CircularInheritanceError> =>
   selectContext(index, { focusNodes, strategy: "Neighborhood" }, inheritanceService)
 
 /**
@@ -204,8 +201,8 @@ export const extractDependencies = (
   index: KnowledgeIndexType,
   focusNodes: ReadonlyArray<string>,
   inheritanceService: InheritanceService
-): Effect.Effect<HashSet.HashSet<string>> =>
-  Effect.gen(function* () {
+): Effect.Effect<HashSet.HashSet<string>, InheritanceError | CircularInheritanceError> =>
+  Effect.gen(function*() {
     let dependencies = HashSet.empty<string>()
 
     for (const focusIri of focusNodes) {
@@ -255,8 +252,8 @@ export const selectMinimal = (
   index: KnowledgeIndexType,
   focusNodes: ReadonlyArray<string>,
   inheritanceService: InheritanceService
-): Effect.Effect<KnowledgeIndexType> =>
-  Effect.gen(function* () {
+): Effect.Effect<KnowledgeIndexType, InheritanceError | CircularInheritanceError> =>
+  Effect.gen(function*() {
     const dependencies = yield* extractDependencies(index, focusNodes, inheritanceService)
 
     let result = KnowledgeIndex.empty()
