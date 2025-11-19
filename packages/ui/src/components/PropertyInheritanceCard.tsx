@@ -1,9 +1,8 @@
-import { HashMap, Graph as EffectGraph, Option, Array as EffectArray, pipe } from "effect"
 import { motion, AnimatePresence } from "framer-motion"
 import { Layers, ChevronDown, ChevronUp, Database, Link2 } from "lucide-react"
 import { useState } from "react"
-import type { PropertyData, NodeId, ClassNode as ClassNodeType } from "@effect-ontology/core/Graph/Types"
-import { isClassNode } from "@effect-ontology/core/Graph/Types"
+import type { PropertyData } from "@effect-ontology/core/Graph/Types"
+import type { KnowledgeUnit } from "@effect-ontology/core/Prompt"
 
 /**
  * PropertyInheritanceCard - Visualizes property accumulation through inheritance
@@ -15,38 +14,36 @@ import { isClassNode } from "@effect-ontology/core/Graph/Types"
  * - Collapsible sections for better UX
  */
 export const PropertyInheritanceCard = ({
-  node,
-  graph,
-  context,
+  unit,
+  universalProperties,
   className
 }: {
-  node: any
-  graph: any
-  context: any
+  unit: KnowledgeUnit
+  universalProperties: ReadonlyArray<PropertyData>
   className?: string
 }): React.ReactElement => {
   const [showInherited, setShowInherited] = useState(true)
   const [showUniversal, setShowUniversal] = useState(false)
 
-  // Get inherited properties from parent classes
-  const inheritedProperties = getInheritedProperties(node.id, graph, context)
-  const universalProperties = context.universalProperties
+  // Properties are already computed in KnowledgeUnit
+  const directProperties = unit.properties
+  const inheritedProperties = unit.inheritedProperties
 
-  const totalProperties = node.properties.length + inheritedProperties.length + universalProperties.length
+  const totalProperties = directProperties.length + inheritedProperties.length + universalProperties.length
 
   return (
     <div className={`bg-white rounded-lg shadow-lg overflow-hidden ${className || ''}`}>
       {/* Header */}
       <div className="bg-linear-to-r from-blue-500 to-blue-600 text-white px-6 py-4">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xl font-bold">{node.label}</h3>
+          <h3 className="text-xl font-bold">{unit.label}</h3>
           <div className="flex items-center gap-2 text-sm bg-white/20 px-3 py-1 rounded-full">
             <Layers className="w-4 h-4" />
             <span>{totalProperties} total</span>
           </div>
         </div>
         <div className="text-xs font-mono text-blue-100 break-all">
-          {node.id}
+          {unit.iri}
         </div>
       </div>
 
@@ -55,8 +52,8 @@ export const PropertyInheritanceCard = ({
         {/* Own Properties - Always visible, top layer */}
         <PropertySection
           title="Direct Properties"
-          subtitle={`Defined on ${node.label}`}
-          properties={node.properties}
+          subtitle={`Defined on ${unit.label}`}
+          properties={directProperties}
           color="blue"
           icon={<Database className="w-4 h-4" />}
           defaultExpanded={true}
@@ -96,7 +93,7 @@ export const PropertyInheritanceCard = ({
       <div className="bg-slate-50 px-6 py-3 text-xs text-slate-600 border-t border-slate-200">
         <div className="flex items-center justify-between">
           <span>
-            {node.properties.length} direct + {inheritedProperties.length} inherited + {universalProperties.length} universal
+            {directProperties.length} direct + {inheritedProperties.length} inherited + {universalProperties.length} universal
           </span>
           <span className="text-blue-600 font-semibold">
             = {totalProperties} total properties
@@ -122,7 +119,7 @@ const PropertySection = ({
 }: {
   title: string
   subtitle: string
-  properties: PropertyData[]
+  properties: ReadonlyArray<PropertyData>
   color: 'blue' | 'violet' | 'amber'
   icon: React.ReactNode
   defaultExpanded: boolean
@@ -263,40 +260,6 @@ const PropertyCard = ({
       </div>
     </motion.div>
   )
-}
-
-/**
- * Get inherited properties from parent classes using proper Effect patterns
- */
-function getInheritedProperties(nodeId: NodeId, graph: any, context: any): PropertyData[] {
-  const visited = new Set<NodeId>()
-  const inherited: PropertyData[] = []
-
-  const collectFromParents = (currentNodeId: NodeId): void => {
-    if (visited.has(currentNodeId)) return
-    visited.add(currentNodeId)
-
-    const nodeIndexOption = HashMap.get(context.nodeIndexMap, currentNodeId) as Option.Option<number>
-    if (Option.isSome(nodeIndexOption)) {
-      const nodeIndex = nodeIndexOption.value as number
-      const neighbors = EffectGraph.neighbors(graph, nodeIndex)
-      for (const parentIndex of neighbors) {
-        const parentIdOption = EffectGraph.getNode(graph, parentIndex) as Option.Option<string>
-        if (Option.isSome(parentIdOption)) {
-          const parentId = parentIdOption.value as string
-          const parentNodeOption = HashMap.get(context.nodes, parentId)
-          if (Option.isSome(parentNodeOption) && isClassNode(parentNodeOption.value as any)) {
-            const parentNode = parentNodeOption.value as ClassNodeType
-            inherited.push(...parentNode.properties)
-            collectFromParents(parentId)
-          }
-        }
-      }
-    }
-  }
-
-  collectFromParents(nodeId)
-  return inherited
 }
 
 /**
