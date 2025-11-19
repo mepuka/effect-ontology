@@ -1,0 +1,112 @@
+@prefix : <http://example.org/pets#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ============================================================================
+# Test Ontology: Dog Owner (Range Refinement)
+#
+# Purpose: Test that owl:someValuesFrom restrictions refine property ranges
+#
+# Expected Behavior:
+#   Person.hasPet → Range(Animal), MinCard(0)
+#   DogOwner.hasPet → Range(Dog), MinCard(1)  ← REFINED via restriction
+#
+# Mathematical Model:
+#   DogOwner ≡ Person ⊓ ∃ hasPet.Dog
+#
+# Test Scenario:
+#   1. Person has hasPet property with range Animal (RDFS)
+#   2. DogOwner inherits from Person (gets hasPet)
+#   3. DogOwner adds restriction: someValuesFrom Dog
+#   4. Expected: Range refined from Animal to Dog
+#               MinCard refined from 0 to 1 (existence implied)
+# ============================================================================
+
+# Ontology declaration
+: a owl:Ontology ;
+  rdfs:label "Dog Owner Test Ontology" ;
+  rdfs:comment "Tests range refinement via owl:someValuesFrom restrictions" .
+
+# ============================================================================
+# Classes
+# ============================================================================
+
+:Person a owl:Class ;
+  rdfs:label "Person" ;
+  rdfs:comment "A human being" .
+
+:Animal a owl:Class ;
+  rdfs:label "Animal" ;
+  rdfs:comment "Any living creature" .
+
+:Dog a owl:Class ;
+  rdfs:subClassOf :Animal ;
+  rdfs:label "Dog" ;
+  rdfs:comment "A domesticated canine (subclass of Animal)" .
+
+:Cat a owl:Class ;
+  rdfs:subClassOf :Animal ;
+  rdfs:label "Cat" ;
+  rdfs:comment "A domesticated feline (subclass of Animal)" .
+
+# ============================================================================
+# Properties (RDFS style - global constraints)
+# ============================================================================
+
+:hasPet a owl:ObjectProperty ;
+  rdfs:label "has pet" ;
+  rdfs:comment "Relationship between a person and their pet" ;
+  rdfs:domain :Person ;
+  rdfs:range :Animal .
+
+# ============================================================================
+# Specialized Classes with Restrictions (OWL style - local constraints)
+# ============================================================================
+
+:DogOwner a owl:Class ;
+  rdfs:label "Dog Owner" ;
+  rdfs:comment "A person who owns at least one dog" ;
+  rdfs:subClassOf :Person ;
+  rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :hasPet ;
+    owl:someValuesFrom :Dog
+  ] .
+
+:CatOwner a owl:Class ;
+  rdfs:label "Cat Owner" ;
+  rdfs:comment "A person who owns at least one cat" ;
+  rdfs:subClassOf :Person ;
+  rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :hasPet ;
+    owl:someValuesFrom :Cat
+  ] .
+
+# ============================================================================
+# Expected Test Results
+# ============================================================================
+
+# Person.hasPet:
+#   source: domain
+#   ranges: [":Animal"]
+#   minCardinality: 0
+#   maxCardinality: None (unbounded)
+
+# DogOwner.hasPet:
+#   source: refined
+#   ranges: [":Dog"]  ← REFINED from :Animal
+#   minCardinality: 1  ← REFINED from 0 (someValuesFrom implies existence)
+#   maxCardinality: None
+
+# CatOwner.hasPet:
+#   source: refined
+#   ranges: [":Cat"]  ← REFINED from :Animal
+#   minCardinality: 1  ← REFINED from 0
+#   maxCardinality: None
+
+# Verification (property-based test):
+#   For all classes C where C subClassOf DogOwner:
+#     C.hasPet.ranges ⊆ {Dog}
+#     C.hasPet.minCardinality >= 1

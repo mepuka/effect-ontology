@@ -1,0 +1,215 @@
+@prefix : <http://example.org/test#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ============================================================================
+# Test Ontology: Unsatisfiable Constraints (Bottom Detection)
+#
+# Purpose: Test that contradictory constraints are detected as Bottom (⊥)
+#
+# Expected Behavior:
+#   BrokenCardinality.hasProp → isBottom() = true
+#   ConflictingRanges.hasValue → isBottom() = true (if Cat/Dog disjoint)
+#
+# Mathematical Model:
+#   Bottom = MinCard > MaxCard
+#   Bottom = Range(A) ⊓ Range(B) where A ⊓ B = ∅
+#
+# Test Scenarios:
+#   1. Cardinality conflict: min > max
+#   2. Disjoint range conflict: Cat ⊓ Dog = ∅
+#   3. Value conflict: hasValue "A" ⊓ hasValue "B"
+# ============================================================================
+
+# Ontology declaration
+: a owl:Ontology ;
+  rdfs:label "Conflict Detection Test Ontology" ;
+  rdfs:comment "Tests detection of unsatisfiable (Bottom) constraints" .
+
+# ============================================================================
+# Test Case 1: Cardinality Conflict
+# ============================================================================
+
+:BrokenCardinality a owl:Class ;
+  rdfs:label "Broken Cardinality" ;
+  rdfs:comment "Has conflicting min/max cardinality (unsatisfiable)" ;
+  rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :hasProp ;
+    owl:minCardinality "3"^^xsd:nonNegativeInteger
+  ] ;
+  rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :hasProp ;
+    owl:maxCardinality "1"^^xsd:nonNegativeInteger
+  ] .
+
+:hasProp a owl:ObjectProperty ;
+  rdfs:label "has property" .
+
+# Expected: BrokenCardinality.hasProp.isBottom() = true
+#   Reason: MinCard(3) ⊓ MaxCard(1) → 3 > 1 (impossible)
+
+# ============================================================================
+# Test Case 2: Disjoint Range Conflict
+# ============================================================================
+
+:Animal a owl:Class ;
+  rdfs:label "Animal" .
+
+:Dog a owl:Class ;
+  rdfs:subClassOf :Animal ;
+  rdfs:label "Dog" .
+
+:Cat a owl:Class ;
+  rdfs:subClassOf :Animal ;
+  rdfs:label "Cat" .
+
+# Declare Dog and Cat as disjoint
+:Dog owl:disjointWith :Cat .
+
+:hasValue a owl:ObjectProperty ;
+  rdfs:label "has value" .
+
+:ConflictingRanges a owl:Class ;
+  rdfs:label "Conflicting Ranges" ;
+  rdfs:comment "Requires value to be both Dog and Cat (impossible)" ;
+  rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :hasValue ;
+    owl:someValuesFrom :Dog
+  ] ;
+  rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :hasValue ;
+    owl:allValuesFrom :Cat
+  ] .
+
+# Expected: ConflictingRanges.hasValue → ranges contain both Dog and Cat
+#   If we implement disjointness checking:
+#     Range(Dog) ⊓ Range(Cat) → ⊥ (empty intersection)
+#   Without disjointness checking:
+#     ranges = [Dog, Cat] (both required)
+#     Not Bottom yet, but semantically unsatisfiable
+
+# ============================================================================
+# Test Case 3: Specific Value Conflict
+# ============================================================================
+
+:hasColor a owl:DatatypeProperty ;
+  rdfs:label "has color" ;
+  rdfs:range xsd:string .
+
+:MultipleValues a owl:Class ;
+  rdfs:label "Multiple Values" ;
+  rdfs:comment "Requires color to be both Red and Blue (impossible)" ;
+  rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :hasColor ;
+    owl:hasValue "Red"
+  ] ;
+  rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :hasColor ;
+    owl:hasValue "Blue"
+  ] .
+
+# Expected: MultipleValues.hasColor → allowedValues = ["Red", "Blue"]
+#   But both restrictions have minCard=1, maxCard=1
+#   Intersection: ["Red"] ∩ ["Blue"] = ∅
+#   Result: Bottom (no value satisfies both)
+
+# ============================================================================
+# Test Case 4: Cascading Conflict
+# ============================================================================
+
+:BaseClass a owl:Class ;
+  rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :cascadeProp ;
+    owl:minCardinality "1"^^xsd:nonNegativeInteger
+  ] .
+
+:MiddleClass a owl:Class ;
+  rdfs:subClassOf :BaseClass ;
+  rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :cascadeProp ;
+    owl:maxCardinality "3"^^xsd:nonNegativeInteger
+  ] .
+
+:BrokenChild a owl:Class ;
+  rdfs:label "Broken Child" ;
+  rdfs:comment "Inherits min=1, max=3, then adds min=5 (conflict)" ;
+  rdfs:subClassOf :MiddleClass ;
+  rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :cascadeProp ;
+    owl:minCardinality "5"^^xsd:nonNegativeInteger
+  ] .
+
+:cascadeProp a owl:ObjectProperty .
+
+# Expected: BrokenChild.cascadeProp → isBottom() = true
+#   BaseClass: min=1, max=∞
+#   MiddleClass: min=1, max=3 (refined)
+#   BrokenChild: min=max(1,5)=5, max=3 (refined)
+#   Result: 5 > 3 → Bottom
+
+# ============================================================================
+# Test Case 5: Edge Case - Empty Intersection
+# ============================================================================
+
+:hasMultiTag a owl:ObjectProperty .
+
+:RequiresTwoTags a owl:Class ;
+  rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :hasMultiTag ;
+    owl:minCardinality "2"^^xsd:nonNegativeInteger
+  ] .
+
+:ForbidsTags a owl:Class ;
+  rdfs:subClassOf [
+    a owl:Restriction ;
+    owl:onProperty :hasMultiTag ;
+    owl:maxCardinality "0"^^xsd:nonNegativeInteger
+  ] .
+
+:Impossible a owl:Class ;
+  rdfs:label "Impossible Class" ;
+  rdfs:comment "Requires at least 2 tags but forbids any tags" ;
+  rdfs:subClassOf :RequiresTwoTags ;
+  rdfs:subClassOf :ForbidsTags .
+
+# Expected: Impossible.hasMultiTag → isBottom() = true
+#   min=2, max=0 → 2 > 0 → Bottom
+
+# ============================================================================
+# Expected Test Results
+# ============================================================================
+
+# BrokenCardinality.hasProp:
+#   isBottom() = true (3 > 1)
+
+# ConflictingRanges.hasValue:
+#   ranges = [Dog, Cat]
+#   If disjoint: isBottom() = true
+#   Else: ranges has both (semantically invalid but structurally OK)
+
+# MultipleValues.hasColor:
+#   allowedValues intersection = ∅
+#   isBottom() = true (no value satisfies both Red and Blue)
+
+# BrokenChild.cascadeProp:
+#   minCard=5, maxCard=3
+#   isBottom() = true
+
+# Impossible.hasMultiTag:
+#   minCard=2, maxCard=0
+#   isBottom() = true
+
+# Verification (absorption law):
+#   For all Bottom constraints B:
+#     B ⊓ anyConstraint = B (Bottom absorbs everything)
