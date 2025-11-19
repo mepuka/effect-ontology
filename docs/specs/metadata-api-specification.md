@@ -722,25 +722,181 @@ export const knowledgeUnitToSchema = (
 
 Helper functions for common visualization tasks.
 
+**Recommended Visualization Library: Observable Plot**
+
+We recommend **Observable Plot** (`@observablehq/plot`) over D3 for the following reasons:
+
+1. **Lighter weight** - Focused API vs D3's comprehensive toolkit
+2. **Declarative** - Aligns with functional programming principles
+3. **Concise** - Mark-based composition (bars, dots, lines) vs imperative D3
+4. **Scales & transforms** - Built-in data transformations (binning, rolling averages)
+5. **Same team as D3** - Maintained by Observable, built on D3 foundation
+6. **Exploratory data analysis** - Designed for rapid iteration and discovery
+
+**Installation:**
+```bash
+npm install @observablehq/plot
+# or
+bun add @observablehq/plot
+```
+
+**Package:** `@observablehq/plot` (v0.6.17+)
+
+### Observable Plot Integration
+
 ```typescript
+import * as Plot from "@observablehq/plot"
+
 /**
- * Convert DependencyGraph to D3.js format
+ * Convert DependencyGraph to Observable Plot format
+ *
+ * Returns Plot specification for network diagram
  */
-export const toDThree = (graph: DependencyGraph): {
-  nodes: Array<{ id: string; label: string; group: number }>
-  links: Array<{ source: string; target: string; type: string }>
-} => ({
-  nodes: graph.nodes.map(node => ({
+export const toObservablePlot = (graph: DependencyGraph) => {
+  const nodes = graph.nodes.map(node => ({
     id: node.id,
     label: node.label,
-    group: node.type === "class" ? 1 : 2
-  })),
-  links: graph.edges.map(edge => ({
+    type: node.type,
+    propertyCount: node.propertyCount
+  }))
+
+  const links = graph.edges.map(edge => ({
     source: edge.source,
     target: edge.target,
     type: edge.type
   }))
-})
+
+  return Plot.plot({
+    marks: [
+      // Draw edges as arrows
+      Plot.arrow(links, {
+        x1: d => nodes.find(n => n.id === d.source)?.id,
+        y1: d => nodes.find(n => n.id === d.source)?.id,
+        x2: d => nodes.find(n => n.id === d.target)?.id,
+        y2: d => nodes.find(n => n.id === d.target)?.id,
+        stroke: "#999",
+        strokeWidth: 1
+      }),
+
+      // Draw nodes as dots
+      Plot.dot(nodes, {
+        x: "id",
+        y: "id",
+        r: d => Math.sqrt(d.propertyCount) * 5,
+        fill: d => d.type === "class" ? "#4a90e2" : "#e24a90",
+        title: "label"
+      }),
+
+      // Add labels
+      Plot.text(nodes, {
+        x: "id",
+        y: "id",
+        text: "label",
+        dy: -10
+      })
+    ],
+    width: 800,
+    height: 600
+  })
+}
+
+/**
+ * Create hierarchy tree plot
+ *
+ * Uses Observable Plot's tree layout
+ */
+export const hierarchyToPlot = (tree: HierarchyTree) => {
+  // Flatten tree to array
+  const flatten = (node: TreeNode, parent: string | null = null): Array<{
+    id: string
+    label: string
+    parent: string | null
+    depth: number
+    propertyCount: number
+  }> => {
+    const result = [{
+      id: node.iri,
+      label: node.label,
+      parent,
+      depth: node.depth,
+      propertyCount: node.propertyCount
+    }]
+
+    for (const child of node.children) {
+      result.push(...flatten(child, node.iri))
+    }
+
+    return result
+  }
+
+  const nodes = tree.roots.flatMap(root => flatten(root))
+
+  return Plot.plot({
+    marks: [
+      // Vertical tree layout
+      Plot.tree(nodes, {
+        path: "id",
+        delimiter: "/",
+        stroke: "#ccc"
+      }),
+
+      // Node circles
+      Plot.dot(nodes, {
+        x: "depth",
+        y: "label",
+        r: 5,
+        fill: "#4a90e2",
+        title: d => `${d.label} (${d.propertyCount} properties)`
+      }),
+
+      // Labels
+      Plot.text(nodes, {
+        x: "depth",
+        y: "label",
+        text: "label",
+        dx: 10
+      })
+    ],
+    marginLeft: 150,
+    width: 800,
+    height: nodes.length * 25
+  })
+}
+
+/**
+ * Create token reduction bar chart
+ */
+export const tokenStatsToPlot = (stats: TokenStats) => {
+  const data = [
+    { category: "Full Index", tokens: stats.estimatedFullTokens },
+    { category: "Focused Index", tokens: stats.estimatedFocusedTokens },
+    { category: "Tokens Saved", tokens: stats.estimatedTokensSaved }
+  ]
+
+  return Plot.plot({
+    marks: [
+      Plot.barX(data, {
+        x: "tokens",
+        y: "category",
+        fill: d => d.category === "Tokens Saved" ? "#2ecc71" : "#3498db",
+        title: d => `${d.tokens.toLocaleString()} tokens`
+      }),
+
+      Plot.text(data, {
+        x: "tokens",
+        y: "category",
+        text: d => d.tokens.toLocaleString(),
+        dx: -10,
+        textAnchor: "end",
+        fill: "white"
+      })
+    ],
+    x: { label: "Tokens" },
+    y: { label: null },
+    marginLeft: 120,
+    width: 600
+  })
+}
 
 /**
  * Convert HierarchyTree to JSON for frontend
@@ -843,58 +999,220 @@ describe("Metadata Integration", () => {
 
 ---
 
-## Frontend Integration Examples
+## Frontend Integration with EffectAtom
 
-### React Component for Class Hierarchy
+**Architecture Note:** Frontend integration will use the **EffectAtom pattern** for sophisticated real-time reactive updates. All services will be wired with EffectAtom to enable live, reactive data flows.
+
+### EffectAtom Design Principles
+
+1. **Reactive State Management** - Metadata changes propagate automatically to UI
+2. **Effect Services Integration** - Metadata API exposed as Effect services
+3. **Real-time Updates** - Ontology changes trigger metadata regeneration
+4. **Declarative Subscriptions** - Components subscribe to metadata atoms
+5. **Composable Reactivity** - Atoms compose for derived state (e.g., filtered views)
+
+### Metadata Service with EffectAtom
 
 ```typescript
-import { useEffect, useState } from "react"
-import type { HierarchyTree } from "@effect-ontology/core/Prompt/Metadata"
+import { Atom, Effect, Layer } from "effect"
+import type { KnowledgeMetadata } from "@effect-ontology/core/Prompt/Metadata"
 
-export const ClassHierarchyView = ({ ontologyUri }: { ontologyUri: string }) => {
-  const [tree, setTree] = useState<HierarchyTree | null>(null)
+/**
+ * Metadata Atom Service
+ *
+ * Provides reactive access to ontology metadata
+ */
+export class MetadataAtomService extends Effect.Service<MetadataAtomService>()("MetadataAtomService", {
+  effect: Effect.gen(function*() {
+    // Create atoms for metadata
+    const metadataAtom = yield* Atom.make<KnowledgeMetadata | null>(null)
+    const loadingAtom = yield* Atom.make<boolean>(false)
+    const errorAtom = yield* Atom.make<Error | null>(null)
 
+    return {
+      // Get current metadata (reactive)
+      metadata: metadataAtom,
+      loading: loadingAtom,
+      error: errorAtom,
+
+      // Refresh metadata from ontology
+      refresh: (ontologyUri: string) =>
+        Effect.gen(function*() {
+          yield* Atom.set(loadingAtom, true)
+          yield* Atom.set(errorAtom, null)
+
+          try {
+            // Build metadata from ontology
+            const metadata = yield* buildKnowledgeMetadata(...)
+            yield* Atom.set(metadataAtom, metadata)
+          } catch (error) {
+            yield* Atom.set(errorAtom, error as Error)
+          } finally {
+            yield* Atom.set(loadingAtom, false)
+          }
+        }),
+
+      // Subscribe to specific metadata slices
+      classSummaries: Atom.map(metadataAtom, m => m?.classSummaries),
+      dependencyGraph: Atom.map(metadataAtom, m => m?.dependencyGraph),
+      tokenStats: (fullIndex, focusedIndex) =>
+        Atom.map(metadataAtom, () => buildTokenStats(fullIndex, focusedIndex))
+    }
+  }),
+  dependencies: [KnowledgeIndexService.Default]
+}) {}
+```
+
+### React Hook for Metadata Atom
+
+```typescript
+import { useAtom } from "@effect-rx/rx-react"
+import { MetadataAtomService } from "./services"
+
+/**
+ * React hook for reactive metadata access
+ */
+export const useMetadata = (ontologyUri: string) => {
+  const metadataService = useContext(MetadataAtomServiceContext)
+
+  // Subscribe to metadata atom
+  const metadata = useAtom(metadataService.metadata)
+  const loading = useAtom(metadataService.loading)
+  const error = useAtom(metadataService.error)
+
+  // Refresh on mount or URI change
   useEffect(() => {
-    // Fetch metadata from API
-    fetch(`/api/ontology/${ontologyUri}/metadata`)
-      .then(res => res.json())
-      .then(data => setTree(data.hierarchyTree))
+    Effect.runPromise(metadataService.refresh(ontologyUri))
   }, [ontologyUri])
 
-  if (!tree) return <div>Loading...</div>
+  return { metadata, loading, error }
+}
+
+/**
+ * React Component with EffectAtom integration
+ */
+export const ClassHierarchyView = ({ ontologyUri }: { ontologyUri: string }) => {
+  const { metadata, loading, error } = useMetadata(ontologyUri)
+
+  if (loading) return <LoadingSpinner />
+  if (error) return <ErrorDisplay error={error} />
+  if (!metadata) return null
 
   return (
     <div>
       <h2>Class Hierarchy</h2>
-      <p>Max Depth: {tree.maxDepth}</p>
-      <p>Total Classes: {tree.totalNodes}</p>
-      <TreeView nodes={tree.roots} />
+      <p>Max Depth: {metadata.hierarchyTree.maxDepth}</p>
+      <p>Total Classes: {metadata.hierarchyTree.totalNodes}</p>
+      <p>Last Updated: {metadata.generatedAt.toLocaleString()}</p>
+
+      {/* Render with Observable Plot */}
+      <PlotView plot={hierarchyToPlot(metadata.hierarchyTree)} />
     </div>
   )
 }
 ```
 
-### D3 Dependency Graph Visualization
+### Reactive Token Stats Dashboard
 
 ```typescript
-import * as d3 from "d3"
-import { toDThree } from "@effect-ontology/core/Prompt/Visualization"
+/**
+ * Real-time token reduction dashboard
+ *
+ * Reacts to focus operation changes
+ */
+export const TokenStatsDashboard = () => {
+  const metadataService = useContext(MetadataAtomServiceContext)
 
-export const DependencyGraphView = ({ graph }) => {
-  const d3Data = toDThree(graph)
+  // Subscribe to focus operations atom
+  const focusConfig = useAtom(focusConfigAtom)
+
+  // Derive token stats (reactive)
+  const tokenStats = useAtom(
+    useMemo(() =>
+      Atom.map(
+        metadataService.metadata,
+        metadata => {
+          if (!metadata) return null
+
+          // Apply current focus config
+          const focused = Focus.selectContext(
+            fullIndex,
+            focusConfig,
+            inheritanceService
+          )
+
+          return buildTokenStats(fullIndex, focused)
+        }
+      ),
+      [focusConfig]
+    )
+  )
+
+  if (!tokenStats) return null
+
+  return (
+    <div className="stats-dashboard">
+      <h3>Token Reduction Analysis</h3>
+
+      {/* Live updating stats */}
+      <StatCard
+        label="Reduction"
+        value={`${tokenStats.reductionPercent.toFixed(1)}%`}
+        color="green"
+      />
+
+      <StatCard
+        label="Tokens Saved"
+        value={tokenStats.estimatedTokensSaved.toLocaleString()}
+        color="blue"
+      />
+
+      <StatCard
+        label="Cost Savings"
+        value={`$${tokenStats.estimatedCostSavings.toFixed(4)}`}
+        color="purple"
+      />
+
+      {/* Observable Plot bar chart (reactive) */}
+      <PlotView plot={tokenStatsToPlot(tokenStats)} />
+
+      {/* List of removed classes (live) */}
+      <RemovedClassesList classes={tokenStats.removedClassLabels} />
+    </div>
+  )
+}
+```
+
+### PlotView Component
+
+```typescript
+import { useEffect, useRef } from "react"
+import type { Plot } from "@observablehq/plot"
+
+/**
+ * Generic Plot renderer component
+ *
+ * Renders any Observable Plot specification reactively
+ */
+export const PlotView = ({ plot }: { plot: Plot }) => {
+  const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const svg = d3.select("#graph")
+    if (!containerRef.current) return
 
-    const simulation = d3.forceSimulation(d3Data.nodes)
-      .force("link", d3.forceLink(d3Data.links).id(d => d.id))
-      .force("charge", d3.forceManyBody())
-      .force("center", d3.forceCenter(400, 300))
+    // Clear previous plot
+    containerRef.current.innerHTML = ""
 
-    // Render graph...
-  }, [graph])
+    // Append new plot
+    containerRef.current.appendChild(plot)
 
-  return <svg id="graph" width={800} height={600} />
+    // Cleanup
+    return () => {
+      plot.remove()
+    }
+  }, [plot])
+
+  return <div ref={containerRef} />
 }
 ```
 
