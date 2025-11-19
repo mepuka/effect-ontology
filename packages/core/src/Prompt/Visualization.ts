@@ -17,7 +17,7 @@
  * @since 1.0.0
  */
 
-import { Array as EffectArray, Data, HashMap, Option, pipe, Schema } from "effect"
+import { Array as EffectArray, Data, HashMap, Number as EffectNumber, Option, Order, pipe, Schema } from "effect"
 import type { ClassSummary, DependencyGraph, HierarchyTree, KnowledgeMetadata, TokenStats } from "./Metadata.js"
 
 /**
@@ -97,10 +97,14 @@ export type DependencyGraphPlotData = typeof DependencyGraphPlotDataSchema.Type
  * @since 1.0.0
  * @category constructors
  */
-export const DependencyGraphPlotData = {
-  schema: DependencyGraphPlotDataSchema,
-  make: Schema.make(DependencyGraphPlotDataSchema)
-}
+export const makeDependencyGraphPlotData = (input: {
+  nodes: ReadonlyArray<DependencyGraphNode>
+  links: ReadonlyArray<DependencyGraphLink>
+}): DependencyGraphPlotData =>
+  Data.struct({
+    nodes: input.nodes,
+    links: input.links
+  })
 
 /**
  * PlotData for hierarchy tree visualization
@@ -139,10 +143,18 @@ export type HierarchyTreePlotData = {
  * @since 1.0.0
  * @category constructors
  */
-export const HierarchyTreePlotData = {
-  schema: HierarchyTreePlotDataSchema,
-  make: Schema.make(HierarchyTreePlotDataSchema)
-}
+export const makeHierarchyTreePlotData = (input: {
+  name: string
+  children?: ReadonlyArray<HierarchyTreePlotData>
+  value?: number
+  depth?: number
+}): HierarchyTreePlotData =>
+  Data.struct({
+    name: input.name,
+    ...(input.children !== undefined && { children: input.children }),
+    ...(input.value !== undefined && { value: input.value }),
+    ...(input.depth !== undefined && { depth: input.depth })
+  })
 
 /**
  * Token Stats Data Point Schema
@@ -217,10 +229,14 @@ export type TokenStatsPlotData = typeof TokenStatsPlotDataSchema.Type
  * @since 1.0.0
  * @category constructors
  */
-export const TokenStatsPlotData = {
-  schema: TokenStatsPlotDataSchema,
-  make: Schema.make(TokenStatsPlotDataSchema)
-}
+export const makeTokenStatsPlotData = (input: {
+  data: ReadonlyArray<TokenStatsDataPoint>
+  summary: TokenStatsSummary
+}): TokenStatsPlotData =>
+  Data.struct({
+    data: input.data,
+    summary: input.summary
+  })
 
 /**
  * Convert DependencyGraph to plot data
@@ -403,7 +419,9 @@ export const toTokenStatsPlotData = (
           })
         ),
         // Sort by token count descending
-        EffectArray.sort((a, b) => b.tokens - a.tokens)
+        EffectArray.sort(
+          Order.mapInput(EffectNumber.Order, (item: TokenStatsDataPoint) => -item.tokens)
+        )
       ),
       summary: Data.struct({
         total: stats.totalTokens,
