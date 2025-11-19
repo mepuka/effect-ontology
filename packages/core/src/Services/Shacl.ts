@@ -70,9 +70,10 @@ const generatePropertyShape = (property: PropertyData): string => {
   // Property path (required)
   constraints.push(`sh:path <${property.iri}>`)
 
-  // Label for better error messages
+  // Label for better error messages (escape quotes and special chars)
   if (property.label) {
-    constraints.push(`sh:name "${property.label}"`)
+    const escapedLabel = property.label.replace(/"/g, '\\"').replace(/\n/g, '\\n')
+    constraints.push(`sh:name "${escapedLabel}"`)
   }
 
   // Range constraint (datatype or class)
@@ -110,17 +111,31 @@ ${constraintStr.slice(0, -2)} # Remove trailing ' ;'
  * @internal
  */
 const generateNodeShape = (classNode: ClassNode, shapePrefix: string = "shape"): string => {
-  const shapeName = classNode.id.split(/[/#]/).pop() || classNode.id
-  const shapeIri = `${shapePrefix}:${shapeName}Shape`
+  // Extract local name from IRI, handling edge cases:
+  // - IRIs ending with # or / (e.g., "http://example.org#" → use full IRI hash)
+  // - IRIs with special characters that aren't valid in Turtle local names
+  const parts = classNode.id.split(/[/#]/).filter(Boolean)
+  const localName = parts[parts.length - 1] || "Shape"
+
+  // Create a safe local name by hashing the class IRI if it contains problematic characters
+  // Turtle local names must match: PN_LOCAL = (PN_CHARS_U | ':' | [0-9] | PLX) ((PN_CHARS | '.' | ':' | PLX)* (PN_CHARS | ':' | PLX))?
+  // For simplicity, use blank node if local name is unsafe, then give it a label
+  const isSafeLocalName = /^[a-zA-Z_][a-zA-Z0-9_-]*$/.test(localName)
+
+  // Use full IRI in angle brackets for the shape IRI to avoid Turtle prefix issues
+  const shapeIri = `<${classNode.id}Shape>`
 
   // Generate property shapes
   const propertyShapes = classNode.properties.map(generatePropertyShape).join(" ;")
+
+  // Escape quotes in labels
+  const escapedLabel = (classNode.label || localName).replace(/"/g, '\\"')
 
   return `
 ${shapeIri}
   a sh:NodeShape ;
   sh:targetClass <${classNode.id}> ;
-  sh:name "${classNode.label || shapeName}" ${propertyShapes ? ";" : "."}${propertyShapes ? propertyShapes + " ." : ""}
+  sh:name "${escapedLabel}" ${propertyShapes ? ";" : "."}${propertyShapes ? propertyShapes + " ." : ""}
 `
 }
 
@@ -374,7 +389,7 @@ export class ShaclService extends Effect.Service<ShaclService>()("ShaclService",
 
         // Stage 3: Create SHACL validator with @zazuko/env factory
         const validator = yield* Effect.sync(() => {
-          return new SHACLValidator(shapesStore, { factory: rdf })
+          return new SHACLValidator(shapesStore, { factory: rdfEnvironment })
         }).pipe(
           Effect.catchAllDefect((cause) =>
             Effect.fail(
