@@ -7,13 +7,44 @@
  * - Graph edges represent subClassOf relationships (Child -> Parent dependency)
  */
 
-import type { HashMap } from "effect"
-import { Schema } from "effect"
+import { HashMap, Schema } from "effect"
+import type * as fc from "fast-check"
 
 /**
  * NodeId - Unique identifier for graph nodes (typically IRI)
+ *
+ * **Arbitrary Generation:**
+ * Generates realistic ontology IRIs from common vocabularies:
+ * - FOAF (Friend of a Friend)
+ * - Dublin Core Terms
+ * - Schema.org
+ * - XSD (XML Schema Datatypes)
  */
-export const NodeIdSchema = Schema.String
+export const NodeIdSchema = Schema.String.annotations({
+  arbitrary: () => (fc: typeof import("fast-check")) =>
+    fc.constantFrom(
+      // FOAF vocabulary
+      "http://xmlns.com/foaf/0.1/Person",
+      "http://xmlns.com/foaf/0.1/Organization",
+      "http://xmlns.com/foaf/0.1/Agent",
+      "http://xmlns.com/foaf/0.1/Document",
+      // Schema.org
+      "http://schema.org/Person",
+      "http://schema.org/Article",
+      "http://schema.org/Event",
+      "http://schema.org/Product",
+      "http://schema.org/Organization",
+      // Dublin Core
+      "http://purl.org/dc/terms/BibliographicResource",
+      "http://purl.org/dc/terms/Agent",
+      // XSD Datatypes (for range values)
+      "http://www.w3.org/2001/XMLSchema#string",
+      "http://www.w3.org/2001/XMLSchema#integer",
+      "http://www.w3.org/2001/XMLSchema#boolean",
+      "http://www.w3.org/2001/XMLSchema#date",
+      "http://www.w3.org/2001/XMLSchema#dateTime"
+    )
+})
 export type NodeId = typeof NodeIdSchema.Type
 
 /**
@@ -24,9 +55,79 @@ export type NodeId = typeof NodeIdSchema.Type
  *   Dog -> hasOwner (domain) and hasOwner -> Dog (creates cycle)
  */
 export const PropertyDataSchema = Schema.Struct({
-  iri: Schema.String,
-  label: Schema.String,
-  range: Schema.String // IRI or datatype - stored as string reference (not graph edge)
+  iri: Schema.String.annotations({
+    arbitrary: () => (fc: typeof import("fast-check")) =>
+      fc.constantFrom(
+        // FOAF properties
+        "http://xmlns.com/foaf/0.1/name",
+        "http://xmlns.com/foaf/0.1/knows",
+        "http://xmlns.com/foaf/0.1/member",
+        "http://xmlns.com/foaf/0.1/homepage",
+        "http://xmlns.com/foaf/0.1/mbox",
+        // Dublin Core properties
+        "http://purl.org/dc/terms/title",
+        "http://purl.org/dc/terms/description",
+        "http://purl.org/dc/terms/creator",
+        "http://purl.org/dc/terms/created",
+        "http://purl.org/dc/terms/modified",
+        // Schema.org properties
+        "http://schema.org/name",
+        "http://schema.org/description",
+        "http://schema.org/url",
+        "http://schema.org/author",
+        "http://schema.org/datePublished"
+      )
+  }),
+  label: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100)).annotations({
+    arbitrary: () => (fc: typeof import("fast-check")) =>
+      fc.constantFrom(
+        // Common property labels
+        "name",
+        "description",
+        "title",
+        "creator",
+        "author",
+        "knows",
+        "member",
+        "memberOf",
+        "hasValue",
+        "hasProperty",
+        "createdAt",
+        "updatedAt",
+        "publishedAt",
+        "url",
+        "email",
+        "homepage"
+      )
+  }),
+  range: Schema.String.annotations({
+    arbitrary: () => (fc: typeof import("fast-check")) =>
+      fc.oneof(
+        // XSD datatypes (biased higher - 60% of properties are datatype properties)
+        fc.constantFrom(
+          "http://www.w3.org/2001/XMLSchema#string",
+          "http://www.w3.org/2001/XMLSchema#integer",
+          "http://www.w3.org/2001/XMLSchema#boolean",
+          "http://www.w3.org/2001/XMLSchema#date",
+          "http://www.w3.org/2001/XMLSchema#dateTime",
+          "http://www.w3.org/2001/XMLSchema#float",
+          "http://www.w3.org/2001/XMLSchema#double",
+          "xsd:string",
+          "xsd:integer",
+          "xsd:boolean",
+          "xsd:date",
+          "xsd:dateTime"
+        ),
+        // Class IRIs (40% are object properties)
+        fc.constantFrom(
+          "http://xmlns.com/foaf/0.1/Person",
+          "http://xmlns.com/foaf/0.1/Organization",
+          "http://schema.org/Person",
+          "http://schema.org/Article",
+          "http://schema.org/Event"
+        )
+      )
+  }) // IRI or datatype - stored as string reference (not graph edge)
 })
 export type PropertyData = typeof PropertyDataSchema.Type
 
@@ -42,7 +143,24 @@ export class ClassNode extends Schema.Class<ClassNode>("ClassNode")({
     })
   ),
   id: NodeIdSchema,
-  label: Schema.String,
+  label: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100)).annotations({
+    arbitrary: () => (fc: typeof import("fast-check")) =>
+      fc.constantFrom(
+        // Common class labels
+        "Person",
+        "Organization",
+        "Document",
+        "Article",
+        "Event",
+        "Product",
+        "Agent",
+        "Resource",
+        "Thing",
+        "Work",
+        "CreativeWork",
+        "BibliographicResource"
+      )
+  }),
   properties: Schema.Array(PropertyDataSchema)
 }) {}
 
