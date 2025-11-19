@@ -45,6 +45,18 @@ describe("Ast Typeclass Instances", () => {
     expect(ac).toBe(-1) // A < C (transitive)
   })
 
+  it("PropertyDataOrder is antisymmetric", () => {
+    const propA: PropertyData = { iri: "http://example.org/aaa", label: "A", range: "string" }
+    const propB: PropertyData = { iri: "http://example.org/bbb", label: "B", range: "string" }
+
+    // Antisymmetry law: if compare(a, b) = -1, then compare(b, a) = 1
+    const ab = Ast.PropertyDataOrder(propA, propB)
+    const ba = Ast.PropertyDataOrder(propB, propA)
+
+    expect(ab).toBe(-1) // A < B
+    expect(ba).toBe(1) // B > A (antisymmetric)
+  })
+
   it("PropertyDataEqual compares by IRI only", () => {
     const propA: PropertyData = {
       iri: "http://example.org/same",
@@ -83,5 +95,30 @@ describe("Ast Typeclass Instances", () => {
     expect(Ast.PropertyDataEqual(propA, propB)).toBe(
       Ast.PropertyDataEqual(propB, propA)
     )
+  })
+
+  it("PropertyDataEqual is transitive", () => {
+    const propA: PropertyData = { iri: "http://example.org/same", label: "A", range: "string" }
+    const propB: PropertyData = { iri: "http://example.org/same", label: "B", range: "number" }
+    const propC: PropertyData = { iri: "http://example.org/same", label: "C", range: "boolean" }
+
+    // Transitivity law: if a = b and b = c, then a = c
+    const ab = Ast.PropertyDataEqual(propA, propB)
+    const bc = Ast.PropertyDataEqual(propB, propC)
+    const ac = Ast.PropertyDataEqual(propA, propC)
+
+    expect(ab).toBe(true) // A = B (same IRI)
+    expect(bc).toBe(true) // B = C (same IRI)
+    expect(ac).toBe(true) // A = C (transitive)
+  })
+
+  it("KnowledgeUnitOrder sorts by IRI", () => {
+    const unitA = Ast.KnowledgeUnit.minimal("http://example.org/aaa", "Class A")
+    const unitB = Ast.KnowledgeUnit.minimal("http://example.org/bbb", "Class B")
+
+    // Order returns: -1 if a < b, 0 if a = b, 1 if a > b
+    const comparison = Ast.KnowledgeUnitOrder(unitA, unitB)
+
+    expect(comparison).toBe(-1) // "aaa" < "bbb"
   })
 })
