@@ -15,7 +15,7 @@
  */
 
 import { LanguageModel } from "@effect/ai"
-import { Effect, HashMap } from "effect"
+import { Effect, HashMap, Layer, Stream } from "effect"
 import { LLMError } from "../Extraction/Events.js"
 import { isClassNode, type OntologyContext } from "../Graph/Types.js"
 import { renderExtractionPrompt } from "../Prompt/PromptDoc.js"
@@ -168,4 +168,34 @@ export class LlmService extends Effect.Service<LlmService>()("LlmService", {
         )
       )
   })
-}) {}
+}) {
+  /**
+   * Test layer with mock LanguageModel that returns empty knowledge graphs.
+   *
+   * Provides a mock LanguageModel service that returns predictable test data
+   * without making actual API calls. The mock returns empty knowledge graphs
+   * by default.
+   *
+   * @example
+   * ```typescript
+   * it.effect("test name", () =>
+   *   Effect.gen(function*() {
+   *     const llm = yield* LlmService
+   *     const result = yield* llm.extractKnowledgeGraph(...)
+   *     expect(result.entities).toEqual([])
+   *   }).pipe(Effect.provide(LlmService.Test))
+   * )
+   * ```
+   *
+   * @since 1.0.0
+   * @category layers
+   */
+  static Test = Layer.succeed(
+    LanguageModel.LanguageModel,
+    {
+      generateText: () => Effect.die("Not implemented in test") as any,
+      generateObject: () => Effect.die("Not implemented in test") as any,
+      streamText: () => Stream.die("Not implemented in test") as any
+    } as LanguageModel.Service
+  )
+}

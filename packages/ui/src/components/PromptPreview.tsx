@@ -2,6 +2,8 @@ import { useAtomValue } from "@effect-atom/atom-react"
 import { HashMap, Option } from "effect"
 import type { ParsedOntologyGraph } from "@effect-ontology/core/Graph/Builder"
 import type { StructuredPrompt } from "@effect-ontology/core/Prompt"
+import { isClassNode } from "@effect-ontology/core/Graph/Types"
+import type { OntologyNode } from "@effect-ontology/core/Graph/Types"
 import { generatedPromptsAtom, ontologyGraphAtom, selectedNodeAtom } from "../state/store"
 import { Result } from "@effect-atom/atom-react"
 import { motion, AnimatePresence } from "framer-motion"
@@ -58,7 +60,7 @@ export const PromptPreview = (): React.ReactElement => {
   // Both succeeded - render prompts
   return Result.match(promptsResult, {
     onInitial: () => (
-      <div className="flex items-center justify-center h-full bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="flex items-center justify-center h-full bg-linear-to-br from-slate-50 to-slate-100">
         <div className="text-center">
           <motion.div
             animate={{ rotate: 360 }}
@@ -89,10 +91,12 @@ export const PromptPreview = (): React.ReactElement => {
       if (Option.isSome(selectedNode)) {
         const promptOption = HashMap.get(nodePrompts, selectedNode.value)
         if (Option.isSome(promptOption)) {
-          const nodeOption = HashMap.get(context.nodes, selectedNode.value)
-          const nodeName = Option.isSome(nodeOption) && (nodeOption.value as any)._tag === "Class"
-            ? (nodeOption.value as any).label
-            : selectedNode.value
+          const contextNodes = context.nodes as HashMap.HashMap<string, OntologyNode>
+          const nodeOption = HashMap.get(contextNodes, selectedNode.value)
+          const nodeName = Option.match(nodeOption, {
+            onNone: () => selectedNode.value,
+            onSome: (node) => (isClassNode(node) ? node.label : selectedNode.value)
+          })
 
           return <SelectedNodePrompt
             nodeId={selectedNode.value}

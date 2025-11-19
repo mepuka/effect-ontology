@@ -7,7 +7,7 @@
  * Based on: docs/higher_order_monoid_implementation.md
  */
 
-import { Effect, HashMap, HashSet } from "effect"
+import { Effect, HashMap, HashSet, Option, pipe } from "effect"
 import type { CircularInheritanceError, InheritanceError, InheritanceService } from "../Ontology/Inheritance.js"
 import { KnowledgeUnit } from "./Ast.js"
 import * as KnowledgeIndex from "./KnowledgeIndex.js"
@@ -310,8 +310,13 @@ export const renderDiff = (
   if (removed.length > 0 && removed.length <= 20) {
     parts.push(`\nRemoved IRIs:`)
     removed.forEach((iri) => {
-      const label = KnowledgeIndex.get(before, iri)
-      const labelText = label._tag === "Some" ? label.value.label : iri
+      const labelText = pipe(
+        KnowledgeIndex.get(before, iri),
+        Option.match({
+          onNone: () => iri,
+          onSome: (unit) => unit.label
+        })
+      )
       parts.push(`  - ${labelText}`)
     })
   }
@@ -319,8 +324,13 @@ export const renderDiff = (
   if (added.length > 0 && added.length <= 20) {
     parts.push(`\nAdded IRIs:`)
     added.forEach((iri) => {
-      const label = KnowledgeIndex.get(after, iri)
-      const labelText = label._tag === "Some" ? label.value.label : iri
+      const labelText = pipe(
+        KnowledgeIndex.get(after, iri),
+        Option.match({
+          onNone: () => iri,
+          onSome: (unit) => unit.label
+        })
+      )
       parts.push(`  + ${labelText}`)
     })
   }

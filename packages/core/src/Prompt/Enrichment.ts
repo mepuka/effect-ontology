@@ -10,14 +10,12 @@
 
 import { Array as EffectArray, Effect, HashMap, pipe } from "effect"
 import type { Graph } from "effect"
-import type { GraphAlgebra } from "../Graph/Types.js"
-import type { NodeId, OntologyContext } from "../Graph/Types.js"
+import type { GraphAlgebra, NodeId, OntologyContext } from "../Graph/Types.js"
 import * as Inheritance from "../Ontology/Inheritance.js"
 import type { CircularInheritanceError, InheritanceError } from "../Ontology/Inheritance.js"
-import { PropertyDataOrder } from "./Ast.js"
-import { KnowledgeUnit } from "./Ast.js"
+import { KnowledgeUnit, PropertyDataOrder } from "./Ast.js"
 import type { KnowledgeIndex } from "./KnowledgeIndex.js"
-import { solveToKnowledgeIndex, type SolverError } from "./Solver.js"
+import { type SolverError, solveToKnowledgeIndex } from "./Solver.js"
 
 /**
  * Enrich a KnowledgeIndex with inherited properties

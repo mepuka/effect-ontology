@@ -215,7 +215,7 @@ const populateParents = (
 
     for (const neighborIndex of neighbors) {
       const parentId = Graph.getNode(graph, neighborIndex)
-      if (parentId._tag === "Some") {
+      if (Option.isSome(parentId)) {
         parentIris.push(parentId.value)
       }
     }
@@ -400,7 +400,7 @@ export const buildDependencyGraph = (
           const neighbors = Graph.neighbors(graph, nodeIndex)
           for (const neighborIndex of neighbors) {
             const parentId = Graph.getNode(graph, neighborIndex)
-            if (parentId._tag === "Some") {
+            if (Option.isSome(parentId)) {
               edges.push(
                 new GraphEdge({
                   source: nodeId,

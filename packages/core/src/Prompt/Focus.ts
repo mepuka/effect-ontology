@@ -7,7 +7,7 @@
  * Based on: docs/higher_order_monoid_implementation.md
  */
 
-import { Effect, HashMap, HashSet } from "effect"
+import { Effect, HashMap, HashSet, Option, pipe } from "effect"
 import type { CircularInheritanceError, InheritanceError, InheritanceService } from "../Ontology/Inheritance.js"
 import * as KnowledgeIndex from "./KnowledgeIndex.js"
 import type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
@@ -71,19 +71,25 @@ export const selectContext = (
     // Process each focus node
     for (const focusIri of config.focusNodes) {
       // Add focus node itself
-      const focusUnit = KnowledgeIndex.get(index, focusIri)
-      if (focusUnit._tag === "Some") {
-        result = HashMap.set(result, focusIri, focusUnit.value)
-      }
+      result = pipe(
+        KnowledgeIndex.get(index, focusIri),
+        Option.match({
+          onNone: () => result,
+          onSome: (unit) => HashMap.set(result, focusIri, unit)
+        })
+      )
 
       // Add ancestors (for inheritance)
       const ancestors = yield* inheritanceService.getAncestors(focusIri)
 
       for (const ancestorIri of ancestors) {
-        const ancestorUnit = KnowledgeIndex.get(index, ancestorIri)
-        if (ancestorUnit._tag === "Some") {
-          result = HashMap.set(result, ancestorIri, ancestorUnit.value)
-        }
+        result = pipe(
+          KnowledgeIndex.get(index, ancestorIri),
+          Option.match({
+            onNone: () => result,
+            onSome: (unit) => HashMap.set(result, ancestorIri, unit)
+          })
+        )
       }
 
       // Strategy: Neighborhood - also include children
@@ -91,10 +97,13 @@ export const selectContext = (
         const children = yield* inheritanceService.getChildren(focusIri)
 
         for (const childIri of children) {
-          const childUnit = KnowledgeIndex.get(index, childIri)
-          if (childUnit._tag === "Some") {
-            result = HashMap.set(result, childIri, childUnit.value)
-          }
+          result = pipe(
+            KnowledgeIndex.get(index, childIri),
+            Option.match({
+              onNone: () => result,
+              onSome: (unit) => HashMap.set(result, childIri, unit)
+            })
+          )
         }
       }
     }
@@ -217,7 +226,7 @@ export const extractDependencies = (
 
       // Add property range types (if they're classes in the ontology)
       const unit = KnowledgeIndex.get(index, focusIri)
-      if (unit._tag === "Some") {
+      if (Option.isSome(unit)) {
         for (const prop of unit.value.properties) {
           // Check if range is a class IRI (not a datatype)
           if (KnowledgeIndex.has(index, prop.range)) {
@@ -259,10 +268,13 @@ export const selectMinimal = (
     let result = KnowledgeIndex.empty()
 
     for (const iri of dependencies) {
-      const unit = KnowledgeIndex.get(index, iri)
-      if (unit._tag === "Some") {
-        result = HashMap.set(result, iri, unit.value)
-      }
+      result = pipe(
+        KnowledgeIndex.get(index, iri),
+        Option.match({
+          onNone: () => result,
+          onSome: (unit) => HashMap.set(result, iri, unit)
+        })
+      )
     }
 
     return result

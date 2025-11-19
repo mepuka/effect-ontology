@@ -1,6 +1,7 @@
 import { useAtom, useAtomValue, Result } from "@effect-atom/atom-react"
 import { HashMap, Option } from "effect"
 import type { ParsedOntologyGraph } from "@effect-ontology/core/Graph/Builder"
+import { isClassNode } from "@effect-ontology/core/Graph/Types"
 import { ontologyGraphAtom, selectedNodeAtom, topologicalOrderAtom } from "../state/store"
 
 export const TopologicalRail = (): React.ReactElement => {
@@ -53,10 +54,10 @@ export const TopologicalRail = (): React.ReactElement => {
                 <div className="flex items-center space-x-8 min-w-max">
                   {topologicalOrder.map((nodeId, index) => {
                     const nodeOption = HashMap.get(context.nodes, nodeId)
-                    if (nodeOption._tag !== "Some") return null
+                    if (Option.isNone(nodeOption)) return null
 
                     const node = nodeOption.value
-                    if (node._tag !== "Class") return null
+                    if (!isClassNode(node)) return null
 
                     const isSelected =
                       Option.isSome(selectedNode) && selectedNode.value === nodeId
