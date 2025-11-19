@@ -12,9 +12,9 @@
 
 import { Data, Effect, Graph, HashMap, Option } from "effect"
 import type { NodeId, OntologyContext } from "../Graph/Types.js"
-import type { GraphAlgebra } from "./Types.js"
 import * as KnowledgeIndex from "./KnowledgeIndex.js"
 import type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
+import type { GraphAlgebra } from "./Types.js"
 
 /**
  * Errors that can occur during graph solving
@@ -193,8 +193,8 @@ export const solveGraph = <R>(
 const findRoots = <N, E>(
   graph: Graph.Graph<N, E, "directed">
 ): Effect.Effect<ReadonlyArray<Graph.NodeIndex>> =>
-  Effect.succeed(() => {
-    const roots: Graph.NodeIndex[] = []
+  Effect.sync(() => {
+    const roots: Array<Graph.NodeIndex> = []
 
     for (const [nodeIndex, _] of graph) {
       const neighbors = Graph.neighbors(graph, nodeIndex)
@@ -227,7 +227,7 @@ export const solveToKnowledgeIndex = (
   context: OntologyContext,
   algebra: GraphAlgebra<KnowledgeIndexType>
 ): Effect.Effect<KnowledgeIndexType, SolverError> =>
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     // Solve graph to get HashMap<NodeId, KnowledgeIndex>
     const indexMap = yield* solveGraph(graph, context, algebra)
 
@@ -235,7 +235,7 @@ export const solveToKnowledgeIndex = (
     const rootIndices = yield* findRoots(graph)
 
     // Collect root node IDs
-    const rootIds: NodeId[] = []
+    const rootIds: Array<NodeId> = []
     for (const rootIndex of rootIndices) {
       const rootId = yield* Graph.getNode(graph, rootIndex).pipe(
         Effect.mapError(
@@ -250,7 +250,7 @@ export const solveToKnowledgeIndex = (
     }
 
     // Combine all root indexes
-    const rootIndexes: KnowledgeIndexType[] = []
+    const rootIndexes: Array<KnowledgeIndexType> = []
     for (const rootId of rootIds) {
       const rootIndex = yield* HashMap.get(indexMap, rootId).pipe(
         Effect.mapError(

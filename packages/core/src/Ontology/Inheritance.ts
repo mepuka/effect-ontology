@@ -42,7 +42,7 @@ export interface InheritanceService {
    */
   readonly getAncestors: (
     classIri: string
-  ) => Effect.Effect<ReadonlyArray<string>, InheritanceError>
+  ) => Effect.Effect<ReadonlyArray<string>, InheritanceError | CircularInheritanceError>
 
   /**
    * Get all effective properties for a given class
@@ -58,7 +58,7 @@ export interface InheritanceService {
    */
   readonly getEffectiveProperties: (
     classIri: string
-  ) => Effect.Effect<ReadonlyArray<PropertyData>, InheritanceError>
+  ) => Effect.Effect<ReadonlyArray<PropertyData>, InheritanceError | CircularInheritanceError>
 
   /**
    * Get immediate parents of a class
@@ -123,14 +123,14 @@ export const make = (
   const getParents = (
     classIri: string
   ): Effect.Effect<ReadonlyArray<string>, InheritanceError> =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const nodeIndex = yield* getNodeIndex(classIri)
 
       // Graph edges are Child -> Parent, so neighbors are parents
       const parentIndices = Graph.neighbors(graph, nodeIndex)
 
       // Convert indices back to IRIs
-      const parents: string[] = []
+      const parents: Array<string> = []
       for (const parentIndex of parentIndices) {
         const parentIri = yield* Graph.getNode(graph, parentIndex).pipe(
           Effect.mapError(
@@ -153,10 +153,10 @@ export const make = (
   const getChildren = (
     classIri: string
   ): Effect.Effect<ReadonlyArray<string>, InheritanceError> =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const targetIndex = yield* getNodeIndex(classIri)
 
-      const children: string[] = []
+      const children: Array<string> = []
 
       // Iterate all nodes to find those with edges to this node
       for (const [nodeIndex, nodeIri] of graph) {
@@ -174,14 +174,14 @@ export const make = (
    */
   const getAncestors = (
     classIri: string
-  ): Effect.Effect<ReadonlyArray<string>, InheritanceError> =>
-    Effect.gen(function* () {
+  ): Effect.Effect<ReadonlyArray<string>, InheritanceError | CircularInheritanceError> =>
+    Effect.gen(function*() {
       const visited = new Set<string>()
       const path = new Set<string>() // For cycle detection
-      const ancestors: string[] = []
+      const ancestors: Array<string> = []
 
-      const visit = (iri: string): Effect.Effect<void, InheritanceError> =>
-        Effect.gen(function* () {
+      const visit = (iri: string): Effect.Effect<void, InheritanceError | CircularInheritanceError> =>
+        Effect.gen(function*() {
           // Check for cycles
           if (path.has(iri)) {
             return yield* Effect.fail(
@@ -223,8 +223,8 @@ export const make = (
    */
   const getEffectiveProperties = (
     classIri: string
-  ): Effect.Effect<ReadonlyArray<PropertyData>, InheritanceError> =>
-    Effect.gen(function* () {
+  ): Effect.Effect<ReadonlyArray<PropertyData>, InheritanceError | CircularInheritanceError> =>
+    Effect.gen(function*() {
       // Get own properties
       const ownNode = yield* HashMap.get(context.nodes, classIri).pipe(
         Effect.mapError(
@@ -242,7 +242,7 @@ export const make = (
       const ancestors = yield* getAncestors(classIri)
 
       // Collect properties from ancestors
-      const ancestorProperties: PropertyData[] = []
+      const ancestorProperties: Array<PropertyData> = []
 
       for (const ancestorIri of ancestors) {
         const ancestorNode = yield* HashMap.get(context.nodes, ancestorIri).pipe(

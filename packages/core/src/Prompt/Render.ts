@@ -8,8 +8,8 @@
  */
 
 import { Effect, HashMap, HashSet } from "effect"
-import type { InheritanceService } from "../Ontology/Inheritance.js"
-import type { KnowledgeUnit } from "./Ast.js"
+import type { CircularInheritanceError, InheritanceError, InheritanceService } from "../Ontology/Inheritance.js"
+import { KnowledgeUnit } from "./Ast.js"
 import * as KnowledgeIndex from "./KnowledgeIndex.js"
 import type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
 import { StructuredPrompt } from "./Types.js"
@@ -39,19 +39,39 @@ export const defaultRenderOptions: RenderOptions = {
  * Topologically sort KnowledgeUnits by dependencies
  *
  * Ensures that parent classes are rendered before children.
- * Uses the parents/children relationships in KnowledgeUnit.
+ * Uses the children field (which is populated during graph solving).
+ *
+ * Algorithm: Start from roots (units with no parents in the set),
+ * then recursively visit children. This gives parent-before-child order.
  *
  * @param units - Array of knowledge units
  * @returns Topologically sorted array
  */
 const topologicalSort = (units: ReadonlyArray<KnowledgeUnit>): ReadonlyArray<KnowledgeUnit> => {
   const unitMap = new Map<string, KnowledgeUnit>()
+  const childToParents = new Map<string, Set<string>>()
+
+  // Build unit map and reverse parent-child relationships
   for (const unit of units) {
     unitMap.set(unit.iri, unit)
+
+    // For each child, track that this unit is its parent
+    for (const childIri of unit.children) {
+      if (!childToParents.has(childIri)) {
+        childToParents.set(childIri, new Set())
+      }
+      childToParents.get(childIri)!.add(unit.iri)
+    }
   }
 
+  // Find roots: units that have no parents in the current set
+  const roots = units.filter((unit) => {
+    const parents = childToParents.get(unit.iri)
+    return !parents || parents.size === 0
+  })
+
   const visited = new Set<string>()
-  const result: KnowledgeUnit[] = []
+  const result: Array<KnowledgeUnit> = []
 
   const visit = (iri: string): void => {
     if (visited.has(iri)) return
@@ -60,18 +80,28 @@ const topologicalSort = (units: ReadonlyArray<KnowledgeUnit>): ReadonlyArray<Kno
     const unit = unitMap.get(iri)
     if (!unit) return
 
-    // Visit parents first (dependencies)
-    for (const parentIri of unit.parents) {
-      visit(parentIri)
-    }
-
-    // Add this unit after its parents
+    // Add this unit first (parent before children)
     result.push(unit)
+
+    // Then visit children
+    for (const childIri of unit.children) {
+      // Only visit children that are in our unit set
+      if (unitMap.has(childIri)) {
+        visit(childIri)
+      }
+    }
   }
 
-  // Visit all units
+  // Start from roots
+  for (const root of roots) {
+    visit(root.iri)
+  }
+
+  // Handle any disconnected components (shouldn't happen in well-formed ontology)
   for (const unit of units) {
-    visit(unit.iri)
+    if (!visited.has(unit.iri)) {
+      visit(unit.iri)
+    }
   }
 
   return result
@@ -85,7 +115,7 @@ const topologicalSort = (units: ReadonlyArray<KnowledgeUnit>): ReadonlyArray<Kno
  * @returns Formatted string
  */
 const formatUnit = (unit: KnowledgeUnit, options: RenderOptions): string => {
-  const parts: string[] = []
+  const parts: Array<string> = []
 
   // Add IRI metadata if requested
   if (options.includeMetadata) {
@@ -167,8 +197,8 @@ export const renderWithInheritance = (
   index: KnowledgeIndexType,
   inheritanceService: InheritanceService,
   options: RenderOptions = defaultRenderOptions
-): Effect.Effect<StructuredPrompt> =>
-  Effect.gen(function* () {
+): Effect.Effect<StructuredPrompt, InheritanceError | CircularInheritanceError> =>
+  Effect.gen(function*() {
     // Enrich each unit with inherited properties
     let enrichedIndex = index
 
@@ -252,9 +282,9 @@ export const renderDiff = (
   const beforeIris = new Set(KnowledgeIndex.keys(before))
   const afterIris = new Set(KnowledgeIndex.keys(after))
 
-  const added: string[] = []
-  const removed: string[] = []
-  const kept: string[] = []
+  const added: Array<string> = []
+  const removed: Array<string> = []
+  const kept: Array<string> = []
 
   for (const iri of afterIris) {
     if (!beforeIris.has(iri)) {
