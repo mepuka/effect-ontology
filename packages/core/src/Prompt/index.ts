@@ -7,7 +7,19 @@
  * @module Prompt
  */
 
-export { combineWithUniversal, defaultPromptAlgebra, processUniversalProperties } from "./Algebra.js"
+export {
+  combineWithUniversal,
+  combineWithUniversalIndex,
+  defaultPromptAlgebra,
+  knowledgeIndexAlgebra,
+  processUniversalProperties,
+  processUniversalPropertiesToIndex
+} from "./Algebra.js"
+export { KnowledgeUnit, type PromptAST } from "./Ast.js"
+export * as Focus from "./Focus.js"
+export * as KnowledgeIndex from "./KnowledgeIndex.js"
+export type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
+export * as Render from "./Render.js"
 export {
   bulletList,
   header,
@@ -22,5 +34,11 @@ export {
   renderExtractionPrompt,
   renderStructuredPrompt
 } from "./PromptDoc.js"
-export { GraphCycleError, MissingNodeDataError, solveGraph, type SolverError } from "./Solver.js"
+export {
+  GraphCycleError,
+  MissingNodeDataError,
+  solveGraph,
+  solveToKnowledgeIndex,
+  type SolverError
+} from "./Solver.js"
 export { type GraphAlgebra, type PromptAlgebra, StructuredPrompt } from "./Types.js"
