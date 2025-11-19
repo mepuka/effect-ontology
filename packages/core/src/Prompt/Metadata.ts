@@ -16,7 +16,7 @@
 
 import { Data, Effect, Graph, HashMap, Option, Schema } from "effect"
 import type { NodeId, OntologyContext } from "../Graph/Types.js"
-import type { KnowledgeUnit } from "./Ast.js"
+import { KnowledgeUnit } from "./Ast.js"
 import * as KnowledgeIndex from "./KnowledgeIndex.js"
 import type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
 
@@ -186,42 +186,115 @@ export class KnowledgeMetadata extends Schema.Class<KnowledgeMetadata>("Knowledg
 }) {}
 
 /**
+ * Populate parent relationships from the Effect Graph
+ *
+ * The knowledgeIndexAlgebra creates KnowledgeUnits with empty parents arrays.
+ * This function uses the Effect Graph structure to fill in the parents for each unit.
+ *
+ * @param graph - The Effect Graph containing edge information
+ * @param index - The knowledge index to update
+ * @returns Updated knowledge index with parents populated
+ *
+ * @since 1.0.0
+ * @category utilities
+ */
+const populateParents = (
+  graph: Graph.Graph<NodeId, unknown, "directed">,
+  index: KnowledgeIndexType
+): KnowledgeIndexType => {
+  let updatedIndex = index
+
+  // For each node in the graph, find its neighbors (parents) and update the unit
+  for (const [nodeIndex, nodeId] of graph) {
+    const unit = KnowledgeIndex.get(index, nodeId)
+    if (Option.isNone(unit)) continue
+
+    // Get all neighbors (parents in the graph)
+    const neighbors = Graph.neighbors(graph, nodeIndex)
+    const parentIris: Array<string> = []
+
+    for (const neighborIndex of neighbors) {
+      const parentId = Graph.getNode(graph, neighborIndex)
+      if (parentId._tag === "Some") {
+        parentIris.push(parentId.value)
+      }
+    }
+
+    // Update the unit with populated parents
+    const updatedUnit = new KnowledgeUnit({
+      ...unit.value,
+      parents: parentIris
+    })
+
+    // Replace in index (KnowledgeIndex is a HashMap)
+    updatedIndex = HashMap.set(updatedIndex, nodeId, updatedUnit)
+  }
+
+  return updatedIndex
+}
+
+/**
  * Compute depth of each class in the hierarchy
  *
  * Performs BFS from roots to assign depth values.
  * Roots have depth 0, their children have depth 1, etc.
  *
- * @param index - The knowledge index
+ * Uses the Effect Graph structure to determine parent-child relationships
+ * (not unit.children, which contains ALL descendants, not just direct children).
+ *
+ * @param graph - The Effect Graph containing edge structure
+ * @param index - The knowledge index (must have parents populated)
  * @returns HashMap mapping IRI to depth
  *
  * @since 1.0.0
  * @category utilities
  */
-const computeDepths = (index: KnowledgeIndexType): HashMap.HashMap<string, number> => {
+const computeDepths = (
+  graph: Graph.Graph<NodeId, unknown, "directed">,
+  index: KnowledgeIndexType
+): HashMap.HashMap<string, number> => {
   let depths = HashMap.empty<string, number>()
-  const queue: Array<{ iri: string; depth: number }> = []
+  const queue: Array<{ iri: string; nodeIndex: Graph.NodeIndex; depth: number }> = []
+
+  // Create IRI -> NodeIndex map for quick lookups
+  const iriToIndex = new Map<string, Graph.NodeIndex>()
+  for (const [nodeIndex, nodeId] of graph) {
+    iriToIndex.set(nodeId, nodeIndex)
+  }
 
   // Find roots (classes with no parents) and enqueue with depth 0
   for (const unit of KnowledgeIndex.values(index)) {
     if (unit.parents.length === 0) {
-      queue.push({ iri: unit.iri, depth: 0 })
-      depths = HashMap.set(depths, unit.iri, 0)
+      const nodeIndex = iriToIndex.get(unit.iri)
+      if (nodeIndex !== undefined) {
+        queue.push({ iri: unit.iri, nodeIndex, depth: 0 })
+        depths = HashMap.set(depths, unit.iri, 0)
+      }
     }
   }
 
-  // BFS to assign depths
+  // BFS to assign depths using DIRECT children from graph
   while (queue.length > 0) {
     const current = queue.shift()!
-    const unit = KnowledgeIndex.get(index, current.iri)
 
-    if (Option.isSome(unit)) {
-      for (const childIri of unit.value.children) {
-        // Only set depth if not already visited (handles multiple paths to same node)
-        if (!HashMap.has(depths, childIri)) {
-          const childDepth = current.depth + 1
-          depths = HashMap.set(depths, childIri, childDepth)
-          queue.push({ iri: childIri, depth: childDepth })
+    // Get direct children from graph (nodes that have current as parent)
+    // We need to iterate all nodes and check if they have current as a neighbor
+    for (const [childIndex, childId] of graph) {
+      // Check if this child has current node as a parent
+      const neighbors = Graph.neighbors(graph, childIndex)
+      let hasCurrentAsParent = false
+
+      for (const neighborIndex of neighbors) {
+        if (neighborIndex === current.nodeIndex) {
+          hasCurrentAsParent = true
+          break
         }
+      }
+
+      if (hasCurrentAsParent && !HashMap.has(depths, childId)) {
+        const childDepth = current.depth + 1
+        depths = HashMap.set(depths, childId, childDepth)
+        queue.push({ iri: childId, nodeIndex: childIndex, depth: childDepth })
       }
     }
   }
@@ -508,28 +581,32 @@ export const buildKnowledgeMetadata = (
   index: KnowledgeIndexType
 ): Effect.Effect<KnowledgeMetadata, MetadataError> =>
   Effect.gen(function*() {
-    // Get existing stats from KnowledgeIndex
-    const indexStats = KnowledgeIndex.stats(index)
+    // Populate parents from graph structure
+    // (The algebra leaves parents empty, so we fill them in from the Effect Graph)
+    const indexWithParents = populateParents(graph, index)
 
-    // Compute depths for all classes
-    const depths = computeDepths(index)
+    // Get existing stats from KnowledgeIndex
+    const indexStats = KnowledgeIndex.stats(indexWithParents)
+
+    // Compute depths for all classes (using graph structure for direct children)
+    const depths = computeDepths(graph, indexWithParents)
 
     // Build class summaries
     let classSummaries = HashMap.empty<string, ClassSummary>()
-    for (const unit of KnowledgeIndex.values(index)) {
+    for (const unit of KnowledgeIndex.values(indexWithParents)) {
       const depth = HashMap.get(depths, unit.iri).pipe(Option.getOrElse(() => 0))
       const summary = buildClassSummary(unit, depth)
       classSummaries = HashMap.set(classSummaries, unit.iri, summary)
     }
 
     // Build dependency graph (now uses Effect Graph!)
-    const dependencyGraph = yield* buildDependencyGraph(graph, context, index, depths)
+    const dependencyGraph = yield* buildDependencyGraph(graph, context, indexWithParents, depths)
 
     // Build hierarchy tree
-    const hierarchyTree = buildHierarchyTree(index, depths)
+    const hierarchyTree = buildHierarchyTree(indexWithParents, depths)
 
     // Build token stats
-    const tokenStats = buildTokenStats(index)
+    const tokenStats = buildTokenStats(indexWithParents)
 
     return new KnowledgeMetadata({
       classSummaries,

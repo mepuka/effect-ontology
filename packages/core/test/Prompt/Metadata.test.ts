@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from "@effect/vitest"
-import { Effect } from "effect"
+import { Effect, HashMap } from "effect"
 import { parseTurtleToGraph } from "../../src/Graph/Builder.js"
 import { knowledgeIndexAlgebra } from "../../src/Prompt/Algebra.js"
 import { buildKnowledgeMetadata } from "../../src/Prompt/Metadata.js"
@@ -48,7 +48,7 @@ describe("Metadata API", () => {
   it.effect("should build metadata from Effect Graph", () =>
     Effect.gen(function*() {
       // Parse ontology
-      const { graph, context } = yield* parseTurtleToGraph(TEST_ONTOLOGY)
+      const { context, graph } = yield* parseTurtleToGraph(TEST_ONTOLOGY)
 
       // Solve graph to KnowledgeIndex
       const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
@@ -61,12 +61,11 @@ describe("Metadata API", () => {
       expect(metadata.dependencyGraph.nodes.length).toBe(3)
       expect(metadata.dependencyGraph.edges.length).toBe(2) // Mammal->Animal, Dog->Mammal
       expect(metadata.hierarchyTree.roots.length).toBe(1) // Animal is root
-    })
-  )
+    }))
 
   it.effect("should compute correct depths", () =>
     Effect.gen(function*() {
-      const { graph, context } = yield* parseTurtleToGraph(TEST_ONTOLOGY)
+      const { context, graph } = yield* parseTurtleToGraph(TEST_ONTOLOGY)
       const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
       const metadata = yield* buildKnowledgeMetadata(graph, context, index)
 
@@ -76,29 +75,28 @@ describe("Metadata API", () => {
       const dogIri = "http://example.org/test#Dog"
 
       const animalSummary = metadata.classSummaries.pipe(
-        (m) => m.get(animalIri),
+        (m) => HashMap.get(m, animalIri),
         (opt) => opt._tag === "Some" ? opt.value : null
       )
 
       const mammalSummary = metadata.classSummaries.pipe(
-        (m) => m.get(mammalIri),
+        (m) => HashMap.get(m, mammalIri),
         (opt) => opt._tag === "Some" ? opt.value : null
       )
 
       const dogSummary = metadata.classSummaries.pipe(
-        (m) => m.get(dogIri),
+        (m) => HashMap.get(m, dogIri),
         (opt) => opt._tag === "Some" ? opt.value : null
       )
 
       expect(animalSummary?.depth).toBe(0) // Root
       expect(mammalSummary?.depth).toBe(1) // Child of Animal
       expect(dogSummary?.depth).toBe(2) // Grandchild of Animal
-    })
-  )
+    }))
 
   it.effect("should estimate token counts", () =>
     Effect.gen(function*() {
-      const { graph, context } = yield* parseTurtleToGraph(TEST_ONTOLOGY)
+      const { context, graph } = yield* parseTurtleToGraph(TEST_ONTOLOGY)
       const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
       const metadata = yield* buildKnowledgeMetadata(graph, context, index)
 
@@ -106,12 +104,11 @@ describe("Metadata API", () => {
       expect(metadata.tokenStats.totalTokens).toBeGreaterThan(0)
       expect(metadata.tokenStats.averageTokensPerClass).toBeGreaterThan(0)
       expect(metadata.tokenStats.estimatedCost).toBeGreaterThan(0)
-    })
-  )
+    }))
 
   it.effect("should build correct hierarchy tree", () =>
     Effect.gen(function*() {
-      const { graph, context } = yield* parseTurtleToGraph(TEST_ONTOLOGY)
+      const { context, graph } = yield* parseTurtleToGraph(TEST_ONTOLOGY)
       const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
       const metadata = yield* buildKnowledgeMetadata(graph, context, index)
 
@@ -128,12 +125,11 @@ describe("Metadata API", () => {
       // Mammal should have one child (Dog)
       expect(tree.roots[0].children[0].children.length).toBe(1)
       expect(tree.roots[0].children[0].children[0].label).toBe("Dog")
-    })
-  )
+    }))
 
   it.effect("should use Effect Graph for edges", () =>
     Effect.gen(function*() {
-      const { graph, context } = yield* parseTurtleToGraph(TEST_ONTOLOGY)
+      const { context, graph } = yield* parseTurtleToGraph(TEST_ONTOLOGY)
       const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
       const metadata = yield* buildKnowledgeMetadata(graph, context, index)
 
@@ -160,6 +156,5 @@ describe("Metadata API", () => {
 
       expect(dogToMammal).toBeDefined()
       expect(dogToMammal?.type).toBe("subClassOf")
-    })
-  )
+    }))
 })
