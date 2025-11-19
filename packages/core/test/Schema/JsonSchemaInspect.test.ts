@@ -21,6 +21,5 @@ describe("Schema.JsonSchemaInspect", () => {
       console.log("\n=== FULL JSON SCHEMA ===")
       console.log(JSON.stringify(jsonSchema, null, 2))
       console.log("=== END ===\n")
-    })
-  )
+    }))
 })

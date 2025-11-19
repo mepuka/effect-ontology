@@ -27,6 +27,7 @@ export type ExtractionEvent = Data.TaggedEnum<{
    *
    * @since 1.0.0
    */
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   LLMThinking: {}
 
   /**

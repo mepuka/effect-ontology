@@ -1,5 +1,11 @@
 import { describe, expect, it } from "@effect/vitest"
-import type { ClassNode, OntologyNode, PropertyNode } from "../../src/Graph/Types.js"
+import {
+  type ClassNode,
+  isClassNode,
+  isPropertyNode,
+  type OntologyNode,
+  type PropertyNode
+} from "../../src/Graph/Types.js"
 
 describe("Graph Types", () => {
   it("ClassNode has required fields", () => {
@@ -68,11 +74,11 @@ describe("Graph Types", () => {
     }
 
     // Type narrowing works
-    if (classNode._tag === "Class") {
+    if (isClassNode(classNode)) {
       expect(classNode.properties).toBeDefined()
     }
 
-    if (propNode._tag === "Property") {
+    if (isPropertyNode(propNode)) {
       expect(propNode.domain).toBeDefined()
     }
   })

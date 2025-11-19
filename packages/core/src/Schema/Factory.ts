@@ -8,7 +8,7 @@
  * @since 1.0.0
  */
 
-import { Schema as S, Array as A, Data } from "effect"
+import { Array as A, Data, Schema as S } from "effect"
 
 /**
  * Error thrown when attempting to create a schema with empty vocabularies

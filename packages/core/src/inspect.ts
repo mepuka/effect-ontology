@@ -4,9 +4,10 @@
  * Usage: bun run src/inspect.ts <path-to-turtle-file>
  */
 
-import { Console, Effect, Graph, HashMap } from "effect"
+import { Console, Effect, Graph, HashMap, Option } from "effect"
 import { readFileSync } from "node:fs"
 import { parseTurtleToGraph } from "./Graph/Builder.js"
+import { isClassNode } from "./Graph/Types.js"
 
 const inspectOntology = (turtlePath: string) =>
   Effect.gen(function*() {
@@ -27,7 +28,7 @@ const inspectOntology = (turtlePath: string) =>
     // Count total scoped properties (attached to classes)
     let scopedProps = 0
     for (const [_id, node] of context.nodes) {
-      if (node._tag === "Class") {
+      if (isClassNode(node)) {
         scopedProps += node.properties.length
       }
     }
@@ -43,7 +44,7 @@ const inspectOntology = (turtlePath: string) =>
 
     for (const classId of sortedClasses) {
       const nodeOption = HashMap.get(context.nodes, classId)
-      if (nodeOption._tag === "Some" && nodeOption.value._tag === "Class") {
+      if (Option.isSome(nodeOption) && isClassNode(nodeOption.value)) {
         const node = nodeOption.value
         const indent = "  "
         yield* Console.log(`${indent}${node.label} (${node.properties.length} properties)`)
