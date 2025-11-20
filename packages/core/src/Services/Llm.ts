@@ -160,8 +160,7 @@ export const extractKnowledgeGraph = <ClassIRI extends string, PropertyIRI exten
             reason: "ApiTimeout",
             description: "LLM request timed out after 30 seconds"
           })
-        )
-      )
+        ))
     )
 
     // Return the validated value
