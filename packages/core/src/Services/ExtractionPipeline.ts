@@ -13,10 +13,12 @@
  */
 
 import { LanguageModel } from "@effect/ai"
-import { Effect, HashMap, Ref, Stream } from "effect"
-import type { OntologyContext } from "../Graph/Types.js"
+import { Effect, Ref, Stream } from "effect"
+import type { Graph, OntologyContext } from "../Graph/Types.js"
 import * as EC from "../Prompt/EntityCache.js"
+import { knowledgeIndexAlgebra } from "../Prompt/Algebra.js"
 import { renderContext } from "../Prompt/Render.js"
+import { solveToKnowledgeIndex } from "../Prompt/Solver.js"
 import { makeKnowledgeGraphSchema } from "../Schema/Factory.js"
 import { EntityDiscoveryService } from "./EntityDiscovery.js"
 import { mergeGraphsWithResolution } from "./EntityResolution.js"
@@ -89,27 +91,29 @@ const knowledgeGraphToTurtle = (graph: {
 }
 
 /**
- * Streaming extraction pipeline with real LLM integration.
+ * Streaming extraction pipeline with real LLM integration and full KnowledgeIndex.
  *
  * Architecture:
- * 1. Build KnowledgeIndex from ontology (static knowledge)
+ * 1. Build KnowledgeIndex from ontology graph (static knowledge via catamorphism)
  * 2. Chunk text using NlpService
  * 3. For each chunk (parallel workers):
  *    - Read EntityDiscoveryService state (dynamic knowledge)
- *    - Build PromptContext (K × C)
- *    - Render to StructuredPrompt (P → S)
- *    - Extract knowledge using LLM
- *    - Update EntityDiscoveryService
- * 4. Collect all graphs
- * 5. Merge with EntityResolution
+ *    - Build PromptContext (K × C product monoid)
+ *    - Render to StructuredPrompt (P → S morphism)
+ *    - Extract knowledge using LLM with schema validation
+ *    - Update EntityDiscoveryService with new entities
+ * 4. Collect all RDF graphs
+ * 5. Merge with EntityResolution (label-based deduplication)
  *
- * @param text - Input text to extract from
- * @param ontology - Ontology context for extraction
- * @param config - Pipeline configuration
- * @returns Effect yielding unified RDF graph (Turtle)
+ * @param text - Input text to extract knowledge from
+ * @param graph - Ontology graph (classes, properties, hierarchy)
+ * @param ontology - Ontology context (prefixes, metadata)
+ * @param config - Pipeline configuration (concurrency, chunk size)
+ * @returns Effect yielding unified RDF graph in Turtle format
  */
 export const streamingExtractionPipeline = (
   text: string,
+  graph: Graph,
   ontology: OntologyContext,
   config: PipelineConfig = defaultPipelineConfig
 ) =>
@@ -118,11 +122,9 @@ export const streamingExtractionPipeline = (
     const nlp = yield* NlpService
     const discovery = yield* EntityDiscoveryService
 
-    // 2. Build KnowledgeIndex from ontology (static knowledge)
-    // TODO: Integrate full knowledge index generation
-    // Requires: graph parameter in pipeline signature
-    // const knowledgeIndex = yield* solveToKnowledgeIndex(graph, ontology, knowledgeIndexAlgebra)
-    const knowledgeIndex = HashMap.empty() // Temporary: empty for initial integration
+    // 2. Build KnowledgeIndex from ontology graph (static knowledge)
+    // Uses catamorphic fold over graph DAG to create queryable index
+    const knowledgeIndex = yield* solveToKnowledgeIndex(graph, ontology, knowledgeIndexAlgebra)
 
     // 3. Create schema from ontology vocabulary
     const { classIris, propertyIris } = extractVocabulary(ontology)
