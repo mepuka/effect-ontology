@@ -60,10 +60,71 @@ export interface KnowledgeGraph {
 }
 
 /**
+ * XSD namespace constant
+ */
+const XSD_NS = "http://www.w3.org/2001/XMLSchema#"
+
+/**
+ * Priority order for XSD datatypes when multiple ranges are present.
+ * Higher index = higher priority.
+ */
+const XSD_PRIORITY = [
+  "string",
+  "dateTime",
+  "date",
+  "double",
+  "decimal",
+  "integer",
+  "boolean"
+] as const
+
+/**
+ * Normalize a range IRI to full XSD namespace URI
+ *
+ * @param range - Range IRI (e.g., "xsd:integer" or "http://www.w3.org/2001/XMLSchema#integer")
+ * @returns Full XSD URI or undefined if not XSD type
+ */
+const normalizeXsdRange = (range: string): string | undefined => {
+  if (range.startsWith("xsd:")) {
+    return XSD_NS + range.slice(4)
+  } else if (range.startsWith(XSD_NS)) {
+    return range
+  }
+  return undefined
+}
+
+/**
+ * Check if a range IRI is an XSD datatype
+ */
+const isXsdDatatype = (range: string): boolean => {
+  return normalizeXsdRange(range) !== undefined
+}
+
+/**
+ * Get priority score for an XSD datatype
+ *
+ * @param xsdUri - Full XSD URI (e.g., "http://www.w3.org/2001/XMLSchema#integer")
+ * @returns Priority score (higher = higher priority), or -1 if not in priority list
+ */
+const getXsdPriority = (xsdUri: string): number => {
+  const localName = xsdUri.slice(XSD_NS.length)
+  return XSD_PRIORITY.indexOf(localName as any)
+}
+
+/**
  * Helper: Infer RDF datatype from PropertyConstraint ranges
  *
  * Maps XSD datatypes to N3.NamedNode for typed literal creation.
- * Falls back to xsd:string if range is unknown or ambiguous.
+ *
+ * **Strategy:**
+ * 1. Check class-specific properties first (more specific)
+ * 2. Fall back to universal properties (domain-agnostic)
+ * 3. Normalize all ranges to full XSD namespace URIs
+ * 4. Filter to only XSD datatypes
+ * 5. If multiple XSD types, select by priority order
+ * 6. If mixed object/datatype or no XSD types, return undefined (falls back to xsd:string)
+ *
+ * **Priority Order:** boolean > integer > decimal > double > date > dateTime > string
  *
  * @param propertyIri - The property IRI to look up
  * @param ontology - Optional ontology context with property definitions
@@ -81,40 +142,56 @@ const inferDatatype = (
   // Find property constraint in ontology
   let ranges: ReadonlyArray<string> = []
 
-  // Check universal properties first
-  const universalProp = ontology.universalProperties.find(
-    (p) => p.propertyIri === propertyIri
-  )
-  if (universalProp) {
-    ranges = universalProp.ranges
-  } else {
-    // Check class properties
-    for (const node of HashMap.values(ontology.nodes)) {
-      if (isClassNode(node)) {
-        const prop = node.properties.find((p) => p.propertyIri === propertyIri)
-        if (prop) {
-          ranges = prop.ranges
-          break
-        }
+  // IMPORTANT: Check class properties FIRST (more specific than universal)
+  for (const node of HashMap.values(ontology.nodes)) {
+    if (isClassNode(node)) {
+      const prop = node.properties.find((p) => p.propertyIri === propertyIri)
+      if (prop) {
+        ranges = prop.ranges
+        break
       }
     }
   }
 
-  // If single unambiguous XSD range, use it
-  if (ranges.length === 1) {
-    const range = ranges[0]
-
-    // Map common XSD types
-    const xsdBase = "http://www.w3.org/2001/XMLSchema#"
-    if (range.startsWith("xsd:")) {
-      return N3.DataFactory.namedNode(range.replace("xsd:", xsdBase))
-    } else if (range.startsWith(xsdBase)) {
-      return N3.DataFactory.namedNode(range)
+  // Fall back to universal properties if not found in any class
+  if (ranges.length === 0) {
+    const universalProp = ontology.universalProperties.find(
+      (p) => p.propertyIri === propertyIri
+    )
+    if (universalProp) {
+      ranges = universalProp.ranges
     }
   }
 
-  // Default: no explicit datatype (defaults to xsd:string)
-  return undefined
+  // No ranges found
+  if (ranges.length === 0) return undefined
+
+  // Normalize and filter to XSD datatypes
+  const xsdRanges = ranges
+    .map(normalizeXsdRange)
+    .filter((uri): uri is string => uri !== undefined)
+
+  // No XSD datatypes in ranges
+  if (xsdRanges.length === 0) return undefined
+
+  // Single XSD type - use it
+  if (xsdRanges.length === 1) {
+    return N3.DataFactory.namedNode(xsdRanges[0])
+  }
+
+  // Multiple XSD types - pick by priority
+  let bestXsd = xsdRanges[0]
+  let bestPriority = getXsdPriority(xsdRanges[0])
+
+  for (let i = 1; i < xsdRanges.length; i++) {
+    const priority = getXsdPriority(xsdRanges[i])
+    if (priority > bestPriority) {
+      bestXsd = xsdRanges[i]
+      bestPriority = priority
+    }
+  }
+
+  return N3.DataFactory.namedNode(bestXsd)
 }
 
 /**
@@ -211,11 +288,14 @@ export class RdfService extends Effect.Service<RdfService>()("RdfService", {
             // Object can be literal (with datatype) or reference
             const object = typeof prop.object === "string"
               ? (() => {
+                  // Normalize value: trim whitespace
+                  const normalizedValue = prop.object.trim()
+
                   // Infer datatype from ontology
                   const datatype = inferDatatype(prop.predicate, ontology)
                   return datatype
-                    ? literal(prop.object, datatype)
-                    : literal(prop.object) // Default xsd:string
+                    ? literal(normalizedValue, datatype)
+                    : literal(normalizedValue) // Default xsd:string
                 })()
               : createSubject(prop.object["@id"])
 
@@ -388,11 +468,14 @@ export class RdfService extends Effect.Service<RdfService>()("RdfService", {
             // Object can be literal (with datatype) or reference
             const object = typeof prop.object === "string"
               ? (() => {
+                  // Normalize value: trim whitespace
+                  const normalizedValue = prop.object.trim()
+
                   // Infer datatype from ontology
                   const datatype = inferDatatype(prop.predicate, ontology)
                   return datatype
-                    ? literal(prop.object, datatype)
-                    : literal(prop.object) // Default xsd:string
+                    ? literal(normalizedValue, datatype)
+                    : literal(normalizedValue) // Default xsd:string
                 })()
               : createSubject(prop.object["@id"])
 
