@@ -364,4 +364,48 @@ describe("Graph Builder", () => {
         )
       }))
   })
+
+  it.effect("parses owl:Restriction from subClassOf", () =>
+    Effect.gen(function*() {
+      // Create turtle with restriction
+      const turtle = `
+      @prefix : <http://example.org/test#> .
+      @prefix owl: <http://www.w3.org/2002/07/owl#> .
+      @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+      :Animal a owl:Class ;
+        rdfs:label "Animal" .
+
+      :Dog a owl:Class ;
+        rdfs:label "Dog" .
+
+      :hasPet a owl:ObjectProperty ;
+        rdfs:label "has pet" .
+
+      :DogOwner a owl:Class ;
+        rdfs:label "Dog Owner" ;
+        rdfs:subClassOf [
+          a owl:Restriction ;
+          owl:onProperty :hasPet ;
+          owl:someValuesFrom :Dog
+        ] .
+    `
+
+      const result = yield* parseTurtleToGraph(turtle)
+
+      // DogOwner should have hasPet constraint from restriction
+      const dogOwnerNode = HashMap.get(result.context.nodes, "http://example.org/test#DogOwner")
+      expect(dogOwnerNode._tag).toBe("Some")
+
+      if (dogOwnerNode._tag === "Some" && dogOwnerNode.value._tag === "Class") {
+        const hasPetProp = dogOwnerNode.value.properties.find(
+          p => p.propertyIri === "http://example.org/test#hasPet"
+        )
+
+        expect(hasPetProp).toBeDefined()
+        expect(hasPetProp?.ranges).toContain("http://example.org/test#Dog")
+        expect(hasPetProp?.minCardinality).toBe(1) // someValuesFrom implies ≥1
+        expect(hasPetProp?.source).toBe("restriction")
+      }
+    }))
 })

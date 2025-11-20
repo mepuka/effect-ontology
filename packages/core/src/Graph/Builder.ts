@@ -305,7 +305,7 @@ export const parseTurtleToGraph = (
     }
 
     // 4. Build Graph edges from subClassOf relationships
-    // Edge semantics: Child -> Parent (Child depends on Parent for rendering)
+    // Also parse owl:Restriction blank nodes and attach to classes
     const subClassTriples = store.getQuads(
       null,
       "http://www.w3.org/2000/01/rdf-schema#subClassOf",
@@ -313,8 +313,43 @@ export const parseTurtleToGraph = (
       null
     )
 
+    // First pass: Parse restrictions and attach to classes
+    for (const quad of subClassTriples) {
+      const childIri = quad.subject.value
+      const parentIri = quad.object.value
+
+      if (isBlankNode(parentIri)) {
+        // Parent is a restriction blank node
+        const restrictionOption = parseRestriction(store, parentIri)
+
+        Option.match(restrictionOption, {
+          onNone: () => {
+            // Not a valid restriction, skip
+          },
+          onSome: (constraint) => {
+            // Add constraint to child class properties
+            classNodes = Option.match(HashMap.get(classNodes, childIri), {
+              onNone: () => classNodes,
+              onSome: (classNode) => {
+                if (classNode._tag === "Class") {
+                  return HashMap.set(
+                    classNodes,
+                    childIri,
+                    ClassNode.make({
+                      ...classNode,
+                      properties: [...classNode.properties, constraint]
+                    })
+                  )
+                }
+                return classNodes
+              }
+            })
+          }
+        })
+      }
+    }
+
     // Build graph using Effect's Graph API
-    // HashMap to store NodeId -> GraphNodeIndex
     let nodeIndexMap = HashMap.empty<NodeId, number>()
 
     const graph = Graph.mutate(Graph.directed<NodeId, null>(), (mutable) => {
@@ -325,22 +360,24 @@ export const parseTurtleToGraph = (
       }
 
       // Add edges: Child -> Parent (dependency direction)
+      // Skip blank node parents (they're restrictions, not classes)
       for (const quad of subClassTriples) {
-        const childIri = quad.subject.value // subClass
-        const parentIri = quad.object.value // superClass
+        const childIri = quad.subject.value
+        const parentIri = quad.object.value
 
-        // Use Option.flatMap to add edge only if both nodes exist
-        Option.flatMap(
-          HashMap.get(nodeIndexMap, childIri),
-          (childIdx) =>
-            Option.map(
-              HashMap.get(nodeIndexMap, parentIri),
-              (parentIdx) => {
-                // Child depends on Parent (render children before parents)
-                Graph.addEdge(mutable, childIdx, parentIdx, null)
-              }
-            )
-        )
+        // Only create edges for named class parents
+        if (!isBlankNode(parentIri)) {
+          Option.flatMap(
+            HashMap.get(nodeIndexMap, childIri),
+            (childIdx) =>
+              Option.map(
+                HashMap.get(nodeIndexMap, parentIri),
+                (parentIdx) => {
+                  Graph.addEdge(mutable, childIdx, parentIdx, null)
+                }
+              )
+          )
+        }
       }
     })
 
