@@ -8,6 +8,7 @@
  */
 
 import { FastCheck, HashMap, Schema } from "effect"
+import { PropertyConstraint } from "./Constraint.js"
 
 /**
  * NodeId - Unique identifier for graph nodes (typically IRI)
@@ -46,89 +47,6 @@ export const NodeIdSchema = Schema.String.annotations({
 })
 export type NodeId = typeof NodeIdSchema.Type
 
-/**
- * PropertyData - Information attached to a ClassNode
- *
- * Properties are stored as data on their domain class, not as separate graph nodes.
- * This prevents cycles: if Property were a node, then
- *   Dog -> hasOwner (domain) and hasOwner -> Dog (creates cycle)
- */
-export const PropertyDataSchema = Schema.Struct({
-  iri: Schema.String.annotations({
-    arbitrary: () => () =>
-      FastCheck.constantFrom(
-        // FOAF properties
-        "http://xmlns.com/foaf/0.1/name",
-        "http://xmlns.com/foaf/0.1/knows",
-        "http://xmlns.com/foaf/0.1/member",
-        "http://xmlns.com/foaf/0.1/homepage",
-        "http://xmlns.com/foaf/0.1/mbox",
-        // Dublin Core properties
-        "http://purl.org/dc/terms/title",
-        "http://purl.org/dc/terms/description",
-        "http://purl.org/dc/terms/creator",
-        "http://purl.org/dc/terms/created",
-        "http://purl.org/dc/terms/modified",
-        // Schema.org properties
-        "http://schema.org/name",
-        "http://schema.org/description",
-        "http://schema.org/url",
-        "http://schema.org/author",
-        "http://schema.org/datePublished"
-      )
-  }),
-  label: Schema.String.pipe(Schema.minLength(1), Schema.maxLength(100)).annotations({
-    arbitrary: () => () =>
-      FastCheck.constantFrom(
-        // Common property labels
-        "name",
-        "description",
-        "title",
-        "creator",
-        "author",
-        "knows",
-        "member",
-        "memberOf",
-        "hasValue",
-        "hasProperty",
-        "createdAt",
-        "updatedAt",
-        "publishedAt",
-        "url",
-        "email",
-        "homepage"
-      )
-  }),
-  range: Schema.String.annotations({
-    arbitrary: () => () =>
-      FastCheck.oneof(
-        // XSD datatypes (biased higher - 60% of properties are datatype properties)
-        FastCheck.constantFrom(
-          "http://www.w3.org/2001/XMLSchema#string",
-          "http://www.w3.org/2001/XMLSchema#integer",
-          "http://www.w3.org/2001/XMLSchema#boolean",
-          "http://www.w3.org/2001/XMLSchema#date",
-          "http://www.w3.org/2001/XMLSchema#dateTime",
-          "http://www.w3.org/2001/XMLSchema#float",
-          "http://www.w3.org/2001/XMLSchema#double",
-          "xsd:string",
-          "xsd:integer",
-          "xsd:boolean",
-          "xsd:date",
-          "xsd:dateTime"
-        ),
-        // Class IRIs (40% are object properties)
-        FastCheck.constantFrom(
-          "http://xmlns.com/foaf/0.1/Person",
-          "http://xmlns.com/foaf/0.1/Organization",
-          "http://schema.org/Person",
-          "http://schema.org/Article",
-          "http://schema.org/Event"
-        )
-      )
-  }) // IRI or datatype - stored as string reference (not graph edge)
-})
-export type PropertyData = typeof PropertyDataSchema.Type
 
 /**
  * ClassNode - A node representing an OWL Class
@@ -160,7 +78,10 @@ export class ClassNode extends Schema.Class<ClassNode>("ClassNode")({
         "BibliographicResource"
       )
   }),
-  properties: Schema.Array(PropertyDataSchema)
+  properties: Schema.Array(PropertyConstraint).pipe(
+    Schema.optional,
+    Schema.withDefaults({ constructor: () => [], decoding: () => [] })
+  )
 }) {}
 
 /**
@@ -244,7 +165,7 @@ export const OntologyContextSchema = Schema.Struct({
    * - Maintain graph hygiene (strict dependencies only)
    * - Improve LLM comprehension (global context)
    */
-  universalProperties: Schema.Array(PropertyDataSchema),
+  universalProperties: Schema.Array(PropertyConstraint),
 
   /**
    * Mapping from NodeId (IRI) to Graph NodeIndex (number)
