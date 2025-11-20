@@ -12,11 +12,10 @@
  * 4. Merge with EntityResolution
  */
 
-import { LanguageModel } from "@effect/ai"
-import { Effect, Ref, Stream } from "effect"
-import type { Graph, OntologyContext } from "../Graph/Types.js"
-import * as EC from "../Prompt/EntityCache.js"
+import { Effect, Graph, Ref, Stream } from "effect"
+import type { NodeId, OntologyContext } from "../Graph/Types.js"
 import { knowledgeIndexAlgebra } from "../Prompt/Algebra.js"
+import * as EC from "../Prompt/EntityCache.js"
 import { renderContext } from "../Prompt/Render.js"
 import { solveToKnowledgeIndex } from "../Prompt/Solver.js"
 import { makeKnowledgeGraphSchema } from "../Schema/Factory.js"
@@ -113,7 +112,7 @@ const knowledgeGraphToTurtle = (graph: {
  */
 export const streamingExtractionPipeline = (
   text: string,
-  graph: Graph,
+  graph: Graph.Graph<NodeId, unknown>,
   ontology: OntologyContext,
   config: PipelineConfig = defaultPipelineConfig
 ) =>

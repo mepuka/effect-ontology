@@ -207,14 +207,14 @@ export const NlpServiceLive = Layer.sync(NlpService, () => {
       catch: (cause) => new NlpError({ message: "Failed to process document", cause })
     })
 
-  // Helper: Prepare text for BM25 (tokenize, stem, remove stopwords)
+  // Helper: Prepare text for BM25 (tokenize, remove stopwords)
   const prepareText = (text: string) => {
     const doc = nlp.readDoc(text)
     return doc
       .tokens()
       .filter((t) => !t.out(nlp.its.stopWordFlag)) // Remove stopwords
       .filter((t) => t.out(nlp.its.type) === "word") // Only words (no punctuation)
-      .out(nlp.its.lemma) // Use lemmas for better matching
+      .out() // Extract token strings
   }
 
   // Store for BM25 engines (keyed by index reference)
@@ -305,10 +305,12 @@ export const NlpServiceLive = Layer.sync(NlpService, () => {
 
             // Add documents to index
             for (const doc of documents) {
-              engine.addDoc({
-                id: doc.id,
-                text: doc.text
-              })
+              engine.addDoc(
+                {
+                  text: doc.text
+                },
+                doc.id
+              )
             }
 
             // Consolidate index (required after adding docs)
@@ -348,15 +350,21 @@ export const NlpServiceLive = Layer.sync(NlpService, () => {
             const rawResults = engine.search(query, limit)
 
             // Map results to SearchResult format
-            const results: Array<SearchResult> = rawResults.map((result: any) => {
-              const doc = HashMap.unsafeGet(docs, result.id)
-              return {
-                id: result.id,
-                score: result.score,
-                text: doc.text,
-                metadata: doc.metadata
+            // wink-bm25 returns array of [id, score] tuples
+            const results: Array<SearchResult> = []
+            for (const result of rawResults) {
+              const [id, score] = result as [string, number]
+              const docOption = HashMap.get(docs, id)
+              if (docOption._tag === "Some") {
+                const doc = docOption.value
+                results.push({
+                  id: doc.id,
+                  score,
+                  text: doc.text,
+                  metadata: doc.metadata
+                })
               }
-            })
+            }
 
             return results
           },
@@ -369,13 +377,12 @@ export const NlpServiceLive = Layer.sync(NlpService, () => {
         // Extract keywords from query
         const queryKeywords = yield* Effect.gen(function*() {
           const doc = yield* processDoc(query)
-          return new Set(
-            doc
-              .tokens()
-              .filter((t) => t.out(nlp.its.pos) === "NOUN" || t.out(nlp.its.pos) === "PROPN")
-              .filter((t) => !t.out(nlp.its.stopWordFlag))
-              .out(nlp.its.lemma) // Use lemmas for matching
-          )
+          const keywords = doc
+            .tokens()
+            .filter((t) => t.out(nlp.its.pos) === "NOUN" || t.out(nlp.its.pos) === "PROPN")
+            .filter((t) => !t.out(nlp.its.stopWordFlag))
+            .out() // Extract token strings
+          return new Set(keywords)
         })
 
         // Score each document by keyword overlap
@@ -384,13 +391,12 @@ export const NlpServiceLive = Layer.sync(NlpService, () => {
             Effect.gen(function*() {
               const docKeywords = yield* Effect.gen(function*() {
                 const d = yield* processDoc(doc.text)
-                return new Set(
-                  d
-                    .tokens()
-                    .filter((t) => t.out(nlp.its.pos) === "NOUN" || t.out(nlp.its.pos) === "PROPN")
-                    .filter((t) => !t.out(nlp.its.stopWordFlag))
-                    .out(nlp.its.lemma)
-                )
+                const keywords = d
+                  .tokens()
+                  .filter((t) => t.out(nlp.its.pos) === "NOUN" || t.out(nlp.its.pos) === "PROPN")
+                  .filter((t) => !t.out(nlp.its.stopWordFlag))
+                  .out() // Extract token strings
+                return new Set(keywords)
               })
 
               // Calculate Jaccard similarity (intersection / union)

@@ -54,7 +54,7 @@ describe.skip("Token Metrics - Real Ontology Prompts", () => {
           const _tokenizer = yield* Tokenizer.Tokenizer
 
           const text = "Extract entities from the following text about people and organizations."
-          const tokens = yield* tokenizer.tokenize(text)
+          const tokens = yield* _tokenizer.tokenize(text)
 
           console.log(`Simple prompt: ${tokens.length} tokens`)
           expect(tokens.length).toBeGreaterThan(0)
@@ -88,7 +88,7 @@ ${
 Extract entities from the text.
           `.trim()
 
-          const tokens = yield* tokenizer.tokenize(prompt)
+          const tokens = yield* _tokenizer.tokenize(prompt)
 
           console.log(`FOAF prompt: ${tokens.length} tokens for ${metadata.stats.totalClasses} classes`)
           console.log(`Estimated token stats: ${metadata.tokenStats.totalTokens} tokens`)
@@ -132,7 +132,7 @@ Extract entities from the text.
           const _tokenizer = yield* Tokenizer.Tokenizer
 
           const text = "Extract entities from the following text about people and organizations."
-          const tokens = yield* tokenizer.tokenize(text)
+          const tokens = yield* _tokenizer.tokenize(text)
 
           console.log(`Claude - Simple prompt: ${tokens.length} tokens`)
           expect(tokens.length).toBeGreaterThan(0)
@@ -165,7 +165,7 @@ ${
 Extract from the following document.
           `.trim()
 
-          const tokens = yield* tokenizer.tokenize(prompt)
+          const tokens = yield* _tokenizer.tokenize(prompt)
 
           console.log(`Claude - Dublin Core prompt: ${tokens.length} tokens`)
 
