@@ -5,8 +5,8 @@
  * No Effect Config - just reactive atoms with localStorage persistence.
  */
 
-import type { LlmProviderParams } from "@effect-ontology/core/Services/LlmProvider"
 import { Atom } from "@effect-atom/atom"
+import type { LlmProviderParams } from "@effect-ontology/core/Services/LlmProvider"
 import { KeyValueStore } from "@effect/platform"
 import { Effect, Layer, Stream } from "effect"
 
@@ -115,9 +115,7 @@ export const BrowserConfigPersistenceLayer = Layer.effectDiscard(
 
     // Watch for changes and persist to localStorage
     yield* Atom.toStream(browserConfigAtom).pipe(
-      Stream.tap((config) =>
-        Effect.ignore(kvs.set(CONFIG_STORAGE_KEY, JSON.stringify(config)))
-      ),
+      Stream.tap((config) => Effect.ignore(kvs.set(CONFIG_STORAGE_KEY, JSON.stringify(config)))),
       Stream.runDrain,
       Effect.fork
     )

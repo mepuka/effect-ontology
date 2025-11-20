@@ -5,13 +5,13 @@
  */
 
 import { describe, expect, it } from "@effect/vitest"
-import { Data, Effect, HashMap, Layer, Option } from "effect"
+import { Data, Effect, HashMap, Option } from "effect"
 import { PropertyConstraint } from "../../src/Graph/Constraint.js"
 import { ClassNode } from "../../src/Graph/Types"
 import type { OntologyContext } from "../../src/Graph/Types"
 import { StructuredPrompt } from "../../src/Prompt/Types"
 import { makeKnowledgeGraphSchema } from "../../src/Schema/Factory"
-import { extractKnowledgeGraph, extractVocabulary, LlmService } from "../../src/Services/Llm"
+import { extractKnowledgeGraph, extractVocabulary } from "../../src/Services/Llm"
 
 describe("Services.Llm", () => {
   // Test ontology context

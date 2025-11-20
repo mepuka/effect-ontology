@@ -4,9 +4,9 @@
  * Verifies property hierarchy invariants with random property hierarchies.
  */
 
+import { describe, expect, it } from "@effect/vitest"
 import { Effect, HashMap, Option } from "effect"
 import * as FastCheck from "fast-check"
-import { describe, test } from "@effect/vitest"
 import { parseTurtleToGraph } from "../../src/Graph/Builder.js"
 
 // Fixed base IRI for consistent test data
@@ -16,7 +16,7 @@ const TEST_BASE = "http://test.example.org/"
 const arbLabel = FastCheck.stringMatching(/^[a-zA-Z][a-zA-Z0-9_]{0,19}$/)
 
 describe("Property Hierarchy - Property-Based Tests", () => {
-  test.effect(
+  it.effect(
     "Property-Based: child property always inherits parent domain (100 samples)",
     () =>
       Effect.gen(function*() {
@@ -64,7 +64,7 @@ describe("Property Hierarchy - Property-Based Tests", () => {
                 expect(childProp).toBeDefined()
               }
             }),
-          { concurrency: "unlimited" }
+          { concurrency: undefined }
         )
       }).pipe(
         Effect.timeoutFail({
@@ -74,7 +74,7 @@ describe("Property Hierarchy - Property-Based Tests", () => {
       )
   )
 
-  test.effect(
+  it.effect(
     "Property-Based: transitive domain inheritance (100 samples)",
     () =>
       Effect.gen(function*() {
@@ -140,7 +140,7 @@ describe("Property Hierarchy - Property-Based Tests", () => {
                 expect(childProp).toBeDefined()
               }
             }),
-          { concurrency: "unlimited" }
+          { concurrency: undefined }
         )
       }).pipe(
         Effect.timeoutFail({
@@ -150,7 +150,7 @@ describe("Property Hierarchy - Property-Based Tests", () => {
       )
   )
 
-  test.effect(
+  it.effect(
     "Property-Based: multiple parents combine domains (100 samples)",
     () =>
       Effect.gen(function*() {
@@ -218,7 +218,7 @@ describe("Property Hierarchy - Property-Based Tests", () => {
                 expect(childOnClass2).toBeDefined()
               }
             }),
-          { concurrency: "unlimited" }
+          { concurrency: undefined }
         )
       }).pipe(
         Effect.timeoutFail({
@@ -228,7 +228,7 @@ describe("Property Hierarchy - Property-Based Tests", () => {
       )
   )
 
-  test.effect(
+  it.effect(
     "Property-Based: explicit range preserved over inherited (100 samples)",
     () =>
       Effect.gen(function*() {
@@ -281,7 +281,7 @@ describe("Property Hierarchy - Property-Based Tests", () => {
                 }
               }
             }),
-          { concurrency: "unlimited" }
+          { concurrency: undefined }
         )
       }).pipe(
         Effect.timeoutFail({
@@ -291,7 +291,7 @@ describe("Property Hierarchy - Property-Based Tests", () => {
       )
   )
 
-  test.effect(
+  it.effect(
     "Property-Based: property without domain or parent stays universal (100 samples)",
     () =>
       Effect.gen(function*() {
@@ -323,7 +323,7 @@ describe("Property Hierarchy - Property-Based Tests", () => {
 
               expect(universalProp).toBeDefined()
             }),
-          { concurrency: "unlimited" }
+          { concurrency: undefined }
         )
       }).pipe(
         Effect.timeoutFail({
