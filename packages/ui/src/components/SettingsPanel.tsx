@@ -9,11 +9,12 @@ import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Settings, X, Save, RotateCcw, ExternalLink, Check } from "lucide-react"
 import { useAtomValue, useAtomSet } from "@effect-atom/atom-react"
-import { 
-  browserConfigAtom,
-  type LlmProvider,
-  type LlmConfigAtomState 
-} from "../state/config"
+import type { LlmProviderParams } from "@effect-ontology/core/Services/LlmProvider"
+import { browserConfigAtom } from "../state/config"
+
+// Type aliases from core
+type LlmProvider = LlmProviderParams["provider"]
+type LlmConfigAtomState = LlmProviderParams
 
 // BrowserConfig alias for readability
 type BrowserConfig = LlmConfigAtomState
