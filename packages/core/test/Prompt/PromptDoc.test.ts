@@ -58,7 +58,8 @@ describe("PromptDoc", () => {
           system: ["You are an expert", "Follow these rules"],
           user: ["Extract from healthcare domain"],
           examples: ["Example 1", "Example 2"],
-          context: []})
+          context: []
+        })
 
         const output = renderStructuredPrompt(prompt)
 
@@ -78,7 +79,8 @@ describe("PromptDoc", () => {
           system: ["System instruction"],
           user: [],
           examples: [],
-          context: []})
+          context: []
+        })
 
         const output = renderStructuredPrompt(prompt)
 
@@ -93,7 +95,8 @@ describe("PromptDoc", () => {
           system: [],
           user: [],
           examples: [],
-          context: []})
+          context: []
+        })
 
         const output = renderStructuredPrompt(prompt)
         expect(output).toBe("")
@@ -105,7 +108,8 @@ describe("PromptDoc", () => {
           system: ["First instruction", "Second instruction"],
           user: [],
           examples: [],
-          context: []})
+          context: []
+        })
 
         const output = renderStructuredPrompt(prompt)
 
@@ -119,7 +123,8 @@ describe("PromptDoc", () => {
           system: [],
           user: ["Context 1", "Context 2"],
           examples: [],
-          context: []})
+          context: []
+        })
 
         const output = renderStructuredPrompt(prompt)
 
@@ -135,7 +140,8 @@ describe("PromptDoc", () => {
           system: [],
           user: [],
           examples: ["Example 1", "Example 2"],
-          context: []})
+          context: []
+        })
 
         const output = renderStructuredPrompt(prompt)
 
@@ -151,7 +157,8 @@ describe("PromptDoc", () => {
           system: ["System instruction"],
           user: [],
           examples: [],
-          context: []})
+          context: []
+        })
 
         const output = renderExtractionPrompt(prompt, "Alice is a patient.")
 
@@ -167,7 +174,8 @@ describe("PromptDoc", () => {
           system: [],
           user: [],
           examples: [],
-          context: []})
+          context: []
+        })
 
         const output = renderExtractionPrompt(prompt, "Test text.")
 
@@ -185,7 +193,8 @@ describe("PromptDoc", () => {
           system: ["instruction 1", "instruction 2"],
           user: ["context 1", "context 2"],
           examples: ["example 1", "example 2"],
-          context: []})
+          context: []
+        })
 
         const text = "Test text"
         const reference = buildPromptText_REFERENCE(prompt, text)
@@ -200,7 +209,8 @@ describe("PromptDoc", () => {
           system: ["instruction 1", "instruction 2"],
           user: [],
           examples: [],
-          context: []})
+          context: []
+        })
 
         const text = "Test text"
         const reference = buildPromptText_REFERENCE(prompt, text)
@@ -215,7 +225,8 @@ describe("PromptDoc", () => {
           system: [],
           user: ["context 1"],
           examples: [],
-          context: []})
+          context: []
+        })
 
         const text = "Test text"
         const reference = buildPromptText_REFERENCE(prompt, text)
@@ -230,7 +241,8 @@ describe("PromptDoc", () => {
           system: [],
           user: [],
           examples: [],
-          context: []})
+          context: []
+        })
 
         const text = "Test text"
         const reference = buildPromptText_REFERENCE(prompt, text)
@@ -271,7 +283,8 @@ describe("PromptDoc", () => {
           system: ["Instruction with \"quotes\" and 'apostrophes'"],
           user: ["Context with tabs:\there"],
           examples: ["Example\nwith\nnewlines"],
-          context: []})
+          context: []
+        })
 
         const text = "Text with special chars: @#$%"
         const reference = buildPromptText_REFERENCE(prompt, text)
@@ -288,7 +301,8 @@ describe("PromptDoc", () => {
           system: ["single"],
           user: ["single"],
           examples: ["single"],
-          context: []})
+          context: []
+        })
 
         const text = "text"
         const reference = buildPromptText_REFERENCE(prompt, text)
@@ -303,7 +317,8 @@ describe("PromptDoc", () => {
           system: ["", "instruction"],
           user: ["context", ""],
           examples: [],
-          context: []})
+          context: []
+        })
 
         const text = "text"
         const reference = buildPromptText_REFERENCE(prompt, text)
@@ -318,7 +333,8 @@ describe("PromptDoc", () => {
           system: ["instruction"],
           user: [],
           examples: [],
-          context: []})
+          context: []
+        })
 
         const text = ""
         const reference = buildPromptText_REFERENCE(prompt, text)

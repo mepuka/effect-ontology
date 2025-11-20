@@ -21,9 +21,9 @@ export const getDepthColor = (depth: number, maxDepth: number): string => {
   const ratio = depth / maxDepth
 
   if (ratio < 0.25) return "text-orange-500" // Root level
-  if (ratio < 0.5) return "text-amber-500"   // Near root
-  if (ratio < 0.75) return "text-cyan-500"   // Mid-depth
-  return "text-blue-500"                      // Deep/leaf
+  if (ratio < 0.5) return "text-amber-500" // Near root
+  if (ratio < 0.75) return "text-cyan-500" // Mid-depth
+  return "text-blue-500" // Deep/leaf
 }
 
 /**

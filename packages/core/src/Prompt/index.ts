@@ -18,10 +18,10 @@ export {
 export { KnowledgeUnit, type PromptAST } from "./Ast.js"
 export * as Context from "./Context.js"
 export type { PromptContext } from "./Context.js"
-export * as EntityCache from "./EntityCache.js"
-export type { EntityCache as EntityCacheType, EntityRef } from "./EntityCache.js"
 export { bulletList, header, numberedList, renderDoc, renderDocWithWidth, section } from "./DocBuilder.js"
 export { enrichKnowledgeIndex, generateEnrichedIndex } from "./Enrichment.js"
+export * as EntityCache from "./EntityCache.js"
+export type { EntityCache as EntityCacheType, EntityRef } from "./EntityCache.js"
 export * as Focus from "./Focus.js"
 export {
   EnrichedStructuredPrompt,

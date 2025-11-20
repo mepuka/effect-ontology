@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
-import { normalize, EntityRef, fromArray, union, empty } from "../../src/Prompt/EntityCache.js"
 import { HashMap } from "effect"
 import * as fc from "fast-check"
+import { empty, EntityRef, fromArray, normalize, union } from "../../src/Prompt/EntityCache.js"
 
 describe("EntityCache", () => {
   it("should normalize labels to canonical form", () => {

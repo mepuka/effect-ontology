@@ -337,7 +337,7 @@ export const arbRefinementPair = FastCheck
       refinedMin: FastCheck.nat({ max: 3 }) // Can be 0 since range is already more specific
     })
   )
-  .map(({ baseMin, baseRange, iri, refinedMin, refinedRange }) => {
+  .map(({ baseRange, iri, refinedMin, refinedRange }) => {
     const base = ConstraintFactory.withRange(iri, baseRange)
     // base.minCardinality = 0
 

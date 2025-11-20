@@ -7,7 +7,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, HashMap, Option } from "effect"
 import { KnowledgeUnit } from "../../src/Prompt/Ast"
-import { renderToEnrichedPrompt, renderEnrichedStats } from "../../src/Prompt/RenderEnriched"
+import { renderEnrichedStats, renderToEnrichedPrompt } from "../../src/Prompt/RenderEnriched"
 
 describe("Prompt.RenderEnriched", () => {
   // Create test KnowledgeIndex

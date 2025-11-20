@@ -209,7 +209,7 @@ const serializeStore = (store: N3.Store): Effect.Effect<string, ParseError> =>
 export const mergeGraphsWithResolution = (
   graphs: ReadonlyArray<RdfGraph>
 ): Effect.Effect<RdfGraph, ParseError> =>
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     // Handle empty input
     if (graphs.length === 0) {
       return ""

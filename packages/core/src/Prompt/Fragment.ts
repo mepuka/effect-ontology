@@ -165,7 +165,7 @@ export class EnrichedStructuredPrompt extends Schema.Class<EnrichedStructuredPro
    *
    * @returns StructuredPrompt with text extracted from fragments
    */
-  toPlainPrompt(): { system: string[]; user: string[]; examples: string[] } {
+  toPlainPrompt(): { system: Array<string>; user: Array<string>; examples: Array<string> } {
     return {
       system: this.system.map((f) => f.text),
       user: this.user.map((f) => f.text),

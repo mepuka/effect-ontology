@@ -51,7 +51,7 @@ describe.skip("Token Metrics - Real Ontology Prompts", () => {
       "should tokenize simple text",
       () =>
         Effect.gen(function*() {
-          const tokenizer = yield* Tokenizer.Tokenizer
+          const _tokenizer = yield* Tokenizer.Tokenizer
 
           const text = "Extract entities from the following text about people and organizations."
           const tokens = yield* tokenizer.tokenize(text)
@@ -66,7 +66,7 @@ describe.skip("Token Metrics - Real Ontology Prompts", () => {
       "should measure FOAF ontology prompt tokens",
       () =>
         Effect.gen(function*() {
-          const tokenizer = yield* Tokenizer.Tokenizer
+          const _tokenizer = yield* Tokenizer.Tokenizer
           const foaf = loadOntology("foaf-minimal.ttl")
 
           const { context, graph } = yield* parseTurtleToGraph(foaf)
@@ -102,7 +102,7 @@ Extract entities from the text.
       "should measure Schema.org token size",
       () =>
         Effect.gen(function*() {
-          const tokenizer = yield* Tokenizer.Tokenizer
+          const _tokenizer = yield* Tokenizer.Tokenizer
           const schema = loadLargeOntology("schema.ttl")
 
           const { context, graph } = yield* parseTurtleToGraph(schema)
@@ -129,7 +129,7 @@ Extract entities from the text.
       "should tokenize simple text with Claude tokenizer",
       () =>
         Effect.gen(function*() {
-          const tokenizer = yield* Tokenizer.Tokenizer
+          const _tokenizer = yield* Tokenizer.Tokenizer
 
           const text = "Extract entities from the following text about people and organizations."
           const tokens = yield* tokenizer.tokenize(text)
@@ -144,7 +144,7 @@ Extract entities from the text.
       "should measure Dublin Core prompt tokens",
       () =>
         Effect.gen(function*() {
-          const tokenizer = yield* Tokenizer.Tokenizer
+          const _tokenizer = yield* Tokenizer.Tokenizer
           const dcterms = loadOntology("dcterms.ttl")
 
           const { context, graph } = yield* parseTurtleToGraph(dcterms)
@@ -220,7 +220,7 @@ Extract entities.
       "should estimate cost for GPT-4 prompts",
       () =>
         Effect.gen(function*() {
-          const tokenizer = yield* Tokenizer.Tokenizer
+          const _tokenizer = yield* Tokenizer.Tokenizer
           const foaf = loadOntology("foaf-minimal.ttl")
 
           const { context, graph } = yield* parseTurtleToGraph(foaf)
