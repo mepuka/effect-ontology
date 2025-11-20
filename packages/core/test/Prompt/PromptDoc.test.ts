@@ -57,8 +57,8 @@ describe("PromptDoc", () => {
         const prompt = StructuredPrompt.make({
           system: ["You are an expert", "Follow these rules"],
           user: ["Extract from healthcare domain"],
-          examples: ["Example 1", "Example 2"]
-        })
+          examples: ["Example 1", "Example 2"],
+          context: []})
 
         const output = renderStructuredPrompt(prompt)
 
@@ -77,8 +77,8 @@ describe("PromptDoc", () => {
         const prompt = StructuredPrompt.make({
           system: ["System instruction"],
           user: [],
-          examples: []
-        })
+          examples: [],
+          context: []})
 
         const output = renderStructuredPrompt(prompt)
 
@@ -92,8 +92,8 @@ describe("PromptDoc", () => {
         const prompt = StructuredPrompt.make({
           system: [],
           user: [],
-          examples: []
-        })
+          examples: [],
+          context: []})
 
         const output = renderStructuredPrompt(prompt)
         expect(output).toBe("")
@@ -104,8 +104,8 @@ describe("PromptDoc", () => {
         const prompt = StructuredPrompt.make({
           system: ["First instruction", "Second instruction"],
           user: [],
-          examples: []
-        })
+          examples: [],
+          context: []})
 
         const output = renderStructuredPrompt(prompt)
 
@@ -118,8 +118,8 @@ describe("PromptDoc", () => {
         const prompt = StructuredPrompt.make({
           system: [],
           user: ["Context 1", "Context 2"],
-          examples: []
-        })
+          examples: [],
+          context: []})
 
         const output = renderStructuredPrompt(prompt)
 
@@ -134,8 +134,8 @@ describe("PromptDoc", () => {
         const prompt = StructuredPrompt.make({
           system: [],
           user: [],
-          examples: ["Example 1", "Example 2"]
-        })
+          examples: ["Example 1", "Example 2"],
+          context: []})
 
         const output = renderStructuredPrompt(prompt)
 
@@ -150,8 +150,8 @@ describe("PromptDoc", () => {
         const prompt = StructuredPrompt.make({
           system: ["System instruction"],
           user: [],
-          examples: []
-        })
+          examples: [],
+          context: []})
 
         const output = renderExtractionPrompt(prompt, "Alice is a patient.")
 
@@ -166,8 +166,8 @@ describe("PromptDoc", () => {
         const prompt = StructuredPrompt.make({
           system: [],
           user: [],
-          examples: []
-        })
+          examples: [],
+          context: []})
 
         const output = renderExtractionPrompt(prompt, "Test text.")
 
@@ -184,8 +184,8 @@ describe("PromptDoc", () => {
         const prompt = StructuredPrompt.make({
           system: ["instruction 1", "instruction 2"],
           user: ["context 1", "context 2"],
-          examples: ["example 1", "example 2"]
-        })
+          examples: ["example 1", "example 2"],
+          context: []})
 
         const text = "Test text"
         const reference = buildPromptText_REFERENCE(prompt, text)
@@ -199,8 +199,8 @@ describe("PromptDoc", () => {
         const prompt = StructuredPrompt.make({
           system: ["instruction 1", "instruction 2"],
           user: [],
-          examples: []
-        })
+          examples: [],
+          context: []})
 
         const text = "Test text"
         const reference = buildPromptText_REFERENCE(prompt, text)
@@ -214,8 +214,8 @@ describe("PromptDoc", () => {
         const prompt = StructuredPrompt.make({
           system: [],
           user: ["context 1"],
-          examples: []
-        })
+          examples: [],
+          context: []})
 
         const text = "Test text"
         const reference = buildPromptText_REFERENCE(prompt, text)
@@ -229,8 +229,8 @@ describe("PromptDoc", () => {
         const prompt = StructuredPrompt.make({
           system: [],
           user: [],
-          examples: []
-        })
+          examples: [],
+          context: []})
 
         const text = "Test text"
         const reference = buildPromptText_REFERENCE(prompt, text)
@@ -254,7 +254,8 @@ describe("PromptDoc", () => {
           examples: [
             "Input: John has diabetes\nOutput: {\"entities\": [...]}",
             "Input: Mary takes aspirin\nOutput: {\"entities\": [...]}"
-          ]
+          ],
+          context: []
         })
 
         const text = "Alice is a 45-year-old patient with hypertension."
@@ -269,8 +270,8 @@ describe("PromptDoc", () => {
         const prompt = StructuredPrompt.make({
           system: ["Instruction with \"quotes\" and 'apostrophes'"],
           user: ["Context with tabs:\there"],
-          examples: ["Example\nwith\nnewlines"]
-        })
+          examples: ["Example\nwith\nnewlines"],
+          context: []})
 
         const text = "Text with special chars: @#$%"
         const reference = buildPromptText_REFERENCE(prompt, text)
@@ -286,8 +287,8 @@ describe("PromptDoc", () => {
         const prompt = StructuredPrompt.make({
           system: ["single"],
           user: ["single"],
-          examples: ["single"]
-        })
+          examples: ["single"],
+          context: []})
 
         const text = "text"
         const reference = buildPromptText_REFERENCE(prompt, text)
@@ -301,8 +302,8 @@ describe("PromptDoc", () => {
         const prompt = StructuredPrompt.make({
           system: ["", "instruction"],
           user: ["context", ""],
-          examples: []
-        })
+          examples: [],
+          context: []})
 
         const text = "text"
         const reference = buildPromptText_REFERENCE(prompt, text)
@@ -316,8 +317,8 @@ describe("PromptDoc", () => {
         const prompt = StructuredPrompt.make({
           system: ["instruction"],
           user: [],
-          examples: []
-        })
+          examples: [],
+          context: []})
 
         const text = ""
         const reference = buildPromptText_REFERENCE(prompt, text)

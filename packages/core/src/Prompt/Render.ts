@@ -178,7 +178,8 @@ export const renderToStructuredPrompt = (
   return StructuredPrompt.make({
     system,
     user: [],
-    examples: []
+    examples: [],
+    context: []
   })
 }
 

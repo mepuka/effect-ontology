@@ -73,7 +73,8 @@ export const defaultPromptAlgebra: PromptAlgebra = (
     return StructuredPrompt.make({
       system: systemSection,
       user: childrenPrompt.user,
-      examples: childrenPrompt.examples
+      examples: childrenPrompt.examples,
+      context: childrenPrompt.context
     })
   }
 
@@ -92,7 +93,8 @@ export const defaultPromptAlgebra: PromptAlgebra = (
     return StructuredPrompt.make({
       system: [propertyDefinition, ...childrenPrompt.system],
       user: childrenPrompt.user,
-      examples: childrenPrompt.examples
+      examples: childrenPrompt.examples,
+      context: childrenPrompt.context
     })
   }
 
@@ -124,7 +126,8 @@ export const processUniversalProperties = (
   return StructuredPrompt.make({
     system: [universalSection],
     user: [],
-    examples: []
+    examples: [],
+    context: []
   })
 }
 
