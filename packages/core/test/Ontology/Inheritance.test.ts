@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Graph, HashMap, HashSet , Data} from "effect"
+import { Data, Effect, Graph, HashMap, HashSet, Option } from "effect"
 import { PropertyConstraint } from "../../src/Graph/Constraint.js"
 import { ClassNode, type OntologyContext } from "../../src/Graph/Types.js"
 import * as Inheritance from "../../src/Ontology/Inheritance.js"
@@ -402,13 +402,27 @@ function buildWithProperties() {
   const classPerson = ClassNode.make({
     id: "http://example.org/Person",
     label: "Person",
-    properties: [PropertyConstraint.make({ propertyIri: "http://example.org/hasName", label: "hasName", ranges: Data.array(["string"]) })]
+    properties: [
+      PropertyConstraint.make({
+        propertyIri: "http://example.org/hasName",
+        label: "hasName",
+        ranges: Data.array(["string"]),
+        maxCardinality: Option.none()
+      })
+    ]
   })
 
   const classEmployee = ClassNode.make({
     id: "http://example.org/Employee",
     label: "Employee",
-    properties: [PropertyConstraint.make({ propertyIri: "http://example.org/hasSalary", label: "hasSalary", ranges: Data.array(["integer"]) })]
+    properties: [
+      PropertyConstraint.make({
+        propertyIri: "http://example.org/hasSalary",
+        label: "hasSalary",
+        ranges: Data.array(["integer"]),
+        maxCardinality: Option.none()
+      })
+    ]
   })
 
   let nodes = HashMap.empty<string, ClassNode>()
@@ -442,19 +456,40 @@ function buildMultiLevelProperties() {
   const classPerson = ClassNode.make({
     id: "http://example.org/Person",
     label: "Person",
-    properties: [PropertyConstraint.make({ propertyIri: "http://example.org/hasName", label: "hasName", ranges: Data.array(["string"]) })]
+    properties: [
+      PropertyConstraint.make({
+        propertyIri: "http://example.org/hasName",
+        label: "hasName",
+        ranges: Data.array(["string"]),
+        maxCardinality: Option.none()
+      })
+    ]
   })
 
   const classEmployee = ClassNode.make({
     id: "http://example.org/Employee",
     label: "Employee",
-    properties: [PropertyConstraint.make({ propertyIri: "http://example.org/hasSalary", label: "hasSalary", ranges: Data.array(["integer"]) })]
+    properties: [
+      PropertyConstraint.make({
+        propertyIri: "http://example.org/hasSalary",
+        label: "hasSalary",
+        ranges: Data.array(["integer"]),
+        maxCardinality: Option.none()
+      })
+    ]
   })
 
   const classManager = ClassNode.make({
     id: "http://example.org/Manager",
     label: "Manager",
-    properties: [PropertyConstraint.make({ propertyIri: "http://example.org/hasTeamSize", label: "hasTeamSize", ranges: Data.array(["integer"]) })]
+    properties: [
+      PropertyConstraint.make({
+        propertyIri: "http://example.org/hasTeamSize",
+        label: "hasTeamSize",
+        ranges: Data.array(["integer"]),
+        maxCardinality: Option.none()
+      })
+    ]
   })
 
   let nodes = HashMap.empty<string, ClassNode>()

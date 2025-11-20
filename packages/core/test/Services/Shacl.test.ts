@@ -8,10 +8,11 @@
  */
 
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, HashMap , Data} from "effect"
+import { Effect, HashMap, Data, Option } from "effect"
 import { Parser, Store } from "n3"
 import SHACLValidator from "rdf-validate-shacl"
 import { ShaclError } from "../../src/Extraction/Events.js"
+import { PropertyConstraint } from "../../src/Graph/Constraint.js"
 import { ClassNode, type OntologyContext } from "../../src/Graph/Types.js"
 import { rdfEnvironment } from "../../src/Services/RdfEnvironment.js"
 import { ShaclService } from "../../src/Services/Shacl.js"
@@ -374,16 +375,18 @@ describe("ShaclService", () => {
           id: "http://xmlns.com/foaf/0.1/Person",
           label: "Person",
           properties: [
-            {
+            PropertyConstraint.make({
               propertyIri: "http://xmlns.com/foaf/0.1/name",
               label: "name",
-              ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"])
-            },
-            {
+              ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"]),
+              maxCardinality: Option.none()
+            }),
+            PropertyConstraint.make({
               propertyIri: "http://xmlns.com/foaf/0.1/age",
               label: "age",
-              ranges: Data.array(["http://www.w3.org/2001/XMLSchema#integer"])
-            }
+              ranges: Data.array(["http://www.w3.org/2001/XMLSchema#integer"]),
+              maxCardinality: Option.none()
+            })
           ]
         })
 
@@ -422,11 +425,12 @@ describe("ShaclService", () => {
           id: "http://example.org/Person",
           label: "Person",
           properties: [
-            {
+            PropertyConstraint.make({
               propertyIri: "http://example.org/knows",
               label: "knows",
-              ranges: Data.array(["http://example.org/Person"]) // Object property - range is a class
-            }
+              ranges: Data.array(["http://example.org/Person"]), // Object property - range is a class
+              maxCardinality: Option.none()
+            })
           ]
         })
 
@@ -457,11 +461,12 @@ describe("ShaclService", () => {
           id: "http://example.org/Person",
           label: "Person",
           properties: [
-            {
+            PropertyConstraint.make({
               propertyIri: "http://example.org/name",
               label: "name",
-              ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"])
-            }
+              ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"]),
+              maxCardinality: Option.none()
+            })
           ]
         })
 
@@ -469,11 +474,12 @@ describe("ShaclService", () => {
           id: "http://example.org/Organization",
           label: "Organization",
           properties: [
-            {
+            PropertyConstraint.make({
               propertyIri: "http://example.org/orgName",
               label: "organization name",
-              ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"])
-            }
+              ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"]),
+              maxCardinality: Option.none()
+            })
           ]
         })
 
@@ -539,27 +545,30 @@ describe("ShaclService", () => {
           id: "http://example.org/Person",
           label: "Person",
           properties: [
-            {
+            PropertyConstraint.make({
               propertyIri: "http://example.org/name",
               label: "name",
-              ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"])
-            }
+              ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"]),
+              maxCardinality: Option.none()
+            })
           ]
         })
 
         const ontology: OntologyContext = {
           nodes: HashMap.set(HashMap.empty(), personClass.id, personClass),
           universalProperties: [
-            {
+            PropertyConstraint.make({
               propertyIri: "http://purl.org/dc/terms/created",
               label: "created",
-              ranges: Data.array(["http://www.w3.org/2001/XMLSchema#dateTime"])
-            },
-            {
+              ranges: Data.array(["http://www.w3.org/2001/XMLSchema#dateTime"]),
+              maxCardinality: Option.none()
+            }),
+            PropertyConstraint.make({
               propertyIri: "http://purl.org/dc/terms/creator",
               label: "creator",
-              ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"])
-            }
+              ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"]),
+              maxCardinality: Option.none()
+            })
           ],
           nodeIndexMap: HashMap.empty(),
           disjointWithMap: HashMap.empty()

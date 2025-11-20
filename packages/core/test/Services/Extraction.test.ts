@@ -6,7 +6,8 @@
 
 import { LanguageModel } from "@effect/ai"
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Graph, HashMap, Layer, Stream , Data} from "effect"
+import { Effect, Graph, HashMap, Layer, Stream, Data, Option } from "effect"
+import { PropertyConstraint } from "../../src/Graph/Constraint.js"
 import { ClassNode, type NodeId, type OntologyContext } from "../../src/Graph/Types.js"
 import type { KnowledgeGraph } from "../../src/Schema/Factory.js"
 import { ExtractionPipeline } from "../../src/Services/Extraction.js"
@@ -24,11 +25,12 @@ describe("Services.Extraction", () => {
           id: "http://xmlns.com/foaf/0.1/Person",
           label: "Person",
           properties: [
-            {
+            PropertyConstraint.make({
               propertyIri: "http://xmlns.com/foaf/0.1/name",
               label: "name",
-              ranges: Data.array(["xsd:string"])
-            }
+              ranges: Data.array(["xsd:string"]),
+              maxCardinality: Option.none()
+            })
           ]
         })
       ]

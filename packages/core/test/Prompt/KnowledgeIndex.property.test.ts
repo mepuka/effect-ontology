@@ -7,9 +7,9 @@
  */
 
 import { describe, expect, test } from "@effect/vitest"
-import { Equal } from "effect"
+import { Equal, Data, Option } from "effect"
 import fc from "fast-check"
-import type { PropertyConstraint } from "../../src/Graph/Constraint.js"
+import { PropertyConstraint } from "../../src/Graph/Constraint.js"
 import { KnowledgeUnit } from "../../src/Prompt/Ast.js"
 import * as KnowledgeIndex from "../../src/Prompt/KnowledgeIndex.js"
 
@@ -25,28 +25,28 @@ const arbIri = fc.webUrl({ withFragments: true })
 /**
  * Generate random property data
  */
-const arbPropertyData: fc.Arbitrary<PropertyData> = fc.record({
+const arbPropertyConstraint: fc.Arbitrary<PropertyConstraint> = fc.record({
   propertyIri: arbIri,
   label: fc.string({ minLength: 1, maxLength: 50 }),
-  range: fc.oneof(
+  ranges: fc.array(fc.oneof(
     fc.constant("string"),
     fc.constant("integer"),
     fc.constant("boolean"),
     fc.constant("float"),
     arbIri
-  )
-})
+  ), { minLength: 1, maxLength: 3 })
+}).map(data => PropertyConstraint.make({ ...data, ranges: Data.array(data.ranges), maxCardinality: Option.none() }))
 
 /**
  * Generate random KnowledgeUnit
  */
 const arbKnowledgeUnit: fc.Arbitrary<KnowledgeUnit> = fc
   .record({
-    propertyIri: arbIri,
+    iri: arbIri,
     label: fc.string({ minLength: 1, maxLength: 100 }),
     definition: fc.string({ minLength: 1, maxLength: 500 }),
-    properties: fc.array(arbPropertyData, { maxLength: 10 }),
-    inheritedProperties: fc.array(arbPropertyData, { maxLength: 10 }),
+    properties: fc.array(arbPropertyConstraint, { maxLength: 10 }),
+    inheritedProperties: fc.array(arbPropertyConstraint, { maxLength: 10 }),
     children: fc.array(arbIri, { maxLength: 5 }),
     parents: fc.array(arbIri, { maxLength: 5 })
   })

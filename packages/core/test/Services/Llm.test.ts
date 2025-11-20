@@ -5,7 +5,8 @@
  */
 
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, HashMap, Layer , Data} from "effect"
+import { Effect, HashMap, Layer, Data, Option } from "effect"
+import { PropertyConstraint } from "../../src/Graph/Constraint.js"
 import { ClassNode } from "../../src/Graph/Types"
 import type { OntologyContext } from "../../src/Graph/Types"
 import { StructuredPrompt } from "../../src/Prompt/Types"
@@ -22,26 +23,29 @@ describe("Services.Llm", () => {
           id: "http://xmlns.com/foaf/0.1/Person",
           label: "Person",
           properties: [
-            {
+            PropertyConstraint.make({
               propertyIri: "http://xmlns.com/foaf/0.1/name",
               label: "name",
-              ranges: Data.array(["xsd:string"])
-            },
-            {
+              ranges: Data.array(["xsd:string"]),
+              maxCardinality: Option.none()
+            }),
+            PropertyConstraint.make({
               propertyIri: "http://xmlns.com/foaf/0.1/knows",
               label: "knows",
-              ranges: Data.array(["http://xmlns.com/foaf/0.1/Person"])
-            }
+              ranges: Data.array(["http://xmlns.com/foaf/0.1/Person"]),
+              maxCardinality: Option.none()
+            })
           ]
         })
       ]
     ]),
     universalProperties: [
-      {
+      PropertyConstraint.make({
         propertyIri: "http://purl.org/dc/terms/description",
         label: "description",
-        ranges: Data.array(["xsd:string"])
-      }
+        ranges: Data.array(["xsd:string"]),
+        maxCardinality: Option.none()
+      })
     ],
     nodeIndexMap: HashMap.empty(),
     disjointWithMap: HashMap.empty()
@@ -90,11 +94,12 @@ describe("Services.Llm", () => {
                 id: "http://example.org/A",
                 label: "A",
                 properties: [
-                  {
+                  PropertyConstraint.make({
                     propertyIri: "http://example.org/prop",
                     label: "prop",
-                    ranges: Data.array(["xsd:string"])
-                  }
+                    ranges: Data.array(["xsd:string"]),
+                    maxCardinality: Option.none()
+                  })
                 ]
               })
             ],
@@ -104,11 +109,12 @@ describe("Services.Llm", () => {
                 id: "http://example.org/B",
                 label: "B",
                 properties: [
-                  {
+                  PropertyConstraint.make({
                     propertyIri: "http://example.org/prop",
                     label: "prop",
-                    ranges: Data.array(["xsd:string"])
-                  }
+                    ranges: Data.array(["xsd:string"]),
+                    maxCardinality: Option.none()
+                  })
                 ]
               })
             ]
