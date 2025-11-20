@@ -323,8 +323,8 @@ export const jsonSchemaAtom = runtime.atom((get) =>
         
         // Collect property IRIs from node properties
         for (const prop of node.properties) {
-          if (!propertyIris.includes(prop.iri)) {
-            propertyIris.push(prop.iri)
+          if (!propertyIris.includes(prop.propertyIri)) {
+            propertyIris.push(prop.propertyIri)
           }
         }
       }
@@ -332,8 +332,8 @@ export const jsonSchemaAtom = runtime.atom((get) =>
 
     // Add universal properties
     for (const prop of context.universalProperties) {
-      if (!propertyIris.includes(prop.iri)) {
-        propertyIris.push(prop.iri)
+      if (!propertyIris.includes(prop.propertyIri)) {
+        propertyIris.push(prop.propertyIri)
       }
     }
 

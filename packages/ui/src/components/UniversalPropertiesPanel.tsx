@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion"
 import { Sparkles, X, Info } from "lucide-react"
 import { useState } from "react"
-import type { PropertyData } from "@effect-ontology/core/Graph/Types"
+import type { PropertyConstraint } from "@effect-ontology/core/Graph/Constraint"
 
 /**
  * UniversalPropertiesPanel - Interactive overlay for domain-agnostic properties
@@ -16,7 +16,7 @@ export const UniversalPropertiesPanel = ({
   universalProperties,
   className
 }: {
-  universalProperties: PropertyData[]
+  universalProperties: PropertyConstraint[]
   className?: string
 }): React.ReactElement | null => {
   const [isExpanded, setIsExpanded] = useState(false)
@@ -122,7 +122,7 @@ export const UniversalPropertiesPanel = ({
                         key={idx}
                         property={prop}
                         index={idx}
-                        isHovered={hoveredProperty === prop.iri}
+                        isHovered={hoveredProperty === prop.propertyIri}
                         onHover={(iri) => setHoveredProperty(iri)}
                         onLeave={() => setHoveredProperty(null)}
                       />
@@ -163,20 +163,20 @@ const UniversalPropertyCard = ({
   onHover,
   onLeave
 }: {
-  property: PropertyData
+  property: PropertyConstraint
   index: number
   isHovered: boolean
   onHover: (iri: string) => void
   onLeave: () => void
 }) => {
-  const rangeLabel = extractLabel(property.range)
+  const rangeLabel = extractLabel(property.ranges[0])
 
   return (
     <motion.div
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: index * 0.05 }}
-      onMouseEnter={() => onHover(property.iri)}
+      onMouseEnter={() => onHover(property.propertyIri)}
       onMouseLeave={onLeave}
       className={`
         relative overflow-hidden rounded-lg border-2 p-4
@@ -226,13 +226,13 @@ const UniversalPropertyCard = ({
         </div>
 
         <div className="text-xs font-mono text-slate-500 break-all mb-2">
-          {property.iri}
+          {property.propertyIri}
         </div>
 
         <div className="flex items-center gap-2 text-xs">
           <span className="text-slate-500">Range:</span>
           <span className="font-semibold text-violet-600">
-            {property.range}
+            {property.ranges[0]}
           </span>
         </div>
 

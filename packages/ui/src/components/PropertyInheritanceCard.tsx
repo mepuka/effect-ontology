@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion"
 import { Layers, ChevronDown, ChevronUp, Database, Link2 } from "lucide-react"
 import { useState } from "react"
-import type { PropertyData } from "@effect-ontology/core/Graph/Types"
+import type { PropertyConstraint } from "@effect-ontology/core/Graph/Constraint"
 import type { KnowledgeUnit } from "@effect-ontology/core/Prompt"
 
 /**
@@ -19,7 +19,7 @@ export const PropertyInheritanceCard = ({
   className
 }: {
   unit: KnowledgeUnit
-  universalProperties: ReadonlyArray<PropertyData>
+  universalProperties: ReadonlyArray<PropertyConstraint>
   className?: string
 }): React.ReactElement => {
   const [showInherited, setShowInherited] = useState(true)
@@ -119,7 +119,7 @@ const PropertySection = ({
 }: {
   title: string
   subtitle: string
-  properties: ReadonlyArray<PropertyData>
+  properties: ReadonlyArray<PropertyConstraint>
   color: 'blue' | 'violet' | 'amber'
   icon: React.ReactNode
   defaultExpanded: boolean
@@ -229,10 +229,10 @@ const PropertyCard = ({
   property,
   stackLayer
 }: {
-  property: PropertyData
+  property: PropertyConstraint
   stackLayer: number
 }) => {
-  const rangeLabel = extractLabel(property.range)
+  const rangeLabel = extractLabel(property.ranges[0])
 
   return (
     <motion.div
@@ -251,12 +251,12 @@ const PropertyCard = ({
       </div>
 
       <div className="text-xs font-mono text-slate-400 break-all">
-        {property.iri}
+        {property.propertyIri}
       </div>
 
       {/* Range info */}
       <div className="mt-2 text-xs text-slate-500">
-        Range: <span className="font-semibold">{property.range}</span>
+        Range: <span className="font-semibold">{property.ranges[0]}</span>
       </div>
     </motion.div>
   )
