@@ -14,6 +14,23 @@
  * N3.Store is a pure in-memory structure with no cleanup needed.
  * Creating fresh stores per operation provides isolation and simplicity.
  *
+ * **Datatype Inference:**
+ * When an OntologyContext is provided to jsonToStore(), the service infers
+ * XSD datatypes from property ranges. This preserves semantic type information
+ * (integers, booleans, dates, etc.) in the generated RDF.
+ *
+ * Supported datatypes: xsd:boolean, xsd:integer, xsd:decimal, xsd:double,
+ * xsd:date, xsd:dateTime, xsd:string
+ *
+ * Multi-range resolution priority: boolean > integer > decimal > double >
+ * date > dateTime > string
+ *
+ * Falls back to xsd:string when:
+ * - No ontology provided
+ * - Property not found in ontology
+ * - No XSD datatypes in ranges
+ * - Ranges mix object classes and datatypes
+ *
  * @module Services/Rdf
  * @since 1.0.0
  */
