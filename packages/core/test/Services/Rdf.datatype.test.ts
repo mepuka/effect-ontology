@@ -639,4 +639,135 @@ describe("Services.Rdf - Datatype Inference", () => {
         )
       }).pipe(Effect.provide(RdfService.Default)))
   })
+
+  describe("Universal Property Inference", () => {
+    it.effect("should infer datatype from universal properties (e.g., Dublin Core)", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        // Dublin Core properties have no rdfs:domain, only ranges
+        const ontology: OntologyContext = {
+          ...OntologyContext.empty(),
+          universalProperties: [
+            PropertyConstraint.make({
+              propertyIri: "http://purl.org/dc/terms/created",
+              ranges: Data.array(["xsd:dateTime"]),
+              maxCardinality: Option.none()
+            }),
+            PropertyConstraint.make({
+              propertyIri: "http://purl.org/dc/terms/title",
+              ranges: Data.array(["xsd:string"]),
+              maxCardinality: Option.none()
+            })
+          ]
+        }
+
+        const graph: KnowledgeGraph = {
+          entities: [
+            {
+              "@id": "http://example.org/document",
+              "@type": "http://xmlns.com/foaf/0.1/Document",
+              properties: [
+                {
+                  predicate: "http://purl.org/dc/terms/created",
+                  object: "2025-11-20T10:00:00Z"
+                },
+                {
+                  predicate: "http://purl.org/dc/terms/title",
+                  object: "My Document"
+                }
+              ]
+            }
+          ]
+        }
+
+        const store = yield* rdf.jsonToStore(graph, ontology)
+
+        const createdTriples = store.getQuads(
+          null,
+          "http://purl.org/dc/terms/created",
+          null,
+          null
+        )
+        expect(createdTriples).toHaveLength(1)
+        const createdLiteral = createdTriples[0].object as N3.Literal
+        expect(createdLiteral.datatype.value).toBe(
+          "http://www.w3.org/2001/XMLSchema#dateTime"
+        )
+
+        const titleTriples = store.getQuads(
+          null,
+          "http://purl.org/dc/terms/title",
+          null,
+          null
+        )
+        expect(titleTriples).toHaveLength(1)
+        const titleLiteral = titleTriples[0].object as N3.Literal
+        expect(titleLiteral.datatype.value).toBe(
+          "http://www.w3.org/2001/XMLSchema#string"
+        )
+      }).pipe(Effect.provide(RdfService.Default)))
+
+    it.effect("should prefer class-specific property over universal when both exist", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        // Universal says xsd:string, class-specific says xsd:integer
+        const ontology: OntologyContext = {
+          ...OntologyContext.empty(),
+          nodes: HashMap.make([
+            "http://example.org/SpecialThing",
+            ClassNode.make({
+              id: "http://example.org/SpecialThing",
+              label: "SpecialThing",
+              properties: [
+                PropertyConstraint.make({
+                  propertyIri: "http://example.org/value",
+                  ranges: Data.array(["xsd:integer"]), // More specific
+                  maxCardinality: Option.none()
+                })
+              ]
+            })
+          ]),
+          universalProperties: [
+            PropertyConstraint.make({
+              propertyIri: "http://example.org/value",
+              ranges: Data.array(["xsd:string"]), // Generic
+              maxCardinality: Option.none()
+            })
+          ]
+        }
+
+        const graph: KnowledgeGraph = {
+          entities: [
+            {
+              "@id": "http://example.org/thing1",
+              "@type": "http://example.org/SpecialThing",
+              properties: [
+                { predicate: "http://example.org/value", object: "42" }
+              ]
+            }
+          ]
+        }
+
+        const store = yield* rdf.jsonToStore(graph, ontology)
+
+        const valueTriples = store.getQuads(
+          null,
+          "http://example.org/value",
+          null,
+          null
+        )
+
+        expect(valueTriples).toHaveLength(1)
+        const literal = valueTriples[0].object as N3.Literal
+
+        // Should NOT use universal xsd:string
+        // Current implementation checks universal FIRST, which is wrong
+        // After fix, should use class-specific xsd:integer
+        expect(literal.datatype.value).toBe(
+          "http://www.w3.org/2001/XMLSchema#integer"
+        )
+      }).pipe(Effect.provide(RdfService.Default)))
+  })
 })
