@@ -330,7 +330,7 @@ const ProviderConfigSection = ({
       <div>
         <label className="block text-xs font-medium text-slate-600 mb-1">
           Temperature
-          <span className="text-slate-500 ml-1">({config.temperature.toFixed(1)})</span>
+          <span className="text-slate-500 ml-1">({config.temperature?.toFixed(1)})</span>
         </label>
         <input
           type="range"

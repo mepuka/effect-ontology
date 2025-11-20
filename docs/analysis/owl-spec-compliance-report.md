@@ -503,31 +503,34 @@ This section summarizes the **actual implemented algorithms** and their **tested
 **Tests:** `packages/core/test/Graph/Builder.test.ts`, `RestrictionParser.test.ts`, `RestrictionParser.property.test.ts`
 
 - **Parsing strategy**
+
   - Uses `N3.Parser` and `N3.Store` to materialize the RDF graph.
   - Treats **named OWL classes** as graph nodes:
     - Quads with `rdf:type owl:Class` form the set of nodes.
     - Labels are resolved via `rdfs:label` when present; otherwise the local fragment or full IRI is used.
   - **Edges** represent `rdfs:subClassOf`:
     - For `A rdfs:subClassOf B`, builder creates an edge `A → B`.
-    - This orientation matches the engineering spec: *child depends on parent*; parents aggregate children’s results.
+    - This orientation matches the engineering spec: _child depends on parent_; parents aggregate children’s results.
 
 - **OntologyContext layout**
-  - `nodes: HashMap<NodeId, OntologyNode>`  
+
+  - `nodes: HashMap<NodeId, OntologyNode>`
     - Currently populated with `ClassNode` instances (properties attached to classes), not separate property nodes.
-  - `universalProperties: PropertyConstraint[]`  
+  - `universalProperties: PropertyConstraint[]`
     - Properties with **no `rdfs:domain`** are collected here (e.g., Dublin Core).
     - Builder tests verify:
       - Dublin Core: all properties end up in `universalProperties`, none attached to classes.
       - FOAF: no universal properties; all properties are domain-scoped.
-  - `nodeIndexMap: HashMap<NodeId, number>`  
+  - `nodeIndexMap: HashMap<NodeId, number>`
     - Bijection between class IRIs and internal `Graph.NodeIndex`.
     - All graph algorithms use this for IRI ↔ index conversion.
-  - `disjointWithMap: HashMap<NodeId, HashSet<NodeId>>`  
+  - `disjointWithMap: HashMap<NodeId, HashSet<NodeId>>`
     - Stores **bidirectional** `owl:disjointWith`:
       - For `A disjointWith B`, builder inserts both `A → B` and `B → A` entries.
     - Later used by `InheritanceService.areDisjoint`.
 
 - **Properties and restrictions**
+
   - Object/datatype properties:
     - Quads with `rdf:type owl:ObjectProperty` or `owl:DatatypeProperty`.
     - `rdfs:range` becomes the initial `ranges` for `PropertyConstraint`.
@@ -576,6 +579,7 @@ This section summarizes the **actual implemented algorithms** and their **tested
 **Tests:** `Ontology/Constraint.property.test.ts` (property-based + unit)
 
 - **Semantic fields vs metadata**
+
   - Fields participating in semantic equality:
     - `propertyIri`
     - `ranges: DataArray<string>`
@@ -588,6 +592,7 @@ This section summarizes the **actual implemented algorithms** and their **tested
   - `semanticEquals` uses `Equal.equals` on Data arrays and `Option` to compare semantic fields only; this is the relation used in lattice law tests.
 
 - **Top (⊤) and Bottom (⊥)**
+
   - `isTop()` holds iff:
     - `ranges` is empty,
     - `minCardinality = 0`,
@@ -599,6 +604,7 @@ This section summarizes the **actual implemented algorithms** and their **tested
     - `PropertyConstraint.bottom(iri, label)` yields an unsatisfiable element with `minCardinality = 1`, `maxCardinality = Some(0)`, `source = "refined"`.
 
 - **Meet operation (⊓) – greatest lower bound**
+
   - **Precondition:** `propertyIri` must match; otherwise `MeetError` is thrown (and surfaced in tests).
   - **Short‑circuit cases:**
     - If `Equal.equals(a, b)`, returns `a` (full structural equality, including metadata).
@@ -636,7 +642,7 @@ This section summarizes the **actual implemented algorithms** and their **tested
     - Combined via set union and sorted, ensuring repeatable results under commutativity/associativity.
 
 - **Refinement relation (⊑)**
-  - Defined as `a ⊑ b` iff `a` is *at least as strict* as `b`:
+  - Defined as `a ⊑ b` iff `a` is _at least as strict_ as `b`:
     - `a.minCardinality ≥ b.minCardinality`.
     - For `maxCardinality`: if both are `Some`, require `a.max ≤ b.max`; if `b.max` is `None`, any `a.max` refines it; if `a.max` is `None` but `b.max` is `Some`, refinement fails.
     - Range refinement:
@@ -656,10 +662,12 @@ This section summarizes the **actual implemented algorithms** and their **tested
 **Tests:** `Ontology/Inheritance.test.ts`, `Ontology/InheritanceCache.test.ts`, `Ontology/InheritanceBenchmark.test.ts`
 
 - **Graph assumptions**
+
   - The class hierarchy is represented as a directed graph with edges `child → parent`.
   - Graphs are assumed acyclic for valid ontologies; cycles are treated as errors by `getAncestors` (see below).
 
 - **Ancestor computation (`getAncestors`)**
+
   - `getAncestorsImpl` performs a DFS up the hierarchy:
     - Maintains:
       - `visited: Set<string>` to avoid recomputation.
@@ -676,6 +684,7 @@ This section summarizes the **actual implemented algorithms** and their **tested
       - `InheritanceBenchmark.test.ts` verifies a 100‑depth chain processes without stack overflow and with correct ancestor counts.
 
 - **Effective properties (`getEffectiveProperties`)**
+
   - Algorithm (`getEffectivePropertiesImpl`):
     1. Fetch the class node and its own `properties` (domain constraints and restriction-derived constraints).
     2. Resolve ancestor IRIs via cached `getAncestors`.
@@ -693,6 +702,7 @@ This section summarizes the **actual implemented algorithms** and their **tested
     - No duplication: lattice idempotence ensures the same constraint encountered via multiple paths (diamond inheritance) collapses to one equivalent constraint.
 
 - **Subclass test (`isSubclass`)**
+
   - `isSubclassImpl(child, parent)`:
     - Reflexive: returns `true` if `child === parent`.
     - Otherwise, gets cached ancestors of `child` and checks if `parent` is among them.
@@ -700,23 +710,24 @@ This section summarizes the **actual implemented algorithms** and their **tested
   - Used by the constraint lattice for semantic range refinement.
 
 - **Disjointness (`areDisjoint`)**
+
   - Three-valued result:
     - `{ _tag: "Disjoint" }`
     - `{ _tag: "Overlapping" }`
     - `{ _tag: "Unknown" }`
   - Algorithm:
-    1. **Explicit disjointness:**  
+    1. **Explicit disjointness:**
        - Looks up `disjointWithMap[class1]`; if present and contains `class2`, returns `Disjoint`.
-    2. **Transitive disjointness:**  
+    2. **Transitive disjointness:**
        - Computes `ancestors1` and `ancestors2` (cached).
        - Forms `classes1 = [class1, ...ancestors1]`, `classes2 = [class2, ...ancestors2]`.
        - For each `c1 ∈ classes1` with an explicit disjoint set, checks if any `c2 ∈ classes2` is in that set.
        - If so, returns `Disjoint`.
-    3. **Overlap detection:**  
+    3. **Overlap detection:**
        - If `class1` appears in `classes2` or `class2` appears in `classes1`, returns `Overlapping`.
        - This implements the “common subclass” check in the subset of cases where one class is a (possibly transitive) subclass of the other.
        - It does **not** search for arbitrary third classes `D` with `D ⊑ class1` and `D ⊑ class2`; those are conservatively treated as `Unknown` unless implied by ancestor relations and explicit disjointness.
-    4. **Open World default:**  
+    4. **Open World default:**
        - If no explicit or transitive disjointness and no ancestor/descendant overlap is found, returns `Unknown`.
   - Tests assert:
     - Explicit symmetric disjointness.
@@ -737,6 +748,7 @@ This section summarizes the **actual implemented algorithms** and their **tested
 **Tests:** `Prompt/Solver.test.ts`, `Prompt/KnowledgeIndex.property.test.ts`, `Prompt/RealOntologies.test.ts`
 
 - **Topological sort (`topologicalSort`)**
+
   - Checks acyclicity via `Graph.isAcyclic(graph)`; if false, fails with `GraphCycleError`.
   - Implements DFS in terms of `Graph.NodeIndex`:
     - `visit(nodeIndex)` recurses into all neighbors (parents, since edges are `child → parent`) before pushing `nodeIndex` into the `result` list.
@@ -747,6 +759,7 @@ This section summarizes the **actual implemented algorithms** and their **tested
   - **Engineering note:** unlike `getAncestorsImpl`, this DFS is not trampolined; extremely deep graphs could, in principle, hit JS stack limits, but real ontologies in the codebase (FOAF, Dublin Core, org.ttl) are shallow enough that this is not an issue in practice.
 
 - **Graph fold (`solveGraph`)**
+
   - Inputs:
     - `graph: Graph<NodeId, unknown, "directed">` with edges `child → parent`.
     - `context: OntologyContext` providing `nodes` and `nodeIndexMap`.
@@ -774,6 +787,7 @@ This section summarizes the **actual implemented algorithms** and their **tested
       - Explicit tests construct a cycle and verify that `solveGraph` fails with `GraphCycleError` and a diagnostic message mentioning “cyclic”.
 
 - **Prompt algebra and KnowledgeIndex**
+
   - `defaultPromptAlgebra`:
     - For `ClassNode`:
       - Renders a simple definition block:
@@ -946,6 +960,7 @@ Properties:
 This subsection ties OWL‑relevant behavior to **concrete test suites** so that future changes can be validated against their intended invariants.
 
 - **Graph builder & OWL parsing**
+
   - `Graph/Builder.test.ts`:
     - Verifies that:
       - Classes from `zoo.ttl`, `organization.ttl`, `dcterms.ttl`, `foaf.ttl` are all materialized as nodes.
@@ -962,6 +977,7 @@ This subsection ties OWL‑relevant behavior to **concrete test suites** so that
       - Semantic invariants for `someValuesFrom` and `hasValue` (existence and exact‑one semantics) hold under randomized data.
 
 - **Constraint lattice & refinement**
+
   - `Ontology/Constraint.property.test.ts`:
     - Property‑based tests run ~1000 randomized cases per law, asserting:
       - Associativity, commutativity, idempotence, identity (Top), absorption (Bottom).
@@ -972,6 +988,7 @@ This subsection ties OWL‑relevant behavior to **concrete test suites** so that
       - Intuitive examples like `Dog ⊑ Animal` range refinement, `someValuesFrom` adding existence, functional properties via cardinality 1, and Bottom behavior for contradictory min/max.
 
 - **Inheritance & disjointness**
+
   - `Ontology/Inheritance.test.ts`:
     - Validates ancestor resolution on:
       - Linear chains (`D → C → B → A`).
@@ -1014,7 +1031,7 @@ This subsection ties OWL‑relevant behavior to **concrete test suites** so that
 - ❌ Qualified cardinalities and data ranges – not parsed; no tests.
 - ❌ Higher‑order disjointness/group constructs (`owl:AllDisjointClasses`, `owl:AllDisjointProperties`) – not supported; no tests.
 
-**Engineering implication:** All risk identified in Sections 2 and 4 manifests as **absence of parsing and tests**, not as inconsistencies between parser, lattice, and solver for the constructs that *are* supported.
+**Engineering implication:** All risk identified in Sections 2 and 4 manifests as **absence of parsing and tests**, not as inconsistencies between parser, lattice, and solver for the constructs that _are_ supported.
 
 ### 6.3 Recommended Test Cases
 

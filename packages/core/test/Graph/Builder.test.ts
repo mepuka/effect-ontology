@@ -9,7 +9,7 @@ describe("Graph Builder", () => {
   const organizationTurtle = readFileSync(path.join(__dirname, "../../test-data/organization.ttl"), "utf-8")
   const dctermsTurtle = readFileSync(path.join(__dirname, "../../test-data/dcterms.ttl"), "utf-8")
   const foafTurtle = readFileSync(path.join(__dirname, "../../test-data/foaf.ttl"), "utf-8")
-  const foafRdfPath = path.join(__dirname, "../fixtures/ontologies/large-scale/foaf.rdf")
+  const _foafRdfPath = path.join(__dirname, "../fixtures/ontologies/large-scale/foaf.rdf")
 
   it.effect("parses classes from zoo.ttl", () =>
     Effect.gen(function*() {
