@@ -10,13 +10,16 @@
 
 import { LanguageModel } from "@effect/ai"
 import { describe, expect, it } from "@effect/vitest"
-import { Data, Effect, HashMap, Layer, Option } from "effect"
+import { Data, Effect, Graph as EffectGraph, HashMap, Layer, Option } from "effect"
 import { PropertyConstraint } from "../../src/Graph/Constraint.js"
 import { ClassNode } from "../../src/Graph/Types"
-import type { OntologyContext } from "../../src/Graph/Types"
+import type { Graph, OntologyContext } from "../../src/Graph/Types"
 import { EntityDiscoveryServiceLive } from "../../src/Services/EntityDiscovery.js"
 import { streamingExtractionPipeline } from "../../src/Services/ExtractionPipeline.js"
 import { NlpServiceLive } from "../../src/Services/Nlp.js"
+
+// Mock graph for testing (empty directed graph)
+const mockGraph: Graph = EffectGraph.directed()
 
 // Mock ontology context for testing
 const mockOntology: OntologyContext = {
@@ -77,7 +80,7 @@ describe("ExtractionPipeline", () => {
   it.effect("should process text through pipeline", () =>
     Effect.gen(function*() {
       const text = "This is a test sentence. Another sentence here. And a third one."
-      const result = yield* streamingExtractionPipeline(text, mockOntology)
+      const result = yield* streamingExtractionPipeline(text, mockGraph, mockOntology)
 
       // Assert: result is valid Turtle
       expect(result).toContain("@prefix")
@@ -86,7 +89,7 @@ describe("ExtractionPipeline", () => {
 
   it.effect("should handle empty text", () =>
     Effect.gen(function*() {
-      const result = yield* streamingExtractionPipeline("", mockOntology)
+      const result = yield* streamingExtractionPipeline("", mockGraph, mockOntology)
 
       // Should return minimal valid graph
       expect(result).toBeDefined()
@@ -99,7 +102,7 @@ describe("ExtractionPipeline", () => {
       const text = Array(100)
         .fill("This is a test sentence.")
         .join(" ")
-      const result = yield* streamingExtractionPipeline(text, mockOntology)
+      const result = yield* streamingExtractionPipeline(text, mockGraph, mockOntology)
 
       // Assert: multiple entities created and merged
       expect(result).toContain("@prefix")
