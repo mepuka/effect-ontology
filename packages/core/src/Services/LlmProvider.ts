@@ -29,9 +29,57 @@ import { AnthropicClient, AnthropicLanguageModel } from "@effect/ai-anthropic"
 import { GoogleClient, GoogleLanguageModel } from "@effect/ai-google"
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai"
 import { FetchHttpClient } from "@effect/platform"
-import { type Config, Effect, Layer, Option, Redacted } from "effect"
-import type { LlmProviderConfig } from "../Config/index.js"
-import { LlmConfigService } from "../Config/index.js"
+import { Effect, Layer, Redacted } from "effect"
+
+/**
+ * Provider Configuration Types
+ *
+ * Plain data structures for LLM provider configuration.
+ * These are passed as function arguments, not read from Effect Config.
+ *
+ * @since 1.0.0
+ * @category types
+ */
+
+export interface AnthropicConfig {
+  readonly apiKey: string
+  readonly model: string
+  readonly maxTokens?: number
+  readonly temperature?: number
+}
+
+export interface OpenAIConfig {
+  readonly apiKey: string
+  readonly model: string
+  readonly maxTokens?: number
+  readonly temperature?: number
+}
+
+export interface GeminiConfig {
+  readonly apiKey: string
+  readonly model: string
+  readonly maxTokens?: number
+  readonly temperature?: number
+}
+
+export interface OpenRouterConfig {
+  readonly apiKey: string
+  readonly model: string
+  readonly maxTokens?: number
+  readonly temperature?: number
+  readonly siteUrl?: string
+  readonly siteName?: string
+}
+
+export type LlmProvider = "anthropic" | "openai" | "gemini" | "openrouter"
+
+export interface LlmProviderParams {
+  readonly provider: LlmProvider
+  readonly anthropic?: AnthropicConfig
+  readonly openai?: OpenAIConfig
+  readonly gemini?: GeminiConfig
+  readonly openrouter?: OpenRouterConfig
+}
 
 /**
  * Anthropic Client Layer
@@ -120,113 +168,78 @@ export const GoogleClientLive = (apiKey: string) =>
 export const GoogleLanguageModelLive = (model: string) => GoogleLanguageModel.layer({ model })
 
 /**
- * Create LanguageModel layer from provider configuration
+ * Create LanguageModel layer from plain provider parameters
  *
- * Dynamically creates the appropriate provider layer based on config.provider.
- * Composes client and language model layers with explicit types.
+ * Dynamically creates the appropriate provider layer based on params.provider.
+ * Takes plain data as function argument - no Effect Config dependency.
  *
- * @param config - Provider configuration from LlmProviderConfig
+ * @param params - Plain provider parameters
  * @returns Layer providing LanguageModel (with dependencies satisfied)
  *
  * @since 1.0.0
  * @category constructors
+ *
+ * @example
+ * ```typescript
+ * const anthropicParams: LlmProviderParams = {
+ *   provider: "anthropic",
+ *   anthropic: {
+ *     apiKey: "sk-ant-...",
+ *     model: "claude-3-5-sonnet-20241022",
+ *     maxTokens: 4096,
+ *     temperature: 0.0
+ *   }
+ * }
+ *
+ * const layer = makeLlmProviderLayer(anthropicParams)
+ * ```
  */
-export const makeProviderLayer = (config: Config.Config.Success<typeof LlmProviderConfig>) => {
-  switch (config.provider) {
-    case "anthropic": {
-      if (Option.isNone(config.anthropic)) {
-        return Layer.die("Anthropic config is required when provider is 'anthropic'")
-      }
-      const anthropicConfig = Option.getOrThrow(config.anthropic)
+export const makeLlmProviderLayer = (
+  params: LlmProviderParams
+): Layer.Layer<LanguageModel.LanguageModel> => {
+  const providerConfig = params[params.provider]
 
+  if (!providerConfig) {
+    return Layer.die(
+      `No configuration provided for provider: ${params.provider}`
+    )
+  }
+
+  switch (params.provider) {
+    case "anthropic": {
+      const config = providerConfig as AnthropicConfig
       return Layer.provideMerge(
-        AnthropicLanguageModelLive(anthropicConfig.model),
-        AnthropicClientLive(anthropicConfig.apiKey)
+        AnthropicLanguageModelLive(config.model),
+        AnthropicClientLive(config.apiKey)
+      ) as Layer.Layer<LanguageModel.LanguageModel>
+    }
+
+    case "openai": {
+      const config = providerConfig as OpenAIConfig
+      return Layer.provideMerge(
+        OpenAiLanguageModelLive(config.model),
+        OpenAiClientLive(config.apiKey)
       ) as Layer.Layer<LanguageModel.LanguageModel>
     }
 
     case "gemini": {
-      if (Option.isNone(config.gemini)) {
-        return Layer.die("Gemini config is required when provider is 'gemini'")
-      }
-      const geminiConfig = Option.getOrThrow(config.gemini)
-
+      const config = providerConfig as GeminiConfig
       return Layer.provideMerge(
-        GoogleLanguageModelLive(geminiConfig.model),
-        GoogleClientLive(geminiConfig.apiKey)
+        GoogleLanguageModelLive(config.model),
+        GoogleClientLive(config.apiKey)
       )
     }
 
     case "openrouter": {
-      if (Option.isNone(config.openrouter)) {
-        return Layer.die("OpenRouter config is required when provider is 'openrouter'")
-      }
-      const openrouterConfig = Option.getOrThrow(config.openrouter)
-
+      const config = providerConfig as OpenRouterConfig
       return Layer.provideMerge(
-        OpenAiLanguageModelLive(openrouterConfig.model),
-        OpenAiClientLive(openrouterConfig.apiKey, "https://openrouter.ai/api/v1")
+        OpenAiLanguageModelLive(config.model),
+        OpenAiClientLive(config.apiKey, "https://openrouter.ai/api/v1")
       ) as Layer.Layer<LanguageModel.LanguageModel>
     }
 
     default: {
-      return Layer.die(`Unsupported provider: ${(config as { provider: string }).provider}`)
+      return Layer.die(`Unsupported provider: ${params.provider}`)
     }
   }
 }
-
-/**
- * Create LanguageModel layer from LlmConfigService for production use
- *
- * Uses Layer.effect to create a layer that reads from LlmConfigService and
- * provides the appropriate LanguageModel based on the configured provider.
- *
- * @returns Layer providing LanguageModel
- *
- * @since 1.0.0
- * @category constructors
- *
- * @example
- * **Using with extraction pipeline:**
- * ```typescript
- * import { Effect } from "effect"
- * import { makeLlmProviderLayer } from "@effect-ontology/core/Services/LlmProvider"
- * import { LlmService } from "@effect-ontology/core/Services/Llm"
- *
- * const program = Effect.gen(function*() {
- *   const llm = yield* LlmService
- *   const result = yield* llm.extractKnowledgeGraph(
- *     text,
- *     ontology,
- *     prompt,
- *     schema
- *   )
- *   console.log(result.entities)
- * }).pipe(
- *   Effect.provide(LlmService.Default),
- *   Effect.provide(makeLlmProviderLayer())
- * )
- * ```
- *
- * @example
- * **Provider switching via environment:**
- * ```bash
- * # Use Anthropic
- * LLM__PROVIDER=anthropic LLM__ANTHROPIC_API_KEY=sk-ant-... bun run program
- *
- * # Use Gemini
- * LLM__PROVIDER=gemini LLM__GEMINI_API_KEY=... bun run program
- *
- * # Use OpenRouter
- * LLM__PROVIDER=openrouter LLM__OPENROUTER_API_KEY=... bun run program
- * ```
- */
-export const makeLlmProviderLayer = () =>
-  Layer.effect(
-    LanguageModel.LanguageModel,
-    Effect.gen(function*() {
-      const config = yield* LlmConfigService
-      const providerLayer = makeProviderLayer(config)
-      return yield* Effect.provide(LanguageModel.LanguageModel, providerLayer)
-    })
-  ).pipe(Layer.provide(LlmConfigService.Default))
