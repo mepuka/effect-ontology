@@ -14,6 +14,33 @@ import { isClassNode } from "../Graph/Types.js"
 import { formatConstraint } from "../Prompt/ConstraintFormatter.js"
 
 /**
+ * Core RDF/RDFS/OWL annotation properties
+ *
+ * These properties should be available in all extraction schemas
+ * to enable entity deduplication, provenance tracking, and metadata.
+ *
+ * @category constants
+ * @since 1.0.0
+ */
+export const CORE_ANNOTATION_PROPERTIES = [
+  // RDFS Core
+  "http://www.w3.org/2000/01/rdf-schema#label", // Human-readable label
+  "http://www.w3.org/2000/01/rdf-schema#comment", // Description
+  "http://www.w3.org/2000/01/rdf-schema#seeAlso", // Related resources
+
+  // OWL Annotations
+  "http://www.w3.org/2002/07/owl#sameAs", // Identity equivalence
+
+  // Dublin Core (common metadata)
+  "http://purl.org/dc/terms/identifier", // Unique identifier
+  "http://purl.org/dc/terms/source", // Source reference
+
+  // SKOS (concept labeling)
+  "http://www.w3.org/2004/02/skos/core#prefLabel", // Preferred label
+  "http://www.w3.org/2004/02/skos/core#altLabel" // Alternative label
+] as const
+
+/**
  * Error thrown when attempting to create a schema with empty vocabularies
  *
  * @category errors
@@ -246,16 +273,22 @@ export const makeKnowledgeGraphSchema = <
   ontology?: OntologyContext,
   options: SchemaGenerationOptions = {}
 ) => {
+  // Merge ontology properties with core annotations
+  const allPropertyIris = [
+    ...propertyIris,
+    ...CORE_ANNOTATION_PROPERTIES
+  ] as ReadonlyArray<PropertyIRI | typeof CORE_ANNOTATION_PROPERTIES[number]>
+
   // Create union schemas for vocabulary validation
   const ClassUnion = unionFromStringArray(classIris, "classes")
 
   // Strict Mode: Generate Discriminated Union for properties
   if (options.strict && ontology) {
-    if (A.isEmptyReadonlyArray(propertyIris)) {
+    if (A.isEmptyReadonlyArray(allPropertyIris)) {
       throw new EmptyVocabularyError({ type: "properties" })
     }
 
-    const propertySchemas = propertyIris.map((iri) => makeStrictPropertySchema(iri, ontology)) as unknown as [
+    const propertySchemas = allPropertyIris.map((iri) => makeStrictPropertySchema(iri, ontology)) as unknown as [
       S.Schema<any>,
       ...Array<S.Schema<any>>
     ]
@@ -278,8 +311,8 @@ export const makeKnowledgeGraphSchema = <
     })
   }
 
-  // Loose Mode (Default)
-  const PropertyUnion = unionFromStringArray(propertyIris, "properties")
+  // Loose Mode (Default) - use merged properties
+  const PropertyUnion = unionFromStringArray(allPropertyIris, "properties")
   const EntitySchema = makeEntitySchema(ClassUnion, PropertyUnion)
 
   // The top-level schema is just a wrapper with an entities array
@@ -288,7 +321,7 @@ export const makeKnowledgeGraphSchema = <
   }).annotations({
     identifier: "KnowledgeGraph",
     title: "Knowledge Graph Extraction",
-    description: "A collection of entities extracted from text, validated against an ontology"
+    description: "A collection of entities extracted from text, validated against an ontology with core RDF annotations for deduplication"
   })
 }
 

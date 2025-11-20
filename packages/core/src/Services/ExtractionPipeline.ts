@@ -12,7 +12,8 @@
  * 4. Merge with EntityResolution
  */
 
-import { Effect, Graph, Ref, Stream } from "effect"
+import type { Graph } from "effect"
+import { Effect, Ref, Stream } from "effect"
 import type { NodeId, OntologyContext } from "../Graph/Types.js"
 import { knowledgeIndexAlgebra } from "../Prompt/Algebra.js"
 import * as EC from "../Prompt/EntityCache.js"
@@ -106,7 +107,7 @@ export const streamingExtractionPipeline = (
     // 1. Get services
     const nlp = yield* NlpService
     const discovery = yield* EntityDiscoveryService
-    const rdf = RdfService.use()
+    const rdf = yield* RdfService
 
     // 2. Build KnowledgeIndex from ontology graph (static knowledge)
     // Uses catamorphic fold over graph DAG to create queryable index

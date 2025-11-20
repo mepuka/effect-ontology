@@ -89,7 +89,7 @@ const extractEntitiesWithLabels = (store: N3.Store): Array<EntityWithLabel> => {
  * @param iris - Array of IRIs (may contain both named and blank nodes)
  * @returns The canonical IRI
  */
-const selectCanonicalIri = (iris: string[]): string => {
+const selectCanonicalIri = (iris: Array<string>): string => {
   const uniqueIris = [...new Set(iris)]
 
   // Separate named IRIs from blank nodes
@@ -103,6 +103,50 @@ const selectCanonicalIri = (iris: string[]): string => {
 
   // Fall back to blank nodes if no named IRIs
   return blankNodes.sort()[0]
+}
+
+/**
+ * Skolemize blank nodes in a store by adding chunk-specific prefix
+ *
+ * Ensures blank node IDs are unique across merged graphs by adding
+ * provenance-based prefixes (chunk index).
+ *
+ * This prevents blank node collision when merging multiple RDF graphs.
+ * For example, _:b1 from chunk 0 becomes _:chunk_0_b1, and _:b1 from
+ * chunk 1 becomes _:chunk_1_b1, so they remain distinct entities.
+ *
+ * @param store - N3.Store with potentially colliding blank node IDs
+ * @param chunkIndex - Unique chunk identifier for this graph
+ * @returns New store with skolemized blank nodes
+ */
+const skolemizeBlankNodes = (
+  store: N3.Store,
+  chunkIndex: number
+): N3.Store => {
+  const newStore = new N3.Store()
+  const { blankNode, quad } = N3.DataFactory
+
+  // Rewrite all quads with skolemized blank nodes
+  for (const q of store) {
+    const newSubject = q.subject.termType === "BlankNode"
+      ? blankNode(`chunk_${chunkIndex}_${q.subject.value}`)
+      : q.subject
+
+    const newObject = q.object.termType === "BlankNode"
+      ? blankNode(`chunk_${chunkIndex}_${(q.object as N3.BlankNode).value}`)
+      : q.object
+
+    newStore.addQuad(
+      quad(
+        newSubject as N3.Quad_Subject,
+        q.predicate,
+        newObject as N3.Quad_Object,
+        q.graph
+      )
+    )
+  }
+
+  return newStore
 }
 
 /**
@@ -249,24 +293,27 @@ export const mergeGraphsWithResolution = (
       concurrency: 3
     })
 
-    // 2. Merge all stores into one
+    // 2. Skolemize each store BEFORE merging (prevents blank node collision)
+    const skolemizedStores = stores.map((store, idx) => skolemizeBlankNodes(store, idx))
+
+    // 3. Merge skolemized stores (now safe - no collisions!)
     const mergedStore = new N3.Store()
-    for (const store of stores) {
+    for (const store of skolemizedStores) {
       for (const quad of store) {
         mergedStore.addQuad(quad)
       }
     }
 
-    // 3. Extract all entities with labels
+    // 4. Extract all entities with labels
     const entities = extractEntitiesWithLabels(mergedStore)
 
-    // 4. Build IRI mapping (duplicate -> canonical)
+    // 5. Build IRI mapping (duplicate -> canonical)
     const iriMapping = buildIriMapping(entities)
 
-    // 5. Replace IRIs in merged store
+    // 6. Replace IRIs in merged store
     const resolvedStore = replaceIrisInStore(mergedStore, iriMapping)
 
-    // 6. Serialize to Turtle
+    // 7. Serialize to Turtle
     const result = yield* serializeStore(resolvedStore)
 
     return result
