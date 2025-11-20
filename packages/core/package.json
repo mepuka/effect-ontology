@@ -7,6 +7,7 @@
     "./Config": "./src/Config/index.ts",
     "./Graph/Builder": "./src/Graph/Builder.ts",
     "./Graph/Types": "./src/Graph/Types.ts",
+    "./Graph/Constraint": "./src/Graph/Constraint.ts",
     "./Prompt": "./src/Prompt/index.ts",
     "./Schema": "./src/Schema/index.ts",
     "./Schema/Factory": "./src/Schema/Factory.ts",

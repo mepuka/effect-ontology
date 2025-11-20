@@ -71,9 +71,9 @@ export const NodeInspector = (): React.ReactElement | null => {
                   <div className="space-y-3">
                     {node.properties.map((prop, idx) => {
                       const rangeLabel =
-                        prop.range.split("#").pop() ||
-                        prop.range.split("/").pop() ||
-                        prop.range
+                        prop.ranges[0].split("#").pop() ||
+                        prop.ranges[0].split("/").pop() ||
+                        prop.ranges[0]
 
                       return (
                         <div
@@ -83,7 +83,7 @@ export const NodeInspector = (): React.ReactElement | null => {
                           <div className="font-semibold text-slate-900 mb-1">{prop.label}</div>
                           <div className="text-xs text-slate-500 mb-1">Range: {rangeLabel}</div>
                           <div className="text-xs font-mono text-slate-400 break-all">
-                            {prop.iri}
+                            {prop.propertyIri}
                           </div>
                         </div>
                       )
