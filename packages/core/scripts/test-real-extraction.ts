@@ -4,85 +4,53 @@
  * Usage: bun packages/core/scripts/test-real-extraction.ts
  */
 
-import { LanguageModel } from "@effect/ai"
-import { Effect, HashMap, JSONSchema } from "effect"
+import { Effect, HashMap } from "effect"
 import { readFileSync } from "fs"
-import { join } from "path"
+import { dirname, join } from "path"
+import { fileURLToPath } from "url"
 import { parseTurtleToGraph } from "../src/Graph/Builder.js"
 import { knowledgeIndexAlgebra } from "../src/Prompt/Algebra.js"
-import { buildKnowledgeMetadata } from "../src/Prompt/Metadata.js"
+import { renderToStructuredPrompt } from "../src/Prompt/Render.js"
 import { solveToKnowledgeIndex } from "../src/Prompt/Solver.js"
 import { makeKnowledgeGraphSchema } from "../src/Schema/Factory.js"
+import { extractKnowledgeGraph, extractVocabulary } from "../src/Services/Llm.js"
 import type { LlmProviderParams } from "../src/Services/LlmProvider.js"
 import { makeLlmProviderLayer } from "../src/Services/LlmProvider.js"
+import { RdfService } from "../src/Services/Rdf.js"
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
 const loadOntology = (filename: string): string => {
   const path = join(__dirname, "../test/fixtures/ontologies", filename)
   return readFileSync(path, "utf-8")
 }
 
-/**
- * Build extraction prompt with JSON Schema
- */
-const buildExtractionPrompt = (jsonSchema: any, sampleText: string): string => {
-  return `You are extracting structured knowledge from text using the FOAF (Friend of a Friend) ontology.
-
-Your task is to extract entities and relationships from the text and return them as JSON matching this schema:
-
-${JSON.stringify(jsonSchema, null, 2)}
-
-Text to analyze:
-${sampleText}
-
-Important instructions:
-1. Return ONLY valid JSON matching the schema above
-2. Extract all people, organizations, and documents mentioned
-3. Include their properties (names, emails, homepages, etc.)
-4. Include relationships (knows, member, currentProject, etc.)
-5. Use the exact IRIs from the enum values in the schema
-6. For entity @id values, use simple identifiers like "alice", "bob", etc.
-
-Return the JSON now:`
-}
-
 const main = Effect.gen(function*() {
   console.log("=== Real Extraction Test with Anthropic ===\n")
 
-  console.log("✅ Starting extraction\n")
-
-  // Load FOAF ontology
-  console.log("📚 Loading FOAF ontology...")
+  // Step 1: Load and parse ontology
+  console.log("📚 Step 1: Loading FOAF ontology...")
   const foaf = loadOntology("foaf-minimal.ttl")
-  const { context, graph } = yield* parseTurtleToGraph(foaf)
-  const index = yield* solveToKnowledgeIndex(graph, context, knowledgeIndexAlgebra)
-  const metadata = yield* buildKnowledgeMetadata(graph, context, index)
+  const { context: ontology, graph } = yield* parseTurtleToGraph(foaf)
 
-  console.log(`   Classes: ${metadata.stats.totalClasses}`)
-  console.log(`   Properties: ${metadata.stats.totalProperties}`)
+  // Generate knowledge index for prompt
+  const index = yield* solveToKnowledgeIndex(graph, ontology, knowledgeIndexAlgebra)
+  const prompt = renderToStructuredPrompt(index)
 
-  // Extract IRIs
-  const classIRIs = Array.from(HashMap.keys(metadata.classSummaries))
-  const propertyIRIs: Array<string> = []
-  for (const summary of HashMap.values(metadata.classSummaries)) {
-    const unitOption = HashMap.get(index, summary.iri)
-    if (unitOption._tag === "Some") {
-      const unit = unitOption.value
-      for (const prop of unit.properties) {
-        if (!propertyIRIs.includes(prop.iri)) {
-          propertyIRIs.push(prop.iri)
-        }
-      }
-    }
-  }
+  console.log(`   Classes: ${HashMap.size(index)}`)
+  console.log(`   Prompt sections: system=${prompt.system.length}, user=${prompt.user.length}`)
 
-  // Generate JSON Schema
-  console.log("\n🔧 Generating JSON Schema...")
-  const schema = makeKnowledgeGraphSchema(classIRIs as any, propertyIRIs as any)
-  const jsonSchema = JSONSchema.make(schema)
-  const jsonSchemaStr = JSON.stringify(jsonSchema, null, 2)
-  console.log(`   Size: ${(jsonSchemaStr.length / 1024).toFixed(2)} KB`)
+  // Step 2: Extract vocabulary and create schema
+  console.log("\n🔧 Step 2: Extracting vocabulary and creating schema...")
+  const { classIris, propertyIris } = extractVocabulary(ontology)
+  console.log(`   Classes: ${classIris.length}`)
+  console.log(`   Properties: ${propertyIris.length}`)
 
-  // Sample text
+  const schema = makeKnowledgeGraphSchema(classIris as any, propertyIris as any)
+  console.log(`   Schema created: KnowledgeGraph`)
+
+  // Step 3: Sample text to extract from
   const sampleText = `
 Alice Smith is a software engineer who specializes in semantic web technologies.
 She knows Bob Johnson and Carol Williams, both of whom she met at university.
@@ -95,57 +63,62 @@ Alice and Bob are both currently working on a project called "Knowledge Graph Bu
 The project is a collaboration between their companies.
   `.trim()
 
-  console.log("\n📝 Sample text:")
+  console.log("\n📝 Step 3: Sample text:")
   console.log(`   "${sampleText.substring(0, 100)}..."`)
   console.log(`   Length: ${sampleText.length} characters`)
 
-  // Build prompt
-  const prompt = buildExtractionPrompt(jsonSchema, sampleText)
-  console.log(`\n📋 Full prompt:`)
-  console.log(`   Length: ${prompt.length} characters`)
-  console.log(`   JSON Schema: ${((jsonSchemaStr.length / prompt.length) * 100).toFixed(1)}% of prompt`)
-
-  // Get language model
-  console.log("\n🚀 Calling Anthropic API...")
-  console.log("   Model: claude-3-haiku-20240307")
-  console.log("   Temperature: 0.0")
-  console.log("   Max tokens: 4096")
-
-  const model = yield* LanguageModel.LanguageModel
-
-  // Make API call
+  // Step 4: Call LLM with structured output
+  console.log("\n🚀 Step 4: Calling LLM with structured output (generateObject)...")
   const startTime = Date.now()
-  const response = yield* model.generateText({ prompt })
+
+  const knowledgeGraph = yield* extractKnowledgeGraph(
+    sampleText,
+    ontology,
+    prompt,
+    schema
+  )
+
   const duration = Date.now() - startTime
+  console.log(`   ✅ Response received in ${duration}ms`)
 
-  console.log(`\n✅ Response received (${duration}ms)`)
-  console.log(`   Response length: ${response.text.length} characters\n`)
+  // Step 5: Display results
+  console.log("\n📊 Step 5: Extracted Knowledge Graph:")
+  console.log(`   Entities: ${knowledgeGraph.entities.length}`)
 
-  // Display response
-  console.log("=== Extracted Knowledge Graph ===")
-  console.log(response.text)
-  console.log("\n=== End of Response ===\n")
+  for (const entity of knowledgeGraph.entities) {
+    const type = entity["@type"].split("/").pop() || "Unknown"
+    const id = entity["@id"]
+    console.log(`\n   Entity: ${id}`)
+    console.log(`     Type: ${type}`)
+    console.log(`     Properties: ${entity.properties.length}`)
 
-  // Try to parse as JSON
-  try {
-    const parsed = JSON.parse(response.text)
-    console.log("✅ Valid JSON response")
-    console.log(`   Entities extracted: ${parsed.entities?.length || 0}`)
-
-    if (parsed.entities && parsed.entities.length > 0) {
-      console.log("\n📊 Extracted Entities:")
-      for (const entity of parsed.entities) {
-        const type = entity["@type"]?.split("/").pop() || "Unknown"
-        const name = entity.properties?.find((p: any) => p.predicate.includes("name"))?.object || entity["@id"]
-        console.log(`   - ${type}: ${name}`)
-      }
+    for (const prop of entity.properties) {
+      const propName = prop.predicate.split("/").pop()
+      const value = typeof prop.object === "string"
+        ? prop.object
+        : prop.object["@id"]
+      console.log(`       - ${propName}: ${value}`)
     }
-  } catch {
-    console.log("⚠️  Response is not valid JSON")
-    console.log("   This may need prompt refinement")
   }
 
-  console.log("\n=== Test Complete ===\n")
+  // Step 6: Convert to RDF with proper XSD datatypes
+  console.log("\n🔧 Step 6: Converting to RDF with XSD datatype inference...")
+  const rdf = yield* RdfService
+  const store = yield* rdf.jsonToStore(knowledgeGraph, ontology)
+  const turtle = yield* rdf.storeToTurtle(store)
+
+  console.log(`   RDF Store: ${store.size} triples`)
+  console.log(`\n📄 Turtle Output (first 500 chars):\n`)
+  console.log(turtle.substring(0, 500) + "...")
+
+  console.log("\n✅ Test Complete!\n")
+  console.log("Summary:")
+  console.log(`  - Ontology classes: ${classIris.length}`)
+  console.log(`  - Ontology properties: ${propertyIris.length}`)
+  console.log(`  - Entities extracted: ${knowledgeGraph.entities.length}`)
+  console.log(`  - Total properties: ${knowledgeGraph.entities.reduce((sum, e) => sum + e.properties.length, 0)}`)
+  console.log(`  - RDF triples: ${store.size}`)
+  console.log(`  - Duration: ${duration}ms\n`)
 })
 
 // Create provider params from environment variables
@@ -185,6 +158,7 @@ const LanguageModelLayer = makeLlmProviderLayer(providerParams)
 // Run with error handling
 const program = main.pipe(
   Effect.provide(LanguageModelLayer),
+  Effect.provide(RdfService.Default),
   Effect.catchAll((error) =>
     Effect.sync(() => {
       console.error("\n❌ Error:", error)
