@@ -10,7 +10,8 @@
  */
 
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Graph, HashMap, HashSet } from "effect"
+import { Effect, Graph, HashMap, HashSet , Data} from "effect"
+import { PropertyConstraint } from "../../src/Graph/Constraint.js"
 import { ClassNode, type OntologyContext } from "../../src/Graph/Types.js"
 import * as Inheritance from "../../src/Ontology/Inheritance.js"
 import { buildLinearChain, buildTestGraph } from "../fixtures/test-graphs.js"
@@ -145,7 +146,7 @@ describe("InheritanceService", () => {
           "http://example.org/Employee"
         )
 
-        const propIris = effectiveProperties.map((p) => p.iri)
+        const propIris = effectiveProperties.map((p) => p.propertyIri)
         expect(propIris).toContain("http://example.org/hasName")
         expect(propIris).toContain("http://example.org/hasSalary")
         expect(effectiveProperties).toHaveLength(2)
@@ -165,7 +166,7 @@ describe("InheritanceService", () => {
           "http://example.org/Manager"
         )
 
-        const propIris = effectiveProperties.map((p) => p.iri)
+        const propIris = effectiveProperties.map((p) => p.propertyIri)
         expect(propIris).toContain("http://example.org/hasName")
         expect(propIris).toContain("http://example.org/hasSalary")
         expect(propIris).toContain("http://example.org/hasTeamSize")
@@ -401,13 +402,13 @@ function buildWithProperties() {
   const classPerson = ClassNode.make({
     id: "http://example.org/Person",
     label: "Person",
-    properties: [{ iri: "http://example.org/hasName", label: "hasName", range: "string" }]
+    properties: [PropertyConstraint.make({ propertyIri: "http://example.org/hasName", label: "hasName", ranges: Data.array(["string"]) })]
   })
 
   const classEmployee = ClassNode.make({
     id: "http://example.org/Employee",
     label: "Employee",
-    properties: [{ iri: "http://example.org/hasSalary", label: "hasSalary", range: "integer" }]
+    properties: [PropertyConstraint.make({ propertyIri: "http://example.org/hasSalary", label: "hasSalary", ranges: Data.array(["integer"]) })]
   })
 
   let nodes = HashMap.empty<string, ClassNode>()
@@ -441,19 +442,19 @@ function buildMultiLevelProperties() {
   const classPerson = ClassNode.make({
     id: "http://example.org/Person",
     label: "Person",
-    properties: [{ iri: "http://example.org/hasName", label: "hasName", range: "string" }]
+    properties: [PropertyConstraint.make({ propertyIri: "http://example.org/hasName", label: "hasName", ranges: Data.array(["string"]) })]
   })
 
   const classEmployee = ClassNode.make({
     id: "http://example.org/Employee",
     label: "Employee",
-    properties: [{ iri: "http://example.org/hasSalary", label: "hasSalary", range: "integer" }]
+    properties: [PropertyConstraint.make({ propertyIri: "http://example.org/hasSalary", label: "hasSalary", ranges: Data.array(["integer"]) })]
   })
 
   const classManager = ClassNode.make({
     id: "http://example.org/Manager",
     label: "Manager",
-    properties: [{ iri: "http://example.org/hasTeamSize", label: "hasTeamSize", range: "integer" }]
+    properties: [PropertyConstraint.make({ propertyIri: "http://example.org/hasTeamSize", label: "hasTeamSize", ranges: Data.array(["integer"]) })]
   })
 
   let nodes = HashMap.empty<string, ClassNode>()

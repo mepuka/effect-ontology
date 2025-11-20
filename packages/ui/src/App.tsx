@@ -2,6 +2,7 @@ import { EnhancedTopologicalRail } from "./components/EnhancedTopologicalRail"
 import { EnhancedNodeInspector } from "./components/EnhancedNodeInspector"
 import { TurtleEditor } from "./components/TurtleEditor"
 import { PromptPreview } from "./components/PromptPreview"
+import { JsonSchemaViewer } from "./components/JsonSchemaViewer"
 import { UniversalPropertiesPanel } from "./components/UniversalPropertiesPanel"
 import { useAtomValue, Result } from "@effect-atom/atom-react"
 import { ontologyGraphAtom } from "./state/store"
@@ -34,9 +35,17 @@ export const App = () => {
         </div>
       </div>
 
-      {/* Right Panel - Prompt Preview */}
-      <div className="w-1/3 overflow-hidden">
-        <PromptPreview />
+      {/* Right Panel - Split: Prompt + Schema */}
+      <div className="w-1/3 flex flex-col overflow-hidden">
+        {/* Top Half - Prompt Preview */}
+        <div className="h-1/2 border-b border-slate-300 overflow-hidden">
+          <PromptPreview />
+        </div>
+        
+        {/* Bottom Half - JSON Schema Viewer */}
+        <div className="h-1/2 overflow-hidden">
+          <JsonSchemaViewer />
+        </div>
       </div>
 
       {/* Universal Properties Overlay */}

@@ -35,7 +35,8 @@ import { Effect, HashMap, Schema } from "effect"
 import { Parser, Store } from "n3"
 import SHACLValidator from "rdf-validate-shacl"
 import { ShaclError, type ValidationReport } from "../Extraction/Events.js"
-import type { ClassNode, OntologyContext, PropertyData } from "../Graph/Types.js"
+import type { PropertyConstraint } from "../Graph/Constraint.js"
+import type { ClassNode, OntologyContext } from "../Graph/Types.js"
 import { isClassNode, OntologyContextSchema } from "../Graph/Types.js"
 import { rdfEnvironment } from "./RdfEnvironment.js"
 
@@ -59,11 +60,11 @@ export type RdfStore = Store
  * @category utilities
  * @internal
  */
-const generatePropertyShape = (property: PropertyData): string => {
+const generatePropertyShape = (property: PropertyConstraint): string => {
   const constraints: Array<string> = []
 
   // Property path (required)
-  constraints.push(`sh:path <${property.iri}>`)
+  constraints.push(`sh:path <${property.propertyIri}>`)
 
   // Label for better error messages (escape quotes, backslashes, and special chars)
   if (property.label) {
@@ -77,13 +78,15 @@ const generatePropertyShape = (property: PropertyData): string => {
   }
 
   // Range constraint (datatype or class)
-  if (property.range) {
+  // Use first range if available
+  const range = property.ranges[0]
+  if (range) {
     // Check if range is a datatype (xsd:*) or a class IRI
-    if (property.range.includes("XMLSchema#") || property.range.startsWith("xsd:")) {
-      constraints.push(`sh:datatype <${property.range}>`)
+    if (range.includes("XMLSchema#") || range.startsWith("xsd:")) {
+      constraints.push(`sh:datatype <${range}>`)
     } else {
       // Range is a class - use sh:class for object properties
-      constraints.push(`sh:class <${property.range}>`)
+      constraints.push(`sh:class <${range}>`)
     }
   }
 
@@ -149,8 +152,8 @@ ${shapeIri}
  * **Transformation Rules:**
  * - ClassNode → sh:NodeShape with sh:targetClass
  * - PropertyData → sh:property with sh:path
- * - property.range (datatype) → sh:datatype
- * - property.range (class) → sh:class
+ * - property.ranges[0] (datatype) → sh:datatype
+ * - property.ranges[0] (class) → sh:class
  * - Universal properties → Applied to all NodeShapes (if needed)
  *
  * **Generated Constraints:**

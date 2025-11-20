@@ -27,7 +27,7 @@ const arbIri = fc.webUrl({ withFragments: true })
  * Generate random property data
  */
 const arbPropertyData: fc.Arbitrary<PropertyData> = fc.record({
-  iri: arbIri,
+  propertyIri: arbIri,
   label: fc.string({ minLength: 1, maxLength: 50 }),
   range: fc.oneof(
     fc.constant("string"),
@@ -46,7 +46,7 @@ const arbPropertyData: fc.Arbitrary<PropertyData> = fc.record({
  */
 const arbKnowledgeUnit: fc.Arbitrary<KnowledgeUnit> = fc
   .record({
-    iri: arbIri,
+    propertyIri: arbIri,
     label: fc.string({ minLength: 0, maxLength: 100 }),
     definition: fc.string({ minLength: 0, maxLength: 500 }),
     properties: fc.array(arbPropertyData, { maxLength: 10 }),
@@ -68,7 +68,7 @@ const arbKnowledgeUnitPair: fc.Arbitrary<[KnowledgeUnit, KnowledgeUnit]> = fc
     // Force same IRI (requirement for merge)
     const bSameIri = new KnowledgeUnit({
       ...b,
-      iri: a.iri
+      propertyIri: a.iri
     })
     return [a, bSameIri]
   })
@@ -115,8 +115,8 @@ describe("KnowledgeUnit.merge - Property-Based Tests", () => {
     fc.assert(
       fc.property(arbKnowledgeUnit, arbKnowledgeUnit, arbKnowledgeUnit, (a, b, c) => {
         // Force same IRI for all three
-        const bSame = new KnowledgeUnit({ ...b, iri: a.iri })
-        const cSame = new KnowledgeUnit({ ...c, iri: a.iri })
+        const bSame = new KnowledgeUnit({ ...b, propertyIri: a.iri })
+        const cSame = new KnowledgeUnit({ ...c, propertyIri: a.iri })
 
         const left = KnowledgeUnit.merge(KnowledgeUnit.merge(a, bSame), cSame)
         const right = KnowledgeUnit.merge(a, KnowledgeUnit.merge(bSame, cSame))
@@ -202,7 +202,7 @@ describe("KnowledgeUnit.merge - Property-Based Tests", () => {
         const merged = KnowledgeUnit.merge(a, b)
 
         // Check no duplicate IRIs
-        const propIris = merged.properties.map((p) => p.iri)
+        const propIris = merged.properties.map((p) => p.propertyIri)
         const uniqueIris = new Set(propIris)
         return uniqueIris.size === propIris.length
       }),

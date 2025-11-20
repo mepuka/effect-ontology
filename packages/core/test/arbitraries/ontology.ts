@@ -14,8 +14,9 @@
 
 import { Arbitrary, HashMap } from "effect"
 import fc from "fast-check"
-import type { OntologyContext, PropertyData, PropertyNode } from "../../src/Graph/Types.js"
-import { ClassNode, NodeIdSchema, PropertyDataSchema } from "../../src/Graph/Types.js"
+import { PropertyConstraint } from "../../src/Graph/Constraint.js"
+import type { OntologyContext, PropertyNode } from "../../src/Graph/Types.js"
+import { ClassNode, NodeIdSchema } from "../../src/Graph/Types.js"
 
 // ============================================================================
 // Primitive Arbitraries
@@ -66,35 +67,41 @@ export const arbXsdDatatypeShort = fc.constantFrom(
 // ============================================================================
 
 /**
- * Generate PropertyData using Schema-based generation
+ * Generate PropertyConstraint using Schema-based generation
  *
- * **Now uses Arbitrary.make(PropertyDataSchema)** which automatically:
+ * **Now uses Arbitrary.make(PropertyConstraint)** which automatically:
  * - Generates realistic property IRIs (FOAF, Dublin Core, Schema.org)
  * - Generates realistic property labels (name, description, author, etc.)
  * - Generates mixed ranges (60% datatype, 40% class IRIs)
  *
- * See Graph/Types.ts for custom arbitrary annotations.
+ * See Graph/Constraint.ts for PropertyConstraint definition.
  */
-export const arbPropertyData = Arbitrary.make(PropertyDataSchema)
+export const arbPropertyData = Arbitrary.make(PropertyConstraint)
 
 /**
- * Generate PropertyData with XSD datatype ranges
+ * Generate PropertyConstraint with XSD datatype ranges
  *
  * Specialized arbitrary for testing sh:datatype constraint generation.
  * Filters schema-generated data to only include XSD datatypes.
  */
-export const arbPropertyDataWithDatatype: fc.Arbitrary<PropertyData> = arbPropertyData.filter(
-  (prop) => prop.range.includes("XMLSchema#") || prop.range.startsWith("xsd:")
+export const arbPropertyDataWithDatatype = arbPropertyData.filter(
+  (prop) => {
+    const range = prop.ranges[0]
+    return range !== undefined && (range.includes("XMLSchema#") || range.startsWith("xsd:"))
+  }
 )
 
 /**
- * Generate PropertyData with class ranges
+ * Generate PropertyConstraint with class ranges
  *
  * Specialized arbitrary for testing sh:class constraint generation.
  * Filters schema-generated data to only include class IRIs (not XSD datatypes).
  */
-export const arbPropertyDataWithClassRange: fc.Arbitrary<PropertyData> = arbPropertyData.filter(
-  (prop) => !prop.range.includes("XMLSchema#") && !prop.range.startsWith("xsd:")
+export const arbPropertyDataWithClassRange = arbPropertyData.filter(
+  (prop) => {
+    const range = prop.ranges[0]
+    return range !== undefined && !range.includes("XMLSchema#") && !range.startsWith("xsd:")
+  }
 )
 
 /**
@@ -140,7 +147,7 @@ export const arbClassNodeDatatypeOnly: fc.Arbitrary<ClassNode> = arbClassNode
   .map((node) => ({
     ...node,
     properties: node.properties.filter(
-      (prop) => prop.range.includes("XMLSchema#") || prop.range.startsWith("xsd:")
+      (prop) => prop.ranges[0].includes("XMLSchema#") || prop.ranges[0].startsWith("xsd:")
     )
   }))
   .map((data) => new ClassNode(data))
@@ -155,7 +162,7 @@ export const arbClassNodeClassRangeOnly: fc.Arbitrary<ClassNode> = arbClassNode
   .map((node) => ({
     ...node,
     properties: node.properties.filter(
-      (prop) => !prop.range.includes("XMLSchema#") && !prop.range.startsWith("xsd:")
+      (prop) => !prop.ranges[0].includes("XMLSchema#") && !prop.ranges[0].startsWith("xsd:")
     )
   }))
   .map((data) => new ClassNode(data))
@@ -304,8 +311,8 @@ export const countClasses = (ontology: OntologyContext): number => {
  *
  * Helper for property test assertions.
  */
-export const getAllProperties = (ontology: OntologyContext): ReadonlyArray<PropertyData> => {
-  const directProperties: Array<PropertyData> = []
+export const getAllProperties = (ontology: OntologyContext): ReadonlyArray<PropertyConstraint> => {
+  const directProperties: Array<PropertyConstraint> = []
 
   for (const node of HashMap.values(ontology.nodes)) {
     if ("properties" in node) {

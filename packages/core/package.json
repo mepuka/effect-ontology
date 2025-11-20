@@ -9,9 +9,15 @@
     "./Graph/Types": "./src/Graph/Types.ts",
     "./Prompt": "./src/Prompt/index.ts",
     "./Schema": "./src/Schema/index.ts",
-    "./Schema/Factory": "./src/Schema/Factory.ts"
+    "./Schema/Factory": "./src/Schema/Factory.ts",
+    "./Schema/Export": "./src/Schema/Export.ts",
+    "./Services/Llm": "./src/Services/Llm.ts",
+    "./Services/Rdf": "./src/Services/Rdf.ts",
+    "./Services/Shacl": "./src/Services/Shacl.ts",
+    "./Services/LlmProvider": "./src/Services/LlmProvider.ts"
   },
   "scripts": {
+    "build": "tsc --skipLibCheck --project tsconfig.build.json",
     "test": "vitest",
     "check": "tsc -b tsconfig.json"
   },

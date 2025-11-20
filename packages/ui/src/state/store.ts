@@ -1,5 +1,6 @@
 import { Atom, Result } from "@effect-atom/atom"
 import { parseTurtleToGraph } from "@effect-ontology/core/Graph/Builder"
+import { isClassNode } from "@effect-ontology/core/Graph/Types"
 import {
   buildKnowledgeMetadata,
   defaultPromptAlgebra,
@@ -8,7 +9,10 @@ import {
   solveGraph,
   solveToKnowledgeIndex
 } from "@effect-ontology/core/Prompt"
-import { Effect, Graph, Option } from "effect"
+import { makeKnowledgeGraphSchema } from "@effect-ontology/core/Schema/Factory"
+import { toJSONSchema, dereferenceJSONSchema, getSchemaStats, formatJSONSchema } from "@effect-ontology/core/Schema/Export"
+import { Effect, Graph, HashMap, Option } from "effect"
+import { runtime } from "../runtime/atoms"
 
 // Default example turtle
 const DEFAULT_TURTLE = `@prefix : <http://example.org/zoo#> .
@@ -48,19 +52,50 @@ const DEFAULT_TURTLE = `@prefix : <http://example.org/zoo#> .
     rdfs:label "owned by" .
 `
 
-// 1. Source of Truth (The Editor State)
+// ============================================================================
+// Non-Effectful Atoms (use Atom.make)
+// ============================================================================
+
+/**
+ * 1. Source of Truth (The Editor State)
+ *
+ * Simple value atom for the Turtle input text.
+ * No services needed, so we use Atom.make directly.
+ */
 export const turtleInputAtom = Atom.make(DEFAULT_TURTLE)
 
-// 2. Parsed Graph State (Effect-based)
-export const ontologyGraphAtom = Atom.make((get) =>
+/**
+ * 5. Selected Node (UI State)
+ *
+ * Simple value atom for the currently selected node.
+ * No services needed, so we use Atom.make directly.
+ */
+export const selectedNodeAtom = Atom.make<Option.Option<string>>(Option.none())
+
+// ============================================================================
+// Effectful Atoms (use runtime.make)
+// ============================================================================
+
+/**
+ * 2. Parsed Graph State (Effect-based)
+ *
+ * Uses runtime.atom to enable access to Effect services.
+ * parseTurtleToGraph may use RdfService internally.
+ */
+export const ontologyGraphAtom = runtime.atom((get) =>
   Effect.gen(function*() {
     const input = get(turtleInputAtom)
     return yield* parseTurtleToGraph(input)
   })
 )
 
-// 3. Topological Order (Derived from graph)
-export const topologicalOrderAtom = Atom.make((get) =>
+/**
+ * 3. Topological Order (Derived from graph)
+ *
+ * Computes topological sort order from the graph.
+ * Uses runtime.atom for consistent Effect handling.
+ */
+export const topologicalOrderAtom = runtime.atom((get) =>
   Effect.gen(function*() {
     // Get the Result from the atom and convert to Effect
     const graphResult = get(ontologyGraphAtom)
@@ -82,8 +117,13 @@ export const topologicalOrderAtom = Atom.make((get) =>
   })
 )
 
-// 4. Generated Prompts (Effect-based catamorphism)
-export const generatedPromptsAtom = Atom.make((get) =>
+/**
+ * 4. Generated Prompts (Effect-based catamorphism)
+ *
+ * Solves the graph using prompt algebra to generate prompts for each node.
+ * Uses runtime.atom for access to Effect services.
+ */
+export const generatedPromptsAtom = runtime.atom((get) =>
   Effect.gen(function*() {
     const graphResult = get(ontologyGraphAtom)
 
@@ -110,9 +150,6 @@ export const generatedPromptsAtom = Atom.make((get) =>
   })
 )
 
-// 5. Selected Node (UI State)
-export const selectedNodeAtom = Atom.make<Option.Option<string>>(Option.none())
-
 // ============================================================================
 // Metadata API Integration
 // ============================================================================
@@ -125,7 +162,7 @@ export const selectedNodeAtom = Atom.make<Option.Option<string>>(Option.none())
  *
  * Dependencies: ontologyGraphAtom
  */
-export const knowledgeIndexAtom = Atom.make((get) =>
+export const knowledgeIndexAtom = runtime.atom((get) =>
   Effect.gen(function*() {
     const graphResult = get(ontologyGraphAtom)
 
@@ -153,7 +190,7 @@ export const knowledgeIndexAtom = Atom.make((get) =>
  *
  * Dependencies: ontologyGraphAtom, knowledgeIndexAtom
  */
-export const metadataAtom = Atom.make((get) =>
+export const metadataAtom = runtime.atom((get) =>
   Effect.gen(function*() {
     const graphResult = get(ontologyGraphAtom)
     const indexResult = get(knowledgeIndexAtom)
@@ -187,7 +224,7 @@ export const metadataAtom = Atom.make((get) =>
  *
  * Dependencies: metadataAtom
  */
-export const tokenStatsAtom = Atom.make((get) =>
+export const tokenStatsAtom = runtime.atom((get) =>
   Effect.gen(function*() {
     const metadataResult = get(metadataAtom)
 
@@ -210,7 +247,7 @@ export const tokenStatsAtom = Atom.make((get) =>
  *
  * Dependencies: metadataAtom
  */
-export const dependencyGraphAtom = Atom.make((get) =>
+export const dependencyGraphAtom = runtime.atom((get) =>
   Effect.gen(function*() {
     const metadataResult = get(metadataAtom)
 
@@ -233,7 +270,7 @@ export const dependencyGraphAtom = Atom.make((get) =>
  *
  * Dependencies: metadataAtom
  */
-export const hierarchyTreeAtom = Atom.make((get) =>
+export const hierarchyTreeAtom = runtime.atom((get) =>
   Effect.gen(function*() {
     const metadataResult = get(metadataAtom)
 
@@ -245,5 +282,95 @@ export const hierarchyTreeAtom = Atom.make((get) =>
 
     const metadata = yield* metadataEffect
     return metadata.hierarchyTree
+  })
+)
+
+// ============================================================================
+// JSON Schema Atoms (for Phase 1: JSON Schema Viewer)
+// ============================================================================
+
+/**
+ * 11. JSON Schema Atom
+ *
+ * Generates JSON Schema from the ontology graph in three formats:
+ * - Anthropic: With $ref pointers (Effect's default)
+ * - OpenAI: Dereferenced (all definitions inline)
+ * - Raw: Pretty-printed JSON string
+ *
+ * Dependencies: ontologyGraphAtom
+ */
+export const jsonSchemaAtom = runtime.atom((get) =>
+  Effect.gen(function*() {
+    const graphResult = get(ontologyGraphAtom)
+
+    const graphEffect = Result.match(graphResult, {
+      onInitial: () => Effect.fail("Graph not yet loaded"),
+      onFailure: (failure) => Effect.failCause(failure.cause),
+      onSuccess: (success) => Effect.succeed(success.value)
+    })
+
+    const { context } = yield* graphEffect
+
+    // Extract class and property IRIs
+    const classIris: Array<string> = []
+    const propertyIris: Array<string> = []
+
+    // Collect class IRIs from nodes
+    for (const node of HashMap.values(context.nodes)) {
+      // Only process ClassNodes
+      if (isClassNode(node)) {
+        classIris.push(node.id)
+        
+        // Collect property IRIs from node properties
+        for (const prop of node.properties) {
+          if (!propertyIris.includes(prop.iri)) {
+            propertyIris.push(prop.iri)
+          }
+        }
+      }
+    }
+
+    // Add universal properties
+    for (const prop of context.universalProperties) {
+      if (!propertyIris.includes(prop.iri)) {
+        propertyIris.push(prop.iri)
+      }
+    }
+
+    // Generate schema
+    const schema = makeKnowledgeGraphSchema(classIris, propertyIris)
+    
+    // Generate all three formats
+    const anthropic = toJSONSchema(schema)
+    const openai = dereferenceJSONSchema(anthropic)
+    const raw = formatJSONSchema(anthropic, 2)
+
+    return {
+      anthropic,
+      openai,
+      raw
+    }
+  })
+)
+
+/**
+ * 12. Schema Stats Atom (Derived)
+ *
+ * Calculates statistics about the generated JSON Schema.
+ *
+ * Dependencies: jsonSchemaAtom
+ */
+export const schemaStatsAtom = runtime.atom((get) =>
+  Effect.gen(function*() {
+    const schemaResult = get(jsonSchemaAtom)
+
+    const schemaEffect = Result.match(schemaResult, {
+      onInitial: () => Effect.fail("Schema not yet loaded"),
+      onFailure: (failure) => Effect.failCause(failure.cause),
+      onSuccess: (success) => Effect.succeed(success.value)
+    })
+
+    const { anthropic } = yield* schemaEffect
+    return getSchemaStats(anthropic)
   })
 )

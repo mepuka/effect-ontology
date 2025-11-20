@@ -52,7 +52,8 @@ const inspectOntology = (turtlePath: string) =>
         // Show properties
         if (node.properties.length > 0) {
           for (const prop of node.properties) {
-            const rangeLabel = prop.range.split("#").pop() || prop.range.split("/").pop() || prop.range
+            const range = prop.ranges[0] || "unknown"
+            const rangeLabel = range.split("#").pop() || range.split("/").pop() || range
             yield* Console.log(`${indent}  - ${prop.label}: ${rangeLabel}`)
           }
         }
@@ -63,7 +64,8 @@ const inspectOntology = (turtlePath: string) =>
     if (context.universalProperties.length > 0) {
       yield* Console.log(`\n🌐 Universal Properties (no explicit domain):`)
       for (const prop of context.universalProperties) {
-        const rangeLabel = prop.range.split("#").pop() || prop.range.split("/").pop() || prop.range
+        const range = prop.ranges[0] || "unknown"
+        const rangeLabel = range.split("#").pop() || range.split("/").pop() || range
         yield* Console.log(`  - ${prop.label}: ${rangeLabel}`)
       }
     }

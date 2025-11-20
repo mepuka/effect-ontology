@@ -7,21 +7,22 @@
  */
 
 import { describe, expect, it } from "@effect/vitest"
-import type { PropertyData } from "../../src/Graph/Types.js"
+import { Data, Option } from "effect"
+import { PropertyConstraint } from "../../src/Graph/Constraint.js"
 import * as Ast from "../../src/Prompt/Ast.js"
 
 describe("Ast Typeclass Instances", () => {
   it("PropertyDataOrder sorts by IRI alphabetically", () => {
-    const propA: PropertyData = {
-      iri: "http://example.org/aaa",
+    const propA = PropertyConstraint.make({
+      propertyIri: "http://example.org/aaa",
       label: "A Property",
-      range: "string"
-    }
-    const propB: PropertyData = {
-      iri: "http://example.org/bbb",
+      ranges: Data.array(["string"])
+    })
+    const propB = PropertyConstraint.make({
+      propertyIri: "http://example.org/bbb",
       label: "B Property",
-      range: "string"
-    }
+      ranges: Data.array(["string"])
+    })
 
     // Test will FAIL initially - PropertyDataOrder doesn't exist yet
     const comparison = Ast.PropertyDataOrder(propA, propB)
@@ -31,9 +32,9 @@ describe("Ast Typeclass Instances", () => {
   })
 
   it("PropertyDataOrder is transitive", () => {
-    const propA: PropertyData = { iri: "http://example.org/aaa", label: "", range: "" }
-    const propB: PropertyData = { iri: "http://example.org/bbb", label: "", range: "" }
-    const propC: PropertyData = { iri: "http://example.org/ccc", label: "", range: "" }
+    const propA = PropertyConstraint.make({ propertyIri: "http://example.org/aaa", label: "", ranges: Data.array([""]) })
+    const propB = PropertyConstraint.make({ propertyIri: "http://example.org/bbb", label: "", ranges: Data.array([""]) })
+    const propC = PropertyConstraint.make({ propertyIri: "http://example.org/ccc", label: "", ranges: Data.array([""]) })
 
     // If A < B and B < C, then A < C (transitivity law)
     const ab = Ast.PropertyDataOrder(propA, propB)
@@ -46,8 +47,8 @@ describe("Ast Typeclass Instances", () => {
   })
 
   it("PropertyDataOrder is antisymmetric", () => {
-    const propA: PropertyData = { iri: "http://example.org/aaa", label: "A", range: "string" }
-    const propB: PropertyData = { iri: "http://example.org/bbb", label: "B", range: "string" }
+    const propA = PropertyConstraint.make({ propertyIri: "http://example.org/aaa", label: "A", ranges: Data.array(["string"]) })
+    const propB = PropertyConstraint.make({ propertyIri: "http://example.org/bbb", label: "B", ranges: Data.array(["string"]) })
 
     // Antisymmetry law: if compare(a, b) = -1, then compare(b, a) = 1
     const ab = Ast.PropertyDataOrder(propA, propB)
@@ -58,16 +59,16 @@ describe("Ast Typeclass Instances", () => {
   })
 
   it("PropertyDataEqual compares by IRI only", () => {
-    const propA: PropertyData = {
-      iri: "http://example.org/same",
+    const propA = PropertyConstraint.make({
+      propertyIri: "http://example.org/same",
       label: "Label A",
-      range: "string"
-    }
-    const propB: PropertyData = {
-      iri: "http://example.org/same",
+      ranges: Data.array(["string"])
+    })
+    const propB = PropertyConstraint.make({
+      propertyIri: "http://example.org/same",
       label: "Label B", // Different label
-      range: "number" // Different range
-    }
+      ranges: Data.array(["number"]) // Different range
+    })
 
     // Test will FAIL initially - PropertyDataEqual doesn't exist yet
     const equal = Ast.PropertyDataEqual(propA, propB)
@@ -77,19 +78,19 @@ describe("Ast Typeclass Instances", () => {
   })
 
   it("PropertyDataEqual is reflexive", () => {
-    const prop: PropertyData = {
-      iri: "http://example.org/test",
+    const prop = PropertyConstraint.make({
+      propertyIri: "http://example.org/test",
       label: "Test",
-      range: "string"
-    }
+      ranges: Data.array(["string"])
+    })
 
     // Reflexivity law: a = a for all a
     expect(Ast.PropertyDataEqual(prop, prop)).toBe(true)
   })
 
   it("PropertyDataEqual is symmetric", () => {
-    const propA: PropertyData = { iri: "http://example.org/same", label: "A", range: "string" }
-    const propB: PropertyData = { iri: "http://example.org/same", label: "B", range: "number" }
+    const propA = PropertyConstraint.make({ propertyIri: "http://example.org/same", label: "A", ranges: Data.array(["string"]) })
+    const propB = PropertyConstraint.make({ propertyIri: "http://example.org/same", label: "B", ranges: Data.array(["number"]) })
 
     // Symmetry law: if a = b then b = a
     expect(Ast.PropertyDataEqual(propA, propB)).toBe(
@@ -98,9 +99,9 @@ describe("Ast Typeclass Instances", () => {
   })
 
   it("PropertyDataEqual is transitive", () => {
-    const propA: PropertyData = { iri: "http://example.org/same", label: "A", range: "string" }
-    const propB: PropertyData = { iri: "http://example.org/same", label: "B", range: "number" }
-    const propC: PropertyData = { iri: "http://example.org/same", label: "C", range: "boolean" }
+    const propA = PropertyConstraint.make({ propertyIri: "http://example.org/same", label: "A", ranges: Data.array(["string"]) })
+    const propB = PropertyConstraint.make({ propertyIri: "http://example.org/same", label: "B", ranges: Data.array(["number"]) })
+    const propC = PropertyConstraint.make({ propertyIri: "http://example.org/same", label: "C", ranges: Data.array(["boolean"]) })
 
     // Transitivity law: if a = b and b = c, then a = c
     const ab = Ast.PropertyDataEqual(propA, propB)

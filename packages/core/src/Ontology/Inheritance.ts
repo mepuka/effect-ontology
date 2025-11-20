@@ -8,7 +8,8 @@
  */
 
 import { Context, Data, Effect, Graph, HashMap, HashSet } from "effect"
-import type { NodeId, OntologyContext, PropertyData } from "../Graph/Types.js"
+import type { PropertyConstraint } from "../Graph/Constraint.js"
+import type { NodeId, OntologyContext } from "../Graph/Types.js"
 
 /**
  * Errors that can occur during inheritance resolution
@@ -78,7 +79,7 @@ export interface InheritanceService {
    */
   readonly getEffectiveProperties: (
     classIri: string
-  ) => Effect.Effect<ReadonlyArray<PropertyData>, InheritanceError | CircularInheritanceError>
+  ) => Effect.Effect<ReadonlyArray<PropertyConstraint>, InheritanceError | CircularInheritanceError>
 
   /**
    * Get immediate parents of a class
@@ -339,7 +340,7 @@ const getEffectivePropertiesImpl = (
   _graph: Graph.Graph<NodeId, unknown, "directed">,
   context: OntologyContext,
   getAncestorsCached: (iri: string) => Effect.Effect<ReadonlyArray<string>, InheritanceError | CircularInheritanceError>
-): Effect.Effect<ReadonlyArray<PropertyData>, InheritanceError | CircularInheritanceError> =>
+): Effect.Effect<ReadonlyArray<PropertyConstraint>, InheritanceError | CircularInheritanceError> =>
   Effect.gen(function*() {
     // Get own properties
     const ownNode = yield* HashMap.get(context.nodes, classIri).pipe(
@@ -358,7 +359,7 @@ const getEffectivePropertiesImpl = (
     const ancestors = yield* getAncestorsCached(classIri)
 
     // Collect properties from ancestors
-    const ancestorProperties: Array<PropertyData> = []
+    const ancestorProperties: Array<PropertyConstraint> = []
 
     for (const ancestorIri of ancestors) {
       const ancestorNode = yield* HashMap.get(context.nodes, ancestorIri).pipe(
@@ -379,16 +380,16 @@ const getEffectivePropertiesImpl = (
     }
 
     // Deduplicate by property IRI (child wins)
-    const propertyMap = new Map<string, PropertyData>()
+    const propertyMap = new Map<string, PropertyConstraint>()
 
     // Add ancestor properties first
     for (const prop of ancestorProperties) {
-      propertyMap.set(prop.iri, prop)
+      propertyMap.set(prop.propertyIri, prop)
     }
 
     // Override with own properties
     for (const prop of ownProperties) {
-      propertyMap.set(prop.iri, prop)
+      propertyMap.set(prop.propertyIri, prop)
     }
 
     return Array.from(propertyMap.values())

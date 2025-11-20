@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, HashMap, Layer } from "effect"
+import { Effect, HashMap, Layer , Data} from "effect"
 import { ClassNode } from "../../src/Graph/Types"
 import type { OntologyContext } from "../../src/Graph/Types"
 import { StructuredPrompt } from "../../src/Prompt/Types"
@@ -23,14 +23,14 @@ describe("Services.Llm", () => {
           label: "Person",
           properties: [
             {
-              iri: "http://xmlns.com/foaf/0.1/name",
+              propertyIri: "http://xmlns.com/foaf/0.1/name",
               label: "name",
-              range: "xsd:string"
+              ranges: Data.array(["xsd:string"])
             },
             {
-              iri: "http://xmlns.com/foaf/0.1/knows",
+              propertyIri: "http://xmlns.com/foaf/0.1/knows",
               label: "knows",
-              range: "http://xmlns.com/foaf/0.1/Person"
+              ranges: Data.array(["http://xmlns.com/foaf/0.1/Person"])
             }
           ]
         })
@@ -38,9 +38,9 @@ describe("Services.Llm", () => {
     ]),
     universalProperties: [
       {
-        iri: "http://purl.org/dc/terms/description",
+        propertyIri: "http://purl.org/dc/terms/description",
         label: "description",
-        range: "xsd:string"
+        ranges: Data.array(["xsd:string"])
       }
     ],
     nodeIndexMap: HashMap.empty(),
@@ -91,9 +91,9 @@ describe("Services.Llm", () => {
                 label: "A",
                 properties: [
                   {
-                    iri: "http://example.org/prop",
+                    propertyIri: "http://example.org/prop",
                     label: "prop",
-                    range: "xsd:string"
+                    ranges: Data.array(["xsd:string"])
                   }
                 ]
               })
@@ -105,9 +105,9 @@ describe("Services.Llm", () => {
                 label: "B",
                 properties: [
                   {
-                    iri: "http://example.org/prop",
+                    propertyIri: "http://example.org/prop",
                     label: "prop",
-                    range: "xsd:string"
+                    ranges: Data.array(["xsd:string"])
                   }
                 ]
               })

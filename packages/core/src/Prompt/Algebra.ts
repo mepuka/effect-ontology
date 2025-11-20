@@ -7,7 +7,8 @@
  * Based on: docs/effect_ontology_engineering_spec.md
  */
 
-import { isClassNode, isPropertyNode, type PropertyData } from "../Graph/Types.js"
+import type { PropertyConstraint } from "../Graph/Constraint.js"
+import { isClassNode, isPropertyNode } from "../Graph/Types.js"
 import { KnowledgeUnit } from "./Ast.js"
 import * as KnowledgeIndex from "./KnowledgeIndex.js"
 import type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
@@ -17,14 +18,15 @@ import { StructuredPrompt } from "./Types.js"
 /**
  * Formats properties into a human-readable list
  */
-const formatProperties = (properties: ReadonlyArray<PropertyData>): string => {
+const formatProperties = (properties: ReadonlyArray<PropertyConstraint>): string => {
   if (properties.length === 0) {
     return "  (no properties)"
   }
 
   return properties
     .map((prop) => {
-      const rangeLabel = prop.range.split("#")[1] || prop.range.split("/").pop() || prop.range
+      const range = prop.ranges[0] || "unknown"
+      const rangeLabel = range.split("#")[1] || range.split("/").pop() || range
       return `  - ${prop.label} (${rangeLabel})`
     })
     .join("\n")
@@ -100,7 +102,7 @@ export const defaultPromptAlgebra: PromptAlgebra = (
  * @returns A StructuredPrompt with universal property definitions
  */
 export const processUniversalProperties = (
-  universalProperties: ReadonlyArray<PropertyData>
+  universalProperties: ReadonlyArray<PropertyConstraint>
 ): StructuredPrompt => {
   if (universalProperties.length === 0) {
     return StructuredPrompt.empty()
@@ -239,7 +241,7 @@ export const knowledgeIndexAlgebra: GraphAlgebra<KnowledgeIndexType> = (
  * @returns A KnowledgeIndex with a synthetic universal properties unit
  */
 export const processUniversalPropertiesToIndex = (
-  universalProperties: ReadonlyArray<PropertyData>
+  universalProperties: ReadonlyArray<PropertyConstraint>
 ): KnowledgeIndexType => {
   if (universalProperties.length === 0) {
     return KnowledgeIndex.empty()

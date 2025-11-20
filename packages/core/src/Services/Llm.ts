@@ -44,8 +44,8 @@ export const extractVocabulary = (ontology: OntologyContext) => {
 
       // Extract properties from this class
       for (const prop of node.properties) {
-        if (!propertyIris.includes(prop.iri)) {
-          propertyIris.push(prop.iri)
+        if (!propertyIris.includes(prop.propertyIri)) {
+          propertyIris.push(prop.propertyIri)
         }
       }
     }
@@ -53,8 +53,8 @@ export const extractVocabulary = (ontology: OntologyContext) => {
 
   // Add universal properties
   for (const prop of ontology.universalProperties) {
-    if (!propertyIris.includes(prop.iri)) {
-      propertyIris.push(prop.iri)
+    if (!propertyIris.includes(prop.propertyIri)) {
+      propertyIris.push(prop.propertyIri)
     }
   }
 

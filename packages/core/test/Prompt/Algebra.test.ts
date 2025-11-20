@@ -9,6 +9,8 @@
  */
 
 import { describe, expect, it } from "@effect/vitest"
+import { Data, Option } from "effect"
+import { PropertyConstraint } from "../../src/Graph/Constraint.js"
 import { ClassNode, PropertyNode } from "../../src/Graph/Types.js"
 import { combineWithUniversal, defaultPromptAlgebra, processUniversalProperties } from "../../src/Prompt/Algebra.js"
 import { StructuredPrompt } from "../../src/Prompt/Types.js"
@@ -103,16 +105,16 @@ describe("Prompt Algebra", () => {
         id: "http://example.org/Dog",
         label: "Dog",
         properties: [
-          {
-            iri: "http://example.org/hasOwner",
+          PropertyConstraint.make({
+            propertyIri: "http://example.org/hasOwner",
             label: "hasOwner",
-            range: "http://example.org/Person"
-          },
-          {
-            iri: "http://example.org/breed",
+            ranges: Data.array(["http://example.org/Person"])
+          }),
+          PropertyConstraint.make({
+            propertyIri: "http://example.org/breed",
             label: "breed",
-            range: "http://www.w3.org/2001/XMLSchema#string"
-          }
+            ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"])
+          })
         ]
       })
 
@@ -173,16 +175,16 @@ describe("Prompt Algebra", () => {
   describe("Universal Properties", () => {
     it("should process universal properties", () => {
       const universalProps = [
-        {
-          iri: "http://purl.org/dc/terms/title",
+        PropertyConstraint.make({
+          propertyIri: "http://purl.org/dc/terms/title",
           label: "dc:title",
-          range: "http://www.w3.org/2001/XMLSchema#string"
-        },
-        {
-          iri: "http://purl.org/dc/terms/creator",
+          ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"])
+        }),
+        PropertyConstraint.make({
+          propertyIri: "http://purl.org/dc/terms/creator",
           label: "dc:creator",
-          range: "http://www.w3.org/2001/XMLSchema#string"
-        }
+          ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"])
+        })
       ]
 
       const result = processUniversalProperties(universalProps)

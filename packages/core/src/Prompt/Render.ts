@@ -129,7 +129,7 @@ const formatUnit = (unit: KnowledgeUnit, options: RenderOptions): string => {
   if (options.includeInheritedProperties && unit.inheritedProperties.length > 0) {
     parts.push("\nInherited Properties:")
     for (const prop of unit.inheritedProperties) {
-      const rangeLabel = prop.range.split("#")[1] || prop.range.split("/").pop() || prop.range
+      const rangeLabel = prop.ranges[0].split("#")[1] || prop.ranges[0].split("/").pop() || prop.ranges[0]
       parts.push(`  - ${prop.label} (${rangeLabel}) [inherited]`)
     }
   }
@@ -207,9 +207,9 @@ export const renderWithInheritance = (
       const effectiveProperties = yield* inheritanceService.getEffectiveProperties(iri)
 
       // Separate own from inherited
-      const ownPropertyIris = new Set(unit.properties.map((p) => p.iri))
+      const ownPropertyIris = new Set(unit.properties.map((p) => p.propertyIri))
       const inheritedProperties = effectiveProperties.filter(
-        (p) => !ownPropertyIris.has(p.iri)
+        (p) => !ownPropertyIris.has(p.propertyIri)
       )
 
       // Update unit with inherited properties

@@ -8,10 +8,10 @@
  */
 
 import { Array as EffectArray, Data, Equivalence, Order, pipe, String as EffectString } from "effect"
-import type { PropertyData } from "../Graph/Types.js"
+import type { PropertyConstraint } from "../Graph/Constraint.js"
 
 /**
- * Order instance for PropertyData - sorts by IRI
+ * Order instance for PropertyConstraint - sorts by propertyIri
  *
  * Enables deterministic array sorting using Effect's Array.sort.
  *
@@ -20,7 +20,7 @@ import type { PropertyData } from "../Graph/Types.js"
  * 2. Antisymmetry: if compare(a, b) = -1, then compare(b, a) = 1
  * 3. Transitivity: if a < b and b < c, then a < c
  *
- * **Implementation:** Delegates to EffectString.Order for IRI comparison.
+ * **Implementation:** Delegates to EffectString.Order for propertyIri comparison.
  * EffectString.Order uses lexicographic ordering (dictionary order).
  *
  * **Why Not JavaScript .sort()?**
@@ -28,13 +28,13 @@ import type { PropertyData } from "../Graph/Types.js"
  * comparison. Different JS engines → different orders. Effect Order is
  * portable and lawful.
  */
-export const PropertyDataOrder: Order.Order<PropertyData> = Order.mapInput(
+export const PropertyDataOrder: Order.Order<PropertyConstraint> = Order.mapInput(
   EffectString.Order,
-  (prop: PropertyData) => prop.iri
+  (prop: PropertyConstraint) => prop.propertyIri
 )
 
 /**
- * Equivalence instance for PropertyData - compares by IRI only
+ * Equivalence instance for PropertyConstraint - compares by propertyIri only
  *
  * Enables deduplication using Effect's Array.dedupeWith.
  *
@@ -43,17 +43,17 @@ export const PropertyDataOrder: Order.Order<PropertyData> = Order.mapInput(
  * 2. Symmetry: if equals(a, b) = true, then equals(b, a) = true
  * 3. Transitivity: if equals(a, b) and equals(b, c), then equals(a, c)
  *
- * **Implementation:** Two properties are equal iff they have the same IRI.
- * Label and range don't affect identity (they're metadata).
+ * **Implementation:** Two properties are equal iff they have the same propertyIri.
+ * Label and ranges don't affect identity (they're metadata).
  *
  * **Why Not JavaScript `===`?**
  * JavaScript === checks reference equality (same object in memory).
- * Two PropertyData objects with same IRI but different object identity
+ * Two PropertyConstraint objects with same propertyIri but different object identity
  * would fail === check. Equivalence checks structural equality.
  */
-export const PropertyDataEqual: Equivalence.Equivalence<PropertyData> = Equivalence.mapInput(
+export const PropertyDataEqual: Equivalence.Equivalence<PropertyConstraint> = Equivalence.mapInput(
   EffectString.Equivalence,
-  (prop: PropertyData) => prop.iri
+  (prop: PropertyConstraint) => prop.propertyIri
 )
 
 /**
@@ -70,9 +70,9 @@ export class KnowledgeUnit extends Data.Class<{
   /** Formatted definition text */
   readonly definition: string
   /** Direct properties defined on this class */
-  readonly properties: ReadonlyArray<PropertyData>
+  readonly properties: ReadonlyArray<PropertyConstraint>
   /** Properties inherited from ancestors (computed separately) */
-  readonly inheritedProperties: ReadonlyArray<PropertyData>
+  readonly inheritedProperties: ReadonlyArray<PropertyConstraint>
   /** IRIs of direct children (subclasses) */
   readonly children: ReadonlyArray<string>
   /** IRIs of direct parents (superclasses) */
