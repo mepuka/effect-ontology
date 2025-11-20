@@ -14,6 +14,144 @@ import * as N3 from "n3"
 import { PropertyConstraint } from "./Constraint.js"
 import { ClassNode, type NodeId, type OntologyContext } from "./Types.js"
 
+/**
+ * OWL Namespace Constants
+ */
+const OWL = {
+  Restriction: "http://www.w3.org/2002/07/owl#Restriction",
+  onProperty: "http://www.w3.org/2002/07/owl#onProperty",
+  someValuesFrom: "http://www.w3.org/2002/07/owl#someValuesFrom",
+  allValuesFrom: "http://www.w3.org/2002/07/owl#allValuesFrom",
+  minCardinality: "http://www.w3.org/2002/07/owl#minCardinality",
+  maxCardinality: "http://www.w3.org/2002/07/owl#maxCardinality",
+  cardinality: "http://www.w3.org/2002/07/owl#cardinality",
+  hasValue: "http://www.w3.org/2002/07/owl#hasValue"
+} as const
+
+const RDF = {
+  type: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+} as const
+
+const RDFS = {
+  label: "http://www.w3.org/2000/01/rdf-schema#label"
+} as const
+
+/**
+ * Parse OWL Restriction blank node into PropertyConstraint
+ *
+ * Handles:
+ * - owl:someValuesFrom (∃ constraint, implies minCardinality=1)
+ * - owl:allValuesFrom (∀ constraint, restricts range)
+ * - owl:minCardinality / owl:maxCardinality
+ * - owl:cardinality (exact count)
+ * - owl:hasValue (specific value constraint)
+ *
+ * @param store - N3 store containing all triples
+ * @param blankNodeId - Blank node ID (e.g., "_:b0")
+ * @returns PropertyConstraint or None if not a valid restriction
+ */
+export const parseRestriction = (
+  store: N3.Store,
+  blankNodeId: string
+): Option.Option<PropertyConstraint> => {
+  // 1. Verify this is an owl:Restriction
+  const typeQuads = store.getQuads(blankNodeId, RDF.type, OWL.Restriction, null)
+  if (typeQuads.length === 0) {
+    return Option.none()
+  }
+
+  // 2. Get owl:onProperty (required)
+  const onPropertyQuad = store.getQuads(blankNodeId, OWL.onProperty, null, null)[0]
+  if (!onPropertyQuad) {
+    return Option.none()
+  }
+
+  const propertyIri = onPropertyQuad.object.value
+
+  // 3. Initialize constraint with defaults
+  let ranges: Array<string> = []
+  let minCardinality = 0
+  let maxCardinality: Option.Option<number> = Option.none()
+  let allowedValues: Array<string> = []
+  let annotations: Array<string> = []
+
+  // 4. Get property label if available
+  const labelQuad = store.getQuads(propertyIri, RDFS.label, null, null)[0]
+  if (labelQuad) {
+    annotations.push(labelQuad.object.value)
+  }
+
+  // 5. Parse owl:someValuesFrom (existential: ∃ hasPet.Dog)
+  const someValuesQuad = store.getQuads(blankNodeId, OWL.someValuesFrom, null, null)[0]
+  if (someValuesQuad) {
+    ranges.push(someValuesQuad.object.value)
+    minCardinality = 1 // someValuesFrom implies at least one
+  }
+
+  // 6. Parse owl:allValuesFrom (universal: ∀ hasPet.Dog)
+  const allValuesQuad = store.getQuads(blankNodeId, OWL.allValuesFrom, null, null)[0]
+  if (allValuesQuad) {
+    ranges.push(allValuesQuad.object.value)
+    // allValuesFrom doesn't imply existence, just restriction when present
+  }
+
+  // 7. Parse owl:minCardinality
+  const minCardQuad = store.getQuads(blankNodeId, OWL.minCardinality, null, null)[0]
+  if (minCardQuad) {
+    const value = parseInt(minCardQuad.object.value, 10)
+    if (!isNaN(value)) {
+      minCardinality = Math.max(minCardinality, value)
+    }
+  }
+
+  // 8. Parse owl:maxCardinality
+  const maxCardQuad = store.getQuads(blankNodeId, OWL.maxCardinality, null, null)[0]
+  if (maxCardQuad) {
+    const value = parseInt(maxCardQuad.object.value, 10)
+    if (!isNaN(value)) {
+      maxCardinality = Option.some(value)
+    }
+  }
+
+  // 9. Parse owl:cardinality (exact count = min and max)
+  const cardQuad = store.getQuads(blankNodeId, OWL.cardinality, null, null)[0]
+  if (cardQuad) {
+    const value = parseInt(cardQuad.object.value, 10)
+    if (!isNaN(value)) {
+      minCardinality = value
+      maxCardinality = Option.some(value)
+    }
+  }
+
+  // 10. Parse owl:hasValue
+  const hasValueQuad = store.getQuads(blankNodeId, OWL.hasValue, null, null)[0]
+  if (hasValueQuad) {
+    allowedValues.push(hasValueQuad.object.value)
+    minCardinality = 1 // hasValue implies exactly one
+    maxCardinality = Option.some(1)
+  }
+
+  // 11. Build PropertyConstraint
+  return Option.some(
+    PropertyConstraint.make({
+      propertyIri,
+      annotations: Data.array(annotations),
+      ranges: Data.array(ranges),
+      minCardinality,
+      maxCardinality,
+      allowedValues: Data.array(allowedValues),
+      source: "restriction"
+    })
+  )
+}
+
+/**
+ * Check if a value is a blank node ID
+ */
+const isBlankNode = (value: string): boolean => {
+  return value.startsWith("_:")
+}
+
 class ParseError extends Data.TaggedError("ParseError")<{
   cause: unknown
 }> {}
