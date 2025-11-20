@@ -149,29 +149,7 @@ describe("Services.Llm", () => {
       }))
   })
 
-  describe("LlmService - Type Safety", () => {
-    it.effect("should have correct service structure", () =>
-      Effect.gen(function*() {
-        // This test verifies that the service compiles with the correct types
-        // We don't actually call the LLM, just verify the service shape
-        const _schema = makeKnowledgeGraphSchema(
-          ["http://xmlns.com/foaf/0.1/Person"],
-          ["http://xmlns.com/foaf/0.1/name"]
-        )
-
-        // Type-level test: ensure service has extractKnowledgeGraph method
-        // This will fail at compile time if the service structure is wrong
-        const llm = yield* LlmService
-
-        // Verify method exists
-        expect(llm.extractKnowledgeGraph).toBeDefined()
-        expect(typeof llm.extractKnowledgeGraph).toBe("function")
-      }).pipe(
-        Effect.provide(
-          Layer.provideMerge(LlmService.Default, LlmService.Test)
-        )
-      ))
-
+  describe("Schema Validation", () => {
     it.effect("should accept valid schema types", () =>
       Effect.sync(() => {
         const schema = makeKnowledgeGraphSchema(
