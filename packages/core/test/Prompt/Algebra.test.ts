@@ -18,7 +18,7 @@ import { StructuredPrompt } from "../../src/Prompt/Types.js"
 
 // Mock graph and predecessors for tests
 const mockGraph = Graph.directed<NodeId, unknown>()
-const mockPredecessors = HashMap.empty<number, number[]>()
+const mockPredecessors = HashMap.empty<number, Array<number>>()
 
 describe("Prompt Algebra", () => {
   describe("StructuredPrompt Monoid", () => {

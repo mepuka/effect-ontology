@@ -45,8 +45,8 @@ export type SolverError = GraphCycleError | MissingNodeDataError
  */
 const buildPredecessorsMap = <N, E>(
   graph: Graph.Graph<N, E, "directed">
-): HashMap.HashMap<number, number[]> => {
-  let predecessors = HashMap.empty<number, number[]>()
+): HashMap.HashMap<number, Array<number>> => {
+  let predecessors = HashMap.empty<number, Array<number>>()
 
   // For each node, get its predecessors using Effect's native reverseAdjacency
   for (const [nodeIndex, _data] of graph) {

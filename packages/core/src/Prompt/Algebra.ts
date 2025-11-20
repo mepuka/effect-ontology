@@ -185,7 +185,7 @@ export const knowledgeIndexAlgebra: GraphAlgebra<KnowledgeIndexType> = (
     // FIX Issue 5: Use precomputed predecessors for O(1) child lookup
     // Find all nodes that have an edge pointing to this node (direct children)
     const childIndices = HashMap.get(predecessors, nodeIndex).pipe(
-      Option.getOrElse(() => [] as number[])
+      Option.getOrElse(() => [] as Array<number>)
     )
     const childIris = childIndices.flatMap((idx: number) =>
       Graph.getNode(graph, idx).pipe(

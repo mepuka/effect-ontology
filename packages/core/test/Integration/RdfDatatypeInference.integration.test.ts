@@ -9,12 +9,12 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
-import * as N3 from "n3"
+import type * as N3 from "n3"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { parseTurtleToGraph } from "../../src/Graph/Builder.js"
 import type { KnowledgeGraph } from "../../src/Services/Rdf.js"
 import { RdfService } from "../../src/Services/Rdf.js"
-import { readFileSync } from "node:fs"
-import { join } from "node:path"
 
 describe("Integration - RDF Datatype Inference", () => {
   it.effect("should infer datatypes from real FOAF ontology", () =>

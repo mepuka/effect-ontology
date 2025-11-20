@@ -8,7 +8,7 @@
  */
 
 import { Schema } from "effect"
-import type { GraphAlgebra, OntologyNode } from "../Graph/Types.js"
+import type { GraphAlgebra } from "../Graph/Types.js"
 
 /**
  * StructuredPrompt - The result type for the catamorphism

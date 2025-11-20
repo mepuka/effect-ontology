@@ -35,7 +35,7 @@
  * @since 1.0.0
  */
 
-import { Effect, HashMap, Layer, Option } from "effect"
+import { Effect, HashMap, Layer } from "effect"
 import * as N3 from "n3"
 import { RdfError } from "../Extraction/Events.js"
 import type { OntologyContext } from "../Graph/Types.js"
@@ -108,13 +108,6 @@ const normalizeXsdRange = (range: string): string | undefined => {
     return range
   }
   return undefined
-}
-
-/**
- * Check if a range IRI is an XSD datatype
- */
-const isXsdDatatype = (range: string): boolean => {
-  return normalizeXsdRange(range) !== undefined
 }
 
 /**
@@ -305,15 +298,15 @@ export class RdfService extends Effect.Service<RdfService>()("RdfService", {
             // Object can be literal (with datatype) or reference
             const object = typeof prop.object === "string"
               ? (() => {
-                  // Normalize value: trim whitespace
-                  const normalizedValue = prop.object.trim()
+                // Normalize value: trim whitespace
+                const normalizedValue = prop.object.trim()
 
-                  // Infer datatype from ontology
-                  const datatype = inferDatatype(prop.predicate, ontology)
-                  return datatype
-                    ? literal(normalizedValue, datatype)
-                    : literal(normalizedValue) // Default xsd:string
-                })()
+                // Infer datatype from ontology
+                const datatype = inferDatatype(prop.predicate, ontology)
+                return datatype
+                  ? literal(normalizedValue, datatype)
+                  : literal(normalizedValue) // Default xsd:string
+              })()
               : createSubject(prop.object["@id"])
 
             store.addQuad(quad(subject, predicate, object))
@@ -485,15 +478,15 @@ export class RdfService extends Effect.Service<RdfService>()("RdfService", {
             // Object can be literal (with datatype) or reference
             const object = typeof prop.object === "string"
               ? (() => {
-                  // Normalize value: trim whitespace
-                  const normalizedValue = prop.object.trim()
+                // Normalize value: trim whitespace
+                const normalizedValue = prop.object.trim()
 
-                  // Infer datatype from ontology
-                  const datatype = inferDatatype(prop.predicate, ontology)
-                  return datatype
-                    ? literal(normalizedValue, datatype)
-                    : literal(normalizedValue) // Default xsd:string
-                })()
+                // Infer datatype from ontology
+                const datatype = inferDatatype(prop.predicate, ontology)
+                return datatype
+                  ? literal(normalizedValue, datatype)
+                  : literal(normalizedValue) // Default xsd:string
+              })()
               : createSubject(prop.object["@id"])
 
             store.addQuad(quad(subject, predicate, object))

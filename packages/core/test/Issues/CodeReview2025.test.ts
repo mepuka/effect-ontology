@@ -8,10 +8,8 @@
  */
 
 import { describe, expect, it } from "@effect/vitest"
-import { Data, Effect, Graph, HashMap, Option } from "effect"
-import { PropertyConstraint } from "../../src/Graph/Constraint"
-import { ClassNode } from "../../src/Graph/Types"
-import type { NodeId, OntologyContext } from "../../src/Graph/Types"
+import { Effect, Graph, Option } from "effect"
+import type { NodeId } from "../../src/Graph/Types"
 import { RdfService } from "../../src/Services/Rdf"
 
 describe("Code Review 2025 - Issue Validation", () => {
@@ -28,7 +26,7 @@ describe("Code Review 2025 - Issue Validation", () => {
               properties: [
                 {
                   predicate: "http://xmlns.com/foaf/0.1/name",
-                  object: 'John "The Boss" Smith' // Quotes in literal
+                  object: "John \"The Boss\" Smith" // Quotes in literal
                 }
               ]
             }
@@ -39,8 +37,8 @@ describe("Code Review 2025 - Issue Validation", () => {
         const turtle = yield* rdf.storeToTurtle(store)
 
         // Should produce valid Turtle with escaped quotes
-        expect(turtle).toContain('\\"The Boss\\"') // Backslash-escaped quotes
-        expect(turtle).not.toContain('""The Boss""') // No double-escaping
+        expect(turtle).toContain("\\\"The Boss\\\"") // Backslash-escaped quotes
+        expect(turtle).not.toContain("\"\"The Boss\"\"") // No double-escaping
 
         // Should round-trip parse
         const parsedStore = yield* rdf.turtleToStore(turtle)
@@ -120,9 +118,7 @@ describe("Code Review 2025 - Issue Validation", () => {
 
       // Use Effect Graph's neighborsDirected with "incoming" to get children
       const childIndices = Graph.neighborsDirected(graph, thingIndex, "incoming")
-      const directChildren = childIndices.map((idx) =>
-        Graph.getNode(graph, idx).pipe(Option.getOrThrow)
-      )
+      const directChildren = childIndices.map((idx) => Graph.getNode(graph, idx).pipe(Option.getOrThrow))
 
       // Should only include "Person", not "Student"
       expect(directChildren).toEqual(["Person"])
