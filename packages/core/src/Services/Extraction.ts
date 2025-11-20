@@ -11,7 +11,7 @@
  * - Uses PubSub.unbounded for event broadcasting to multiple UI consumers
  * - Effect.gen workflow (not Stream) for single-value transformations
  * - Scoped service with automatic PubSub cleanup
- * - Integrates LlmService, RdfService, and PromptService
+ * - Integrates extractKnowledgeGraph, RdfService, and PromptService
  *
  * @module Services/Extraction
  * @since 1.0.0
@@ -30,7 +30,7 @@ import { type ContextStrategy, selectContext } from "../Prompt/Focus.js"
 import { renderToStructuredPrompt } from "../Prompt/Render.js"
 import { type SolverError } from "../Prompt/Solver.js"
 import { EmptyVocabularyError, makeKnowledgeGraphSchema } from "../Schema/Factory.js"
-import { extractVocabulary, LlmService } from "./Llm.js"
+import { extractKnowledgeGraph, extractVocabulary } from "./Llm.js"
 import { RdfService } from "./Rdf.js"
 import { ShaclService } from "./Shacl.js"
 
@@ -194,10 +194,9 @@ export class ExtractionPipeline extends Effect.Service<ExtractionPipeline>()(
         extract: (request: ExtractionRequest): Effect.Effect<
           ExtractionResult,
           ExtractionError | SolverError | InheritanceError | CircularInheritanceError,
-          LlmService | RdfService | ShaclService | LanguageModel.LanguageModel
+          RdfService | ShaclService | LanguageModel.LanguageModel
         > =>
           Effect.gen(function*() {
-            const llm = yield* LlmService
             const rdf = yield* RdfService
             const shacl = yield* ShaclService
 
@@ -271,7 +270,7 @@ export class ExtractionPipeline extends Effect.Service<ExtractionPipeline>()(
             })
 
             // Stage 4: Call LLM with structured output
-            const knowledgeGraph = yield* llm.extractKnowledgeGraph(
+            const knowledgeGraph = yield* extractKnowledgeGraph(
               request.text,
               request.ontology,
               combinedPrompt,
