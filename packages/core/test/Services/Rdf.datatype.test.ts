@@ -770,4 +770,195 @@ describe("Services.Rdf - Datatype Inference", () => {
         )
       }).pipe(Effect.provide(RdfService.Default)))
   })
+
+  describe("Fallback and Edge Cases", () => {
+    it.effect("should fall back to plain literal when no ontology provided", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const graph: KnowledgeGraph = {
+          entities: [
+            {
+              "@id": "http://example.org/alice",
+              "@type": "http://xmlns.com/foaf/0.1/Person",
+              properties: [
+                { predicate: "http://xmlns.com/foaf/0.1/age", object: "30" }
+              ]
+            }
+          ]
+        }
+
+        const store = yield* rdf.jsonToStore(graph) // No ontology
+
+        const ageTriples = store.getQuads(
+          null,
+          "http://xmlns.com/foaf/0.1/age",
+          null,
+          null
+        )
+
+        expect(ageTriples).toHaveLength(1)
+        const literal = ageTriples[0].object as N3.Literal
+
+        // No ontology = default xsd:string
+        expect(literal.datatype.value).toBe(
+          "http://www.w3.org/2001/XMLSchema#string"
+        )
+      }).pipe(Effect.provide(RdfService.Default)))
+
+    it.effect("should fall back when property not found in ontology", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const ontology: OntologyContext = {
+          ...OntologyContext.empty(),
+          nodes: HashMap.make([
+            "http://xmlns.com/foaf/0.1/Person",
+            ClassNode.make({
+              id: "http://xmlns.com/foaf/0.1/Person",
+              label: "Person",
+              properties: [
+                PropertyConstraint.make({
+                  propertyIri: "http://xmlns.com/foaf/0.1/name",
+                  ranges: Data.array(["xsd:string"]),
+                  maxCardinality: Option.none()
+                })
+              ]
+            })
+          ])
+        }
+
+        const graph: KnowledgeGraph = {
+          entities: [
+            {
+              "@id": "http://example.org/alice",
+              "@type": "http://xmlns.com/foaf/0.1/Person",
+              properties: [
+                // Unknown property
+                { predicate: "http://example.org/unknownProp", object: "value" }
+              ]
+            }
+          ]
+        }
+
+        const store = yield* rdf.jsonToStore(graph, ontology)
+
+        const unknownTriples = store.getQuads(
+          null,
+          "http://example.org/unknownProp",
+          null,
+          null
+        )
+
+        expect(unknownTriples).toHaveLength(1)
+        const literal = unknownTriples[0].object as N3.Literal
+        expect(literal.datatype.value).toBe(
+          "http://www.w3.org/2001/XMLSchema#string"
+        )
+      }).pipe(Effect.provide(RdfService.Default)))
+
+    it.effect("should fall back when property has empty ranges array", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const ontology: OntologyContext = {
+          ...OntologyContext.empty(),
+          nodes: HashMap.make([
+            "http://xmlns.com/foaf/0.1/Person",
+            ClassNode.make({
+              id: "http://xmlns.com/foaf/0.1/Person",
+              label: "Person",
+              properties: [
+                PropertyConstraint.make({
+                  propertyIri: "http://xmlns.com/foaf/0.1/name",
+                  ranges: Data.array([]), // Empty ranges
+                  maxCardinality: Option.none()
+                })
+              ]
+            })
+          ])
+        }
+
+        const graph: KnowledgeGraph = {
+          entities: [
+            {
+              "@id": "http://example.org/alice",
+              "@type": "http://xmlns.com/foaf/0.1/Person",
+              properties: [
+                { predicate: "http://xmlns.com/foaf/0.1/name", object: "Alice" }
+              ]
+            }
+          ]
+        }
+
+        const store = yield* rdf.jsonToStore(graph, ontology)
+
+        const nameTriples = store.getQuads(
+          null,
+          "http://xmlns.com/foaf/0.1/name",
+          null,
+          null
+        )
+
+        expect(nameTriples).toHaveLength(1)
+        const literal = nameTriples[0].object as N3.Literal
+        expect(literal.datatype.value).toBe(
+          "http://www.w3.org/2001/XMLSchema#string"
+        )
+      }).pipe(Effect.provide(RdfService.Default)))
+
+    it.effect("should handle whitespace in literal values", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const ontology: OntologyContext = {
+          ...OntologyContext.empty(),
+          nodes: HashMap.make([
+            "http://xmlns.com/foaf/0.1/Person",
+            ClassNode.make({
+              id: "http://xmlns.com/foaf/0.1/Person",
+              label: "Person",
+              properties: [
+                PropertyConstraint.make({
+                  propertyIri: "http://xmlns.com/foaf/0.1/age",
+                  ranges: Data.array(["xsd:integer"]),
+                  maxCardinality: Option.none()
+                })
+              ]
+            })
+          ])
+        }
+
+        const graph: KnowledgeGraph = {
+          entities: [
+            {
+              "@id": "http://example.org/alice",
+              "@type": "http://xmlns.com/foaf/0.1/Person",
+              properties: [
+                // Value has leading/trailing whitespace
+                { predicate: "http://xmlns.com/foaf/0.1/age", object: "  30  " }
+              ]
+            }
+          ]
+        }
+
+        const store = yield* rdf.jsonToStore(graph, ontology)
+
+        const ageTriples = store.getQuads(
+          null,
+          "http://xmlns.com/foaf/0.1/age",
+          null,
+          null
+        )
+
+        expect(ageTriples).toHaveLength(1)
+        const literal = ageTriples[0].object as N3.Literal
+
+        // Value should be trimmed
+        expect(literal.value).toBe("30")
+        expect(literal.datatype.value).toBe(
+          "http://www.w3.org/2001/XMLSchema#integer"
+        )
+      }).pipe(Effect.provide(RdfService.Default)))
+  })
 })
