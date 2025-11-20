@@ -8,7 +8,7 @@
  */
 
 import { Schema } from "effect"
-import type { OntologyNode } from "../Graph/Types.js"
+import type { GraphAlgebra, OntologyNode } from "../Graph/Types.js"
 
 /**
  * StructuredPrompt - The result type for the catamorphism
@@ -55,21 +55,8 @@ export class StructuredPrompt extends Schema.Class<StructuredPrompt>("Structured
   }
 }
 
-/**
- * GraphAlgebra - The algebra for folding over the graph
- *
- * Type: D × List<R> → R
- * where D is the node data (OntologyNode)
- * and R is the result type (generic, typically StructuredPrompt)
- *
- * @param nodeData - The data of the current node being processed
- * @param childrenResults - Ordered list of results from the node's dependencies (children)
- * @returns The result for the current node
- */
-export type GraphAlgebra<R> = (
-  nodeData: OntologyNode,
-  childrenResults: ReadonlyArray<R>
-) => R
+// Re-export GraphAlgebra from Graph/Types.ts (now with graph and nodeIndex parameters)
+export type { GraphAlgebra }
 
 /**
  * PromptAlgebra - Specialized algebra for generating prompts

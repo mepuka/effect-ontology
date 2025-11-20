@@ -8,6 +8,7 @@
  */
 
 import { Doc } from "@effect/printer"
+import { Graph } from "effect"
 import type { PropertyConstraint } from "../Graph/Constraint.js"
 import { isClassNode, isPropertyNode } from "../Graph/Types.js"
 import { KnowledgeUnit } from "./Ast.js"
@@ -54,7 +55,9 @@ const formatProperties = (properties: ReadonlyArray<PropertyConstraint>): string
  */
 export const defaultPromptAlgebra: PromptAlgebra = (
   nodeData,
-  childrenResults
+  childrenResults,
+  _graph,
+  _nodeIndex
 ): StructuredPrompt => {
   // Handle ClassNode
   if (isClassNode(nodeData)) {
@@ -171,16 +174,23 @@ export const combineWithUniversal = (
  */
 export const knowledgeIndexAlgebra: GraphAlgebra<KnowledgeIndexType> = (
   nodeData,
-  childrenResults
+  childrenResults,
+  graph,
+  nodeIndex
 ): KnowledgeIndexType => {
   // Handle ClassNode
   if (isClassNode(nodeData)) {
-    // Extract child IRIs from children's indexes
-    const childIris = childrenResults.flatMap((childIndex) => Array.from(KnowledgeIndex.keys(childIndex)))
+    // FIX Issue 2: Query direct children from graph, not from recursive results
+    // Find all nodes that have an edge pointing to this node (direct children)
+    const childIris: string[] = []
+    for (const [idx, data] of graph) {
+      const neighbors = Graph.neighbors(graph, idx)
+      if (Array.from(neighbors).includes(nodeIndex)) {
+        childIris.push(data)
+      }
+    }
 
-    // Note: Parents will be populated during graph traversal
-    // Each child's result is pushed to parent, so we know our children,
-    // but not our parents yet (they come from the graph structure)
+    // Note: Parents can be queried similarly by looking at neighbors of this node
 
     // Create definition for this class
     const definition = [

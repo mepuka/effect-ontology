@@ -317,15 +317,20 @@ export const OntologyContext = {
 /**
  * GraphAlgebra - The algebra for folding over the graph
  *
- * Type: D × List<R> → R
- * where D is the node data (OntologyNode)
- * and R is the result type (generic, typically StructuredPrompt)
+ * Type: D × List<R> × G × I → R
+ * where D is the node data (OntologyNode),
+ * R is the result type (generic, typically StructuredPrompt),
+ * G is the dependency graph, and I is the node index
  *
  * @param nodeData - The data of the current node being processed
  * @param childrenResults - Ordered list of results from the node's dependencies (children)
+ * @param graph - The full dependency graph for querying direct children/parents (Issue 2 fix)
+ * @param nodeIndex - The current node's index in the graph
  * @returns The result for the current node
  */
 export type GraphAlgebra<R> = (
   nodeData: OntologyNode,
-  childrenResults: ReadonlyArray<R>
+  childrenResults: ReadonlyArray<R>,
+  graph: import("effect").Graph.Graph<NodeId, unknown, "directed">,
+  nodeIndex: import("effect").Graph.NodeIndex
 ) => R
