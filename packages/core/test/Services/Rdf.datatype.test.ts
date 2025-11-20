@@ -380,4 +380,263 @@ describe("Services.Rdf - Datatype Inference", () => {
         )
       }).pipe(Effect.provide(RdfService.Default)))
   })
+
+  describe("Multi-Range Inference", () => {
+    it.effect("should pick xsd:date over xsd:string when both present", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const ontology: OntologyContext = {
+          ...OntologyContext.empty(),
+          nodes: HashMap.make([
+            "http://schema.org/Thing",
+            ClassNode.make({
+              id: "http://schema.org/Thing",
+              label: "Thing",
+              properties: [
+                PropertyConstraint.make({
+                  propertyIri: "http://schema.org/datePublished",
+                  ranges: Data.array(["xsd:date", "xsd:string"]),
+                  maxCardinality: Option.none()
+                })
+              ]
+            })
+          ])
+        }
+
+        const graph: KnowledgeGraph = {
+          entities: [
+            {
+              "@id": "http://example.org/article",
+              "@type": "http://schema.org/Thing",
+              properties: [
+                {
+                  predicate: "http://schema.org/datePublished",
+                  object: "2025-11-20"
+                }
+              ]
+            }
+          ]
+        }
+
+        const store = yield* rdf.jsonToStore(graph, ontology)
+
+        const dateTriples = store.getQuads(
+          null,
+          "http://schema.org/datePublished",
+          null,
+          null
+        )
+
+        expect(dateTriples).toHaveLength(1)
+        const literal = dateTriples[0].object as N3.Literal
+        expect(literal.datatype.value).toBe(
+          "http://www.w3.org/2001/XMLSchema#date"
+        )
+      }).pipe(Effect.provide(RdfService.Default)))
+
+    it.effect("should use priority: boolean > integer > decimal > double > date > dateTime > string", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        // Test boolean wins over integer
+        const ontology1: OntologyContext = {
+          ...OntologyContext.empty(),
+          nodes: HashMap.make([
+            "http://example.org/Test",
+            ClassNode.make({
+              id: "http://example.org/Test",
+              label: "Test",
+              properties: [
+                PropertyConstraint.make({
+                  propertyIri: "http://example.org/prop",
+                  ranges: Data.array(["xsd:integer", "xsd:boolean"]),
+                  maxCardinality: Option.none()
+                })
+              ]
+            })
+          ])
+        }
+
+        const graph1: KnowledgeGraph = {
+          entities: [
+            {
+              "@id": "http://example.org/test1",
+              "@type": "http://example.org/Test",
+              properties: [
+                { predicate: "http://example.org/prop", object: "true" }
+              ]
+            }
+          ]
+        }
+
+        const store1 = yield* rdf.jsonToStore(graph1, ontology1)
+        const triples1 = store1.getQuads(
+          null,
+          "http://example.org/prop",
+          null,
+          null
+        )
+        const literal1 = triples1[0].object as N3.Literal
+        expect(literal1.datatype.value).toBe(
+          "http://www.w3.org/2001/XMLSchema#boolean"
+        )
+
+        // Test integer wins over decimal
+        const ontology2: OntologyContext = {
+          ...OntologyContext.empty(),
+          nodes: HashMap.make([
+            "http://example.org/Test",
+            ClassNode.make({
+              id: "http://example.org/Test",
+              label: "Test",
+              properties: [
+                PropertyConstraint.make({
+                  propertyIri: "http://example.org/prop",
+                  ranges: Data.array(["xsd:decimal", "xsd:integer"]),
+                  maxCardinality: Option.none()
+                })
+              ]
+            })
+          ])
+        }
+
+        const graph2: KnowledgeGraph = {
+          entities: [
+            {
+              "@id": "http://example.org/test2",
+              "@type": "http://example.org/Test",
+              properties: [
+                { predicate: "http://example.org/prop", object: "42" }
+              ]
+            }
+          ]
+        }
+
+        const store2 = yield* rdf.jsonToStore(graph2, ontology2)
+        const triples2 = store2.getQuads(
+          null,
+          "http://example.org/prop",
+          null,
+          null
+        )
+        const literal2 = triples2[0].object as N3.Literal
+        expect(literal2.datatype.value).toBe(
+          "http://www.w3.org/2001/XMLSchema#integer"
+        )
+      }).pipe(Effect.provide(RdfService.Default)))
+
+    it.effect("should return xsd:string when ranges mix object classes and XSD datatypes", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const ontology: OntologyContext = {
+          ...OntologyContext.empty(),
+          nodes: HashMap.make([
+            "http://schema.org/CreativeWork",
+            ClassNode.make({
+              id: "http://schema.org/CreativeWork",
+              label: "CreativeWork",
+              properties: [
+                PropertyConstraint.make({
+                  propertyIri: "http://schema.org/author",
+                  // Mixed: object class and datatype
+                  ranges: Data.array([
+                    "http://schema.org/Person",
+                    "xsd:string"
+                  ]),
+                  maxCardinality: Option.none()
+                })
+              ]
+            })
+          ])
+        }
+
+        const graph: KnowledgeGraph = {
+          entities: [
+            {
+              "@id": "http://example.org/article",
+              "@type": "http://schema.org/CreativeWork",
+              properties: [
+                { predicate: "http://schema.org/author", object: "John Doe" }
+              ]
+            }
+          ]
+        }
+
+        const store = yield* rdf.jsonToStore(graph, ontology)
+
+        const authorTriples = store.getQuads(
+          null,
+          "http://schema.org/author",
+          null,
+          null
+        )
+
+        expect(authorTriples).toHaveLength(1)
+        const literal = authorTriples[0].object as N3.Literal
+
+        // Should fall back to xsd:string
+        expect(literal.datatype.value).toBe(
+          "http://www.w3.org/2001/XMLSchema#string"
+        )
+      }).pipe(Effect.provide(RdfService.Default)))
+
+    it.effect("should return xsd:string when all ranges are non-XSD classes", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const ontology: OntologyContext = {
+          ...OntologyContext.empty(),
+          nodes: HashMap.make([
+            "http://schema.org/Person",
+            ClassNode.make({
+              id: "http://schema.org/Person",
+              label: "Person",
+              properties: [
+                PropertyConstraint.make({
+                  propertyIri: "http://schema.org/knows",
+                  // Only object classes, no XSD types
+                  ranges: Data.array([
+                    "http://schema.org/Person",
+                    "http://schema.org/Organization"
+                  ]),
+                  maxCardinality: Option.none()
+                })
+              ]
+            })
+          ])
+        }
+
+        const graph: KnowledgeGraph = {
+          entities: [
+            {
+              "@id": "http://example.org/alice",
+              "@type": "http://schema.org/Person",
+              properties: [
+                // String value for object property (edge case)
+                { predicate: "http://schema.org/knows", object: "Bob" }
+              ]
+            }
+          ]
+        }
+
+        const store = yield* rdf.jsonToStore(graph, ontology)
+
+        const knowsTriples = store.getQuads(
+          null,
+          "http://schema.org/knows",
+          null,
+          null
+        )
+
+        expect(knowsTriples).toHaveLength(1)
+        const literal = knowsTriples[0].object as N3.Literal
+
+        // Should fall back to xsd:string
+        expect(literal.datatype.value).toBe(
+          "http://www.w3.org/2001/XMLSchema#string"
+        )
+      }).pipe(Effect.provide(RdfService.Default)))
+  })
 })
