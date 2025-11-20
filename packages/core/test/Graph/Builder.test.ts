@@ -77,11 +77,11 @@ describe("Graph Builder", () => {
         if (animalNode._tag === "Class") {
           // hasName has domain Animal
           const hasNameProp = animalNode.properties.find(
-            (p) => p.iri === "http://example.org/zoo#hasName"
+            (p) => p.propertyIri === "http://example.org/zoo#hasName"
           )
           expect(hasNameProp).toBeDefined()
           expect(hasNameProp?.label).toBe("has name")
-          expect(hasNameProp?.range).toBe("http://www.w3.org/2001/XMLSchema#string")
+          expect(hasNameProp?.ranges[0]).toBe("http://www.w3.org/2001/XMLSchema#string")
         }
       }
 
@@ -91,7 +91,7 @@ describe("Graph Builder", () => {
         if (petNode._tag === "Class") {
           // ownedBy has domain Pet
           const ownedByProp = petNode.properties.find(
-            (p) => p.iri === "http://example.org/zoo#ownedBy"
+            (p) => p.propertyIri === "http://example.org/zoo#ownedBy"
           )
           expect(ownedByProp).toBeDefined()
           expect(ownedByProp?.label).toBe("owned by")
@@ -238,7 +238,7 @@ describe("Graph Builder", () => {
         if (managerNode._tag === "Class") {
           const managesProp = managerNode.properties.find((p) => p.label === "manages")
           expect(managesProp).toBeDefined()
-          expect(managesProp?.range).toBe("http://example.org/org#Employee")
+          expect(managesProp?.ranges[0]).toBe("http://example.org/org#Employee")
         }
       }))
 
@@ -252,11 +252,11 @@ describe("Graph Builder", () => {
         if (orgNode._tag === "Class") {
           // hasAddress should point to Address class
           const hasAddressProp = orgNode.properties.find((p) => p.label === "has address")
-          expect(hasAddressProp?.range).toBe("http://example.org/org#Address")
+          expect(hasAddressProp?.ranges[0]).toBe("http://example.org/org#Address")
 
           // hasEmployee should point to Employee class
           const hasEmployeeProp = orgNode.properties.find((p) => p.label === "has employee")
-          expect(hasEmployeeProp?.range).toBe("http://example.org/org#Employee")
+          expect(hasEmployeeProp?.ranges[0]).toBe("http://example.org/org#Employee")
         }
       }))
 
@@ -340,14 +340,14 @@ describe("Graph Builder", () => {
           (p) => p.label === "Creator"
         )
         expect(creatorProp).toBeDefined()
-        expect(creatorProp?.range).toBe("http://purl.org/dc/terms/Agent")
+        expect(creatorProp?.ranges[0]).toBe("http://purl.org/dc/terms/Agent")
 
         // Find title property
         const titleProp = result.context.universalProperties.find(
           (p) => p.label === "Title"
         )
         expect(titleProp).toBeDefined()
-        expect(titleProp?.range).toBe("http://www.w3.org/2001/XMLSchema#string")
+        expect(titleProp?.ranges[0]).toBe("http://www.w3.org/2001/XMLSchema#string")
       }))
 
     it.effect("classes are still parsed even with no scoped properties", () =>

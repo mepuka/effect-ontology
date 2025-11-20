@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, HashMap } from "effect"
+import { Effect, HashMap , Data} from "effect"
 import { Parser, Store } from "n3"
 import SHACLValidator from "rdf-validate-shacl"
 import { ShaclError } from "../../src/Extraction/Events.js"
@@ -375,14 +375,14 @@ describe("ShaclService", () => {
           label: "Person",
           properties: [
             {
-              iri: "http://xmlns.com/foaf/0.1/name",
+              propertyIri: "http://xmlns.com/foaf/0.1/name",
               label: "name",
-              range: "http://www.w3.org/2001/XMLSchema#string"
+              ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"])
             },
             {
-              iri: "http://xmlns.com/foaf/0.1/age",
+              propertyIri: "http://xmlns.com/foaf/0.1/age",
               label: "age",
-              range: "http://www.w3.org/2001/XMLSchema#integer"
+              ranges: Data.array(["http://www.w3.org/2001/XMLSchema#integer"])
             }
           ]
         })
@@ -423,9 +423,9 @@ describe("ShaclService", () => {
           label: "Person",
           properties: [
             {
-              iri: "http://example.org/knows",
+              propertyIri: "http://example.org/knows",
               label: "knows",
-              range: "http://example.org/Person" // Object property - range is a class
+              ranges: Data.array(["http://example.org/Person"]) // Object property - range is a class
             }
           ]
         })
@@ -458,9 +458,9 @@ describe("ShaclService", () => {
           label: "Person",
           properties: [
             {
-              iri: "http://example.org/name",
+              propertyIri: "http://example.org/name",
               label: "name",
-              range: "http://www.w3.org/2001/XMLSchema#string"
+              ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"])
             }
           ]
         })
@@ -470,9 +470,9 @@ describe("ShaclService", () => {
           label: "Organization",
           properties: [
             {
-              iri: "http://example.org/orgName",
+              propertyIri: "http://example.org/orgName",
               label: "organization name",
-              range: "http://www.w3.org/2001/XMLSchema#string"
+              ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"])
             }
           ]
         })
@@ -540,9 +540,9 @@ describe("ShaclService", () => {
           label: "Person",
           properties: [
             {
-              iri: "http://example.org/name",
+              propertyIri: "http://example.org/name",
               label: "name",
-              range: "http://www.w3.org/2001/XMLSchema#string"
+              ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"])
             }
           ]
         })
@@ -551,14 +551,14 @@ describe("ShaclService", () => {
           nodes: HashMap.set(HashMap.empty(), personClass.id, personClass),
           universalProperties: [
             {
-              iri: "http://purl.org/dc/terms/created",
+              propertyIri: "http://purl.org/dc/terms/created",
               label: "created",
-              range: "http://www.w3.org/2001/XMLSchema#dateTime"
+              ranges: Data.array(["http://www.w3.org/2001/XMLSchema#dateTime"])
             },
             {
-              iri: "http://purl.org/dc/terms/creator",
+              propertyIri: "http://purl.org/dc/terms/creator",
               label: "creator",
-              range: "http://www.w3.org/2001/XMLSchema#string"
+              ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"])
             }
           ],
           nodeIndexMap: HashMap.empty(),

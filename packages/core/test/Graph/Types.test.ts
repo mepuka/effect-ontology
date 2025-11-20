@@ -1,4 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
+import { Data, Option } from "effect"
+import { PropertyConstraint } from "../../src/Graph/Constraint.js"
 import {
   type ClassNode,
   isClassNode,
@@ -28,16 +30,21 @@ describe("Graph Types", () => {
       id: "http://example.org/zoo#Animal",
       label: "Animal",
       properties: [
-        {
-          iri: "http://example.org/zoo#hasName",
+        PropertyConstraint.make({
+          propertyIri: "http://example.org/zoo#hasName",
           label: "has name",
-          range: "http://www.w3.org/2001/XMLSchema#string"
-        }
+          ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"]),
+          minCardinality: 0,
+          maxCardinality: Option.none(),
+          allowedValues: Data.array([]),
+          annotations: Data.array(["has name"]),
+          source: "domain"
+        })
       ]
     }
 
     expect(classNode.properties).toHaveLength(1)
-    expect(classNode.properties[0].iri).toBe("http://example.org/zoo#hasName")
+    expect(classNode.properties[0].propertyIri).toBe("http://example.org/zoo#hasName")
   })
 
   it("PropertyNode has required fields", () => {

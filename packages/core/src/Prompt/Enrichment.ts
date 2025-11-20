@@ -64,8 +64,8 @@ export const enrichKnowledgeIndex = (
 
           // Separate own vs inherited
           // A property is "inherited" if it's in effectiveProps but not in unit.properties
-          const ownPropertyIris = new Set(unit.properties.map((p) => p.iri))
-          const inheritedProps = effectiveProps.filter((p) => !ownPropertyIris.has(p.iri))
+          const ownPropertyIris = new Set(unit.properties.map((p) => p.propertyIri))
+          const inheritedProps = effectiveProps.filter((p) => !ownPropertyIris.has(p.propertyIri))
 
           // Create enriched unit with inherited properties
           // Sort inherited properties by IRI for determinism

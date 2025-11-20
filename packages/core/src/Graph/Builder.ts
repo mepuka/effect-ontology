@@ -11,7 +11,8 @@
 
 import { Data, Effect, Graph, HashMap, HashSet, Option } from "effect"
 import * as N3 from "n3"
-import { ClassNode, type NodeId, type OntologyContext, type PropertyData } from "./Types.js"
+import { PropertyConstraint } from "./Constraint.js"
+import { ClassNode, type NodeId, type OntologyContext } from "./Types.js"
 
 class ParseError extends Data.TaggedError("ParseError")<{
   cause: unknown
@@ -93,7 +94,7 @@ export const parseTurtleToGraph = (
       "http://www.w3.org/2002/07/owl#DatatypeProperty"
     ]
 
-    const universalProperties: Array<PropertyData> = []
+    const universalProperties: Array<PropertyConstraint> = []
 
     for (const propType of propertyTypes) {
       const propTriples = store.getQuads(
@@ -132,11 +133,12 @@ export const parseTurtleToGraph = (
           null
         )
 
-        const propertyData: PropertyData = {
-          iri: propIri,
+        const propertyData = PropertyConstraint.make({
+          propertyIri: propIri,
           label,
-          range
-        }
+          ranges: Data.array([range]),
+          maxCardinality: Option.none()
+        })
 
         if (domainQuads.length === 0) {
           // CASE A: No Domain -> Universal Property (e.g., Dublin Core)

@@ -229,11 +229,11 @@ export const extractDependencies = (
       if (Option.isSome(unit)) {
         for (const prop of unit.value.properties) {
           // Check if range is a class IRI (not a datatype)
-          if (KnowledgeIndex.has(index, prop.range)) {
-            dependencies = HashSet.add(dependencies, prop.range)
+          if (KnowledgeIndex.has(index, prop.ranges[0])) {
+            dependencies = HashSet.add(dependencies, prop.ranges[0])
 
             // Recursively add range class's ancestors
-            const rangeAncestors = yield* inheritanceService.getAncestors(prop.range)
+            const rangeAncestors = yield* inheritanceService.getAncestors(prop.ranges[0])
             for (const ancestorIri of rangeAncestors) {
               dependencies = HashSet.add(dependencies, ancestorIri)
             }

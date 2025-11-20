@@ -12,6 +12,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { KnowledgeUnit } from "../../src/Prompt/Ast.js"
 import * as KnowledgeIndex from "../../src/Prompt/KnowledgeIndex.js"
+import { Data } from "effect"
 
 describe("KnowledgeIndex", () => {
   describe("KnowledgeUnit", () => {
@@ -29,20 +30,20 @@ describe("KnowledgeIndex", () => {
 
     it("should merge two units with same IRI", () => {
       const unit1 = new KnowledgeUnit({
-        iri: "http://example.org/Person",
+        propertyIri: "http://example.org/Person",
         label: "Person",
         definition: "Class: Person",
-        properties: [{ iri: "http://example.org/hasName", label: "hasName", range: "string" }],
+        properties: [{ propertyIri: "http://example.org/hasName", label: "hasName", ranges: Data.array(["string"]) }],
         inheritedProperties: [],
         children: ["http://example.org/Employee"],
         parents: []
       })
 
       const unit2 = new KnowledgeUnit({
-        iri: "http://example.org/Person",
+        propertyIri: "http://example.org/Person",
         label: "Person",
         definition: "Class: Person",
-        properties: [{ iri: "http://example.org/hasName", label: "hasName", range: "string" }],
+        properties: [{ propertyIri: "http://example.org/hasName", label: "hasName", ranges: Data.array(["string"]) }],
         inheritedProperties: [],
         children: ["http://example.org/Student"],
         parents: []
@@ -196,7 +197,7 @@ describe("KnowledgeIndex", () => {
 
     it("should merge children when combining units with same IRI", () => {
       const unit1 = new KnowledgeUnit({
-        iri: "http://example.org/Person",
+        propertyIri: "http://example.org/Person",
         label: "Person",
         definition: "Class: Person",
         properties: [],
@@ -206,7 +207,7 @@ describe("KnowledgeIndex", () => {
       })
 
       const unit2 = new KnowledgeUnit({
-        iri: "http://example.org/Person",
+        propertyIri: "http://example.org/Person",
         label: "Person",
         definition: "Class: Person",
         properties: [],
@@ -242,22 +243,22 @@ describe("KnowledgeIndex", () => {
     it("should compute stats for non-empty index", () => {
       const index = KnowledgeIndex.fromUnits([
         new KnowledgeUnit({
-          iri: "http://example.org/Person",
+          propertyIri: "http://example.org/Person",
           label: "Person",
           definition: "Class: Person",
           properties: [
-            { iri: "http://example.org/hasName", label: "hasName", range: "string" },
-            { iri: "http://example.org/hasAge", label: "hasAge", range: "integer" }
+            { propertyIri: "http://example.org/hasName", label: "hasName", ranges: Data.array(["string"]) },
+            { propertyIri: "http://example.org/hasAge", label: "hasAge", ranges: Data.array(["integer"]) }
           ],
           inheritedProperties: [],
           children: [],
           parents: []
         }),
         new KnowledgeUnit({
-          iri: "http://example.org/Animal",
+          propertyIri: "http://example.org/Animal",
           label: "Animal",
           definition: "Class: Animal",
-          properties: [{ iri: "http://example.org/hasSpecies", label: "hasSpecies", range: "string" }],
+          properties: [{ propertyIri: "http://example.org/hasSpecies", label: "hasSpecies", ranges: Data.array(["string"]) }],
           inheritedProperties: [],
           children: [],
           parents: []

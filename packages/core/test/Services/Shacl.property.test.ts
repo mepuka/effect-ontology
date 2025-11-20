@@ -98,8 +98,8 @@ const getPropertiesWithXSDRange = (ontology: OntologyContext): Array<string> => 
   for (const node of HashMap.values(ontology.nodes)) {
     if (isClassNode(node)) {
       for (const prop of node.properties) {
-        if (prop.range.includes("XMLSchema#") || prop.range.startsWith("xsd:")) {
-          properties.push(prop.iri)
+        if (prop.ranges[0].includes("XMLSchema#") || prop.ranges[0].startsWith("xsd:")) {
+          properties.push(prop.propertyIri)
         }
       }
     }
@@ -119,8 +119,8 @@ const getPropertiesWithClassRange = (ontology: OntologyContext): Array<string> =
   for (const node of HashMap.values(ontology.nodes)) {
     if (isClassNode(node)) {
       for (const prop of node.properties) {
-        if (!prop.range.includes("XMLSchema#") && !prop.range.startsWith("xsd:")) {
-          properties.push(prop.iri)
+        if (!prop.ranges[0].includes("XMLSchema#") && !prop.ranges[0].startsWith("xsd:")) {
+          properties.push(prop.propertyIri)
         }
       }
     }
@@ -192,7 +192,7 @@ describe("ShaclService - Property-Based Tests", () => {
           const allProperties: Array<string> = []
           for (const node of HashMap.values(ontology.nodes)) {
             if (isClassNode(node)) {
-              for (const prop of node.properties.map((p) => p.iri)) {
+              for (const prop of node.properties.map((p) => p.propertyIri)) {
                 allProperties.push(prop)
               }
             }

@@ -5,7 +5,8 @@
  */
 
 import { Effect, Graph, HashMap, HashSet, Layer, Option } from "effect"
-import { ClassNode, type NodeId, type OntologyContext, type PropertyData } from "../../src/Graph/Types.js"
+import type { PropertyConstraint } from "../../src/Graph/Constraint.js"
+import { ClassNode, type NodeId, type OntologyContext } from "../../src/Graph/Types.js"
 import * as Inheritance from "../../src/Ontology/Inheritance.js"
 
 /**
@@ -165,7 +166,7 @@ export const buildTestHierarchy = (): { graph: Graph.Graph<string, null>; contex
 export function buildTestGraph(config: {
   subClassOf: Array<[string, string]>
   disjointWith: Array<[string, string]>
-  classes?: Array<{ id: string; label: string; properties?: Array<PropertyData> }>
+  classes?: Array<{ id: string; label: string; properties?: Array<PropertyConstraint> }>
 }) {
   let nodes = HashMap.empty<NodeId, ClassNode>()
   let nodeIndexMap = HashMap.empty<NodeId, number>()

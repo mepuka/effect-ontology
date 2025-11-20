@@ -6,7 +6,7 @@
 
 import { LanguageModel } from "@effect/ai"
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Graph, HashMap, Layer, Stream } from "effect"
+import { Effect, Graph, HashMap, Layer, Stream , Data} from "effect"
 import { ClassNode, type NodeId, type OntologyContext } from "../../src/Graph/Types.js"
 import type { KnowledgeGraph } from "../../src/Schema/Factory.js"
 import { ExtractionPipeline } from "../../src/Services/Extraction.js"
@@ -25,9 +25,9 @@ describe("Services.Extraction", () => {
           label: "Person",
           properties: [
             {
-              iri: "http://xmlns.com/foaf/0.1/name",
+              propertyIri: "http://xmlns.com/foaf/0.1/name",
               label: "name",
-              range: "xsd:string"
+              ranges: Data.array(["xsd:string"])
             }
           ]
         })

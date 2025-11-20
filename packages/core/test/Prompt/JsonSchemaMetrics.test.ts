@@ -77,8 +77,8 @@ describe("JSON Schema Metrics - Actual Prompt Tokens", () => {
           if (unitOption._tag === "Some") {
             const unit = unitOption.value
             for (const prop of unit.properties) {
-              if (!propertyIRIs.includes(prop.iri)) {
-                propertyIRIs.push(prop.iri)
+              if (!propertyIRIs.includes(prop.propertyIri)) {
+                propertyIRIs.push(prop.propertyIri)
               }
             }
           }
@@ -113,8 +113,8 @@ describe("JSON Schema Metrics - Actual Prompt Tokens", () => {
           if (unitOption._tag === "Some") {
             const unit = unitOption.value
             for (const prop of unit.properties) {
-              if (!propertyIRIs.includes(prop.iri)) {
-                propertyIRIs.push(prop.iri)
+              if (!propertyIRIs.includes(prop.propertyIri)) {
+                propertyIRIs.push(prop.propertyIri)
               }
             }
           }
@@ -159,8 +159,8 @@ describe("JSON Schema Metrics - Actual Prompt Tokens", () => {
             )
             if (unit) {
               for (const prop of unit.properties) {
-                if (!propertyIRIs.includes(prop.iri)) {
-                  propertyIRIs.push(prop.iri)
+                if (!propertyIRIs.includes(prop.propertyIri)) {
+                  propertyIRIs.push(prop.propertyIri)
                 }
               }
             }
@@ -189,7 +189,7 @@ describe("JSON Schema Metrics - Actual Prompt Tokens", () => {
 
           expect(tokens.length).toBeGreaterThan(100)
         }),
-      { timeout: 10000 }
+      10000
     )
 
     it.layer(tokenizerLayer)(
@@ -220,8 +220,8 @@ Extract from: "Alice knows Bob. Bob works at Acme Corp."
             )
             if (unit) {
               for (const prop of unit.properties) {
-                if (!propertyIRIs.includes(prop.iri)) {
-                  propertyIRIs.push(prop.iri)
+                if (!propertyIRIs.includes(prop.propertyIri)) {
+                  propertyIRIs.push(prop.propertyIri)
                 }
               }
             }
@@ -241,7 +241,7 @@ Extract from: "Alice knows Bob. Bob works at Acme Corp."
 
           expect(fullTokens.length).toBeGreaterThan(textOnlyTokens.length)
         }),
-      { timeout: 10000 }
+      10000
     )
   })
 
@@ -268,8 +268,8 @@ Extract from: "Alice knows Bob. Bob works at Acme Corp."
             )
             if (unit) {
               for (const prop of unit.properties) {
-                if (!propertyIRIs.includes(prop.iri)) {
-                  propertyIRIs.push(prop.iri)
+                if (!propertyIRIs.includes(prop.propertyIri)) {
+                  propertyIRIs.push(prop.propertyIri)
                 }
               }
             }
@@ -287,7 +287,7 @@ Extract from: "Alice knows Bob. Bob works at Acme Corp."
 
           expect(tokens.length).toBeGreaterThan(100)
         }),
-      { timeout: 10000 }
+      10000
     )
   })
 
@@ -314,8 +314,8 @@ Extract from: "Alice knows Bob. Bob works at Acme Corp."
             )
             if (unit) {
               for (const prop of unit.properties) {
-                if (!propertyIRIs.includes(prop.iri)) {
-                  propertyIRIs.push(prop.iri)
+                if (!propertyIRIs.includes(prop.propertyIri)) {
+                  propertyIRIs.push(prop.propertyIri)
                 }
               }
             }
@@ -341,7 +341,7 @@ Extract from: "Alice knows Bob. Bob works at Acme Corp."
           // JSON Schema should be the largest component
           expect(schemaTokens.length).toBeGreaterThan(instructionsTokens.length)
         }),
-      { timeout: 10000 }
+      10000
     )
   })
 })
