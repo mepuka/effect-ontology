@@ -143,8 +143,12 @@ describe("Schema Factory", () => {
     expect(() => decode(unknownProp)).toThrow()
   })
 
-  it("throws error for empty vocabulary", () => {
+  it("throws error for empty class vocabulary", () => {
+    // Empty classes should still throw
     expect(() => makeKnowledgeGraphSchema([], propertyIris)).toThrow()
-    expect(() => makeKnowledgeGraphSchema(classIris, [])).toThrow()
+
+    // Empty properties is OK now because CORE_ANNOTATION_PROPERTIES are added
+    // This is intentional - rdfs:label and friends are always available
+    expect(() => makeKnowledgeGraphSchema(classIris, [])).not.toThrow()
   })
 })

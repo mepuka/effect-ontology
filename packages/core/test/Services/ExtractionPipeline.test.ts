@@ -17,6 +17,7 @@ import type { NodeId, OntologyContext } from "../../src/Graph/Types"
 import { EntityDiscoveryServiceLive } from "../../src/Services/EntityDiscovery.js"
 import { streamingExtractionPipeline } from "../../src/Services/ExtractionPipeline.js"
 import { NlpServiceLive } from "../../src/Services/Nlp.js"
+import { RdfService } from "../../src/Services/Rdf.js"
 
 // Mock graph for testing (empty directed graph)
 const mockGraph: Graph.Graph<NodeId, unknown> = Graph.directed()
@@ -74,7 +75,12 @@ const MockLanguageModelLive = Layer.succeed(
 )
 
 // Test layers
-const TestLayers = Layer.mergeAll(NlpServiceLive, EntityDiscoveryServiceLive, MockLanguageModelLive)
+const TestLayers = Layer.mergeAll(
+  NlpServiceLive,
+  EntityDiscoveryServiceLive,
+  MockLanguageModelLive,
+  RdfService.Default
+)
 
 describe("ExtractionPipeline", () => {
   it.effect("should process text through pipeline", () =>

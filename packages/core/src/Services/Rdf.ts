@@ -18,7 +18,7 @@
  * @since 1.0.0
  */
 
-import { Effect } from "effect"
+import { Effect, Layer } from "effect"
 import * as N3 from "n3"
 import { RdfError } from "../Extraction/Events.js"
 
@@ -266,4 +266,134 @@ export class RdfService extends Effect.Service<RdfService>()("RdfService", {
           })
       })
   })
-}) {}
+}) {
+  /**
+   * Default production layer for RdfService
+   *
+   * Provides a stateless RdfService instance with no dependencies.
+   * Uses the Layer automatically created by Effect.Service's `sync` factory.
+   *
+   * @since 1.0.0
+   * @category layers
+   * @example
+   * ```typescript
+   * import { RdfService } from "@effect-ontology/core/Services/Rdf"
+   * import { Effect } from "effect"
+   *
+   * const program = Effect.gen(function* () {
+   *   const rdf = yield* RdfService
+   *   // Use rdf service...
+   * })
+   *
+   * // Provide default layer
+   * Effect.runPromise(program.pipe(Effect.provide(RdfService.Default)))
+   * ```
+   */
+  static readonly Default = Layer.succeed(RdfService, {
+    jsonToStore: (graph) =>
+      Effect.sync(() => {
+        const store = new N3.Store()
+        const { blankNode, literal, namedNode, quad } = N3.DataFactory
+
+        // Helper to create subject term (blank node or named node)
+        const createSubject = (id: string): N3.NamedNode | N3.BlankNode =>
+          id.startsWith("_:") ? blankNode(id.slice(2)) : namedNode(id)
+
+        // Convert each entity
+        for (const entity of graph.entities) {
+          const subject = createSubject(entity["@id"])
+
+          // Add type triple
+          store.addQuad(
+            quad(
+              subject,
+              namedNode("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+              namedNode(entity["@type"])
+            )
+          )
+
+          // Add property triples
+          for (const prop of entity.properties) {
+            const predicate = namedNode(prop.predicate)
+
+            // Object can be literal or reference
+            const object = typeof prop.object === "string"
+              ? literal(prop.object)
+              : createSubject(prop.object["@id"])
+
+            store.addQuad(quad(subject, predicate, object))
+          }
+        }
+
+        return store
+      }).pipe(
+        Effect.catchAllDefect((cause) =>
+          Effect.fail(
+            new RdfError({
+              module: "RdfService",
+              method: "jsonToStore",
+              reason: "InvalidQuad",
+              description: "Failed to create RDF quads from entities",
+              cause
+            })
+          )
+        )
+      ),
+
+    storeToTurtle: (store) =>
+      Effect.tryPromise({
+        try: () =>
+          new Promise<string>((resolve, reject) => {
+            const writer = new N3.Writer({ format: "Turtle" })
+
+            // Add all quads from store
+            for (const quad of store) {
+              writer.addQuad(quad)
+            }
+
+            // Writer.end is callback-based
+            writer.end((error, result) => {
+              if (error) reject(error)
+              else resolve(result)
+            })
+          }),
+        catch: (cause) =>
+          new RdfError({
+            module: "RdfService",
+            method: "storeToTurtle",
+            reason: "ParseError",
+            description: "Failed to serialize store to Turtle",
+            cause
+          })
+      }),
+
+    turtleToStore: (turtle) =>
+      Effect.tryPromise({
+        try: () =>
+          new Promise<RdfStore>((resolve, reject) => {
+            const parser = new N3.Parser()
+            const store = new N3.Store()
+
+            // Parser.parse is callback-based (quad, error, quad, ..., end)
+            parser.parse(turtle, (error, quad, _prefixes) => {
+              if (error) {
+                reject(error)
+              } else if (quad) {
+                store.addQuad(quad)
+              } else {
+                // quad is null on completion
+                resolve(store)
+              }
+            })
+          }),
+        catch: (cause) =>
+          new RdfError({
+            module: "RdfService",
+            method: "turtleToStore",
+            reason: "ParseError",
+            description: "Failed to parse Turtle to store",
+            cause
+          })
+      })
+  } as RdfService)
+}
