@@ -31,6 +31,33 @@ export class MissingNodeDataError extends Data.TaggedError("MissingNodeDataError
 export type SolverError = GraphCycleError | MissingNodeDataError
 
 /**
+ * Build reverse adjacency map for efficient parent lookups
+ *
+ * Uses Effect Graph's built-in `neighborsDirected` with "incoming" direction
+ * to get predecessors (parents) for each node in O(deg⁻(v)) time.
+ *
+ * This is the key optimization for Issue 5: Replaces O(V²) scan in
+ * knowledgeIndexAlgebra with O(1) HashMap lookup using Effect's native
+ * reverseAdjacency structure.
+ *
+ * @param graph - The ontology graph
+ * @returns HashMap mapping node index to array of predecessor indices
+ */
+const buildPredecessorsMap = <N, E>(
+  graph: Graph.Graph<N, E, "directed">
+): HashMap.HashMap<number, number[]> => {
+  let predecessors = HashMap.empty<number, number[]>()
+
+  // For each node, get its predecessors using Effect's native reverseAdjacency
+  for (const [nodeIndex, _data] of graph) {
+    const parents = Graph.neighborsDirected(graph, nodeIndex, "incoming")
+    predecessors = HashMap.set(predecessors, nodeIndex, parents)
+  }
+
+  return predecessors
+}
+
+/**
  * Performs a topological sort on the graph using DFS
  *
  * Returns nodes in dependency order: children before parents
@@ -107,6 +134,9 @@ export const solveGraph = <R>(
     // Step 1: Get topological ordering
     const sortedIndices = yield* topologicalSort(graph)
 
+    // Step 1.5: Build predecessors map using Effect Graph's reverseAdjacency (Issue 5 fix)
+    const predecessors = buildPredecessorsMap(graph)
+
     // Step 2: Initialize state
     // Results: NodeIndex -> R (final computed results)
     let results = HashMap.empty<Graph.NodeIndex, R>()
@@ -147,8 +177,8 @@ export const solveGraph = <R>(
         )
       )
 
-      // 3.2: Apply algebra (with graph and nodeIndex for Issue 2 fix)
-      const result = algebra(ontologyNode, childrenResults, graph, nodeIndex)
+      // 3.2: Apply algebra (with graph, nodeIndex, and predecessors for Issue 5 fix)
+      const result = algebra(ontologyNode, childrenResults, graph, nodeIndex, predecessors)
       results = HashMap.set(results, nodeIndex, result)
 
       // 3.3: Push to dependents (parents)
