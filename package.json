@@ -27,7 +27,11 @@
     "coverage": "vitest --coverage"
   },
   "dependencies": {
+    "@anthropic-ai/tokenizer": "^0.0.4",
     "@effect/ai": "^0.32.1",
+    "@effect/ai-anthropic": "^0.22.0",
+    "@effect/ai-google": "^0.11.0",
+    "@effect/ai-openai": "^0.35.0",
     "@effect/typeclass": "^0.38.0",
     "@zazuko/env": "^3.0.1",
     "effect": "^3.17.7",
@@ -35,7 +39,8 @@
     "n3": "^1.26.0",
     "rdf-validate-shacl": "^0.6.5",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "tiktoken": "^1.0.22"
   },
   "devDependencies": {
     "@babel/cli": "^7.24.8",

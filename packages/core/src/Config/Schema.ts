@@ -25,7 +25,7 @@
  * const testConfig = ConfigProvider.fromMap(
  *   new Map([
  *     ["LLM.PROVIDER", "anthropic"],
- *     ["LLM.ANTHROPIC_API_KEY", "test-key"]
+ *     ["LLM.ANTHROPIC.API_KEY", "test-key"]
  *   ])
  * )
  * ```
@@ -41,7 +41,7 @@ import { Config } from "effect"
  * @since 1.0.0
  * @category models
  */
-export type LlmProvider = "anthropic" | "gemini" | "openrouter"
+export type LlmProvider = "anthropic" | "openai" | "gemini" | "openrouter"
 
 /**
  * Anthropic Provider Configuration
@@ -52,6 +52,21 @@ export type LlmProvider = "anthropic" | "gemini" | "openrouter"
  * @category schemas
  */
 export interface AnthropicConfig {
+  readonly apiKey: string
+  readonly model: string
+  readonly maxTokens: number
+  readonly temperature: number
+}
+
+/**
+ * OpenAI Provider Configuration
+ *
+ * Configuration for GPT models via OpenAI API.
+ *
+ * @since 1.0.0
+ * @category schemas
+ */
+export interface OpenAIConfig {
   readonly apiKey: string
   readonly model: string
   readonly maxTokens: number
@@ -102,6 +117,7 @@ export interface OpenRouterConfig {
 export interface LlmConfig {
   readonly provider: LlmProvider
   readonly anthropic?: AnthropicConfig
+  readonly openai?: OpenAIConfig
   readonly gemini?: GeminiConfig
   readonly openrouter?: OpenRouterConfig
 }
@@ -154,23 +170,48 @@ export interface AppConfig {
  * Effect.Config schema for Anthropic provider configuration.
  *
  * Environment variables:
- * - LLM.ANTHROPIC_API_KEY (required)
- * - LLM.ANTHROPIC_MODEL (optional, default: "claude-3-5-sonnet-20241022")
- * - LLM.ANTHROPIC_MAX_TOKENS (optional, default: 4096)
- * - LLM.ANTHROPIC_TEMPERATURE (optional, default: 0.0)
+ * - LLM__ANTHROPIC_API_KEY (required)
+ * - LLM__ANTHROPIC_MODEL (optional, default: "claude-3-5-sonnet-20241022")
+ * - LLM__ANTHROPIC_MAX_TOKENS (optional, default: 4096)
+ * - LLM__ANTHROPIC_TEMPERATURE (optional, default: 0.0)
  *
  * @since 1.0.0
  * @category config
  */
-export const AnthropicConfigSchema = Config.all({
-  apiKey: Config.string("ANTHROPIC_API_KEY"),
-  model: Config.withDefault(
-    Config.string("ANTHROPIC_MODEL"),
-    "claude-3-5-sonnet-20241022"
-  ),
-  maxTokens: Config.withDefault(Config.number("ANTHROPIC_MAX_TOKENS"), 4096),
-  temperature: Config.withDefault(Config.number("ANTHROPIC_TEMPERATURE"), 0.0)
-})
+export const AnthropicConfigSchema = Config.nested("ANTHROPIC")(
+  Config.all({
+    apiKey: Config.string("API_KEY"),
+    model: Config.withDefault(
+      Config.string("MODEL"),
+      "claude-3-5-sonnet-20241022"
+    ),
+    maxTokens: Config.withDefault(Config.number("MAX_TOKENS"), 4096),
+    temperature: Config.withDefault(Config.number("TEMPERATURE"), 0.0)
+  })
+)
+
+/**
+ * OpenAI Config Schema
+ *
+ * Effect.Config schema for OpenAI provider configuration.
+ *
+ * Environment variables:
+ * - LLM__OPENAI_API_KEY (required)
+ * - LLM__OPENAI_MODEL (optional, default: "gpt-4o")
+ * - LLM__OPENAI_MAX_TOKENS (optional, default: 4096)
+ * - LLM__OPENAI_TEMPERATURE (optional, default: 0.0)
+ *
+ * @since 1.0.0
+ * @category config
+ */
+export const OpenAIConfigSchema = Config.nested("OPENAI")(
+  Config.all({
+    apiKey: Config.string("API_KEY"),
+    model: Config.withDefault(Config.string("MODEL"), "gpt-4o"),
+    maxTokens: Config.withDefault(Config.number("MAX_TOKENS"), 4096),
+    temperature: Config.withDefault(Config.number("TEMPERATURE"), 0.0)
+  })
+)
 
 /**
  * Gemini Config Schema
@@ -178,20 +219,22 @@ export const AnthropicConfigSchema = Config.all({
  * Effect.Config schema for Google Gemini provider configuration.
  *
  * Environment variables:
- * - LLM.GEMINI_API_KEY (required)
- * - LLM.GEMINI_MODEL (optional, default: "gemini-2.0-flash-exp")
- * - LLM.GEMINI_MAX_TOKENS (optional, default: 4096)
- * - LLM.GEMINI_TEMPERATURE (optional, default: 0.0)
+ * - LLM__GEMINI_API_KEY (required)
+ * - LLM__GEMINI_MODEL (optional, default: "gemini-2.5-flash")
+ * - LLM__GEMINI_MAX_TOKENS (optional, default: 4096)
+ * - LLM__GEMINI_TEMPERATURE (optional, default: 0.0)
  *
  * @since 1.0.0
  * @category config
  */
-export const GeminiConfigSchema = Config.all({
-  apiKey: Config.string("GEMINI_API_KEY"),
-  model: Config.withDefault(Config.string("GEMINI_MODEL"), "gemini-2.0-flash-exp"),
-  maxTokens: Config.withDefault(Config.number("GEMINI_MAX_TOKENS"), 4096),
-  temperature: Config.withDefault(Config.number("GEMINI_TEMPERATURE"), 0.0)
-})
+export const GeminiConfigSchema = Config.nested("GEMINI")(
+  Config.all({
+    apiKey: Config.string("API_KEY"),
+    model: Config.withDefault(Config.string("MODEL"), "gemini-2.5-flash"),
+    maxTokens: Config.withDefault(Config.number("MAX_TOKENS"), 4096),
+    temperature: Config.withDefault(Config.number("TEMPERATURE"), 0.0)
+  })
+)
 
 /**
  * OpenRouter Config Schema
@@ -199,27 +242,29 @@ export const GeminiConfigSchema = Config.all({
  * Effect.Config schema for OpenRouter provider configuration.
  *
  * Environment variables:
- * - LLM.OPENROUTER_API_KEY (required)
- * - LLM.OPENROUTER_MODEL (optional, default: "anthropic/claude-3.5-sonnet")
- * - LLM.OPENROUTER_MAX_TOKENS (optional, default: 4096)
- * - LLM.OPENROUTER_TEMPERATURE (optional, default: 0.0)
- * - LLM.OPENROUTER_SITE_URL (optional)
- * - LLM.OPENROUTER_SITE_NAME (optional)
+ * - LLM__OPENROUTER_API_KEY (required)
+ * - LLM__OPENROUTER_MODEL (optional, default: "anthropic/claude-3.5-sonnet")
+ * - LLM__OPENROUTER_MAX_TOKENS (optional, default: 4096)
+ * - LLM__OPENROUTER_TEMPERATURE (optional, default: 0.0)
+ * - LLM__OPENROUTER_SITE_URL (optional)
+ * - LLM__OPENROUTER_SITE_NAME (optional)
  *
  * @since 1.0.0
  * @category config
  */
-export const OpenRouterConfigSchema = Config.all({
-  apiKey: Config.string("OPENROUTER_API_KEY"),
-  model: Config.withDefault(
-    Config.string("OPENROUTER_MODEL"),
-    "anthropic/claude-3.5-sonnet"
-  ),
-  maxTokens: Config.withDefault(Config.number("OPENROUTER_MAX_TOKENS"), 4096),
-  temperature: Config.withDefault(Config.number("OPENROUTER_TEMPERATURE"), 0.0),
-  siteUrl: Config.option(Config.string("OPENROUTER_SITE_URL")),
-  siteName: Config.option(Config.string("OPENROUTER_SITE_NAME"))
-})
+export const OpenRouterConfigSchema = Config.nested("OPENROUTER")(
+  Config.all({
+    apiKey: Config.string("API_KEY"),
+    model: Config.withDefault(
+      Config.string("MODEL"),
+      "anthropic/claude-3.5-sonnet"
+    ),
+    maxTokens: Config.withDefault(Config.number("MAX_TOKENS"), 4096),
+    temperature: Config.withDefault(Config.number("TEMPERATURE"), 0.0),
+    siteUrl: Config.option(Config.string("SITE_URL")),
+    siteName: Config.option(Config.string("SITE_NAME"))
+  })
+)
 
 /**
  * LLM Config Schema
@@ -227,7 +272,7 @@ export const OpenRouterConfigSchema = Config.all({
  * Effect.Config schema for LLM service configuration with provider selection.
  *
  * Environment variables:
- * - LLM.PROVIDER (required): "anthropic" | "gemini" | "openrouter"
+ * - LLM__PROVIDER (required): "anthropic" | "openai" | "gemini" | "openrouter"
  * - Plus provider-specific variables (see provider schemas)
  *
  * @since 1.0.0
@@ -246,7 +291,7 @@ export const OpenRouterConfigSchema = Config.all({
  * const testConfig = ConfigProvider.fromMap(
  *   new Map([
  *     ["LLM.PROVIDER", "anthropic"],
- *     ["LLM.ANTHROPIC_API_KEY", "sk-ant-test"]
+ *     ["LLM.ANTHROPIC.API_KEY", "sk-ant-test"]
  *   ])
  * )
  * ```
@@ -255,12 +300,13 @@ export const LlmProviderConfig = Config.nested("LLM")(
   Config.all({
     provider: Config.string("PROVIDER").pipe(
       Config.validate({
-        message: "Invalid provider. Must be one of: anthropic, gemini, openrouter",
+        message: "Invalid provider. Must be one of: anthropic, openai, gemini, openrouter",
         validation: (value): value is LlmProvider =>
-          value === "anthropic" || value === "gemini" || value === "openrouter"
+          value === "anthropic" || value === "openai" || value === "gemini" || value === "openrouter"
       })
     ),
     anthropic: Config.option(AnthropicConfigSchema),
+    openai: Config.option(OpenAIConfigSchema),
     gemini: Config.option(GeminiConfigSchema),
     openrouter: Config.option(OpenRouterConfigSchema)
   })

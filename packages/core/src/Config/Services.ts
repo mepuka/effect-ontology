@@ -82,6 +82,60 @@ export class LlmConfigService extends Effect.Service<LlmConfigService>()(
       ])
     )
   )
+
+  /**
+   * Test layer with sensible defaults for Gemini provider.
+   *
+   * @example
+   * ```typescript
+   * const program = Effect.gen(function* () {
+   *   const config = yield* LlmConfigService
+   *   expect(config.provider).toBe("gemini")
+   * }).pipe(Effect.provide(LlmConfigService.TestGemini))
+   * ```
+   *
+   * @since 1.0.0
+   * @category layers
+   */
+  static TestGemini = Layer.setConfigProvider(
+    ConfigProvider.fromMap(
+      new Map([
+        ["LLM.PROVIDER", "gemini"],
+        ["LLM.GEMINI_API_KEY", "test-api-key"],
+        ["LLM.GEMINI_MODEL", "gemini-2.0-flash-exp"],
+        ["LLM.GEMINI_MAX_TOKENS", "4096"],
+        ["LLM.GEMINI_TEMPERATURE", "0.0"]
+      ])
+    )
+  )
+
+  /**
+   * Test layer with sensible defaults for OpenRouter provider.
+   *
+   * @example
+   * ```typescript
+   * const program = Effect.gen(function* () {
+   *   const config = yield* LlmConfigService
+   *   expect(config.provider).toBe("openrouter")
+   * }).pipe(Effect.provide(LlmConfigService.TestOpenRouter))
+   * ```
+   *
+   * @since 1.0.0
+   * @category layers
+   */
+  static TestOpenRouter = Layer.setConfigProvider(
+    ConfigProvider.fromMap(
+      new Map([
+        ["LLM.PROVIDER", "openrouter"],
+        ["LLM.OPENROUTER_API_KEY", "test-api-key"],
+        ["LLM.OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet"],
+        ["LLM.OPENROUTER_MAX_TOKENS", "4096"],
+        ["LLM.OPENROUTER_TEMPERATURE", "0.0"],
+        ["LLM.OPENROUTER_SITE_URL", "https://example.com"],
+        ["LLM.OPENROUTER_SITE_NAME", "Test App"]
+      ])
+    )
+  )
 }
 
 /**
