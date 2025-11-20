@@ -691,3 +691,236 @@ it.layer(MyService.Test)(
 
 **Remember: Test layers enable isolated, composable, type-safe testing. Use them liberally.**
 
+
+---
+
+## LLM Provider Architecture (Data-Driven)
+
+**CRITICAL: This project uses a data-driven approach for LLM providers - NO Effect Config**
+
+The LLM provider system was redesigned (Nov 2025) to eliminate Effect Config complexity and enable dynamic provider switching. Provider configuration is now plain data passed as function arguments.
+
+### Core Principles
+
+1. **Provider params are data, not config** - Pass `LlmProviderParams` as function arguments
+2. **Core library is provider-agnostic** - No Effect Config dependency
+3. **Dynamic layer composition** - Use `Effect.provide(layer)` inline per call
+4. **Atoms handle provider selection** - Read from `browserConfigAtom` (plain data)
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ Browser/Backend: Plain Data                            │
+│ const params: LlmProviderParams = {                    │
+│   provider: "anthropic",                               │
+│   anthropic: { apiKey: "...", model: "..." }           │
+│ }                                                       │
+└─────────────────────────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────┐
+│ makeLlmProviderLayer(params)                           │
+│ Returns: Layer<LanguageModel.LanguageModel>            │
+└─────────────────────────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────┐
+│ extractKnowledgeGraph(text, ontology, prompt, schema)  │
+│ Requires: LanguageModel.LanguageModel                  │
+│ Returns: Effect<KnowledgeGraph, LLMError, LM>          │
+└─────────────────────────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────┐
+│ Effect.provide(providerLayer)                          │
+│ Compose layer inline per call                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Usage Patterns
+
+#### Backend Scripts
+
+```typescript
+import { makeLlmProviderLayer, type LlmProviderParams } from "@effect-ontology/core/Services/LlmProvider"
+import { extractKnowledgeGraph } from "@effect-ontology/core/Services/Llm"
+import { Effect } from "effect"
+
+// Read env vars and create params
+const params: LlmProviderParams = {
+  provider: (process.env.VITE_LLM_PROVIDER || "anthropic") as any,
+  anthropic: {
+    apiKey: process.env.VITE_LLM_ANTHROPIC_API_KEY || "",
+    model: process.env.VITE_LLM_ANTHROPIC_MODEL || "claude-3-5-sonnet-20241022",
+    maxTokens: Number(process.env.VITE_LLM_ANTHROPIC_MAX_TOKENS) || 4096,
+    temperature: Number(process.env.VITE_LLM_ANTHROPIC_TEMPERATURE) || 0.0
+  },
+  // ... other providers
+}
+
+// Create provider layer
+const providerLayer = makeLlmProviderLayer(params)
+
+// Use in program
+const program = Effect.gen(function*() {
+  const result = yield* extractKnowledgeGraph(
+    text,
+    ontology,
+    prompt,
+    schema
+  )
+  console.log(result)
+})
+
+Effect.runPromise(program.pipe(Effect.provide(providerLayer)))
+```
+
+#### Frontend Atoms
+
+```typescript
+import { runtime } from "./runtime/atoms"
+import { browserConfigAtom } from "./state/config"
+import { makeLlmProviderLayer } from "@effect-ontology/core/Services/LlmProvider"
+import { extractKnowledgeGraph } from "@effect-ontology/core/Services/Llm"
+
+export const extractionAtom = runtime.atom((get) =>
+  Effect.gen(function*() {
+    // Read config as plain data
+    const config = get(browserConfigAtom)
+    
+    // Compose provider layer inline
+    const providerLayer = makeLlmProviderLayer(config)
+    
+    // Provide layer per-call
+    return yield* extractKnowledgeGraph(
+      text,
+      ontology,
+      prompt,
+      schema
+    ).pipe(Effect.provide(providerLayer))
+  })
+)
+```
+
+### Configuration
+
+#### Environment Variables
+
+Both browser and backend use **VITE_* prefixed variables**:
+
+```bash
+# .env file
+VITE_LLM_PROVIDER=anthropic
+
+VITE_LLM_ANTHROPIC_API_KEY=sk-ant-api03-...
+VITE_LLM_ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
+VITE_LLM_ANTHROPIC_MAX_TOKENS=4096
+VITE_LLM_ANTHROPIC_TEMPERATURE=0.0
+
+VITE_LLM_OPENAI_API_KEY=sk-...
+VITE_LLM_OPENAI_MODEL=gpt-4o
+
+VITE_LLM_GEMINI_API_KEY=...
+VITE_LLM_GEMINI_MODEL=gemini-2.5-flash
+
+VITE_LLM_OPENROUTER_API_KEY=...
+VITE_LLM_OPENROUTER_MODEL=anthropic/claude-3.5-sonnet
+```
+
+**Browser**: Vite automatically loads VITE_* vars into `import.meta.env`
+**Backend**: Node reads VITE_* vars from `process.env`
+
+#### Browser Config Atom
+
+```typescript
+// packages/ui/src/state/config.ts
+import { Atom } from "@effect-atom/atom"
+import type { LlmProviderParams } from "@effect-ontology/core/Services/LlmProvider"
+
+// Simple plain-data atom (no Effect Config!)
+export const browserConfigAtom = Atom.make<LlmProviderParams>({
+  provider: "anthropic",
+  anthropic: {
+    apiKey: import.meta.env.VITE_LLM_ANTHROPIC_API_KEY || "",
+    model: import.meta.env.VITE_LLM_ANTHROPIC_MODEL || "claude-3-5-sonnet-20241022",
+    maxTokens: 4096,
+    temperature: 0.0
+  },
+  // ... other providers
+})
+```
+
+### Supported Providers
+
+- **Anthropic** (Claude): `@effect/ai-anthropic`
+- **OpenAI** (GPT): `@effect/ai-openai`
+- **Google** (Gemini): `@effect/ai-google`
+- **OpenRouter**: Uses OpenAI adapter with custom URL
+
+### Dynamic Provider Switching
+
+Change provider at runtime without page reload:
+
+```typescript
+import { Atom } from "@effect-atom/atom"
+import { browserConfigAtom } from "./state/config"
+
+// Switch to OpenAI
+Atom.set(browserConfigAtom, {
+  ...get(browserConfigAtom),
+  provider: "openai"
+})
+
+// Next extraction will use OpenAI
+```
+
+### Benefits
+
+1. **No config timing issues** - Params are plain data, not Effect Config
+2. **Dynamic provider switching** - Change provider without reloading layers
+3. **Simpler architecture** - No ConfigProvider, no path delimiters, no timing bugs
+4. **Clearer data flow** - Provider params are explicit function arguments
+5. **Easier testing** - Pass test params directly, no config mocking
+6. **Provider-agnostic core** - Core library has zero config dependencies
+
+### Migration from Old Config System
+
+**Old (Effect Config-based):**
+```typescript
+// ❌ Deprecated - DO NOT USE
+const llm = yield* LlmService
+const result = yield* llm.extractKnowledgeGraph(...)
+```
+
+**New (Data-driven):**
+```typescript
+// ✅ Current approach
+const params = { provider: "anthropic", anthropic: {...} }
+const providerLayer = makeLlmProviderLayer(params)
+const result = yield* extractKnowledgeGraph(...)
+  .pipe(Effect.provide(providerLayer))
+```
+
+### Removed Components
+
+The following were **deleted** in the Nov 2025 refactor:
+
+- ❌ `packages/core/src/Config/Schema.ts` - LLM config schemas
+- ❌ `packages/core/src/Config/Services.ts` - Config services (LlmConfigService)
+- ❌ `packages/core/src/Config/index.ts` - Config module exports
+- ❌ `LlmService` class - Use `extractKnowledgeGraph` function instead
+
+### References
+
+- Core implementation: `packages/core/src/Services/LlmProvider.ts`
+- Extraction functions: `packages/core/src/Services/Llm.ts`
+- Browser config: `packages/ui/src/state/config.ts`
+- Frontend layers: `packages/ui/src/runtime/layers.ts`
+- Backend example: `packages/core/scripts/test-real-extraction.ts`
+- Design doc: `docs/plans/2025-11-20-remove-config-make-llm-data-driven-design.md`
+- Implementation plan: `docs/plans/2025-11-20-remove-config-make-llm-data-driven.md`
+
+---
+
+**Remember: Provider params are data, not config. Pass them as function arguments.**
