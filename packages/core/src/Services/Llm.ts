@@ -15,7 +15,7 @@
  */
 
 import { LanguageModel } from "@effect/ai"
-import { Effect, HashMap } from "effect"
+import { Duration, Effect, HashMap, Schedule } from "effect"
 import { LLMError } from "../Extraction/Events.js"
 import { isClassNode, type OntologyContext } from "../Graph/Types.js"
 import { renderExtractionPrompt } from "../Prompt/PromptDoc.js"
@@ -136,19 +136,45 @@ export const extractKnowledgeGraph = <ClassIRI extends string, PropertyIRI exten
     // Build the complete prompt using @effect/printer
     const promptText = renderExtractionPrompt(prompt, text)
 
-    // Call LLM with structured output
+    // Call LLM with structured output, retry, and timeout
     const response = yield* LanguageModel.generateObject({
       prompt: promptText,
       schema,
       objectName: "KnowledgeGraph"
-    })
+    }).pipe(
+      // Add timeout (30 seconds)
+      Effect.timeout(Duration.seconds(30)),
+      // Retry with exponential backoff (max 3 retries)
+      Effect.retry(
+        Schedule.exponential(Duration.seconds(1)).pipe(
+          Schedule.union(Schedule.recurs(3)),
+          Schedule.jittered
+        )
+      ),
+      // Handle timeout gracefully
+      Effect.catchTag("TimeoutException", () =>
+        Effect.fail(
+          new LLMError({
+            module: "extractKnowledgeGraph",
+            method: "generateObject",
+            reason: "ApiTimeout",
+            description: "LLM request timed out after 30 seconds"
+          })
+        )
+      )
+    )
 
     // Return the validated value
     return response.value
   }).pipe(
-    // Map all errors to LLMError
-    Effect.catchAll((error) =>
-      Effect.fail(
+    // Map all other errors to LLMError
+    Effect.catchAll((error) => {
+      // If it's already an LLMError, pass it through
+      if (error instanceof LLMError) {
+        return Effect.fail(error)
+      }
+
+      return Effect.fail(
         new LLMError({
           module: "extractKnowledgeGraph",
           method: "generateObject",
@@ -161,5 +187,5 @@ export const extractKnowledgeGraph = <ClassIRI extends string, PropertyIRI exten
           cause: error
         })
       )
-    )
+    })
   )
