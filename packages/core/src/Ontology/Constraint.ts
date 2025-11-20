@@ -15,9 +15,10 @@
 
 import { Data, Effect, Equal, Option } from "effect"
 import { PropertyConstraint } from "../Graph/Constraint.js"
-export { PropertyConstraint } from "../Graph/Constraint.js"
 import { InheritanceService } from "./Inheritance.js"
 import type { DisjointnessResult } from "./Inheritance.js"
+
+export { PropertyConstraint } from "../Graph/Constraint.js"
 
 /**
  * Error when meet operation fails
@@ -196,7 +197,6 @@ const intersectArrays = <T>(
   return intersection.sort()
 }
 
-
 /**
  * Meet operation (⊓) - combines two constraints into the stricter one
  *
@@ -313,7 +313,7 @@ export const meet = (
       (a.ranges.length > 0 || b.ranges.length > 0)
 
     if (hasCardinalityContradiction || hasAllowedValuesContradiction || hasRangeContradiction) {
-      return PropertyConstraint.bottom(a.propertyIri, annotations[0])
+      return PropertyConstraint.bottom(a.propertyIri, annotations[0] || "bottom")
     }
 
     return PropertyConstraint.make({

@@ -78,9 +78,18 @@ const generatePropertyShape = (property: PropertyConstraint): string => {
   }
 
   // Range constraint (datatype or class)
-  // Use first range if available
+  // Use first range if available (skip invalid ranges)
+  const isValidRangeIri = (iri: string): boolean => {
+    const trimmed = iri.trim()
+    if (trimmed.length === 0) return false
+    if (!/^[a-zA-Z0-9]/.test(trimmed)) return false
+    if (!(trimmed.includes(":") || trimmed.includes("/"))) return false
+    if (!/[a-zA-Z0-9]/.test(trimmed)) return false
+    return true
+  }
+
   const range = property.ranges[0]
-  if (range) {
+  if (range && isValidRangeIri(range)) {
     // Check if range is a datatype (xsd:*) or a class IRI
     if (range.includes("XMLSchema#") || range.startsWith("xsd:")) {
       constraints.push(`sh:datatype <${range}>`)
@@ -123,8 +132,21 @@ const generateNodeShape = (classNode: ClassNode, _shapePrefix: string = "shape")
   // Use full IRI in angle brackets for the shape IRI to avoid Turtle prefix issues
   const shapeIri = `<${classNode.id}Shape>`
 
-  // Generate property shapes
-  const propertyShapes = classNode.properties.map(generatePropertyShape).join(" ;")
+  // Generate property shapes (filter out properties with invalid IRIs)
+  // Valid IRI must start with alphanumeric, contain : or /, and have alphanumeric chars
+  const isValidIri = (iri: string): boolean => {
+    const trimmed = iri.trim()
+    if (trimmed.length === 0) return false
+    if (!/^[a-zA-Z0-9]/.test(trimmed)) return false
+    if (!(trimmed.includes(":") || trimmed.includes("/"))) return false
+    if (!/[a-zA-Z0-9]/.test(trimmed)) return false
+    return true
+  }
+
+  const propertyShapes = classNode.properties
+    .filter((prop) => isValidIri(prop.propertyIri))
+    .map(generatePropertyShape)
+    .join(" ;")
 
   // Escape quotes, backslashes, and special chars in labels
   const escapedLabel = (classNode.label || localName)

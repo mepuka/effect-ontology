@@ -19,7 +19,9 @@
   },
   "scripts": {
     "build": "tsc --skipLibCheck --project tsconfig.build.json",
-    "test": "vitest",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
     "check": "tsc -b tsconfig.json"
   },
   "dependencies": {

@@ -128,7 +128,7 @@ const createStore = () => {
 describe("Restriction Parser", () => {
   describe("owl:someValuesFrom (Existential Quantification)", () => {
     it("should parse someValuesFrom restriction", () => {
-      const { store, addRestriction } = createStore()
+      const { addRestriction, store } = createStore()
       addRestriction("b0", {
         propertyIri: "http://example.org/hasPet",
         someValuesFrom: "http://example.org/Dog"
@@ -147,7 +147,7 @@ describe("Restriction Parser", () => {
     })
 
     it("should include property label in annotations", () => {
-      const { store, addRestriction } = createStore()
+      const { addRestriction, store } = createStore()
       addRestriction("b0", {
         propertyIri: "http://example.org/hasPet",
         propertyLabel: "has pet",
@@ -165,7 +165,7 @@ describe("Restriction Parser", () => {
 
   describe("owl:allValuesFrom (Universal Quantification)", () => {
     it("should parse allValuesFrom restriction", () => {
-      const { store, addRestriction } = createStore()
+      const { addRestriction, store } = createStore()
       addRestriction("b0", {
         propertyIri: "http://example.org/hasPet",
         allValuesFrom: "http://example.org/Dog"
@@ -186,7 +186,7 @@ describe("Restriction Parser", () => {
 
   describe("owl:minCardinality", () => {
     it("should parse minCardinality restriction", () => {
-      const { store, addRestriction } = createStore()
+      const { addRestriction, store } = createStore()
       addRestriction("b0", {
         propertyIri: "http://example.org/hasPet",
         minCardinality: 2
@@ -205,7 +205,7 @@ describe("Restriction Parser", () => {
     })
 
     it("should handle minCardinality 0", () => {
-      const { store, addRestriction } = createStore()
+      const { addRestriction, store } = createStore()
       addRestriction("b0", {
         propertyIri: "http://example.org/hasPet",
         minCardinality: 0
@@ -222,7 +222,7 @@ describe("Restriction Parser", () => {
 
   describe("owl:maxCardinality", () => {
     it("should parse maxCardinality restriction", () => {
-      const { store, addRestriction } = createStore()
+      const { addRestriction, store } = createStore()
       addRestriction("b0", {
         propertyIri: "http://example.org/hasPet",
         maxCardinality: 3
@@ -243,7 +243,7 @@ describe("Restriction Parser", () => {
     })
 
     it("should handle maxCardinality 0 (property forbidden)", () => {
-      const { store, addRestriction } = createStore()
+      const { addRestriction, store } = createStore()
       addRestriction("b0", {
         propertyIri: "http://example.org/hasPet",
         maxCardinality: 0
@@ -264,7 +264,7 @@ describe("Restriction Parser", () => {
 
   describe("owl:cardinality (Exact Cardinality)", () => {
     it("should parse exact cardinality restriction", () => {
-      const { store, addRestriction } = createStore()
+      const { addRestriction, store } = createStore()
       addRestriction("b0", {
         propertyIri: "http://example.org/hasPet",
         cardinality: 2
@@ -285,7 +285,7 @@ describe("Restriction Parser", () => {
     })
 
     it("should handle cardinality 1 (functional property)", () => {
-      const { store, addRestriction } = createStore()
+      const { addRestriction, store } = createStore()
       addRestriction("b0", {
         propertyIri: "http://example.org/hasBirthDate",
         cardinality: 1
@@ -306,7 +306,7 @@ describe("Restriction Parser", () => {
 
   describe("owl:hasValue (Value Constraint)", () => {
     it("should parse hasValue restriction", () => {
-      const { store, addRestriction } = createStore()
+      const { addRestriction, store } = createStore()
       addRestriction("b0", {
         propertyIri: "http://example.org/hasCountry",
         hasValue: "http://example.org/USA"
@@ -330,7 +330,7 @@ describe("Restriction Parser", () => {
 
   describe("Combined Restrictions", () => {
     it("should parse someValuesFrom + minCardinality (at least 2 dogs)", () => {
-      const { store, addRestriction } = createStore()
+      const { addRestriction, store } = createStore()
       addRestriction("b0", {
         propertyIri: "http://example.org/hasPet",
         someValuesFrom: "http://example.org/Dog",
@@ -348,7 +348,7 @@ describe("Restriction Parser", () => {
     })
 
     it("should parse allValuesFrom + maxCardinality (at most 3 dogs)", () => {
-      const { store, addRestriction } = createStore()
+      const { addRestriction, store } = createStore()
       addRestriction("b0", {
         propertyIri: "http://example.org/hasPet",
         allValuesFrom: "http://example.org/Dog",
@@ -368,7 +368,7 @@ describe("Restriction Parser", () => {
     })
 
     it("should parse minCardinality + maxCardinality (bounded range)", () => {
-      const { store, addRestriction } = createStore()
+      const { addRestriction, store } = createStore()
       addRestriction("b0", {
         propertyIri: "http://example.org/hasPet",
         minCardinality: 1,
@@ -388,7 +388,7 @@ describe("Restriction Parser", () => {
     })
 
     it("should parse someValuesFrom + allValuesFrom (both ranges)", () => {
-      const { store, addRestriction } = createStore()
+      const { addRestriction, store } = createStore()
       addRestriction("b0", {
         propertyIri: "http://example.org/hasPet",
         someValuesFrom: "http://example.org/Dog",

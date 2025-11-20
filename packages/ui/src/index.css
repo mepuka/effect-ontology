@@ -1,10 +1,34 @@
 @import "tailwindcss";
 
+/* Custom CSS Properties for Design System */
+:root {
+  /* Typography */
+  --font-ui: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-code: 'JetBrains Mono', 'Courier New', monospace;
+  
+  /* Depth-based Color Gradients (warm shallow → cool deep) */
+  --depth-0: hsl(25, 95%, 58%);   /* Warm orange - root/shallow */
+  --depth-1: hsl(45, 90%, 55%);   /* Amber */
+  --depth-2: hsl(60, 85%, 52%);   /* Yellow-green */
+  --depth-3: hsl(160, 70%, 48%);  /* Teal */
+  --depth-4: hsl(200, 75%, 50%);  /* Blue */
+  --depth-5: hsl(230, 70%, 55%);  /* Indigo */
+  --depth-6: hsl(260, 65%, 58%);  /* Purple - deep */
+  
+  /* Accent Colors */
+  --accent-primary: hsl(220, 90%, 56%);
+  --accent-success: hsl(142, 71%, 45%);
+  --accent-warning: hsl(38, 92%, 50%);
+  --accent-error: hsl(0, 84%, 60%);
+  
+  /* Geometric Pattern Colors */
+  --pattern-bg: hsl(215, 28%, 17%);
+  --pattern-lines: hsla(215, 28%, 30%, 0.3);
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
-    "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-    sans-serif;
+  font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -12,4 +36,64 @@ body {
 #root {
   height: 100vh;
   width: 100vw;
+}
+
+/* Geometric Background Patterns */
+.pattern-grid {
+  background-image: 
+    linear-gradient(var(--pattern-lines) 1px, transparent 1px),
+    linear-gradient(90deg, var(--pattern-lines) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.pattern-diagonal {
+  background-image: 
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 10px,
+      var(--pattern-lines) 10px,
+      var(--pattern-lines) 11px
+    );
+}
+
+.pattern-dots {
+  background-image: radial-gradient(circle, var(--pattern-lines) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+/* Layered Gradient Backgrounds */
+.bg-layered-slate {
+  background: 
+    linear-gradient(135deg, hsl(215, 25%, 12%) 0%, hsl(215, 28%, 17%) 100%),
+    radial-gradient(circle at 20% 50%, hsla(220, 80%, 40%, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 50%, hsla(260, 70%, 50%, 0.08) 0%, transparent 50%);
+}
+
+.bg-layered-light {
+  background:
+    linear-gradient(135deg, hsl(210, 40%, 98%) 0%, hsl(210, 40%, 93%) 100%),
+    radial-gradient(circle at 30% 30%, hsla(220, 80%, 60%, 0.03) 0%, transparent 50%);
+}
+
+/* Depth-based utility classes */
+.text-depth-0 { color: var(--depth-0); }
+.text-depth-1 { color: var(--depth-1); }
+.text-depth-2 { color: var(--depth-2); }
+.text-depth-3 { color: var(--depth-3); }
+.text-depth-4 { color: var(--depth-4); }
+.text-depth-5 { color: var(--depth-5); }
+.text-depth-6 { color: var(--depth-6); }
+
+.bg-depth-0 { background-color: var(--depth-0); }
+.bg-depth-1 { background-color: var(--depth-1); }
+.bg-depth-2 { background-color: var(--depth-2); }
+.bg-depth-3 { background-color: var(--depth-3); }
+.bg-depth-4 { background-color: var(--depth-4); }
+.bg-depth-5 { background-color: var(--depth-5); }
+.bg-depth-6 { background-color: var(--depth-6); }
+
+/* Code blocks with JetBrains Mono */
+code, pre, .font-mono {
+  font-family: var(--font-code);
 }

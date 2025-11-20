@@ -153,7 +153,8 @@ export const buildTestHierarchy = (): { graph: Graph.Graph<string, null>; contex
     nodes,
     universalProperties: [],
     nodeIndexMap,
-    disjointWithMap
+    disjointWithMap,
+    propertyParentsMap: HashMap.empty()
   }
 
   return { graph, context }
@@ -230,7 +231,8 @@ export function buildTestGraph(config: {
     nodes,
     universalProperties: [],
     nodeIndexMap,
-    disjointWithMap
+    disjointWithMap,
+    propertyParentsMap: HashMap.empty()
   }
 
   return { graph, context }
@@ -293,7 +295,8 @@ export function buildLinearChain() {
     nodes,
     universalProperties: [],
     nodeIndexMap,
-    disjointWithMap: HashMap.empty()
+    disjointWithMap: HashMap.empty(),
+    propertyParentsMap: HashMap.empty()
   }
 
   return { graph, context }

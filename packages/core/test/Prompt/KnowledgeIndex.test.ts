@@ -10,10 +10,10 @@
  */
 
 import { describe, expect, it } from "@effect/vitest"
-import { KnowledgeUnit } from "../../src/Prompt/Ast.js"
-import * as KnowledgeIndex from "../../src/Prompt/KnowledgeIndex.js"
 import { Data, Option } from "effect"
 import { PropertyConstraint } from "../../src/Graph/Constraint.js"
+import { KnowledgeUnit } from "../../src/Prompt/Ast.js"
+import * as KnowledgeIndex from "../../src/Prompt/KnowledgeIndex.js"
 
 describe("KnowledgeIndex", () => {
   describe("KnowledgeUnit", () => {
@@ -34,7 +34,14 @@ describe("KnowledgeIndex", () => {
         iri: "http://example.org/Person",
         label: "Person",
         definition: "Class: Person",
-        properties: [PropertyConstraint.make({ propertyIri: "http://example.org/hasName", label: "hasName", ranges: Data.array(["string"]), maxCardinality: Option.none() })],
+        properties: [
+          PropertyConstraint.make({
+            propertyIri: "http://example.org/hasName",
+            label: "hasName",
+            ranges: Data.array(["string"]),
+            maxCardinality: Option.none()
+          })
+        ],
         inheritedProperties: [],
         children: ["http://example.org/Employee"],
         parents: []
@@ -44,7 +51,14 @@ describe("KnowledgeIndex", () => {
         iri: "http://example.org/Person",
         label: "Person",
         definition: "Class: Person",
-        properties: [PropertyConstraint.make({ propertyIri: "http://example.org/hasName", label: "hasName", ranges: Data.array(["string"]), maxCardinality: Option.none() })],
+        properties: [
+          PropertyConstraint.make({
+            propertyIri: "http://example.org/hasName",
+            label: "hasName",
+            ranges: Data.array(["string"]),
+            maxCardinality: Option.none()
+          })
+        ],
         inheritedProperties: [],
         children: ["http://example.org/Student"],
         parents: []
@@ -248,8 +262,18 @@ describe("KnowledgeIndex", () => {
           label: "Person",
           definition: "Class: Person",
           properties: [
-            PropertyConstraint.make({ propertyIri: "http://example.org/hasName", label: "hasName", ranges: Data.array(["string"]), maxCardinality: Option.none() }),
-            PropertyConstraint.make({ propertyIri: "http://example.org/hasAge", label: "hasAge", ranges: Data.array(["integer"]), maxCardinality: Option.none() })
+            PropertyConstraint.make({
+              propertyIri: "http://example.org/hasName",
+              label: "hasName",
+              ranges: Data.array(["string"]),
+              maxCardinality: Option.none()
+            }),
+            PropertyConstraint.make({
+              propertyIri: "http://example.org/hasAge",
+              label: "hasAge",
+              ranges: Data.array(["integer"]),
+              maxCardinality: Option.none()
+            })
           ],
           inheritedProperties: [],
           children: [],
@@ -259,7 +283,14 @@ describe("KnowledgeIndex", () => {
           iri: "http://example.org/Animal",
           label: "Animal",
           definition: "Class: Animal",
-          properties: [PropertyConstraint.make({ propertyIri: "http://example.org/hasSpecies", label: "hasSpecies", ranges: Data.array(["string"]), maxCardinality: Option.none() })],
+          properties: [
+            PropertyConstraint.make({
+              propertyIri: "http://example.org/hasSpecies",
+              label: "hasSpecies",
+              ranges: Data.array(["string"]),
+              maxCardinality: Option.none()
+            })
+          ],
           inheritedProperties: [],
           children: [],
           parents: []

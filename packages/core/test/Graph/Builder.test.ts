@@ -9,6 +9,7 @@ describe("Graph Builder", () => {
   const organizationTurtle = readFileSync(path.join(__dirname, "../../test-data/organization.ttl"), "utf-8")
   const dctermsTurtle = readFileSync(path.join(__dirname, "../../test-data/dcterms.ttl"), "utf-8")
   const foafTurtle = readFileSync(path.join(__dirname, "../../test-data/foaf.ttl"), "utf-8")
+  const foafRdfPath = path.join(__dirname, "../fixtures/ontologies/large-scale/foaf.rdf")
 
   it.effect("parses classes from zoo.ttl", () =>
     Effect.gen(function*() {
@@ -399,7 +400,7 @@ describe("Graph Builder", () => {
 
       if (dogOwnerNode._tag === "Some" && dogOwnerNode.value._tag === "Class") {
         const hasPetProp = dogOwnerNode.value.properties.find(
-          p => p.propertyIri === "http://example.org/test#hasPet"
+          (p) => p.propertyIri === "http://example.org/test#hasPet"
         )
 
         expect(hasPetProp).toBeDefined()
@@ -408,4 +409,150 @@ describe("Graph Builder", () => {
         expect(hasPetProp?.source).toBe("restriction")
       }
     }))
+
+  // Functional Property Tests
+  describe("Functional Properties", () => {
+    it.effect("parses owl:FunctionalProperty and sets maxCardinality = 1", () =>
+      Effect.gen(function*() {
+        const turtle = `
+@prefix : <http://example.org/test#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+:Person a owl:Class ;
+    rdfs:label "Person" .
+
+:hasSSN a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:label "has SSN" ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:string .
+`
+        const result = yield* parseTurtleToGraph(turtle)
+
+        // Get Person class
+        const personNode = HashMap.get(result.context.nodes, "http://example.org/test#Person")
+        expect(personNode._tag).toBe("Some")
+
+        if (personNode._tag === "Some" && personNode.value._tag === "Class") {
+          const hasSSN = personNode.value.properties.find(
+            (p) => p.propertyIri === "http://example.org/test#hasSSN"
+          )
+
+          expect(hasSSN).toBeDefined()
+          expect(hasSSN?.maxCardinality).toBeDefined()
+          expect(Option.isSome(hasSSN!.maxCardinality!)).toBe(true)
+          if (hasSSN && hasSSN.maxCardinality && Option.isSome(hasSSN.maxCardinality)) {
+            expect(Option.getOrThrow(hasSSN.maxCardinality)).toBe(1)
+          }
+        }
+      }))
+
+    it.effect("non-functional properties remain unconstrained", () =>
+      Effect.gen(function*() {
+        const turtle = `
+@prefix : <http://example.org/test#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+:Person a owl:Class ;
+    rdfs:label "Person" .
+
+:hasName a owl:DatatypeProperty ;
+    rdfs:label "has name" ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:string .
+`
+        const result = yield* parseTurtleToGraph(turtle)
+
+        // Get Person class
+        const personNode = HashMap.get(result.context.nodes, "http://example.org/test#Person")
+        expect(personNode._tag).toBe("Some")
+
+        if (personNode._tag === "Some" && personNode.value._tag === "Class") {
+          const hasName = personNode.value.properties.find(
+            (p) => p.propertyIri === "http://example.org/test#hasName"
+          )
+
+          expect(hasName).toBeDefined()
+          expect(hasName?.maxCardinality).toBeDefined()
+          expect(Option.isNone(hasName!.maxCardinality!)).toBe(true)
+        }
+      }))
+
+    it.effect("functional universal property (no domain)", () =>
+      Effect.gen(function*() {
+        const turtle = `
+@prefix : <http://example.org/test#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+:identifier a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:label "identifier" ;
+    rdfs:range xsd:string .
+`
+        const result = yield* parseTurtleToGraph(turtle)
+
+        // Find in universal properties
+        const identifier = result.context.universalProperties.find(
+          (p) => p.propertyIri === "http://example.org/test#identifier"
+        )
+
+        expect(identifier).toBeDefined()
+        expect(identifier?.maxCardinality).toBeDefined()
+        expect(Option.isSome(identifier!.maxCardinality!)).toBe(true)
+        if (identifier && identifier.maxCardinality && Option.isSome(identifier.maxCardinality)) {
+          expect(Option.getOrThrow(identifier.maxCardinality)).toBe(1)
+        }
+      }))
+
+    it.effect("parses simple ontology with multiple functional properties", () =>
+      Effect.gen(function*() {
+        const turtle = `
+@prefix : <http://example.org/test#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+:Person a owl:Class ;
+    rdfs:label "Person" .
+
+:hasSSN a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:label "has SSN" ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:string .
+
+:hasEmail a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:label "has email" ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:string .
+
+:hasName a owl:DatatypeProperty ;
+    rdfs:label "has name" ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:string .
+`
+        const result = yield* parseTurtleToGraph(turtle)
+
+        // Get Person class
+        const personNode = HashMap.get(result.context.nodes, "http://example.org/test#Person")
+        expect(personNode._tag).toBe("Some")
+
+        if (personNode._tag === "Some" && personNode.value._tag === "Class") {
+          // Count functional properties (should be 2: hasSSN, hasEmail)
+          const functionalProps = personNode.value.properties.filter(
+            (p) => Option.isSome(p.maxCardinality) && Option.getOrThrow(p.maxCardinality) === 1
+          )
+          expect(functionalProps.length).toBe(2)
+
+          // Count non-functional properties (should be 1: hasName)
+          const nonFunctionalProps = personNode.value.properties.filter(
+            (p) => Option.isNone(p.maxCardinality)
+          )
+          expect(nonFunctionalProps.length).toBe(1)
+        }
+      }))
+  })
 })

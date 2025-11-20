@@ -7,29 +7,37 @@
  * Based on: docs/effect_ontology_engineering_spec.md
  */
 
+import { Doc } from "@effect/printer"
 import type { PropertyConstraint } from "../Graph/Constraint.js"
 import { isClassNode, isPropertyNode } from "../Graph/Types.js"
 import { KnowledgeUnit } from "./Ast.js"
+import { propertyLineDoc } from "./ConstraintFormatter.js"
 import * as KnowledgeIndex from "./KnowledgeIndex.js"
 import type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
 import type { GraphAlgebra, PromptAlgebra } from "./Types.js"
 import { StructuredPrompt } from "./Types.js"
 
 /**
- * Formats properties into a human-readable list
+ * Formats properties into a human-readable list with full constraint information
+ *
+ * Uses ConstraintFormatter for LLM-optimized output showing:
+ * - Type constraints (ranges)
+ * - Cardinality (required/optional, min/max values)
+ * - Property characteristics (functional, symmetric, etc.)
+ * - Allowed values (enumerations)
  */
 const formatProperties = (properties: ReadonlyArray<PropertyConstraint>): string => {
   if (properties.length === 0) {
     return "  (no properties)"
   }
 
-  return properties
-    .map((prop) => {
-      const range = prop.ranges[0] || "unknown"
-      const rangeLabel = range.split("#")[1] || range.split("/").pop() || range
-      return `  - ${prop.label} (${rangeLabel})`
-    })
-    .join("\n")
+  // Convert each property to Doc and render
+  const propertyLines = properties.map((prop) => {
+    const doc = propertyLineDoc(prop)
+    return Doc.render(doc, { style: "pretty" })
+  })
+
+  return propertyLines.join("\n")
 }
 
 /**

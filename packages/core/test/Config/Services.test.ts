@@ -27,8 +27,8 @@ describe("Config.Services", () => {
                 ConfigProvider.fromMap(
                   new Map([
                     ["LLM.PROVIDER", "anthropic"],
-                    ["LLM.ANTHROPIC_API_KEY", "test-key"],
-                    ["LLM.ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022"]
+                    ["LLM.ANTHROPIC.API_KEY", "test-key"],
+                    ["LLM.ANTHROPIC.MODEL", "claude-3-5-sonnet-20241022"]
                   ])
                 )
               )
@@ -54,8 +54,8 @@ describe("Config.Services", () => {
                 ConfigProvider.fromMap(
                   new Map([
                     ["LLM.PROVIDER", "gemini"],
-                    ["LLM.GEMINI_API_KEY", "gemini-key"],
-                    ["LLM.GEMINI_MODEL", "gemini-1.5-pro"]
+                    ["LLM.GEMINI.API_KEY", "gemini-key"],
+                    ["LLM.GEMINI.MODEL", "gemini-1.5-pro"]
                   ])
                 )
               )
@@ -81,9 +81,9 @@ describe("Config.Services", () => {
                 ConfigProvider.fromMap(
                   new Map([
                     ["LLM.PROVIDER", "openrouter"],
-                    ["LLM.OPENROUTER_API_KEY", "or-key"],
-                    ["LLM.OPENROUTER_MODEL", "anthropic/claude-3.5-sonnet"],
-                    ["LLM.OPENROUTER_SITE_URL", "https://test.com"]
+                    ["LLM.OPENROUTER.API_KEY", "or-key"],
+                    ["LLM.OPENROUTER.MODEL", "anthropic/claude-3.5-sonnet"],
+                    ["LLM.OPENROUTER.SITE_URL", "https://test.com"]
                   ])
                 )
               )
@@ -109,7 +109,7 @@ describe("Config.Services", () => {
                 ConfigProvider.fromMap(
                   new Map([
                     ["LLM.PROVIDER", "anthropic"],
-                    ["LLM.ANTHROPIC_API_KEY", "test-key"]
+                    ["LLM.ANTHROPIC.API_KEY", "test-key"]
                   ])
                 )
               )
@@ -221,7 +221,7 @@ describe("Config.Services", () => {
                 ConfigProvider.fromMap(
                   new Map([
                     ["LLM.PROVIDER", "gemini"],
-                    ["LLM.GEMINI_API_KEY", "gemini-key"],
+                    ["LLM.GEMINI.API_KEY", "gemini-key"],
                     ["RDF.FORMAT", "Turtle"],
                     ["SHACL.ENABLED", "false"]
                   ])
@@ -247,7 +247,7 @@ describe("Config.Services", () => {
                 ConfigProvider.fromMap(
                   new Map([
                     ["LLM.PROVIDER", "anthropic"],
-                    ["LLM.ANTHROPIC_API_KEY", "test-key"],
+                    ["LLM.ANTHROPIC.API_KEY", "test-key"],
                     ["RDF.FORMAT", "N-Triples"],
                     ["SHACL.ENABLED", "true"]
                   ])
@@ -278,7 +278,7 @@ describe("Config.Services", () => {
                 ConfigProvider.fromMap(
                   new Map([
                     ["LLM.PROVIDER", "anthropic"],
-                    ["LLM.ANTHROPIC_API_KEY", "test-key"],
+                    ["LLM.ANTHROPIC.API_KEY", "test-key"],
                     ["RDF.FORMAT", "Turtle"]
                   ])
                 )

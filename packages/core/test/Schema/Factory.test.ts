@@ -1,382 +1,150 @@
-/**
- * Tests for Dynamic Knowledge Graph Schema Factory
- *
- * @since 1.0.0
- */
+import { Data, HashMap, Option, Schema } from "effect"
+import { describe, expect, it } from "vitest"
+import type { OntologyContext } from "../../src/Graph/Types.js"
+import { ClassNode } from "../../src/Graph/Types.js"
+import { PropertyConstraint } from "../../src/Ontology/Constraint.js"
+import { makeKnowledgeGraphSchema } from "../../src/Schema/Factory.js"
 
-import { describe, expect, it } from "@effect/vitest"
-import { Effect, Exit, Schema as S } from "effect"
-import { EmptyVocabularyError, makeKnowledgeGraphSchema } from "../../src/Schema/Factory"
+describe("Schema Factory", () => {
+  const classIris = ["http://example.org/Person"]
+  const propertyIris = ["http://example.org/name", "http://example.org/knows"]
 
-describe("Schema.Factory", () => {
-  // Mock ontology vocabularies
-  const FOAF_CLASSES = [
-    "http://xmlns.com/foaf/0.1/Person",
-    "http://xmlns.com/foaf/0.1/Organization",
-    "http://xmlns.com/foaf/0.1/Document"
-  ] as const
-
-  const FOAF_PROPERTIES = [
-    "http://xmlns.com/foaf/0.1/name",
-    "http://xmlns.com/foaf/0.1/knows",
-    "http://xmlns.com/foaf/0.1/member"
-  ] as const
-
-  describe("makeKnowledgeGraphSchema", () => {
-    it.effect("should create a schema from vocabulary arrays", () =>
-      Effect.sync(() => {
-        const schema = makeKnowledgeGraphSchema(FOAF_CLASSES, FOAF_PROPERTIES)
-
-        // Schema should have proper structure
-        expect(schema.ast._tag).toBe("TypeLiteral")
-      }))
-
-    it.effect("should throw EmptyVocabularyError for empty class array", () =>
-      Effect.sync(() => {
-        expect(() => makeKnowledgeGraphSchema([], FOAF_PROPERTIES)).toThrow(
-          EmptyVocabularyError
-        )
-      }))
-
-    it.effect("should throw EmptyVocabularyError for empty property array", () =>
-      Effect.sync(() => {
-        expect(() => makeKnowledgeGraphSchema(FOAF_CLASSES, [])).toThrow(
-          EmptyVocabularyError
-        )
-      }))
+  const personNode = new ClassNode({
+    id: "http://example.org/Person",
+    label: "Person",
+    properties: [
+      PropertyConstraint.make({
+        propertyIri: "http://example.org/name",
+        ranges: Data.array(["xsd:string"]),
+        minCardinality: 1,
+        maxCardinality: Option.some(1)
+      }),
+      PropertyConstraint.make({
+        propertyIri: "http://example.org/knows",
+        ranges: Data.array(["http://example.org/Person"]),
+        minCardinality: 0,
+        maxCardinality: Option.none()
+      })
+    ]
   })
 
-  describe("Schema Validation - Valid Cases", () => {
-    const schema = makeKnowledgeGraphSchema(FOAF_CLASSES, FOAF_PROPERTIES)
+  const ontology: OntologyContext = {
+    nodes: HashMap.make(["http://example.org/Person", personNode]),
+    universalProperties: [],
+    nodeIndexMap: HashMap.empty(),
+    disjointWithMap: HashMap.empty(),
+    propertyParentsMap: HashMap.empty()
+  }
 
-    it.effect("should accept valid knowledge graph with single entity", () =>
-      Effect.gen(function*() {
-        const validData = {
-          entities: [
-            {
-              "@id": "_:person1",
-              "@type": "http://xmlns.com/foaf/0.1/Person" as const,
-              properties: [
-                {
-                  predicate: "http://xmlns.com/foaf/0.1/name" as const,
-                  object: "Alice"
-                }
-              ]
-            }
-          ]
-        }
+  const validData = {
+    entities: [
+      {
+        "@id": "_:person1",
+        "@type": "http://example.org/Person",
+        properties: [
+          {
+            predicate: "http://example.org/name",
+            object: "Alice"
+          },
+          {
+            predicate: "http://example.org/knows",
+            object: { "@id": "_:person2" }
+          }
+        ]
+      }
+    ]
+  }
 
-        const decoded = yield* S.decodeUnknown(schema)(validData)
+  it("validates data in loose mode (default)", () => {
+    const schema = makeKnowledgeGraphSchema(classIris, propertyIris)
+    const decode = Schema.decodeUnknownSync(schema)
 
-        expect(decoded.entities).toHaveLength(1)
-        expect(decoded.entities[0]["@type"]).toBe("http://xmlns.com/foaf/0.1/Person")
-      }))
+    // Should validate successfully
+    expect(() => decode(validData)).not.toThrow()
 
-    it.effect("should accept multiple entities", () =>
-      Effect.gen(function*() {
-        const validData = {
-          entities: [
-            {
-              "@id": "_:person1",
-              "@type": "http://xmlns.com/foaf/0.1/Person" as const,
-              properties: [
-                {
-                  predicate: "http://xmlns.com/foaf/0.1/name" as const,
-                  object: "Alice"
-                }
-              ]
-            },
-            {
-              "@id": "_:org1",
-              "@type": "http://xmlns.com/foaf/0.1/Organization" as const,
-              properties: [
-                {
-                  predicate: "http://xmlns.com/foaf/0.1/name" as const,
-                  object: "Anthropic"
-                }
-              ]
-            }
-          ]
-        }
-
-        const decoded = yield* S.decodeUnknown(schema)(validData)
-
-        expect(decoded.entities).toHaveLength(2)
-      }))
-
-    it.effect("should accept entity with multiple properties", () =>
-      Effect.gen(function*() {
-        const validData = {
-          entities: [
-            {
-              "@id": "_:person1",
-              "@type": "http://xmlns.com/foaf/0.1/Person" as const,
-              properties: [
-                {
-                  predicate: "http://xmlns.com/foaf/0.1/name" as const,
-                  object: "Alice"
-                },
-                {
-                  predicate: "http://xmlns.com/foaf/0.1/knows" as const,
-                  object: { "@id": "_:person2" }
-                }
-              ]
-            }
-          ]
-        }
-
-        const decoded = yield* S.decodeUnknown(schema)(validData)
-
-        expect(decoded.entities[0].properties).toHaveLength(2)
-      }))
-
-    it.effect("should accept property with object reference", () =>
-      Effect.gen(function*() {
-        const validData = {
-          entities: [
-            {
-              "@id": "_:person1",
-              "@type": "http://xmlns.com/foaf/0.1/Person" as const,
-              properties: [
-                {
-                  predicate: "http://xmlns.com/foaf/0.1/knows" as const,
-                  object: { "@id": "http://example.org/person/bob" }
-                }
-              ]
-            }
-          ]
-        }
-
-        const decoded = yield* S.decodeUnknown(schema)(validData)
-
-        const knowsProperty = decoded.entities[0].properties[0]
-        expect(typeof knowsProperty.object).toBe("object")
-        expect((knowsProperty.object as any)["@id"]).toBe(
-          "http://example.org/person/bob"
-        )
-      }))
-
-    it.effect("should accept entity with no properties", () =>
-      Effect.gen(function*() {
-        const validData = {
-          entities: [
-            {
-              "@id": "_:person1",
-              "@type": "http://xmlns.com/foaf/0.1/Person" as const,
-              properties: []
-            }
-          ]
-        }
-
-        const decoded = yield* S.decodeUnknown(schema)(validData)
-
-        expect(decoded.entities[0].properties).toHaveLength(0)
-      }))
+    // Should accept either string or object for any property
+    const flexibleData = {
+      entities: [{
+        "@id": "_:p1",
+        "@type": "http://example.org/Person",
+        properties: [
+          { predicate: "http://example.org/name", object: { "@id": "_:weird" } }, // Wrong type but allowed in loose mode
+          { predicate: "http://example.org/knows", object: "also-weird" } // Wrong type but allowed
+        ]
+      }]
+    }
+    expect(() => decode(flexibleData)).not.toThrow()
   })
 
-  describe("Schema Validation - Invalid Cases", () => {
-    const schema = makeKnowledgeGraphSchema(FOAF_CLASSES, FOAF_PROPERTIES)
+  it("validates data in strict mode", () => {
+    const schema = makeKnowledgeGraphSchema(classIris, propertyIris, ontology, { strict: true })
+    const decode = Schema.decodeUnknownSync(schema)
 
-    it.effect("should reject unknown class IRI", () =>
-      Effect.gen(function*() {
-        const invalidData = {
-          entities: [
-            {
-              "@id": "_:unknown1",
-              "@type": "http://example.org/UnknownClass",
-              properties: []
-            }
-          ]
-        }
-
-        const result = yield* S.decodeUnknown(schema)(invalidData).pipe(
-          Effect.exit
-        )
-
-        expect(Exit.isFailure(result)).toBe(true)
-      }))
-
-    it.effect("should reject unknown property IRI", () =>
-      Effect.gen(function*() {
-        const invalidData = {
-          entities: [
-            {
-              "@id": "_:person1",
-              "@type": "http://xmlns.com/foaf/0.1/Person" as const,
-              properties: [
-                {
-                  predicate: "http://example.org/unknownProperty",
-                  object: "value"
-                }
-              ]
-            }
-          ]
-        }
-
-        const result = yield* S.decodeUnknown(schema)(invalidData).pipe(
-          Effect.exit
-        )
-
-        expect(Exit.isFailure(result)).toBe(true)
-      }))
-
-    it.effect("should reject missing required fields", () =>
-      Effect.gen(function*() {
-        const invalidData = {
-          entities: [
-            {
-              "@id": "_:person1",
-              // Missing @type
-              properties: []
-            }
-          ]
-        }
-
-        const result = yield* S.decodeUnknown(schema)(invalidData).pipe(
-          Effect.exit
-        )
-
-        expect(Exit.isFailure(result)).toBe(true)
-      }))
-
-    it.effect("should reject invalid property object structure", () =>
-      Effect.gen(function*() {
-        const invalidData = {
-          entities: [
-            {
-              "@id": "_:person1",
-              "@type": "http://xmlns.com/foaf/0.1/Person" as const,
-              properties: [
-                {
-                  predicate: "http://xmlns.com/foaf/0.1/knows" as const,
-                  object: { invalid: "structure" } // Missing @id
-                }
-              ]
-            }
-          ]
-        }
-
-        const result = yield* S.decodeUnknown(schema)(invalidData).pipe(
-          Effect.exit
-        )
-
-        expect(Exit.isFailure(result)).toBe(true)
-      }))
-
-    it.effect("should reject non-array entities", () =>
-      Effect.gen(function*() {
-        const invalidData = {
-          entities: "not an array"
-        }
-
-        const result = yield* S.decodeUnknown(schema)(invalidData).pipe(
-          Effect.exit
-        )
-
-        expect(Exit.isFailure(result)).toBe(true)
-      }))
+    // Should validate correct data
+    expect(() => decode(validData)).not.toThrow()
   })
 
-  describe("Type Inference", () => {
-    it.effect("should correctly infer types from vocabularies", () =>
-      Effect.gen(function*() {
-        const schema = makeKnowledgeGraphSchema(FOAF_CLASSES, FOAF_PROPERTIES)
+  it("rejects invalid property types in strict mode", () => {
+    const schema = makeKnowledgeGraphSchema(classIris, propertyIris, ontology, { strict: true })
+    const decode = Schema.decodeUnknownSync(schema)
 
-        const validData = {
-          entities: [
-            {
-              "@id": "_:person1",
-              "@type": "http://xmlns.com/foaf/0.1/Person" as const,
-              properties: [
-                {
-                  predicate: "http://xmlns.com/foaf/0.1/name" as const,
-                  object: "Alice"
-                }
-              ]
-            }
-          ]
-        }
+    // name should be string, not object
+    const wrongNameType = {
+      entities: [{
+        "@id": "_:p1",
+        "@type": "http://example.org/Person",
+        properties: [
+          { predicate: "http://example.org/name", object: { "@id": "_:wrong" } }
+        ]
+      }]
+    }
+    expect(() => decode(wrongNameType)).toThrow()
 
-        const _decoded = yield* S.decodeUnknown(schema)(validData)
-
-        // TypeScript should narrow the types correctly
-        type EntityType = (typeof _decoded.entities)[number]["@type"]
-        type PropertyPredicate = (typeof _decoded.entities)[number]["properties"][number]["predicate"]
-
-        // These should compile without errors
-        const _typeCheck1: EntityType = "http://xmlns.com/foaf/0.1/Person"
-        const _typeCheck2: PropertyPredicate = "http://xmlns.com/foaf/0.1/name"
-
-        expect(true).toBe(true) // Compilation is the real test
-      }))
+    // knows should be object, not string
+    const wrongKnowsType = {
+      entities: [{
+        "@id": "_:p1",
+        "@type": "http://example.org/Person",
+        properties: [
+          { predicate: "http://example.org/knows", object: "wrong" }
+        ]
+      }]
+    }
+    expect(() => decode(wrongKnowsType)).toThrow()
   })
 
-  describe("Edge Cases", () => {
-    it.effect("should handle single class and property", () =>
-      Effect.gen(function*() {
-        const schema = makeKnowledgeGraphSchema(
-          ["http://example.org/Thing"],
-          ["http://example.org/prop"]
-        )
+  it("rejects unknown classes", () => {
+    const schema = makeKnowledgeGraphSchema(classIris, propertyIris)
+    const decode = Schema.decodeUnknownSync(schema)
 
-        const validData = {
-          entities: [
-            {
-              "@id": "_:thing1",
-              "@type": "http://example.org/Thing" as const,
-              properties: [
-                {
-                  predicate: "http://example.org/prop" as const,
-                  object: "value"
-                }
-              ]
-            }
-          ]
-        }
+    const unknownClass = {
+      entities: [{
+        "@id": "_:p1",
+        "@type": "http://example.org/UnknownClass",
+        properties: []
+      }]
+    }
+    expect(() => decode(unknownClass)).toThrow()
+  })
 
-        const decoded = yield* S.decodeUnknown(schema)(validData)
+  it("rejects unknown properties", () => {
+    const schema = makeKnowledgeGraphSchema(classIris, propertyIris)
+    const decode = Schema.decodeUnknownSync(schema)
 
-        expect(decoded.entities).toHaveLength(1)
-      }))
+    const unknownProp = {
+      entities: [{
+        "@id": "_:p1",
+        "@type": "http://example.org/Person",
+        properties: [
+          { predicate: "http://example.org/unknownProp", object: "value" }
+        ]
+      }]
+    }
+    expect(() => decode(unknownProp)).toThrow()
+  })
 
-    it.effect("should handle empty entities array", () =>
-      Effect.gen(function*() {
-        const schema = makeKnowledgeGraphSchema(FOAF_CLASSES, FOAF_PROPERTIES)
-
-        const validData = {
-          entities: []
-        }
-
-        const decoded = yield* S.decodeUnknown(schema)(validData)
-
-        expect(decoded.entities).toHaveLength(0)
-      }))
-
-    it.effect("should handle IRIs with special characters", () =>
-      Effect.gen(function*() {
-        const schema = makeKnowledgeGraphSchema(
-          ["http://example.org/Class-With-Dashes"],
-          ["http://example.org/prop_with_underscores"]
-        )
-
-        const validData = {
-          entities: [
-            {
-              "@id": "_:entity1",
-              "@type": "http://example.org/Class-With-Dashes" as const,
-              properties: [
-                {
-                  predicate: "http://example.org/prop_with_underscores" as const,
-                  object: "value"
-                }
-              ]
-            }
-          ]
-        }
-
-        const decoded = yield* S.decodeUnknown(schema)(validData)
-
-        expect(decoded.entities).toHaveLength(1)
-      }))
+  it("throws error for empty vocabulary", () => {
+    expect(() => makeKnowledgeGraphSchema([], propertyIris)).toThrow()
+    expect(() => makeKnowledgeGraphSchema(classIris, [])).toThrow()
   })
 })

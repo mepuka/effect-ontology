@@ -8,13 +8,13 @@
  */
 
 import { Effect, HashMap, JSONSchema } from "effect"
-import { readFileSync, writeFileSync, mkdirSync } from "fs"
+import { mkdirSync, readFileSync, writeFileSync } from "fs"
 import { join } from "path"
 import { parseTurtleToGraph } from "../src/Graph/Builder.js"
 import { knowledgeIndexAlgebra } from "../src/Prompt/Algebra.js"
 import { buildKnowledgeMetadata } from "../src/Prompt/Metadata.js"
-import { makeKnowledgeGraphSchema } from "../src/Schema/Factory.js"
 import { solveToKnowledgeIndex } from "../src/Prompt/Solver.js"
+import { makeKnowledgeGraphSchema } from "../src/Schema/Factory.js"
 
 const loadOntology = (path: string) => readFileSync(path, "utf-8")
 
@@ -60,7 +60,7 @@ Please provide your extraction as valid JSON.
   `.trim()
 }
 
-const main = Effect.gen(function* () {
+const main = Effect.gen(function*() {
   console.log("=== Generating Sample Extraction Prompts ===\n")
 
   // Create output directory
@@ -87,14 +87,14 @@ const main = Effect.gen(function* () {
 
   // Extract IRIs for FOAF
   const foafClassIRIs = Array.from(HashMap.keys(foafMetadata.classSummaries))
-  const foafPropertyIRIs: string[] = []
+  const foafPropertyIRIs: Array<string> = []
   for (const summary of HashMap.values(foafMetadata.classSummaries)) {
     const unitOption = HashMap.get(foafIndex, summary.iri)
     if (unitOption._tag === "Some") {
       const unit = unitOption.value
       for (const prop of unit.properties) {
-        if (!foafPropertyIRIs.includes(prop.iri)) {
-          foafPropertyIRIs.push(prop.iri)
+        if (!foafPropertyIRIs.includes(prop.propertyIri)) {
+          foafPropertyIRIs.push(prop.propertyIri)
         }
       }
     }
@@ -160,7 +160,9 @@ Alice maintains a personal homepage at https://alice.example.com.
   console.log(`   Stats: ${foafStatsPath}`)
   console.log(`   Prompt length: ${foafPrompt.length} characters`)
   console.log(
-    `   JSON Schema: ${foafJsonSchemaStr.length} chars (${((foafJsonSchemaStr.length / foafPrompt.length) * 100).toFixed(1)}%)`
+    `   JSON Schema: ${foafJsonSchemaStr.length} chars (${
+      ((foafJsonSchemaStr.length / foafPrompt.length) * 100).toFixed(1)
+    }%)`
   )
 
   // Generate a simple example with inline schema
@@ -201,15 +203,21 @@ Generated on: ${new Date().toISOString()}
 - **Classes**: ${foafClassIRIs.length}
 - **Properties**: ${foafPropertyIRIs.length}
 - **Total Prompt**: ${foafPrompt.length} characters
-- **JSON Schema**: ${foafJsonSchemaStr.length} characters (${((foafJsonSchemaStr.length / foafPrompt.length) * 100).toFixed(1)}% of prompt)
+- **JSON Schema**: ${foafJsonSchemaStr.length} characters (${
+    ((foafJsonSchemaStr.length / foafPrompt.length) * 100).toFixed(1)
+  }% of prompt)
 - **Estimated Tokens**: ${foafMetadata.tokenStats.totalTokens}
 - **Estimated Cost** (GPT-4 @ $30/1M): $${foafMetadata.tokenStats.estimatedCost.toFixed(6)}
 
 ### Observations
 
-1. **JSON Schema Dominance**: The JSON Schema represents ${((foafJsonSchemaStr.length / foafPrompt.length) * 100).toFixed(1)}% of the total prompt
+1. **JSON Schema Dominance**: The JSON Schema represents ${
+    ((foafJsonSchemaStr.length / foafPrompt.length) * 100).toFixed(1)
+  }% of the total prompt
 2. **Enum Overhead**: Each property/class enum in the schema adds significant tokens
-3. **Scaling Challenge**: With ${foafClassIRIs.length} classes and ${foafPropertyIRIs.length} properties, the schema is already ${(foafJsonSchemaStr.length / 1024).toFixed(2)} KB
+3. **Scaling Challenge**: With ${foafClassIRIs.length} classes and ${foafPropertyIRIs.length} properties, the schema is already ${
+    (foafJsonSchemaStr.length / 1024).toFixed(2)
+  } KB
 4. **Real-world Impact**: For large ontologies (e.g., Schema.org with 800+ classes), JSON Schema can easily exceed 50KB
 
 ### Next Steps

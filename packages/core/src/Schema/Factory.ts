@@ -8,7 +8,10 @@
  * @since 1.0.0
  */
 
-import { Array as A, Data, Schema as S } from "effect"
+import { Array as A, Data, HashMap, Schema as S } from "effect"
+import type { OntologyContext } from "../Graph/Types.js"
+import { isClassNode } from "../Graph/Types.js"
+import { formatConstraint } from "../Prompt/ConstraintFormatter.js"
 
 /**
  * Error thrown when attempting to create a schema with empty vocabularies
@@ -22,6 +25,24 @@ export class EmptyVocabularyError extends Data.TaggedError("EmptyVocabularyError
   get message() {
     return `Cannot create schema with zero ${this.type} IRIs`
   }
+}
+
+/**
+ * Options for schema generation
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export interface SchemaGenerationOptions {
+  /**
+   * strict: If true, generates a Discriminated Union of specific property shapes.
+   * This forces the LLM to use the correct value structure (Literal vs Reference)
+   * for each property and includes constraint descriptions.
+   *
+   * loose: (Default) Generates a generic structure where any property can take
+   * any value type. More permissive but less semantically precise.
+   */
+  readonly strict?: boolean
 }
 
 /**
@@ -46,6 +67,16 @@ const unionFromStringArray = <T extends string>(
 
   // Union them - TypeScript will infer the correct type
   return S.Union(...literals)
+}
+
+/**
+ * Helper: Determines if a property is a Datatype property (literal value)
+ * based on its range.
+ *
+ * @internal
+ */
+const isDatatypeProperty = (range: string): boolean => {
+  return range.startsWith("http://www.w3.org/2001/XMLSchema#") || range === "xsd:string" || range === "xsd:integer"
 }
 
 /**
@@ -102,6 +133,60 @@ export const makeEntitySchema = <
   })
 
 /**
+ * Creates a strict property schema (Discriminated Union member)
+ *
+ * @internal
+ */
+const makeStrictPropertySchema = (
+  propertyIri: string,
+  ontology: OntologyContext
+) => {
+  // Find property definition to determine type
+  // We look in universalProperties or search all class nodes
+  // For now, we default to Object property if unknown, or check common XSD ranges if available
+
+  // In a real implementation, we would look up the property in the ontology
+  // For this MVP, we'll assume it's an Object property unless it looks like a Datatype property
+  // This logic can be refined by looking up the actual PropertyNode if available
+
+  // Default to Object property structure (reference)
+  let objectSchema: S.Schema<any> = S.Struct({ "@id": S.String })
+
+  // Try to find property metadata for better typing and description
+  let description = ""
+
+  // Check universal properties first
+  const universalProp = ontology.universalProperties.find((p) => p.propertyIri === propertyIri)
+  if (universalProp) {
+    description = formatConstraint(universalProp)
+    if (universalProp.ranges.some(isDatatypeProperty)) {
+      objectSchema = S.String
+    }
+  } else {
+    // Check class properties
+    for (const node of HashMap.values(ontology.nodes)) {
+      if (isClassNode(node)) {
+        const prop = node.properties.find((p) => p.propertyIri === propertyIri)
+        if (prop) {
+          description = formatConstraint(prop)
+          if (prop.ranges.some(isDatatypeProperty)) {
+            objectSchema = S.String
+          }
+          break
+        }
+      }
+    }
+  }
+
+  return S.Struct({
+    predicate: S.Literal(propertyIri),
+    object: objectSchema
+  }).annotations({
+    description: description || undefined
+  })
+}
+
+/**
  * Creates a complete Knowledge Graph schema from ontology vocabularies
  *
  * This schema defines the contract between the LLM and our validation pipeline.
@@ -118,8 +203,8 @@ export const makeEntitySchema = <
  * import { makeKnowledgeGraphSchema } from "@effect-ontology/core/Schema/Factory"
  *
  * const schema = makeKnowledgeGraphSchema(
- *   ["http://xmlns.com/foaf/0.1/Person", "http://xmlns.com/foaf/0.1/Organization"],
- *   ["http://xmlns.com/foaf/0.1/name", "http://xmlns.com/foaf/0.1/knows"]
+ *   ["http://xmlns.com/foaf/0.1/Person"],
+ *   ["http://xmlns.com/foaf/0.1/name"]
  * )
  *
  * // Valid data
@@ -144,6 +229,8 @@ export const makeEntitySchema = <
  *
  * @param classIris - Array of ontology class IRIs (must be non-empty)
  * @param propertyIris - Array of ontology property IRIs (must be non-empty)
+ * @param ontology - Optional ontology context for strict mode
+ * @param options - Generation options
  * @returns Effect Schema for knowledge graph validation
  * @throws {EmptyVocabularyError} if either array is empty
  *
@@ -155,13 +242,44 @@ export const makeKnowledgeGraphSchema = <
   PropertyIRI extends string = string
 >(
   classIris: ReadonlyArray<ClassIRI>,
-  propertyIris: ReadonlyArray<PropertyIRI>
+  propertyIris: ReadonlyArray<PropertyIRI>,
+  ontology?: OntologyContext,
+  options: SchemaGenerationOptions = {}
 ) => {
   // Create union schemas for vocabulary validation
   const ClassUnion = unionFromStringArray(classIris, "classes")
-  const PropertyUnion = unionFromStringArray(propertyIris, "properties")
 
-  // Create the entity schema with our vocabulary constraints
+  // Strict Mode: Generate Discriminated Union for properties
+  if (options.strict && ontology) {
+    if (A.isEmptyReadonlyArray(propertyIris)) {
+      throw new EmptyVocabularyError({ type: "properties" })
+    }
+
+    const propertySchemas = propertyIris.map((iri) => makeStrictPropertySchema(iri, ontology)) as unknown as [
+      S.Schema<any>,
+      ...Array<S.Schema<any>>
+    ]
+
+    const StrictPropertyUnion = S.Union(...propertySchemas)
+
+    const StrictEntitySchema = S.Struct({
+      "@id": S.String,
+      "@type": ClassUnion,
+      properties: S.Array(StrictPropertyUnion)
+    })
+
+    return S.Struct({
+      entities: S.Array(StrictEntitySchema)
+    }).annotations({
+      identifier: "KnowledgeGraph",
+      title: "Knowledge Graph Extraction (Strict)",
+      description:
+        "A collection of entities extracted from text, validated against an ontology with strict property typing"
+    })
+  }
+
+  // Loose Mode (Default)
+  const PropertyUnion = unionFromStringArray(propertyIris, "properties")
   const EntitySchema = makeEntitySchema(ClassUnion, PropertyUnion)
 
   // The top-level schema is just a wrapper with an entities array

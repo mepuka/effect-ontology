@@ -25,15 +25,89 @@ const OWL = {
   minCardinality: "http://www.w3.org/2002/07/owl#minCardinality",
   maxCardinality: "http://www.w3.org/2002/07/owl#maxCardinality",
   cardinality: "http://www.w3.org/2002/07/owl#cardinality",
-  hasValue: "http://www.w3.org/2002/07/owl#hasValue"
+  hasValue: "http://www.w3.org/2002/07/owl#hasValue",
+  FunctionalProperty: "http://www.w3.org/2002/07/owl#FunctionalProperty",
+  SymmetricProperty: "http://www.w3.org/2002/07/owl#SymmetricProperty",
+  TransitiveProperty: "http://www.w3.org/2002/07/owl#TransitiveProperty",
+  InverseFunctionalProperty: "http://www.w3.org/2002/07/owl#InverseFunctionalProperty",
+  unionOf: "http://www.w3.org/2002/07/owl#unionOf",
+  intersectionOf: "http://www.w3.org/2002/07/owl#intersectionOf",
+  complementOf: "http://www.w3.org/2002/07/owl#complementOf"
 } as const
+
+/**
+ * Parse an RDF list (rdf:first/rdf:rest/rdf:nil) into an array
+ *
+ * RDF lists are represented as linked lists using blank nodes:
+ * - rdf:first points to the element
+ * - rdf:rest points to the next node
+ * - rdf:nil marks the end
+ *
+ * @param store - The N3 store
+ * @param listHead - The blank node Term representing the list head
+ * @returns Option containing array of IRIs, or None if malformed
+ *
+ * @example
+ * ```turtle
+ * :AdultOrSenior owl:unionOf [
+ *   rdf:first :Adult ;
+ *   rdf:rest [
+ *     rdf:first :Senior ;
+ *     rdf:rest rdf:nil
+ *   ]
+ * ] .
+ * ```
+ */
+export const parseRdfList = (
+  store: N3.Store,
+  listHead: N3.Term
+): Option.Option<ReadonlyArray<string>> => {
+  const items: Array<string> = []
+  let current: N3.Term = listHead
+
+  // Follow the linked list until we hit rdf:nil
+  while (current.value !== "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil") {
+    // Get rdf:first (the element)
+    const firstQuad = store.getQuads(
+      current,
+      "http://www.w3.org/1999/02/22-rdf-syntax-ns#first",
+      null,
+      null
+    )[0]
+
+    if (!firstQuad) {
+      // Malformed list - no rdf:first
+      return Option.none()
+    }
+
+    items.push(firstQuad.object.value)
+
+    // Get rdf:rest (pointer to next node)
+    const restQuad = store.getQuads(
+      current,
+      "http://www.w3.org/1999/02/22-rdf-syntax-ns#rest",
+      null,
+      null
+    )[0]
+
+    if (!restQuad) {
+      // Malformed list - no rdf:rest
+      return Option.none()
+    }
+
+    current = restQuad.object
+  }
+
+  return Option.some(items)
+}
 
 const RDF = {
   type: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
 } as const
 
 const RDFS = {
-  label: "http://www.w3.org/2000/01/rdf-schema#label"
+  label: "http://www.w3.org/2000/01/rdf-schema#label",
+  subPropertyOf: "http://www.w3.org/2000/01/rdf-schema#subPropertyOf"
 } as const
 
 /**
@@ -69,11 +143,11 @@ export const parseRestriction = (
   const propertyIri = onPropertyQuad.object.value
 
   // 3. Initialize constraint with defaults
-  let ranges: Array<string> = []
+  const ranges: Array<string> = []
   let minCardinality = 0
   let maxCardinality: Option.Option<number> = Option.none()
-  let allowedValues: Array<string> = []
-  let annotations: Array<string> = []
+  const allowedValues: Array<string> = []
+  const annotations: Array<string> = []
 
   // 4. Get property label if available
   const labelQuad = store.getQuads(propertyIri, RDFS.label, null, null)[0]
@@ -225,8 +299,51 @@ export const parseTurtleToGraph = (
       )
     }
 
-    // 3. Extract all properties and attach to their domain classes
+    // 3. Parse rdfs:subPropertyOf relationships FIRST
+    // We need this before processing properties to enable domain/range inheritance
+    const subPropertyTriples = store.getQuads(
+      null,
+      RDFS.subPropertyOf,
+      null,
+      null
+    )
+
+    const propertyParentsMap = new Map<string, Set<string>>()
+
+    for (const quad of subPropertyTriples) {
+      const childProperty = quad.subject.value
+      const parentProperty = quad.object.value
+
+      if (!propertyParentsMap.has(childProperty)) {
+        propertyParentsMap.set(childProperty, new Set())
+      }
+      propertyParentsMap.get(childProperty)!.add(parentProperty)
+    }
+
+    // Helper: Get all ancestor properties (transitive closure)
+    const getPropertyAncestors = (propIri: string, visited = new Set<string>()): Set<string> => {
+      if (visited.has(propIri)) return new Set() // Cycle detection
+      visited.add(propIri)
+
+      const ancestors = new Set<string>()
+      const parents = propertyParentsMap.get(propIri)
+
+      if (parents) {
+        for (const parent of parents) {
+          ancestors.add(parent)
+          // Recursively add grandparents
+          for (const grandparent of getPropertyAncestors(parent, visited)) {
+            ancestors.add(grandparent)
+          }
+        }
+      }
+
+      return ancestors
+    }
+
+    // 4. Extract all properties and attach to their domain classes
     // Properties without domains are collected as "universal properties"
+    // Properties inherit domains/ranges from parent properties via rdfs:subPropertyOf
     const propertyTypes = [
       "http://www.w3.org/2002/07/owl#ObjectProperty",
       "http://www.w3.org/2002/07/owl#DatatypeProperty"
@@ -254,38 +371,103 @@ export const parseTurtleToGraph = (
         )[0]
         const label = labelQuad?.object.value || propIri.split("#")[1] || propIri
 
-        // Get range
+        // Get explicit range
         const rangeQuad = store.getQuads(
           propIri,
           "http://www.w3.org/2000/01/rdf-schema#range",
           null,
           null
         )[0]
-        const range = rangeQuad?.object.value || "http://www.w3.org/2001/XMLSchema#string"
+        const range = rangeQuad?.object.value
 
-        // Get domain(s)
+        // Get explicit domain(s)
         const domainQuads = store.getQuads(
           propIri,
           "http://www.w3.org/2000/01/rdf-schema#domain",
           null,
           null
         )
+        const explicitDomains = domainQuads.map((q) => q.object.value)
+
+        // Inherit domains and ranges from parent properties
+        const inheritedDomains = new Set<string>(explicitDomains)
+        const inheritedRanges = new Set<string>(range ? [range] : [])
+
+        const ancestors = getPropertyAncestors(propIri)
+        for (const ancestorIri of ancestors) {
+          // Inherit domains
+          const ancestorDomainQuads = store.getQuads(
+            ancestorIri,
+            "http://www.w3.org/2000/01/rdf-schema#domain",
+            null,
+            null
+          )
+          for (const domainQuad of ancestorDomainQuads) {
+            inheritedDomains.add(domainQuad.object.value)
+          }
+
+          // Inherit ranges (child can narrow, but we collect all)
+          const ancestorRangeQuad = store.getQuads(
+            ancestorIri,
+            "http://www.w3.org/2000/01/rdf-schema#range",
+            null,
+            null
+          )[0]
+          if (ancestorRangeQuad) {
+            inheritedRanges.add(ancestorRangeQuad.object.value)
+          }
+        }
+
+        // Use inherited range if no explicit range, otherwise prefer explicit
+        const finalRange = range || (inheritedRanges.size > 0
+          ? Array.from(inheritedRanges)[0]
+          : "http://www.w3.org/2001/XMLSchema#string")
+
+        // Check property characteristics
+        const isFunctional = store.getQuads(
+          propIri,
+          RDF.type,
+          OWL.FunctionalProperty,
+          null
+        ).length > 0
+
+        const isSymmetric = store.getQuads(
+          propIri,
+          RDF.type,
+          OWL.SymmetricProperty,
+          null
+        ).length > 0
+
+        const isTransitive = store.getQuads(
+          propIri,
+          RDF.type,
+          OWL.TransitiveProperty,
+          null
+        ).length > 0
+
+        const isInverseFunctional = store.getQuads(
+          propIri,
+          RDF.type,
+          OWL.InverseFunctionalProperty,
+          null
+        ).length > 0
 
         const propertyData = PropertyConstraint.make({
           propertyIri: propIri,
           label,
-          ranges: Data.array([range]),
-          maxCardinality: Option.none()
+          ranges: Data.array([finalRange]),
+          maxCardinality: isFunctional ? Option.some(1) : Option.none(),
+          isSymmetric,
+          isTransitive,
+          isInverseFunctional
         })
 
-        if (domainQuads.length === 0) {
-          // CASE A: No Domain -> Universal Property (e.g., Dublin Core)
+        if (inheritedDomains.size === 0) {
+          // CASE A: No Domain (even after inheritance) -> Universal Property
           universalProperties.push(propertyData)
         } else {
-          // CASE B: Explicit Domain -> Attach to specific ClassNode(s)
-          for (const domainQuad of domainQuads) {
-            const domainIri = domainQuad.object.value
-
+          // CASE B: Has Domain (explicit or inherited) -> Attach to specific ClassNode(s)
+          for (const domainIri of inheritedDomains) {
             // Use Option.match to update the node if it exists
             classNodes = Option.match(HashMap.get(classNodes, domainIri), {
               onNone: () => classNodes, // No change if class not found
@@ -304,7 +486,7 @@ export const parseTurtleToGraph = (
       }
     }
 
-    // 4. Build Graph edges from subClassOf relationships
+    // 5. Build Graph edges from subClassOf relationships
     // Also parse owl:Restriction blank nodes and attach to classes
     const subClassTriples = store.getQuads(
       null,
@@ -348,7 +530,71 @@ export const parseTurtleToGraph = (
       }
     }
 
-    // Build graph using Effect's Graph API
+    // 5.5. Parse owl:unionOf, owl:intersectionOf, owl:complementOf class expressions
+    // These define complex class definitions
+    for (const classIri of HashMap.keys(classNodes)) {
+      const classExpressions: Array<any> = []
+
+      // Parse owl:unionOf
+      const unionQuads = store.getQuads(classIri, OWL.unionOf, null, null)
+      for (const quad of unionQuads) {
+        if (isBlankNode(quad.object)) {
+          // Pass the blank node Term directly (not the string value)
+          const classesOption = parseRdfList(store, quad.object)
+
+          Option.match(classesOption, {
+            onNone: () => {}, // Malformed list, skip
+            onSome: (classes) => {
+              classExpressions.push({ _tag: "UnionOf", classes: Array.from(classes) })
+            }
+          })
+        }
+      }
+
+      // Parse owl:intersectionOf
+      const intersectionQuads = store.getQuads(classIri, OWL.intersectionOf, null, null)
+      for (const quad of intersectionQuads) {
+        if (isBlankNode(quad.object)) {
+          // Pass the blank node Term directly (not the string value)
+          const classesOption = parseRdfList(store, quad.object)
+
+          Option.match(classesOption, {
+            onNone: () => {}, // Malformed list, skip
+            onSome: (classes) => {
+              classExpressions.push({ _tag: "IntersectionOf", classes: Array.from(classes) })
+            }
+          })
+        }
+      }
+
+      // Parse owl:complementOf (simpler - single class reference)
+      const complementQuads = store.getQuads(classIri, OWL.complementOf, null, null)
+      for (const quad of complementQuads) {
+        classExpressions.push({
+          _tag: "ComplementOf",
+          class: quad.object.value
+        })
+      }
+
+      // Attach class expressions to the node if any were found
+      if (classExpressions.length > 0) {
+        classNodes = Option.match(HashMap.get(classNodes, classIri), {
+          onNone: () => classNodes,
+          onSome: (classNode) => {
+            return HashMap.set(
+              classNodes,
+              classIri,
+              ClassNode.make({
+                ...classNode,
+                classExpressions
+              })
+            )
+          }
+        })
+      }
+    }
+
+    // 6. Build graph using Effect's Graph API
     let nodeIndexMap = HashMap.empty<NodeId, number>()
 
     const graph = Graph.mutate(Graph.directed<NodeId, null>(), (mutable) => {
@@ -381,7 +627,7 @@ export const parseTurtleToGraph = (
       }
     })
 
-    // 5. Parse owl:disjointWith relationships (bidirectional)
+    // 7. Parse owl:disjointWith relationships (bidirectional)
     const disjointTriples = store.getQuads(
       null,
       "http://www.w3.org/2002/07/owl#disjointWith",
@@ -426,12 +672,23 @@ export const parseTurtleToGraph = (
       )
     }
 
-    // 6. Build context (node data store)
+    // 8. Convert property parents map to immutable HashMap for context
+    let propertyParentsMapImmutable = HashMap.empty<string, HashSet.HashSet<string>>()
+    for (const [key, valueSet] of propertyParentsMap.entries()) {
+      propertyParentsMapImmutable = HashMap.set(
+        propertyParentsMapImmutable,
+        key,
+        HashSet.fromIterable(valueSet)
+      )
+    }
+
+    // 9. Build context (node data store)
     const context: OntologyContext = {
       nodes: classNodes,
       universalProperties,
       nodeIndexMap,
-      disjointWithMap: disjointWithMapImmutable
+      disjointWithMap: disjointWithMapImmutable,
+      propertyParentsMap: propertyParentsMapImmutable
     }
 
     return {

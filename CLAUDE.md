@@ -1,5 +1,167 @@
 # Local Development Context
 
+## Package Management and Build Tools
+
+**CRITICAL: This project uses Bun as the package manager and runtime**
+
+### Package Manager
+
+- **Bun**: `bun@1.2.23` (specified in package.json `packageManager` field)
+- **Workspace**: Monorepo with packages in `packages/*`
+
+### Installation
+
+```bash
+# Install dependencies
+bun install
+
+# Install in a specific workspace package
+cd packages/core && bun install
+cd packages/ui && bun install
+```
+
+### Available Scripts
+
+**Root-level scripts (from project root):**
+
+```bash
+# Development
+bun run dev              # Start UI dev server
+
+# Building
+bun run build            # Build all packages (core + ui)
+bun run build:core       # Build core package only
+bun run build:ui         # Build UI package only
+
+# Type checking
+bun run check            # Check all packages
+bun run check:core       # Check core package
+bun run check:ui         # Check UI package
+
+# Linting
+bun run lint             # Lint all packages
+bun run lint-fix         # Lint and auto-fix
+
+# Testing
+bun run test             # Run all tests (currently core only)
+bun run test:core        # Run core package tests
+bun run coverage         # Run tests with coverage
+
+# Cleanup
+bun run clean            # Remove build artifacts
+```
+
+**Package-specific scripts:**
+
+```bash
+# Core package (packages/core)
+cd packages/core
+bun run build            # TypeScript build
+bun run test             # Run vitest
+bun run check            # Type check
+
+# UI package (packages/ui)
+cd packages/ui
+bun run dev              # Vite dev server
+bun run build            # Vite build
+bun run check            # Type check
+```
+
+### Running TypeScript Scripts
+
+Use `bunx tsx` to run TypeScript files directly:
+
+```bash
+# Run a script
+bunx tsx packages/core/scripts/test-real-extraction.ts
+
+# Run with environment variables
+ANTHROPIC_API_KEY=xxx bunx tsx packages/core/scripts/generate-sample-prompts.ts
+```
+
+### Testing
+
+The project uses **Vitest** with **@effect/vitest** for testing:
+
+```bash
+# Run all tests
+bun run test
+
+# Run tests in watch mode
+cd packages/core && bunx vitest
+
+# Run specific test file
+cd packages/core && bunx vitest test/Graph/Builder.test.ts
+
+# Run with coverage
+bun run coverage
+```
+
+### Type Checking
+
+Use `bun run check` for type checking (runs `tsc -b`):
+
+```bash
+# Check all packages
+bun run check
+
+# Check specific package
+bun run check:core
+bun run check:ui
+
+# Or directly
+cd packages/core && bunx tsc -b tsconfig.json
+```
+
+### Common Workflows
+
+**Adding dependencies:**
+```bash
+# Add to root (shared dependencies)
+bun add effect @effect/schema
+
+# Add to specific package
+cd packages/core && bun add n3
+cd packages/ui && bun add react
+```
+
+**Development workflow:**
+```bash
+# 1. Install dependencies
+bun install
+
+# 2. Run type checking
+bun run check
+
+# 3. Run tests
+bun run test
+
+# 4. Start development
+bun run dev
+```
+
+**Build and verify:**
+```bash
+# Clean previous builds
+bun run clean
+
+# Build all packages
+bun run build
+
+# Verify type checking
+bun run check
+```
+
+### Important Notes
+
+1. **Always use `bun` commands** - Not npm, yarn, or pnpm
+2. **Use `bunx` for executables** - Instead of npx (e.g., `bunx tsx`, `bunx vitest`)
+3. **Workspace commands** - Scripts in root package.json coordinate workspace packages
+4. **TypeScript execution** - Use `bunx tsx` to run .ts files without pre-compilation
+5. **Vitest integration** - All tests use vitest with @effect/vitest helpers
+
+---
+
 ## Effect Source Code Context
 
 **CRITICAL: Always search local Effect source before writing Effect code**

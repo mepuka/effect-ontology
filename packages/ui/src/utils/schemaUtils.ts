@@ -27,17 +27,17 @@
  */
 export const isIRI = (value: string): boolean => {
   if (typeof value !== "string") return false
-  
+
   // Check for http/https URLs
   if (value.startsWith("http://") || value.startsWith("https://")) {
     return true
   }
-  
+
   // Check for common IRI patterns
   if (value.includes("://")) {
     return true
   }
-  
+
   return false
 }
 
@@ -58,9 +58,9 @@ export const isIRI = (value: string): boolean => {
  * // Returns: ["http://xmlns.com/foaf/0.1/Person", "http://xmlns.com/foaf/0.1/name", ...]
  * ```
  */
-export const extractIRIs = (jsonSchema: any): string[] => {
+export const extractIRIs = (jsonSchema: any): Array<string> => {
   const iris = new Set<string>()
-  
+
   const traverse = (obj: any) => {
     if (typeof obj === "string") {
       if (isIRI(obj)) {
@@ -72,7 +72,7 @@ export const extractIRIs = (jsonSchema: any): string[] => {
       Object.values(obj).forEach(traverse)
     }
   }
-  
+
   traverse(jsonSchema)
   return Array.from(iris)
 }
@@ -128,25 +128,25 @@ export const abbreviateIRI = (
       }
     }
   }
-  
+
   // Try common prefixes
   for (const [namespace, prefix] of COMMON_PREFIXES.entries()) {
     if (iri.startsWith(namespace)) {
       return `${prefix}:${iri.slice(namespace.length)}`
     }
   }
-  
+
   // Try to extract from URL-like IRIs with # or /
   const hashIndex = iri.lastIndexOf("#")
   if (hashIndex > 0) {
     return iri.slice(hashIndex + 1)
   }
-  
+
   const slashIndex = iri.lastIndexOf("/")
   if (slashIndex > 0 && slashIndex < iri.length - 1) {
     return iri.slice(slashIndex + 1)
   }
-  
+
   // Return original if no abbreviation found
   return iri
 }
@@ -173,12 +173,12 @@ export const getLocalName = (iri: string): string => {
   if (hashIndex >= 0) {
     return iri.slice(hashIndex + 1)
   }
-  
+
   const slashIndex = iri.lastIndexOf("/")
   if (slashIndex >= 0) {
     return iri.slice(slashIndex + 1)
   }
-  
+
   return iri
 }
 
@@ -204,12 +204,12 @@ export const getNamespace = (iri: string): string => {
   if (hashIndex >= 0) {
     return iri.slice(0, hashIndex + 1)
   }
-  
+
   const slashIndex = iri.lastIndexOf("/")
   if (slashIndex >= 0) {
     return iri.slice(0, slashIndex + 1)
   }
-  
+
   return ""
 }
 
@@ -231,9 +231,9 @@ export const getNamespace = (iri: string): string => {
  * // Returns: Map { "http://example.org/ns#" => "ns" }
  * ```
  */
-export const buildPrefixMap = (iris: string[]): Map<string, string> => {
+export const buildPrefixMap = (iris: Array<string>): Map<string, string> => {
   const namespaces = new Map<string, number>()
-  
+
   // Count namespace occurrences
   for (const iri of iris) {
     const ns = getNamespace(iri)
@@ -241,27 +241,26 @@ export const buildPrefixMap = (iris: string[]): Map<string, string> => {
       namespaces.set(ns, (namespaces.get(ns) || 0) + 1)
     }
   }
-  
+
   // Generate prefixes for common namespaces
   const prefixMap = new Map<string, string>()
   let counter = 1
-  
+
   for (const [namespace, count] of namespaces.entries()) {
     // Only create prefixes for namespaces used more than once
     if (count > 1) {
       // Check if it's a known prefix
       let prefix = COMMON_PREFIXES.get(namespace)
-      
+
       if (!prefix) {
         // Generate a prefix from the namespace
         const localPart = namespace.replace(/[#\/]$/, "").split(/[#\/]/).pop() || ""
         prefix = localPart || `ns${counter++}`
       }
-      
+
       prefixMap.set(namespace, prefix)
     }
   }
-  
+
   return prefixMap
 }
-

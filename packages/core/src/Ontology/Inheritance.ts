@@ -340,7 +340,9 @@ const getEffectivePropertiesImpl = (
   classIri: string,
   _graph: Graph.Graph<NodeId, unknown, "directed">,
   context: OntologyContext,
-  getAncestorsCached: (iri: string) => Effect.Effect<ReadonlyArray<string>, InheritanceError | CircularInheritanceError>,
+  getAncestorsCached: (
+    iri: string
+  ) => Effect.Effect<ReadonlyArray<string>, InheritanceError | CircularInheritanceError>,
   service: InheritanceService
 ): Effect.Effect<ReadonlyArray<PropertyConstraint>, InheritanceError | CircularInheritanceError> =>
   Effect.gen(function*() {

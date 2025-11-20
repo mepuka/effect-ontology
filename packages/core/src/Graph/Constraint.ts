@@ -7,7 +7,63 @@
  * @module Graph/Constraint
  */
 
-import { Data, Schema, Option, Equal } from "effect"
+import { Data, Equal, FastCheck, Option, Schema } from "effect"
+
+/**
+ * Arbitrary for generating valid IRIs used in constraints
+ *
+ * Includes class IRIs, property IRIs, and XSD datatypes.
+ * Used by propertyIri, ranges, and allowedValues fields.
+ */
+const arbValidIri = FastCheck.constantFrom(
+  // FOAF properties
+  "http://xmlns.com/foaf/0.1/name",
+  "http://xmlns.com/foaf/0.1/knows",
+  "http://xmlns.com/foaf/0.1/mbox",
+  "http://xmlns.com/foaf/0.1/homepage",
+  "http://xmlns.com/foaf/0.1/givenName",
+  "http://xmlns.com/foaf/0.1/familyName",
+  "http://xmlns.com/foaf/0.1/age",
+  "http://xmlns.com/foaf/0.1/member",
+  // FOAF classes
+  "http://xmlns.com/foaf/0.1/Person",
+  "http://xmlns.com/foaf/0.1/Organization",
+  "http://xmlns.com/foaf/0.1/Agent",
+  "http://xmlns.com/foaf/0.1/Document",
+  // Schema.org properties
+  "http://schema.org/name",
+  "http://schema.org/description",
+  "http://schema.org/url",
+  "http://schema.org/author",
+  "http://schema.org/datePublished",
+  "http://schema.org/email",
+  "http://schema.org/address",
+  // Schema.org classes
+  "http://schema.org/Person",
+  "http://schema.org/Article",
+  "http://schema.org/Event",
+  "http://schema.org/Product",
+  "http://schema.org/Organization",
+  // Dublin Core properties
+  "http://purl.org/dc/terms/title",
+  "http://purl.org/dc/terms/description",
+  "http://purl.org/dc/terms/creator",
+  "http://purl.org/dc/terms/date",
+  "http://purl.org/dc/terms/subject",
+  "http://purl.org/dc/terms/publisher",
+  "http://purl.org/dc/terms/contributor",
+  // Dublin Core classes
+  "http://purl.org/dc/terms/BibliographicResource",
+  "http://purl.org/dc/terms/Agent",
+  // XSD Datatypes (for range values)
+  "http://www.w3.org/2001/XMLSchema#string",
+  "http://www.w3.org/2001/XMLSchema#integer",
+  "http://www.w3.org/2001/XMLSchema#boolean",
+  "http://www.w3.org/2001/XMLSchema#date",
+  "http://www.w3.org/2001/XMLSchema#dateTime",
+  "http://www.w3.org/2001/XMLSchema#float",
+  "http://www.w3.org/2001/XMLSchema#double"
+)
 
 /**
  * Source of a constraint
@@ -21,7 +77,9 @@ export type ConstraintSource = typeof ConstraintSource.Type
 export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
   "PropertyConstraint"
 )({
-  propertyIri: Schema.String,
+  propertyIri: Schema.String.annotations({
+    arbitrary: () => () => arbValidIri
+  }),
 
   annotations: Schema.DataFromSelf(Schema.Array(Schema.String)).pipe(
     Schema.optional,
@@ -33,7 +91,9 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
 
   label: Schema.String.pipe(Schema.optional),
 
-  ranges: Schema.DataFromSelf(Schema.Array(Schema.String)).pipe(
+  ranges: Schema.DataFromSelf(Schema.Array(Schema.String.annotations({
+    arbitrary: () => () => arbValidIri
+  }))).pipe(
     Schema.optional,
     Schema.withDefaults({ constructor: () => Data.array([]), decoding: () => Data.array([]) })
   ),
@@ -46,7 +106,9 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
 
   maxCardinality: Schema.OptionFromUndefinedOr(Schema.Number.pipe(Schema.nonNegative())),
 
-  allowedValues: Schema.DataFromSelf(Schema.Array(Schema.String)).pipe(
+  allowedValues: Schema.DataFromSelf(Schema.Array(Schema.String.annotations({
+    arbitrary: () => () => arbValidIri
+  }))).pipe(
     Schema.optional,
     Schema.withDefaults({ constructor: () => Data.array([]), decoding: () => Data.array([]) })
   ),
@@ -57,6 +119,27 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
       constructor: () => "domain" as const,
       decoding: () => "domain" as const
     })
+  ),
+
+  /**
+   * Property characteristics from OWL
+   * - symmetric: If x P y, then y P x (e.g., sibling, spouse)
+   * - transitive: If x P y and y P z, then x P z (e.g., ancestor, partOf)
+   * - inverseFunctional: Unique in reverse direction (e.g., SSN identifies person)
+   */
+  isSymmetric: Schema.Boolean.pipe(
+    Schema.optional,
+    Schema.withDefaults({ constructor: () => false, decoding: () => false })
+  ),
+
+  isTransitive: Schema.Boolean.pipe(
+    Schema.optional,
+    Schema.withDefaults({ constructor: () => false, decoding: () => false })
+  ),
+
+  isInverseFunctional: Schema.Boolean.pipe(
+    Schema.optional,
+    Schema.withDefaults({ constructor: () => false, decoding: () => false })
   )
 }) {
   /**

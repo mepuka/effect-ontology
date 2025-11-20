@@ -52,7 +52,10 @@ export class ConstraintFactory {
       minCardinality: 0,
       maxCardinality: Option.none(),
       allowedValues: Data.array([]),
-      source: "domain"
+      source: "domain",
+      isSymmetric: false,
+      isTransitive: false,
+      isInverseFunctional: false
     })
   }
 
@@ -86,7 +89,10 @@ export class ConstraintFactory {
       minCardinality: min,
       maxCardinality: max !== undefined ? Option.some(max) : Option.none(),
       allowedValues: Data.array([]),
-      source: "domain"
+      source: "domain",
+      isSymmetric: false,
+      isTransitive: false,
+      isInverseFunctional: false
     })
   }
 
@@ -116,7 +122,10 @@ export class ConstraintFactory {
       minCardinality: 1, // Must have at least one
       maxCardinality: Option.none(),
       allowedValues: Data.array([]),
-      source: "restriction"
+      source: "restriction",
+      isSymmetric: false,
+      isTransitive: false,
+      isInverseFunctional: false
     })
   }
 
@@ -146,7 +155,10 @@ export class ConstraintFactory {
       minCardinality: 0, // Doesn't assert existence
       maxCardinality: Option.none(),
       allowedValues: Data.array([]),
-      source: "restriction"
+      source: "restriction",
+      isSymmetric: false,
+      isTransitive: false,
+      isInverseFunctional: false
     })
   }
 
@@ -173,7 +185,10 @@ export class ConstraintFactory {
       minCardinality: 1,
       maxCardinality: Option.some(1),
       allowedValues: Data.array([value]),
-      source: "restriction"
+      source: "restriction",
+      isSymmetric: false,
+      isTransitive: false,
+      isInverseFunctional: false
     })
   }
 
@@ -232,7 +247,10 @@ export class ConstraintFactory {
       minCardinality: 0,
       maxCardinality: Option.some(1),
       allowedValues: Data.array([]),
-      source: "domain"
+      source: "domain",
+      isSymmetric: false,
+      isTransitive: false,
+      isInverseFunctional: false
     })
   }
 
@@ -252,6 +270,9 @@ export class ConstraintFactory {
     maxCardinality?: number
     allowedValues?: ReadonlyArray<string>
     source?: "domain" | "restriction" | "refined"
+    isSymmetric?: boolean
+    isTransitive?: boolean
+    isInverseFunctional?: boolean
   }): PropertyConstraint {
     const label = params.label || params.iri.split("#")[1] || params.iri
     return PropertyConstraint.make({
@@ -263,7 +284,10 @@ export class ConstraintFactory {
         ? Option.some(params.maxCardinality)
         : Option.none(),
       allowedValues: Data.array(params.allowedValues || []),
-      source: params.source || "domain"
+      source: params.source || "domain",
+      isSymmetric: params.isSymmetric ?? false,
+      isTransitive: params.isTransitive ?? false,
+      isInverseFunctional: params.isInverseFunctional ?? false
     })
   }
 }
