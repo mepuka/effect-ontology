@@ -76,10 +76,40 @@ const extractEntitiesWithLabels = (store: N3.Store): Array<EntityWithLabel> => {
 }
 
 /**
+ * Select canonical IRI from a list of IRIs
+ *
+ * FIX Issue 4: Prefer named IRIs over blank nodes
+ * - Named IRIs (http://...) are stable identifiers
+ * - Blank nodes (_:...) are temporary and can collide
+ *
+ * Strategy:
+ * 1. If any named IRIs exist, pick alphabetically first named IRI
+ * 2. Otherwise, fall back to alphabetically first blank node
+ *
+ * @param iris - Array of IRIs (may contain both named and blank nodes)
+ * @returns The canonical IRI
+ */
+const selectCanonicalIri = (iris: string[]): string => {
+  const uniqueIris = [...new Set(iris)]
+
+  // Separate named IRIs from blank nodes
+  const namedIris = uniqueIris.filter((iri) => !iri.startsWith("_:"))
+  const blankNodes = uniqueIris.filter((iri) => iri.startsWith("_:"))
+
+  // Prefer named IRIs (stable identifiers)
+  if (namedIris.length > 0) {
+    return namedIris.sort()[0]
+  }
+
+  // Fall back to blank nodes if no named IRIs
+  return blankNodes.sort()[0]
+}
+
+/**
  * Build IRI mapping: duplicate IRI -> canonical IRI
  *
  * For each group of entities with the same normalized label:
- * - Pick the alphabetically first IRI as canonical
+ * - Pick canonical IRI (preferring named IRIs over blank nodes)
  * - Map all other IRIs to the canonical one
  */
 const buildIriMapping = (
@@ -102,12 +132,11 @@ const buildIriMapping = (
   for (const [_normalizedLabel, iris] of groups.entries()) {
     if (iris.length <= 1) continue // No duplicates
 
-    // Sort IRIs alphabetically and pick first as canonical
-    const sortedIris = [...new Set(iris)].sort() // Remove duplicates, then sort
-    const canonical = sortedIris[0]
+    // Select canonical IRI (FIX Issue 4: prefer named IRIs)
+    const canonical = selectCanonicalIri(iris)
 
     // Map all non-canonical IRIs to canonical
-    for (const iri of sortedIris) {
+    for (const iri of iris) {
       if (iri !== canonical) {
         mapping = HashMap.set(mapping, iri, canonical)
       }

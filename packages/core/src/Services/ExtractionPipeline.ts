@@ -23,6 +23,7 @@ import { EntityDiscoveryService } from "./EntityDiscovery.js"
 import { mergeGraphsWithResolution } from "./EntityResolution.js"
 import { extractKnowledgeGraph, extractVocabulary } from "./Llm.js"
 import { NlpService } from "./Nlp.js"
+import { RdfService } from "./Rdf.js"
 
 /**
  * Pipeline configuration
@@ -46,47 +47,32 @@ export const defaultPipelineConfig: PipelineConfig = {
 }
 
 /**
- * Convert KnowledgeGraph JSON to RDF Turtle string
+ * Extract rdfs:label from entity properties
  *
- * Helper function to convert structured extraction output to RDF.
+ * Looks for rdfs:label property in the entity's properties array.
+ * Falls back to the entity's @id if no label is found.
  *
- * @param graph - The knowledge graph from LLM extraction
- * @returns Turtle string representation
+ * @param entity - The knowledge graph entity
+ * @returns The extracted label or IRI as fallback
  */
-const knowledgeGraphToTurtle = (graph: {
-  entities: ReadonlyArray<{
-    "@id": string
-    "@type": string
-    properties: ReadonlyArray<{
-      predicate: string
-      object: string | { "@id": string }
+const extractLabel = (
+  entity: {
+    readonly "@id": string
+    readonly properties: ReadonlyArray<{
+      readonly predicate: string
+      readonly object: string | { readonly "@id": string }
     }>
-  }>
-}): string => {
-  const lines = ["@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> ."]
-
-  for (const entity of graph.entities) {
-    // Entity with type
-    lines.push(`<${entity["@id"]}> a <${entity["@type"]}> ;`)
-
-    // Properties
-    for (let i = 0; i < entity.properties.length; i++) {
-      const prop = entity.properties[i]
-      const isLast = i === entity.properties.length - 1
-
-      if (typeof prop.object === "string") {
-        // Literal value
-        lines.push(`  <${prop.predicate}> "${prop.object}"${isLast ? " ." : " ;"}`)
-      } else {
-        // Object reference
-        lines.push(`  <${prop.predicate}> <${prop.object["@id"]}>${isLast ? " ." : " ;"}`)
-      }
-    }
-
-    lines.push("") // Blank line between entities
   }
+): string => {
+  const RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
 
-  return lines.join("\n")
+  // Find rdfs:label property
+  const labelProp = entity.properties.find(
+    (p) => p.predicate === RDFS_LABEL && typeof p.object === "string"
+  )
+
+  // Return label if found, otherwise use IRI
+  return labelProp ? (labelProp.object as string) : entity["@id"]
 }
 
 /**
@@ -120,6 +106,7 @@ export const streamingExtractionPipeline = (
     // 1. Get services
     const nlp = yield* NlpService
     const discovery = yield* EntityDiscoveryService
+    const rdf = RdfService.use()
 
     // 2. Build KnowledgeIndex from ontology graph (static knowledge)
     // Uses catamorphic fold over graph DAG to create queryable index
@@ -158,15 +145,16 @@ export const streamingExtractionPipeline = (
             // D. Extract knowledge using LLM
             const knowledgeGraph = yield* extractKnowledgeGraph(chunkText, ontology, prompt, schema)
 
-            // E. Convert to RDF Turtle
-            const rdfGraph = knowledgeGraphToTurtle(knowledgeGraph)
+            // E. Convert to RDF Turtle using RdfService (fixes Issue 1: proper escaping)
+            const store = yield* rdf.jsonToStore(knowledgeGraph)
+            const rdfGraph = yield* rdf.storeToTurtle(store)
 
-            // F. Update entity discovery (for next chunks)
+            // F. Update entity discovery (for next chunks) with label extraction (fixes Issue 3)
             const newEntities = knowledgeGraph.entities.map(
               (entity) =>
                 new EC.EntityRef({
                   iri: entity["@id"],
-                  label: entity["@id"], // TODO: Extract rdfs:label from properties if available
+                  label: extractLabel(entity), // Extract rdfs:label from properties
                   types: [entity["@type"]],
                   foundInChunk: currentChunkIndex,
                   confidence: 1.0 // TODO: Add confidence scoring

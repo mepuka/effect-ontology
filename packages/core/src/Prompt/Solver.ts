@@ -147,8 +147,8 @@ export const solveGraph = <R>(
         )
       )
 
-      // 3.2: Apply algebra
-      const result = algebra(ontologyNode, childrenResults)
+      // 3.2: Apply algebra (with graph and nodeIndex for Issue 2 fix)
+      const result = algebra(ontologyNode, childrenResults, graph, nodeIndex)
       results = HashMap.set(results, nodeIndex, result)
 
       // 3.3: Push to dependents (parents)
