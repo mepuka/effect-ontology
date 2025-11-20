@@ -4,18 +4,17 @@
  * Usage: bun packages/core/scripts/test-real-extraction.ts
  */
 
-import { AnthropicClient } from "@effect/ai-anthropic"
 import { LanguageModel } from "@effect/ai"
-import { AnthropicLanguageModel } from "@effect/ai-anthropic"
-import { Config, Effect, HashMap, JSONSchema, Layer, Redacted } from "effect"
-import { FetchHttpClient } from "@effect/platform"
+import { Effect, HashMap, JSONSchema } from "effect"
 import { readFileSync } from "fs"
 import { join } from "path"
+import type { LlmProviderParams } from "../src/Services/LlmProvider.js"
+import { makeLlmProviderLayer } from "../src/Services/LlmProvider.js"
 import { parseTurtleToGraph } from "../src/Graph/Builder.js"
 import { knowledgeIndexAlgebra } from "../src/Prompt/Algebra.js"
 import { buildKnowledgeMetadata } from "../src/Prompt/Metadata.js"
-import { makeKnowledgeGraphSchema } from "../src/Schema/Factory.js"
 import { solveToKnowledgeIndex } from "../src/Prompt/Solver.js"
+import { makeKnowledgeGraphSchema } from "../src/Schema/Factory.js"
 
 const loadOntology = (filename: string): string => {
   const path = join(__dirname, "../test/fixtures/ontologies", filename)
@@ -46,7 +45,7 @@ Important instructions:
 Return the JSON now:`
 }
 
-const main = Effect.gen(function* () {
+const main = Effect.gen(function*() {
   console.log("=== Real Extraction Test with Anthropic ===\n")
 
   console.log("✅ Starting extraction\n")
@@ -63,7 +62,7 @@ const main = Effect.gen(function* () {
 
   // Extract IRIs
   const classIRIs = Array.from(HashMap.keys(metadata.classSummaries))
-  const propertyIRIs: string[] = []
+  const propertyIRIs: Array<string> = []
   for (const summary of HashMap.values(metadata.classSummaries)) {
     const unitOption = HashMap.get(index, summary.iri)
     if (unitOption._tag === "Some") {
@@ -137,8 +136,7 @@ The project is a collaboration between their companies.
       console.log("\n📊 Extracted Entities:")
       for (const entity of parsed.entities) {
         const type = entity["@type"]?.split("/").pop() || "Unknown"
-        const name =
-          entity.properties?.find((p: any) => p.predicate.includes("name"))?.object || entity["@id"]
+        const name = entity.properties?.find((p: any) => p.predicate.includes("name"))?.object || entity["@id"]
         console.log(`   - ${type}: ${name}`)
       }
     }
@@ -150,32 +148,39 @@ The project is a collaboration between their companies.
   console.log("\n=== Test Complete ===\n")
 })
 
-// Create Anthropic client layer from config
-const AnthropicClientLayer = Layer.unwrapEffect(
-  Effect.gen(function* () {
-    const apiKey = yield* Config.nested("LLM")(
-      Config.nested("ANTHROPIC")(
-        Config.string("API_KEY")
-      )
-    ).pipe(
-      Effect.catchAll(() => Config.string("ANTHROPIC_API_KEY"))
-    )
-
-    return AnthropicClient.layer({ apiKey: Redacted.make(apiKey) })
-  })
-)
-
-// Create language model layer
-const LanguageModelLayer = AnthropicLanguageModel.layer({
-  model: "claude-3-haiku-20240307",
-  config: {
-    max_tokens: 4096,
-    temperature: 0.0
+// Create provider params from environment variables
+const providerParams: LlmProviderParams = {
+  provider: (process.env.VITE_LLM_PROVIDER || "anthropic") as LlmProviderParams["provider"],
+  anthropic: {
+    apiKey: process.env.VITE_LLM_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY || "",
+    model: process.env.VITE_LLM_ANTHROPIC_MODEL || "claude-3-haiku-20240307",
+    maxTokens: Number(process.env.VITE_LLM_ANTHROPIC_MAX_TOKENS) || 4096,
+    temperature: Number(process.env.VITE_LLM_ANTHROPIC_TEMPERATURE) || 0.0
+  },
+  openai: {
+    apiKey: process.env.VITE_LLM_OPENAI_API_KEY || "",
+    model: process.env.VITE_LLM_OPENAI_MODEL || "gpt-4o",
+    maxTokens: Number(process.env.VITE_LLM_OPENAI_MAX_TOKENS) || 4096,
+    temperature: Number(process.env.VITE_LLM_OPENAI_TEMPERATURE) || 0.0
+  },
+  gemini: {
+    apiKey: process.env.VITE_LLM_GEMINI_API_KEY || "",
+    model: process.env.VITE_LLM_GEMINI_MODEL || "gemini-2.5-flash",
+    maxTokens: Number(process.env.VITE_LLM_GEMINI_MAX_TOKENS) || 4096,
+    temperature: Number(process.env.VITE_LLM_GEMINI_TEMPERATURE) || 0.0
+  },
+  openrouter: {
+    apiKey: process.env.VITE_LLM_OPENROUTER_API_KEY || "",
+    model: process.env.VITE_LLM_OPENROUTER_MODEL || "anthropic/claude-3.5-sonnet",
+    maxTokens: Number(process.env.VITE_LLM_OPENROUTER_MAX_TOKENS) || 4096,
+    temperature: Number(process.env.VITE_LLM_OPENROUTER_TEMPERATURE) || 0.0,
+    siteUrl: process.env.VITE_LLM_OPENROUTER_SITE_URL,
+    siteName: process.env.VITE_LLM_OPENROUTER_SITE_NAME
   }
-}).pipe(
-  Layer.provide(AnthropicClientLayer),
-  Layer.provide(FetchHttpClient.layer)
-)
+}
+
+// Create language model layer from params
+const LanguageModelLayer = makeLlmProviderLayer(providerParams)
 
 // Run with error handling
 const program = main.pipe(
@@ -183,9 +188,10 @@ const program = main.pipe(
   Effect.catchAll((error) =>
     Effect.sync(() => {
       console.error("\n❌ Error:", error)
-      if (String(error).includes("API key")) {
+      if (String(error).includes("API key") || String(error).includes("apiKey")) {
         console.error("\n💡 Set your API key:")
-        console.error("   export LLM__ANTHROPIC_API_KEY=your-key")
+        console.error("   export VITE_LLM_ANTHROPIC_API_KEY=your-key")
+        console.error("   or ANTHROPIC_API_KEY=your-key")
         console.error("   or add to .env file")
       }
       process.exit(1)
