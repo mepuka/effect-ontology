@@ -5,8 +5,10 @@
  * - NlpService (chunking)
  * - EntityDiscoveryService (shared state)
  * - EntityResolution (merging)
+ * - LLM (mocked for testing)
  */
 
+import { LanguageModel } from "@effect/ai"
 import { describe, expect, it } from "@effect/vitest"
 import { Data, Effect, HashMap, Layer, Option } from "effect"
 import { PropertyConstraint } from "../../src/Graph/Constraint.js"
@@ -41,8 +43,35 @@ const mockOntology: OntologyContext = {
   propertyParentsMap: HashMap.empty()
 }
 
+// Mock LanguageModel for testing (returns simple mock entities)
+const MockLanguageModelLive = Layer.succeed(
+  LanguageModel.LanguageModel,
+  {
+    generate: () => Effect.succeed({ value: "", usage: { inputTokens: 0, outputTokens: 0 } }),
+    stream: () => Effect.succeed({ value: "", usage: { inputTokens: 0, outputTokens: 0 } }),
+    generateObject: () =>
+      Effect.succeed({
+        value: {
+          entities: [
+            {
+              "@id": "http://example.org/testEntity",
+              "@type": "http://xmlns.com/foaf/0.1/Person",
+              properties: [
+                {
+                  predicate: "http://xmlns.com/foaf/0.1/name",
+                  object: "Test Person"
+                }
+              ]
+            }
+          ]
+        },
+        usage: { inputTokens: 0, outputTokens: 0 }
+      } as any) // Type assertion for mock
+  } as any // Type assertion for test mock
+)
+
 // Test layers
-const TestLayers = Layer.merge(NlpServiceLive, EntityDiscoveryServiceLive)
+const TestLayers = Layer.mergeAll(NlpServiceLive, EntityDiscoveryServiceLive, MockLanguageModelLive)
 
 describe("ExtractionPipeline", () => {
   it.effect("should process text through pipeline", () =>
@@ -75,8 +104,8 @@ describe("ExtractionPipeline", () => {
       // Assert: multiple entities created and merged
       expect(result).toContain("@prefix")
       expect(result).toContain("rdfs:")
-      // Should have at least one entity (resolution may deduplicate and rename blank nodes)
-      expect(result).toContain(":Entity")
-      expect(result).toContain("rdfs:label")
+      // Should have at least one entity from mock LLM
+      expect(result).toContain("Person")
+      expect(result).toContain("name")
     }).pipe(Effect.provide(TestLayers)))
 })
