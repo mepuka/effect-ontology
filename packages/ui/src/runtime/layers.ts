@@ -1,73 +1,33 @@
 /**
  * Frontend Layer Composition
  *
- * Provides Effect layers for all services needed by atoms in the frontend.
- * Composes configuration layers, service layers, and LLM provider layers.
- *
- * **Architecture:**
- * - FrontendConfigLayer: Base configuration services
- * - FrontendServicesLayer: All effectful services (depends on config)
- * - FrontendRuntimeLayer: Complete runtime (config + services + LLM provider)
- * - FrontendTestLayer: Test-only layer with mocks
+ * Provides Effect layers for services needed by atoms in the frontend.
+ * NO LLM configuration - atoms compose LanguageModel layers inline per-call.
  *
  * @module runtime/layers
  * @since 1.0.0
  */
 
-import { LlmConfigService, RdfConfigService, ShaclConfigService } from "@effect-ontology/core/Config"
-import { LlmService } from "@effect-ontology/core/Services/Llm"
-import { makeLlmProviderLayer } from "@effect-ontology/core/Services/LlmProvider"
 import { RdfService } from "@effect-ontology/core/Services/Rdf"
 import { ShaclService } from "@effect-ontology/core/Services/Shacl"
+import { KeyValueStore } from "@effect/platform"
+import { BrowserKeyValueStore } from "@effect/platform-browser"
 import { Layer } from "effect"
-
-/**
- * Base configuration layer for frontend
- *
- * Provides all config services with browser-compatible defaults.
- * Config values can be injected at build time or runtime.
- *
- * @since 1.0.0
- * @category layers
- */
-export const FrontendConfigLayer = Layer.mergeAll(
-  LlmConfigService.Default,
-  RdfConfigService.Default,
-  ShaclConfigService.Default
-)
-
-/**
- * Frontend services layer
- *
- * Provides all effectful services needed by atoms.
- * Depends on FrontendConfigLayer.
- *
- * **Services Provided:**
- * - LlmService: Knowledge graph extraction
- * - RdfService: RDF parsing operations
- * - ShaclService: SHACL validation operations
- *
- * @since 1.0.0
- * @category layers
- */
-export const FrontendServicesLayer = Layer.provideMerge(
-  Layer.mergeAll(
-    LlmService.Default,
-    RdfService.Default,
-    ShaclService.Default
-  ),
-  FrontendConfigLayer
-)
 
 /**
  * Complete frontend runtime layer
  *
- * Includes all services + LLM provider layer.
- * This is the main layer for production use.
+ * Provides only stateless services - NO LLM config or LanguageModel.
+ * Atoms provide LanguageModel inline using Effect.provide() per call.
  *
- * **Composition:**
- * - FrontendServicesLayer (LlmService, RdfService, ShaclService)
- * - makeLlmProviderLayer() (LanguageModel based on config)
+ * **Services Provided:**
+ * - RdfService: RDF parsing operations
+ * - ShaclService: SHACL validation operations
+ * - KeyValueStore: Browser localStorage
+ *
+ * **NOT Provided (by design):**
+ * - LlmConfigService ❌ (atoms use plain data from browserConfigAtom)
+ * - LanguageModel ❌ (atoms compose provider layer inline)
  *
  * @since 1.0.0
  * @category layers
@@ -75,43 +35,40 @@ export const FrontendServicesLayer = Layer.provideMerge(
  * @example
  * ```typescript
  * import { runtime } from "./runtime/atoms"
+ * import { browserConfigAtom } from "./state/config"
+ * import { makeLlmProviderLayer } from "@effect-ontology/core/Services/LlmProvider"
+ * import { extractKnowledgeGraph } from "@effect-ontology/core/Services/Llm"
  *
- * const extractionAtom = runtime.make(() =>
+ * const extractionAtom = runtime.atom((get) =>
  *   Effect.gen(function*() {
- *     const llm = yield* LlmService
- *     return yield* llm.extractKnowledgeGraph(...)
+ *     // Read config as plain data
+ *     const config = get(browserConfigAtom)
+ *
+ *     // Compose provider layer inline
+ *     const providerLayer = makeLlmProviderLayer(config)
+ *
+ *     // Provide layer per-call
+ *     return yield* extractKnowledgeGraph(...)
+ *       .pipe(Effect.provide(providerLayer))
  *   })
  * )
  * ```
  */
-export const FrontendRuntimeLayer = Layer.provideMerge(
-  FrontendServicesLayer,
-  makeLlmProviderLayer()
+export const FrontendRuntimeLayer = Layer.mergeAll(
+  RdfService.Default,
+  ShaclService.Default,
+  BrowserKeyValueStore.layerLocalStorage
 )
 
 /**
  * Test runtime layer with mock services
  *
- * Uses Test layers with in-memory implementations.
+ * Uses test layers with in-memory implementations.
  * No network calls, API keys, or external dependencies.
- *
- * **Use in tests:**
- * ```typescript
- * import { testRuntime } from "./runtime/atoms"
- *
- * const testAtom = testRuntime.make(() =>
- *   Effect.gen(function*() {
- *     const config = yield* LlmConfigService
- *     expect(config.provider).toBe("anthropic")
- *   })
- * )
- * ```
  *
  * @since 1.0.0
  * @category layers
  */
 export const FrontendTestLayer = Layer.mergeAll(
-  LlmConfigService.Test,
-  RdfConfigService.Test,
-  ShaclConfigService.Test
+  KeyValueStore.layerMemory
 )
