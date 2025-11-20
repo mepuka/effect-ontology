@@ -9,13 +9,16 @@
     "./Graph/Types": "./src/Graph/Types.ts",
     "./Graph/Constraint": "./src/Graph/Constraint.ts",
     "./Prompt": "./src/Prompt/index.ts",
+    "./Prompt/Fragment": "./src/Prompt/Fragment.ts",
+    "./Prompt/RenderEnriched": "./src/Prompt/RenderEnriched.ts",
     "./Schema": "./src/Schema/index.ts",
     "./Schema/Factory": "./src/Schema/Factory.ts",
     "./Schema/Export": "./src/Schema/Export.ts",
     "./Services/Llm": "./src/Services/Llm.ts",
     "./Services/Rdf": "./src/Services/Rdf.ts",
     "./Services/Shacl": "./src/Services/Shacl.ts",
-    "./Services/LlmProvider": "./src/Services/LlmProvider.ts"
+    "./Services/LlmProvider": "./src/Services/LlmProvider.ts",
+    "./Services/Nlp": "./src/Services/Nlp.ts"
   },
   "scripts": {
     "build": "tsc --skipLibCheck --project tsconfig.build.json",
@@ -28,7 +31,10 @@
     "@effect/printer": "^0.47.0",
     "@effect/typeclass": "^0.38.0",
     "effect": "^3.17.7",
-    "n3": "^1.26.0"
+    "n3": "^1.26.0",
+    "wink-eng-lite-web-model": "^1.8.1",
+    "wink-nlp": "^2.4.0",
+    "wink-nlp-utils": "^2.1.0"
   },
   "devDependencies": {
     "@effect/vitest": "^0.25.1",

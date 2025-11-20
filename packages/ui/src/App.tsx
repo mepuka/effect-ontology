@@ -1,7 +1,7 @@
 import { EnhancedTopologicalRail } from "./components/EnhancedTopologicalRail"
 import { EnhancedNodeInspector } from "./components/EnhancedNodeInspector"
 import { TurtleEditor } from "./components/TurtleEditor"
-import { PromptPreview } from "./components/PromptPreview"
+import { EnrichedPromptPreview } from "./components/EnrichedPromptPreview"
 import { JsonSchemaViewer } from "./components/JsonSchemaViewer"
 import { UniversalPropertiesPanel } from "./components/UniversalPropertiesPanel"
 import { ObservablePlotPanel } from "./components/ObservablePlotPanel"
@@ -39,9 +39,9 @@ export const App = () => {
 
       {/* Right Panel - Split: Prompt + Schema */}
       <div className="w-1/3 flex flex-col overflow-hidden bg-layered-slate pattern-grid">
-        {/* Top Half - Prompt Preview */}
+        {/* Top Half - Enriched Prompt Preview */}
         <div className="h-1/2 border-b border-slate-700 overflow-hidden">
-          <PromptPreview />
+          <EnrichedPromptPreview />
         </div>
         
         {/* Bottom Half - JSON Schema Viewer */}
