@@ -21,7 +21,8 @@ describe("Prompt Algebra", () => {
       const x = StructuredPrompt.make({
         system: ["Test system"],
         user: ["Test user"],
-        examples: ["Test example"]
+        examples: ["Test example"],
+        context: []
       })
 
       const result = StructuredPrompt.combine(StructuredPrompt.empty(), x)
@@ -29,13 +30,15 @@ describe("Prompt Algebra", () => {
       expect(result.system).toEqual(["Test system"])
       expect(result.user).toEqual(["Test user"])
       expect(result.examples).toEqual(["Test example"])
+      expect(result.context).toEqual([])
     })
 
     it("should satisfy identity law: x ⊕ empty = x", () => {
       const x = StructuredPrompt.make({
         system: ["Test system"],
         user: ["Test user"],
-        examples: ["Test example"]
+        examples: ["Test example"],
+        context: []
       })
 
       const result = StructuredPrompt.combine(x, StructuredPrompt.empty())
@@ -43,25 +46,29 @@ describe("Prompt Algebra", () => {
       expect(result.system).toEqual(["Test system"])
       expect(result.user).toEqual(["Test user"])
       expect(result.examples).toEqual(["Test example"])
+      expect(result.context).toEqual([])
     })
 
     it("should satisfy associativity: (a ⊕ b) ⊕ c = a ⊕ (b ⊕ c)", () => {
       const a = StructuredPrompt.make({
         system: ["A"],
         user: [],
-        examples: []
+        examples: [],
+        context: []
       })
 
       const b = StructuredPrompt.make({
         system: ["B"],
         user: [],
-        examples: []
+        examples: [],
+        context: []
       })
 
       const c = StructuredPrompt.make({
         system: ["C"],
         user: [],
-        examples: []
+        examples: [],
+        context: []
       })
 
       const left = StructuredPrompt.combine(StructuredPrompt.combine(a, b), c)
@@ -70,13 +77,14 @@ describe("Prompt Algebra", () => {
       expect(left.system).toEqual(right.system)
       expect(left.user).toEqual(right.user)
       expect(left.examples).toEqual(right.examples)
+      expect(left.context).toEqual(right.context)
     })
 
     it("should combine multiple prompts correctly", () => {
       const prompts = [
-        StructuredPrompt.make({ system: ["A"], user: [], examples: [] }),
-        StructuredPrompt.make({ system: ["B"], user: [], examples: [] }),
-        StructuredPrompt.make({ system: ["C"], user: [], examples: [] })
+        StructuredPrompt.make({ system: ["A"], user: [], examples: [], context: [] }),
+        StructuredPrompt.make({ system: ["B"], user: [], examples: [], context: [] }),
+        StructuredPrompt.make({ system: ["C"], user: [], examples: [], context: [] })
       ]
 
       const result = StructuredPrompt.combineAll(prompts)
@@ -138,13 +146,15 @@ describe("Prompt Algebra", () => {
       const childPrompt1 = StructuredPrompt.make({
         system: ["Child 1 definition"],
         user: [],
-        examples: []
+        examples: [],
+        context: []
       })
 
       const childPrompt2 = StructuredPrompt.make({
         system: ["Child 2 definition"],
         user: [],
-        examples: []
+        examples: [],
+        context: []
       })
 
       const result = defaultPromptAlgebra(parentClass, [childPrompt1, childPrompt2])
@@ -205,25 +215,29 @@ describe("Prompt Algebra", () => {
       expect(result.system).toEqual([])
       expect(result.user).toEqual([])
       expect(result.examples).toEqual([])
+      expect(result.context).toEqual([])
     })
 
     it("should combine universal with graph results", () => {
       const universal = StructuredPrompt.make({
         system: ["Universal section"],
         user: [],
-        examples: []
+        examples: [],
+        context: []
       })
 
       const graphResults = [
         StructuredPrompt.make({
           system: ["Class A"],
           user: [],
-          examples: []
+          examples: [],
+          context: []
         }),
         StructuredPrompt.make({
           system: ["Class B"],
           user: [],
-          examples: []
+          examples: [],
+          context: []
         })
       ]
 

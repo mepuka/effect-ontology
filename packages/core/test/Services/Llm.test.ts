@@ -58,7 +58,8 @@ describe("Services.Llm", () => {
     user: ["Extract entities and relationships from the text."],
     examples: [
       "Example: \"Alice knows Bob\" -> {\"@id\": \"_:alice\", \"@type\": \"Person\", \"knows\": {\"@id\": \"_:bob\"}}"
-    ]
+    ],
+    context: []
   })
 
   describe("extractVocabulary", () => {
@@ -169,7 +170,8 @@ describe("Services.Llm", () => {
         const complexPrompt = StructuredPrompt.make({
           system: ["Instruction 1", "Instruction 2"],
           user: ["Context 1", "Context 2"],
-          examples: ["Example 1", "Example 2", "Example 3"]
+          examples: ["Example 1", "Example 2", "Example 3"],
+          context: []
         })
 
         expect(complexPrompt.system).toHaveLength(2)
@@ -182,12 +184,14 @@ describe("Services.Llm", () => {
         const minimalPrompt = StructuredPrompt.make({
           system: [],
           user: [],
-          examples: []
+          examples: [],
+          context: []
         })
 
         expect(minimalPrompt.system).toHaveLength(0)
         expect(minimalPrompt.user).toHaveLength(0)
         expect(minimalPrompt.examples).toHaveLength(0)
+        expect(minimalPrompt.context).toHaveLength(0)
       }))
 
     it.effect("should support prompt combination", () =>
@@ -195,13 +199,15 @@ describe("Services.Llm", () => {
         const prompt1 = StructuredPrompt.make({
           system: ["System 1"],
           user: ["User 1"],
-          examples: []
+          examples: [],
+          context: []
         })
 
         const prompt2 = StructuredPrompt.make({
           system: ["System 2"],
           user: [],
-          examples: ["Example 1"]
+          examples: ["Example 1"],
+          context: []
         })
 
         const combined = StructuredPrompt.combine(prompt1, prompt2)
@@ -209,6 +215,7 @@ describe("Services.Llm", () => {
         expect(combined.system).toHaveLength(2)
         expect(combined.user).toHaveLength(1)
         expect(combined.examples).toHaveLength(1)
+        expect(combined.context).toHaveLength(0)
       }))
   })
 
@@ -230,7 +237,8 @@ describe("Services.Llm", () => {
         const prompt = StructuredPrompt.make({
           system: ["Extract entities"],
           user: ["From text"],
-          examples: []
+          examples: [],
+          context: []
         })
 
         // This should compile without errors

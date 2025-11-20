@@ -13,13 +13,15 @@ import type { OntologyNode } from "../Graph/Types.js"
 /**
  * StructuredPrompt - The result type for the catamorphism
  *
- * Represents a prompt with system instructions, user context, and examples.
+ * Represents a prompt with system instructions, user context, examples,
+ * and dynamic entity context from streaming extraction.
  * Forms a Monoid with component-wise concatenation as the combine operation.
  */
 export class StructuredPrompt extends Schema.Class<StructuredPrompt>("StructuredPrompt")({
   system: Schema.Array(Schema.String),
   user: Schema.Array(Schema.String),
-  examples: Schema.Array(Schema.String)
+  examples: Schema.Array(Schema.String),
+  context: Schema.Array(Schema.String)
 }) {
   /**
    * Monoid combine operation: component-wise concatenation
@@ -28,7 +30,8 @@ export class StructuredPrompt extends Schema.Class<StructuredPrompt>("Structured
     return StructuredPrompt.make({
       system: [...a.system, ...b.system],
       user: [...a.user, ...b.user],
-      examples: [...a.examples, ...b.examples]
+      examples: [...a.examples, ...b.examples],
+      context: [...a.context, ...b.context]
     })
   }
 
@@ -39,7 +42,8 @@ export class StructuredPrompt extends Schema.Class<StructuredPrompt>("Structured
     return StructuredPrompt.make({
       system: [],
       user: [],
-      examples: []
+      examples: [],
+      context: []
     })
   }
 
