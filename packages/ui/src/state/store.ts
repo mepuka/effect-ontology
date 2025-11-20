@@ -9,8 +9,13 @@ import {
   solveGraph,
   solveToKnowledgeIndex
 } from "@effect-ontology/core/Prompt"
+import {
+  dereferenceJSONSchema,
+  formatJSONSchema,
+  getSchemaStats,
+  toJSONSchema
+} from "@effect-ontology/core/Schema/Export"
 import { makeKnowledgeGraphSchema } from "@effect-ontology/core/Schema/Factory"
-import { toJSONSchema, dereferenceJSONSchema, getSchemaStats, formatJSONSchema } from "@effect-ontology/core/Schema/Export"
 import { Effect, Graph, HashMap, Option } from "effect"
 import { runtime } from "../runtime/atoms"
 
@@ -320,7 +325,7 @@ export const jsonSchemaAtom = runtime.atom((get) =>
       // Only process ClassNodes
       if (isClassNode(node)) {
         classIris.push(node.id)
-        
+
         // Collect property IRIs from node properties
         for (const prop of node.properties) {
           if (!propertyIris.includes(prop.propertyIri)) {
@@ -339,7 +344,7 @@ export const jsonSchemaAtom = runtime.atom((get) =>
 
     // Generate schema
     const schema = makeKnowledgeGraphSchema(classIris, propertyIris)
-    
+
     // Generate all three formats
     const anthropic = toJSONSchema(schema)
     const openai = dereferenceJSONSchema(anthropic)
