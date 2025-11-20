@@ -34,9 +34,24 @@ describe("Ast Typeclass Instances", () => {
   })
 
   it("PropertyDataOrder is transitive", () => {
-    const propA = PropertyConstraint.make({ propertyIri: "http://example.org/aaa", label: "", ranges: Data.array([""]), maxCardinality: Option.none() })
-    const propB = PropertyConstraint.make({ propertyIri: "http://example.org/bbb", label: "", ranges: Data.array([""]), maxCardinality: Option.none() })
-    const propC = PropertyConstraint.make({ propertyIri: "http://example.org/ccc", label: "", ranges: Data.array([""]), maxCardinality: Option.none() })
+    const propA = PropertyConstraint.make({
+      propertyIri: "http://example.org/aaa",
+      label: "",
+      ranges: Data.array([""]),
+      maxCardinality: Option.none()
+    })
+    const propB = PropertyConstraint.make({
+      propertyIri: "http://example.org/bbb",
+      label: "",
+      ranges: Data.array([""]),
+      maxCardinality: Option.none()
+    })
+    const propC = PropertyConstraint.make({
+      propertyIri: "http://example.org/ccc",
+      label: "",
+      ranges: Data.array([""]),
+      maxCardinality: Option.none()
+    })
 
     // If A < B and B < C, then A < C (transitivity law)
     const ab = Ast.PropertyDataOrder(propA, propB)
@@ -49,8 +64,18 @@ describe("Ast Typeclass Instances", () => {
   })
 
   it("PropertyDataOrder is antisymmetric", () => {
-    const propA = PropertyConstraint.make({ propertyIri: "http://example.org/aaa", label: "A", ranges: Data.array(["string"]), maxCardinality: Option.none() })
-    const propB = PropertyConstraint.make({ propertyIri: "http://example.org/bbb", label: "B", ranges: Data.array(["string"]), maxCardinality: Option.none() })
+    const propA = PropertyConstraint.make({
+      propertyIri: "http://example.org/aaa",
+      label: "A",
+      ranges: Data.array(["string"]),
+      maxCardinality: Option.none()
+    })
+    const propB = PropertyConstraint.make({
+      propertyIri: "http://example.org/bbb",
+      label: "B",
+      ranges: Data.array(["string"]),
+      maxCardinality: Option.none()
+    })
 
     // Antisymmetry law: if compare(a, b) = -1, then compare(b, a) = 1
     const ab = Ast.PropertyDataOrder(propA, propB)
@@ -94,8 +119,18 @@ describe("Ast Typeclass Instances", () => {
   })
 
   it("PropertyDataEqual is symmetric", () => {
-    const propA = PropertyConstraint.make({ propertyIri: "http://example.org/same", label: "A", ranges: Data.array(["string"]), maxCardinality: Option.none() })
-    const propB = PropertyConstraint.make({ propertyIri: "http://example.org/same", label: "B", ranges: Data.array(["number"]), maxCardinality: Option.none() })
+    const propA = PropertyConstraint.make({
+      propertyIri: "http://example.org/same",
+      label: "A",
+      ranges: Data.array(["string"]),
+      maxCardinality: Option.none()
+    })
+    const propB = PropertyConstraint.make({
+      propertyIri: "http://example.org/same",
+      label: "B",
+      ranges: Data.array(["number"]),
+      maxCardinality: Option.none()
+    })
 
     // Symmetry law: if a = b then b = a
     expect(Ast.PropertyDataEqual(propA, propB)).toBe(
@@ -104,9 +139,24 @@ describe("Ast Typeclass Instances", () => {
   })
 
   it("PropertyDataEqual is transitive", () => {
-    const propA = PropertyConstraint.make({ propertyIri: "http://example.org/same", label: "A", ranges: Data.array(["string"]), maxCardinality: Option.none() })
-    const propB = PropertyConstraint.make({ propertyIri: "http://example.org/same", label: "B", ranges: Data.array(["number"]), maxCardinality: Option.none() })
-    const propC = PropertyConstraint.make({ propertyIri: "http://example.org/same", label: "C", ranges: Data.array(["boolean"]), maxCardinality: Option.none() })
+    const propA = PropertyConstraint.make({
+      propertyIri: "http://example.org/same",
+      label: "A",
+      ranges: Data.array(["string"]),
+      maxCardinality: Option.none()
+    })
+    const propB = PropertyConstraint.make({
+      propertyIri: "http://example.org/same",
+      label: "B",
+      ranges: Data.array(["number"]),
+      maxCardinality: Option.none()
+    })
+    const propC = PropertyConstraint.make({
+      propertyIri: "http://example.org/same",
+      label: "C",
+      ranges: Data.array(["boolean"]),
+      maxCardinality: Option.none()
+    })
 
     // Transitivity law: if a = b and b = c, then a = c
     const ab = Ast.PropertyDataEqual(propA, propB)

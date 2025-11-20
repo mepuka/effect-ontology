@@ -56,7 +56,8 @@ describe("Solver", () => {
           ),
           universalProperties: [],
           nodeIndexMap: HashMap.make(["A", 0], ["B", 1]),
-          disjointWithMap: HashMap.empty()
+          disjointWithMap: HashMap.empty(),
+          propertyParentsMap: HashMap.empty()
         }
 
         const results = yield* solveGraph(graph, context, trackingAlgebra)
@@ -93,7 +94,8 @@ describe("Solver", () => {
           ),
           universalProperties: [],
           nodeIndexMap: HashMap.make(["A", 0], ["B", 1], ["C", 2]),
-          disjointWithMap: HashMap.empty()
+          disjointWithMap: HashMap.empty(),
+          propertyParentsMap: HashMap.empty()
         }
 
         const results = yield* solveGraph(graph, context, trackingAlgebra)
@@ -136,7 +138,8 @@ describe("Solver", () => {
           ),
           universalProperties: [],
           nodeIndexMap: HashMap.make(["A", 0], ["B", 1], ["C", 2]),
-          disjointWithMap: HashMap.empty()
+          disjointWithMap: HashMap.empty(),
+          propertyParentsMap: HashMap.empty()
         }
 
         const results = yield* solveGraph(graph, context, trackingAlgebra)
@@ -184,7 +187,8 @@ describe("Solver", () => {
           ),
           universalProperties: [],
           nodeIndexMap: HashMap.make(["A", 0], ["B", 1], ["C", 2], ["D", 3], ["E", 4]),
-          disjointWithMap: HashMap.empty()
+          disjointWithMap: HashMap.empty(),
+          propertyParentsMap: HashMap.empty()
         }
 
         const results = yield* solveGraph(graph, context, trackingAlgebra)
@@ -226,7 +230,8 @@ describe("Solver", () => {
           ),
           universalProperties: [],
           nodeIndexMap: HashMap.make(["A", 0], ["B", 1], ["C", 2], ["D", 3]),
-          disjointWithMap: HashMap.empty()
+          disjointWithMap: HashMap.empty(),
+          propertyParentsMap: HashMap.empty()
         }
 
         const results = yield* solveGraph(graph, context, trackingAlgebra)
@@ -273,7 +278,8 @@ describe("Solver", () => {
           ),
           universalProperties: [],
           nodeIndexMap: HashMap.make(["A", 0], ["B", 1], ["C", 2]),
-          disjointWithMap: HashMap.empty()
+          disjointWithMap: HashMap.empty(),
+          propertyParentsMap: HashMap.empty()
         }
 
         const result = yield* Effect.either(solveGraph(graph, context, trackingAlgebra))
@@ -299,7 +305,8 @@ describe("Solver", () => {
           nodes: HashMap.empty(), // Empty - missing "A"
           universalProperties: [],
           nodeIndexMap: HashMap.empty(),
-          disjointWithMap: HashMap.empty()
+          disjointWithMap: HashMap.empty(),
+          propertyParentsMap: HashMap.empty()
         }
 
         const result = yield* Effect.either(solveGraph(graph, context, trackingAlgebra))

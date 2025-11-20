@@ -392,7 +392,8 @@ function buildDiamond() {
     nodes,
     universalProperties: [],
     nodeIndexMap,
-    disjointWithMap: HashMap.empty()
+    disjointWithMap: HashMap.empty(),
+    propertyParentsMap: HashMap.empty()
   }
 
   return { graph, context }
@@ -446,7 +447,8 @@ function buildWithProperties() {
     nodes,
     universalProperties: [],
     nodeIndexMap,
-    disjointWithMap: HashMap.empty()
+    disjointWithMap: HashMap.empty(),
+    propertyParentsMap: HashMap.empty()
   }
 
   return { graph, context }
@@ -517,7 +519,8 @@ function buildMultiLevelProperties() {
     nodes,
     universalProperties: [],
     nodeIndexMap,
-    disjointWithMap: HashMap.empty()
+    disjointWithMap: HashMap.empty(),
+    propertyParentsMap: HashMap.empty()
   }
 
   return { graph, context }

@@ -6,7 +6,7 @@
 
 import { LanguageModel } from "@effect/ai"
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Graph, HashMap, Layer, Stream, Data, Option } from "effect"
+import { Data, Effect, Graph, HashMap, Layer, Option, Stream } from "effect"
 import { PropertyConstraint } from "../../src/Graph/Constraint.js"
 import { ClassNode, type NodeId, type OntologyContext } from "../../src/Graph/Types.js"
 import type { KnowledgeGraph } from "../../src/Schema/Factory.js"
@@ -37,7 +37,8 @@ describe("Services.Extraction", () => {
     ]),
     universalProperties: [],
     nodeIndexMap: HashMap.fromIterable([["http://xmlns.com/foaf/0.1/Person", 0]]),
-    disjointWithMap: HashMap.empty()
+    disjointWithMap: HashMap.empty(),
+    propertyParentsMap: HashMap.empty()
   }
 
   // Test graph (single node, no edges)

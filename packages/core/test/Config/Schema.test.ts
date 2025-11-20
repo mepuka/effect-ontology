@@ -22,10 +22,10 @@ describe("Config.Schema", () => {
       Effect.gen(function*() {
         const testConfig = ConfigProvider.fromMap(
           new Map([
-            ["LLM.ANTHROPIC_API_KEY", "test-key"],
-            ["LLM.ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022"],
-            ["LLM.ANTHROPIC_MAX_TOKENS", "8192"],
-            ["LLM.ANTHROPIC_TEMPERATURE", "0.5"]
+            ["LLM.ANTHROPIC.API_KEY", "test-key"],
+            ["LLM.ANTHROPIC.MODEL", "claude-3-5-sonnet-20241022"],
+            ["LLM.ANTHROPIC.MAX_TOKENS", "8192"],
+            ["LLM.ANTHROPIC.TEMPERATURE", "0.5"]
           ])
         )
 
@@ -42,7 +42,7 @@ describe("Config.Schema", () => {
     it.effect("should use default values when optional fields missing", () =>
       Effect.gen(function*() {
         const testConfig = ConfigProvider.fromMap(
-          new Map([["LLM.ANTHROPIC_API_KEY", "test-key"]])
+          new Map([["LLM.ANTHROPIC.API_KEY", "test-key"]])
         )
 
         const config = yield* Config.nested("LLM")(AnthropicConfigSchema).pipe(
@@ -72,7 +72,7 @@ describe("Config.Schema", () => {
     it.effect("should load config with defaults", () =>
       Effect.gen(function*() {
         const testConfig = ConfigProvider.fromMap(
-          new Map([["LLM.GEMINI_API_KEY", "gemini-test-key"]])
+          new Map([["LLM.GEMINI.API_KEY", "gemini-test-key"]])
         )
 
         const config = yield* Config.nested("LLM")(GeminiConfigSchema).pipe(
@@ -80,7 +80,7 @@ describe("Config.Schema", () => {
         )
 
         expect(config.apiKey).toBe("gemini-test-key")
-        expect(config.model).toBe("gemini-2.0-flash-exp")
+        expect(config.model).toBe("gemini-2.5-flash")
         expect(config.maxTokens).toBe(4096)
         expect(config.temperature).toBe(0.0)
       }))
@@ -89,8 +89,8 @@ describe("Config.Schema", () => {
       Effect.gen(function*() {
         const testConfig = ConfigProvider.fromMap(
           new Map([
-            ["LLM.GEMINI_API_KEY", "gemini-test-key"],
-            ["LLM.GEMINI_MODEL", "gemini-1.5-pro"]
+            ["LLM.GEMINI.API_KEY", "gemini-test-key"],
+            ["LLM.GEMINI.MODEL", "gemini-1.5-pro"]
           ])
         )
 
@@ -107,9 +107,9 @@ describe("Config.Schema", () => {
       Effect.gen(function*() {
         const testConfig = ConfigProvider.fromMap(
           new Map([
-            ["LLM.OPENROUTER_API_KEY", "or-test-key"],
-            ["LLM.OPENROUTER_SITE_URL", "https://example.com"],
-            ["LLM.OPENROUTER_SITE_NAME", "Test App"]
+            ["LLM.OPENROUTER.API_KEY", "or-test-key"],
+            ["LLM.OPENROUTER.SITE_URL", "https://example.com"],
+            ["LLM.OPENROUTER.SITE_NAME", "Test App"]
           ])
         )
 
@@ -126,7 +126,7 @@ describe("Config.Schema", () => {
     it.effect("should handle missing optional fields", () =>
       Effect.gen(function*() {
         const testConfig = ConfigProvider.fromMap(
-          new Map([["LLM.OPENROUTER_API_KEY", "or-test-key"]])
+          new Map([["LLM.OPENROUTER.API_KEY", "or-test-key"]])
         )
 
         const config = yield* Config.nested("LLM")(OpenRouterConfigSchema).pipe(
@@ -144,7 +144,7 @@ describe("Config.Schema", () => {
         const testConfig = ConfigProvider.fromMap(
           new Map([
             ["LLM.PROVIDER", "anthropic"],
-            ["LLM.ANTHROPIC_API_KEY", "test-key"]
+            ["LLM.ANTHROPIC.API_KEY", "test-key"]
           ])
         )
 
@@ -161,7 +161,7 @@ describe("Config.Schema", () => {
         const testConfig = ConfigProvider.fromMap(
           new Map([
             ["LLM.PROVIDER", "gemini"],
-            ["LLM.GEMINI_API_KEY", "gemini-key"]
+            ["LLM.GEMINI.API_KEY", "gemini-key"]
           ])
         )
 
@@ -178,7 +178,7 @@ describe("Config.Schema", () => {
         const testConfig = ConfigProvider.fromMap(
           new Map([
             ["LLM.PROVIDER", "openrouter"],
-            ["LLM.OPENROUTER_API_KEY", "or-key"]
+            ["LLM.OPENROUTER.API_KEY", "or-key"]
           ])
         )
 
@@ -302,7 +302,7 @@ describe("Config.Schema", () => {
         const testConfig = ConfigProvider.fromMap(
           new Map([
             ["LLM.PROVIDER", "anthropic"],
-            ["LLM.ANTHROPIC_API_KEY", "test-key"],
+            ["LLM.ANTHROPIC.API_KEY", "test-key"],
             ["RDF.FORMAT", "Turtle"],
             ["SHACL.ENABLED", "false"]
           ])
@@ -322,8 +322,8 @@ describe("Config.Schema", () => {
         const testConfig = ConfigProvider.fromMap(
           new Map([
             ["LLM.PROVIDER", "gemini"],
-            ["LLM.GEMINI_API_KEY", "gemini-key"],
-            ["LLM.GEMINI_MODEL", "gemini-1.5-pro"],
+            ["LLM.GEMINI.API_KEY", "gemini-key"],
+            ["LLM.GEMINI.MODEL", "gemini-1.5-pro"],
             ["RDF.FORMAT", "N-Triples"],
             ["RDF.BASE_IRI", "http://example.org/"],
             ["SHACL.ENABLED", "true"],

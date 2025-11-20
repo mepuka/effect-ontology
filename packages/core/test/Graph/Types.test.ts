@@ -15,7 +15,8 @@ describe("Graph Types", () => {
       _tag: "Class",
       id: "http://example.org/zoo#Dog",
       label: "Dog",
-      properties: []
+      properties: [],
+      classExpressions: []
     }
 
     expect(classNode._tag).toBe("Class")
@@ -40,7 +41,8 @@ describe("Graph Types", () => {
           annotations: Data.array(["has name"]),
           source: "domain"
         })
-      ]
+      ],
+      classExpressions: []
     }
 
     expect(classNode.properties).toHaveLength(1)
@@ -68,7 +70,8 @@ describe("Graph Types", () => {
       _tag: "Class",
       id: "http://example.org/zoo#Dog",
       label: "Dog",
-      properties: []
+      properties: [],
+      classExpressions: []
     }
 
     const propNode: OntologyNode = {

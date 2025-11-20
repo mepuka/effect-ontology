@@ -109,7 +109,8 @@ function createDiamondGraph() {
     nodes,
     universalProperties: [],
     nodeIndexMap,
-    disjointWithMap: HashMap.empty()
+    disjointWithMap: HashMap.empty(),
+    propertyParentsMap: HashMap.empty()
   }
 
   return { graph, context }

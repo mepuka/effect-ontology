@@ -47,10 +47,32 @@ export const NodeIdSchema = Schema.String.annotations({
 })
 export type NodeId = typeof NodeIdSchema.Type
 
-
 /**
  * ClassNode - A node representing an OWL Class
  */
+/**
+ * Class expression types for OWL class descriptions
+ */
+export type ClassExpression =
+  | { readonly _tag: "UnionOf"; readonly classes: ReadonlyArray<string> }
+  | { readonly _tag: "IntersectionOf"; readonly classes: ReadonlyArray<string> }
+  | { readonly _tag: "ComplementOf"; readonly class: string }
+
+export const ClassExpressionSchema = Schema.Union(
+  Schema.Struct({
+    _tag: Schema.Literal("UnionOf"),
+    classes: Schema.Array(Schema.String)
+  }),
+  Schema.Struct({
+    _tag: Schema.Literal("IntersectionOf"),
+    classes: Schema.Array(Schema.String)
+  }),
+  Schema.Struct({
+    _tag: Schema.Literal("ComplementOf"),
+    class: Schema.String
+  })
+)
+
 export class ClassNode extends Schema.Class<ClassNode>("ClassNode")({
   _tag: Schema.Literal("Class").pipe(
     Schema.optional,
@@ -79,6 +101,16 @@ export class ClassNode extends Schema.Class<ClassNode>("ClassNode")({
       )
   }),
   properties: Schema.Array(PropertyConstraint).pipe(
+    Schema.optional,
+    Schema.withDefaults({ constructor: () => [], decoding: () => [] })
+  ),
+  /**
+   * Class expressions (union, intersection, complement)
+   * Used for complex class definitions like:
+   * - :AdultOrSenior owl:unionOf (:Adult :Senior)
+   * - :WorkingAdult owl:intersectionOf (:Adult :Employee)
+   */
+  classExpressions: Schema.Array(ClassExpressionSchema).pipe(
     Schema.optional,
     Schema.withDefaults({ constructor: () => [], decoding: () => [] })
   )
@@ -196,6 +228,29 @@ export const OntologyContextSchema = Schema.Struct({
       constructor: () => HashMap.empty(),
       decoding: () => HashMap.empty()
     })
+  ),
+
+  /**
+   * Property hierarchy relationships (rdfs:subPropertyOf)
+   *
+   * Maps each property IRI to the set of parent property IRIs.
+   * Used for property inheritance: child properties inherit domains, ranges,
+   * and constraints from parent properties.
+   *
+   * Example: :homePhone rdfs:subPropertyOf :phone
+   *   → propertyParentsMap[":homePhone"] = {":phone"}
+   *
+   * @since 1.2.0
+   */
+  propertyParentsMap: Schema.HashMap({
+    key: Schema.String, // Property IRI
+    value: Schema.HashSet(Schema.String) // Parent property IRIs
+  }).pipe(
+    Schema.optional,
+    Schema.withDefaults({
+      constructor: () => HashMap.empty(),
+      decoding: () => HashMap.empty()
+    })
   )
 })
 
@@ -254,7 +309,8 @@ export const OntologyContext = {
     nodes: HashMap.empty(),
     universalProperties: [],
     nodeIndexMap: HashMap.empty(),
-    disjointWithMap: HashMap.empty()
+    disjointWithMap: HashMap.empty(),
+    propertyParentsMap: HashMap.empty()
   })
 }
 

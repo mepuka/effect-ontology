@@ -40,21 +40,21 @@ For Anthropic (Claude):
 
 ```env
 LLM__PROVIDER=anthropic
-LLM__ANTHROPIC_API_KEY=sk-ant-your-api-key-here
+LLM__ANTHROPIC__API_KEY=sk-ant-your-api-key-here
 ```
 
 For Google Gemini:
 
 ```env
 LLM__PROVIDER=gemini
-LLM__GEMINI_API_KEY=your-gemini-api-key-here
+LLM__GEMINI__API_KEY=your-gemini-api-key-here
 ```
 
 For OpenRouter:
 
 ```env
 LLM__PROVIDER=openrouter
-LLM__OPENROUTER_API_KEY=your-openrouter-api-key-here
+LLM__OPENROUTER__API_KEY=your-openrouter-api-key-here
 ```
 
 ### 3. Use configuration in your code
@@ -147,10 +147,10 @@ Effect.provide(program, testLayer)
 
 ```env
 LLM__PROVIDER=anthropic
-LLM__ANTHROPIC_API_KEY=sk-ant-your-key-here
-LLM__ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
-LLM__ANTHROPIC_MAX_TOKENS=4096
-LLM__ANTHROPIC_TEMPERATURE=0.0
+LLM__ANTHROPIC__API_KEY=sk-ant-your-key-here
+LLM__ANTHROPIC__MODEL=claude-3-5-sonnet-20241022
+LLM__ANTHROPIC__MAX_TOKENS=4096
+LLM__ANTHROPIC__TEMPERATURE=0.0
 ```
 
 **Available Models:**
@@ -180,10 +180,10 @@ const program = Effect.gen(function* () {
 
 ```env
 LLM__PROVIDER=gemini
-LLM__GEMINI_API_KEY=your-gemini-key-here
-LLM__GEMINI_MODEL=gemini-2.0-flash-exp
-LLM__GEMINI_MAX_TOKENS=4096
-LLM__GEMINI_TEMPERATURE=0.0
+LLM__GEMINI__API_KEY=your-gemini-key-here
+LLM__GEMINI__MODEL=gemini-2.0-flash-exp
+LLM__GEMINI__MAX_TOKENS=4096
+LLM__GEMINI__TEMPERATURE=0.0
 ```
 
 **Available Models:**
@@ -197,12 +197,12 @@ LLM__GEMINI_TEMPERATURE=0.0
 
 ```env
 LLM__PROVIDER=openrouter
-LLM__OPENROUTER_API_KEY=your-or-key-here
-LLM__OPENROUTER_MODEL=anthropic/claude-3.5-sonnet
-LLM__OPENROUTER_MAX_TOKENS=4096
-LLM__OPENROUTER_TEMPERATURE=0.0
-LLM__OPENROUTER_SITE_URL=https://your-app.com
-LLM__OPENROUTER_SITE_NAME=YourAppName
+LLM__OPENROUTER__API_KEY=your-or-key-here
+LLM__OPENROUTER__MODEL=anthropic/claude-3.5-sonnet
+LLM__OPENROUTER__MAX_TOKENS=4096
+LLM__OPENROUTER__TEMPERATURE=0.0
+LLM__OPENROUTER__SITE_URL=https://your-app.com
+LLM__OPENROUTER__SITE_NAME=YourAppName
 ```
 
 **Model Examples:**
@@ -370,8 +370,8 @@ import { ConfigProvider, Effect, Layer } from "effect"
 const testConfig = ConfigProvider.fromMap(
   new Map([
     ["LLM.PROVIDER", "anthropic"],
-    ["LLM.ANTHROPIC_API_KEY", "test-key"],
-    ["LLM.ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022"]
+    ["LLM.ANTHROPIC.API_KEY", "test-key"],
+    ["LLM.ANTHROPIC.MODEL", "claude-3-5-sonnet-20241022"]
   ])
 )
 
@@ -402,9 +402,9 @@ const program = Effect.gen(function* () {
 Effect.Config uses double underscores (`__`) for nested configs:
 
 ```env
-LLM__PROVIDER=anthropic          # Config.nested("LLM")(Config.string("PROVIDER"))
-LLM__ANTHROPIC_API_KEY=key       # Config.nested("LLM")(Config.string("ANTHROPIC_API_KEY"))
-RDF__FORMAT=Turtle               # Config.nested("RDF")(Config.string("FORMAT"))
+LLM__PROVIDER=anthropic                    # Config.nested("LLM")(Config.string("PROVIDER"))
+LLM__ANTHROPIC__API_KEY=key                # Config.nested("LLM")(Config.nested("ANTHROPIC")(Config.string("API_KEY")))
+RDF__FORMAT=Turtle                         # Config.nested("RDF")(Config.string("FORMAT"))
 ```
 
 ### Validation Errors
@@ -455,7 +455,7 @@ Config.option(Config.string("SITE_URL"))
 ### Missing Configuration
 
 ```
-Error: (MissingData) Expected LLM.ANTHROPIC_API_KEY to exist in the process context
+Error: (MissingData) Expected LLM.ANTHROPIC.API_KEY to exist in the process context
 ```
 
 **Solution**: Add the missing environment variable to `.env`

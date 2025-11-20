@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, test } from "@effect/vitest"
-import { Equal, Data, Option } from "effect"
+import { Data, Equal, Option } from "effect"
 import fc from "fast-check"
 import { PropertyConstraint } from "../../src/Graph/Constraint.js"
 import { KnowledgeUnit } from "../../src/Prompt/Ast.js"
@@ -28,14 +28,17 @@ const arbIri = fc.webUrl({ withFragments: true })
 const arbPropertyConstraint: fc.Arbitrary<PropertyConstraint> = fc.record({
   propertyIri: arbIri,
   label: fc.string({ minLength: 1, maxLength: 50 }),
-  ranges: fc.array(fc.oneof(
-    fc.constant("string"),
-    fc.constant("integer"),
-    fc.constant("boolean"),
-    fc.constant("float"),
-    arbIri
-  ), { minLength: 1, maxLength: 3 })
-}).map(data => PropertyConstraint.make({ ...data, ranges: Data.array(data.ranges), maxCardinality: Option.none() }))
+  ranges: fc.array(
+    fc.oneof(
+      fc.constant("string"),
+      fc.constant("integer"),
+      fc.constant("boolean"),
+      fc.constant("float"),
+      arbIri
+    ),
+    { minLength: 1, maxLength: 3 }
+  )
+}).map((data) => PropertyConstraint.make({ ...data, ranges: Data.array(data.ranges), maxCardinality: Option.none() }))
 
 /**
  * Generate random KnowledgeUnit

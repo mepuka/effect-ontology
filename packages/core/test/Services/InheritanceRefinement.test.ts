@@ -71,7 +71,8 @@ describe("InheritanceService - Constraint Refinement", () => {
         nodes,
         universalProperties: [],
         nodeIndexMap,
-        disjointWithMap: HashMap.empty()
+        disjointWithMap: HashMap.empty(),
+        propertyParentsMap: HashMap.empty()
       }
 
       // Create inheritance service
@@ -80,7 +81,7 @@ describe("InheritanceService - Constraint Refinement", () => {
       // Get effective properties for DogOwner
       const effectiveProps = yield* service.getEffectiveProperties("http://example.org/DogOwner")
 
-      const hasPetProp = effectiveProps.find(p => p.propertyIri === "http://example.org/hasPet")
+      const hasPetProp = effectiveProps.find((p) => p.propertyIri === "http://example.org/hasPet")
 
       expect(hasPetProp).toBeDefined()
 

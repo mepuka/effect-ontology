@@ -15,7 +15,7 @@
  */
 
 import { LanguageModel } from "@effect/ai"
-import { Effect, HashMap, Layer, Stream } from "effect"
+import { Effect, HashMap } from "effect"
 import { LLMError } from "../Extraction/Events.js"
 import { isClassNode, type OntologyContext } from "../Graph/Types.js"
 import { renderExtractionPrompt } from "../Prompt/PromptDoc.js"
@@ -163,43 +163,3 @@ export const extractKnowledgeGraph = <ClassIRI extends string, PropertyIRI exten
       )
     )
   )
-
-/**
- * LlmService (DEPRECATED - use extractKnowledgeGraph function instead)
- *
- * Legacy service class wrapper for backward compatibility.
- * Will be removed in future version.
- *
- * @deprecated Use extractKnowledgeGraph function with Effect.provide instead
- * @since 1.0.0
- * @category deprecated
- */
-export class LlmService extends Effect.Service<LlmService>()("LlmService", {
-  sync: () => ({
-    /**
-     * @deprecated Use extractKnowledgeGraph function instead
-     */
-    extractKnowledgeGraph: <ClassIRI extends string, PropertyIRI extends string>(
-      text: string,
-      ontology: OntologyContext,
-      prompt: StructuredPrompt,
-      schema: KnowledgeGraphSchema<ClassIRI, PropertyIRI>
-    ) => extractKnowledgeGraph(text, ontology, prompt, schema)
-  })
-}) {
-  /**
-   * Test layer with mock LanguageModel that returns empty knowledge graphs.
-   *
-   * @deprecated Use makeLlmProviderLayer with test params instead
-   * @since 1.0.0
-   * @category layers
-   */
-  static Test = Layer.succeed(
-    LanguageModel.LanguageModel,
-    {
-      generateText: () => Effect.die("Not implemented in test") as any,
-      generateObject: () => Effect.die("Not implemented in test") as any,
-      streamText: () => Stream.die("Not implemented in test") as any
-    } as LanguageModel.Service
-  )
-}
