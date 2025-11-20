@@ -13,7 +13,7 @@ import { Tokenizer } from "@effect/ai"
 import { AnthropicTokenizer } from "@effect/ai-anthropic"
 import { OpenAiTokenizer } from "@effect/ai-openai"
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, HashMap } from "effect"
+import { Effect } from "effect"
 import { readFileSync } from "fs"
 import { join } from "path"
 import { parseTurtleToGraph } from "../../src/Graph/Builder.js"
@@ -53,7 +53,8 @@ describe("Token Metrics - Real Ontology Prompts", () => {
           console.log(`Simple prompt: ${tokens.length} tokens`)
           expect(tokens.length).toBeGreaterThan(0)
           expect(tokens.length).toBeLessThan(50)
-        })
+        }),
+      10000
     )
 
     it.layer(tokenizerLayer)(
@@ -72,7 +73,7 @@ describe("Token Metrics - Real Ontology Prompts", () => {
 You are extracting structured data based on the FOAF ontology.
 
 Classes (${metadata.stats.totalClasses} total):
-${Array.from(HashMap.values(metadata.classSummaries))
+${Array.from(metadata.classSummaries.values())
   .slice(0, 5)
   .map((c) => `- ${c.label}: ${c.totalProperties} properties`)
   .join("\n")}
@@ -88,6 +89,7 @@ Extract entities from the text.
           expect(tokens.length).toBeGreaterThan(50)
           expect(tokens.length).toBeLessThan(500)
         }),
+      10000
     )
 
     it.layer(tokenizerLayer)(
@@ -109,6 +111,7 @@ Extract entities from the text.
           expect(metadata.tokenStats.totalTokens).toBeGreaterThan(1000)
           expect(metadata.stats.totalClasses).toBeGreaterThan(50)
         }),
+      30000
     )
   })
 
@@ -128,6 +131,7 @@ Extract entities from the text.
           expect(tokens.length).toBeGreaterThan(0)
           expect(tokens.length).toBeLessThan(50)
         }),
+      10000
     )
 
     it.layer(tokenizerLayer)(
@@ -145,7 +149,7 @@ Extract entities from the text.
 Extract metadata using Dublin Core terms.
 
 Available classes (${metadata.stats.totalClasses} total):
-${Array.from(HashMap.values(metadata.classSummaries))
+${Array.from(metadata.classSummaries.values())
   .slice(0, 10)
   .map((c) => `- ${c.label}`)
   .join("\n")}
@@ -159,6 +163,7 @@ Extract from the following document.
 
           expect(tokens.length).toBeGreaterThan(50)
         }),
+      10000
     )
   })
 
@@ -226,6 +231,7 @@ Extract entities.
           expect(estimatedCost).toBeGreaterThan(0)
           expect(estimatedCost).toBeLessThan(0.1) // Should be < $0.10
         }),
+      10000
     )
 
     it.layer(AnthropicTokenizer.layer)(
@@ -248,6 +254,7 @@ Extract entities.
           expect(estimatedCost).toBeGreaterThan(0)
           expect(estimatedCost).toBeLessThan(0.01) // Should be < $0.01
         }),
+      10000
     )
   })
 
@@ -277,6 +284,7 @@ Extract entities.
           expect(metadata.tokenStats.totalTokens).toBeGreaterThan(1000)
           expect(metadata.stats.totalClasses).toBeGreaterThan(50)
         }),
+      60000
     )
   })
 })

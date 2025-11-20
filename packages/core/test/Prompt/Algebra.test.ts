@@ -108,12 +108,12 @@ describe("Prompt Algebra", () => {
           PropertyConstraint.make({
             propertyIri: "http://example.org/hasOwner",
             label: "hasOwner",
-            ranges: Data.array(["http://example.org/Person"])
+            ranges: Data.array(["http://example.org/Person"]), maxCardinality: Option.none()
           }),
           PropertyConstraint.make({
             propertyIri: "http://example.org/breed",
             label: "breed",
-            ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"])
+            ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"]), maxCardinality: Option.none()
           })
         ]
       })
@@ -178,12 +178,12 @@ describe("Prompt Algebra", () => {
         PropertyConstraint.make({
           propertyIri: "http://purl.org/dc/terms/title",
           label: "dc:title",
-          ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"])
+          ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"]), maxCardinality: Option.none()
         }),
         PropertyConstraint.make({
           propertyIri: "http://purl.org/dc/terms/creator",
           label: "dc:creator",
-          ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"])
+          ranges: Data.array(["http://www.w3.org/2001/XMLSchema#string"]), maxCardinality: Option.none()
         })
       ]
 

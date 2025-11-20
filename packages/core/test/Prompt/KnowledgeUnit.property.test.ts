@@ -9,9 +9,9 @@
  */
 
 import { describe, test } from "@effect/vitest"
-import { Equal } from "effect"
+import { Equal, Data, Option } from "effect"
 import fc from "fast-check"
-import type { PropertyData } from "../../src/Graph/Types.js"
+import { PropertyConstraint } from "../../src/Graph/Constraint.js"
 import { KnowledgeUnit } from "../../src/Prompt/Ast.js"
 
 // ============================================================================
@@ -26,17 +26,17 @@ const arbIri = fc.webUrl({ withFragments: true })
 /**
  * Generate random property data
  */
-const arbPropertyData: fc.Arbitrary<PropertyData> = fc.record({
+const arbPropertyConstraint: fc.Arbitrary<PropertyConstraint> = fc.record({
   propertyIri: arbIri,
   label: fc.string({ minLength: 1, maxLength: 50 }),
-  range: fc.oneof(
+  ranges: fc.array(fc.oneof(
     fc.constant("string"),
     fc.constant("integer"),
     fc.constant("boolean"),
     fc.constant("float"),
     arbIri
-  )
-})
+  ), { minLength: 1, maxLength: 3 })
+}).map(data => PropertyConstraint.make({ ...data, ranges: Data.array(data.ranges), maxCardinality: Option.none() }))
 
 /**
  * Generate random KnowledgeUnit
@@ -46,11 +46,11 @@ const arbPropertyData: fc.Arbitrary<PropertyData> = fc.record({
  */
 const arbKnowledgeUnit: fc.Arbitrary<KnowledgeUnit> = fc
   .record({
-    propertyIri: arbIri,
+    iri: arbIri,
     label: fc.string({ minLength: 0, maxLength: 100 }),
     definition: fc.string({ minLength: 0, maxLength: 500 }),
-    properties: fc.array(arbPropertyData, { maxLength: 10 }),
-    inheritedProperties: fc.array(arbPropertyData, { maxLength: 10 }),
+    properties: fc.array(arbPropertyConstraint, { maxLength: 10 }),
+    inheritedProperties: fc.array(arbPropertyConstraint, { maxLength: 10 }),
     children: fc.array(arbIri, { maxLength: 5 }),
     parents: fc.array(arbIri, { maxLength: 5 })
   })
@@ -68,7 +68,7 @@ const arbKnowledgeUnitPair: fc.Arbitrary<[KnowledgeUnit, KnowledgeUnit]> = fc
     // Force same IRI (requirement for merge)
     const bSameIri = new KnowledgeUnit({
       ...b,
-      propertyIri: a.iri
+      iri: a.iri
     })
     return [a, bSameIri]
   })
@@ -115,8 +115,8 @@ describe("KnowledgeUnit.merge - Property-Based Tests", () => {
     fc.assert(
       fc.property(arbKnowledgeUnit, arbKnowledgeUnit, arbKnowledgeUnit, (a, b, c) => {
         // Force same IRI for all three
-        const bSame = new KnowledgeUnit({ ...b, propertyIri: a.iri })
-        const cSame = new KnowledgeUnit({ ...c, propertyIri: a.iri })
+        const bSame = new KnowledgeUnit({ ...b, iri: a.iri })
+        const cSame = new KnowledgeUnit({ ...c, iri: a.iri })
 
         const left = KnowledgeUnit.merge(KnowledgeUnit.merge(a, bSame), cSame)
         const right = KnowledgeUnit.merge(a, KnowledgeUnit.merge(bSame, cSame))
