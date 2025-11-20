@@ -108,7 +108,8 @@ function createDiamondGraph() {
   const context: OntologyContext = {
     nodes,
     universalProperties: [],
-    nodeIndexMap
+    nodeIndexMap,
+    disjointWithMap: HashMap.empty()
   }
 
   return { graph, context }

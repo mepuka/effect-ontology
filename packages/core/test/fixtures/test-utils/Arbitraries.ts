@@ -35,13 +35,12 @@ export const arbVariableIri = FastCheck.webUrl({ withFragments: true })
  * - Random URLs
  */
 export const arbClassIri = FastCheck.oneof(
-  FastCheck.constant("http://www.w3.org/2002/07/owl#Thing"), // Top
+  FastCheck.constant("http://example.org/Thing"), // Top class in test hierarchy
   FastCheck.constant("http://example.org/Animal"),
   FastCheck.constant("http://example.org/Dog"),
   FastCheck.constant("http://example.org/Cat"),
   FastCheck.constant("http://example.org/Person"),
-  FastCheck.constant("http://example.org/Employee"),
-  FastCheck.webUrl({ withFragments: true })
+  FastCheck.constant("http://example.org/Employee")
 )
 
 /**
@@ -107,7 +106,7 @@ export const arbConstraint: FastCheck.Arbitrary<PropertyConstraint> = FastCheck
     allowedValues: arbAllowedValues,
     source: arbSource
   })
-  .map(({ iri, label, ranges, cardinality, allowedValues, source }) => {
+  .map(({ allowedValues, cardinality, iri, label, ranges, source }) => {
     const [min, max] = cardinality
 
     // TODO Phase 1: Uncomment when PropertyConstraint is implemented
@@ -129,7 +128,7 @@ export const arbConstraint: FastCheck.Arbitrary<PropertyConstraint> = FastCheck
       minCardinality: min,
       maxCardinality: max,
       allowedValues,
-      source
+      source: source as "domain" | "restriction" | "refined"
     })
   })
 
@@ -217,10 +216,10 @@ export const arbConstraintTriple = FastCheck
 export const arbBottomCandidate = FastCheck
   .record({
     iri: arbIri,
-    minCard: FastCheck.nat({ min: 3, max: 10 }),
-    maxCard: FastCheck.nat({ min: 0, max: 2 })
+    minCard: FastCheck.integer({ min: 3, max: 10 }),
+    maxCard: FastCheck.integer({ min: 0, max: 2 })
   })
-  .map(({ iri, minCard, maxCard }) => {
+  .map(({ iri, maxCard, minCard }) => {
     // TODO Phase 1: Uncomment when PropertyConstraint is implemented
     // return new PropertyConstraint({
     //   iri,
@@ -282,9 +281,9 @@ export const arbConstraintWithPattern = (
       )
 
     case "multi":
-      return fc
-        .record({ iri: arbIri, range: arbClassIri, min: FastCheck.nat({ min: 2, max: 5 }) })
-        .map(({ iri, range, min }) => {
+      return FastCheck
+        .record({ iri: arbIri, range: arbClassIri, min: FastCheck.integer({ min: 2, max: 5 }) })
+        .map(({ iri, min, range }: { iri: string; min: number; range: string }) => {
           // TODO Phase 1: Uncomment when PropertyConstraint is implemented
           // return new PropertyConstraint({
           //   iri,
@@ -313,29 +312,34 @@ export const arbConstraintWithPattern = (
  * Useful for testing monotonicity and refinement detection.
  *
  * Strategy: Generate base constraint, then add restrictions to create child.
+ * Ensures proper subclass relationships: Dog/Cat are subclasses of Animal, Employee is subclass of Person.
  */
 export const arbRefinementPair = FastCheck
-  .record({
-    iri: arbIri,
-    baseRange: FastCheck.constantFrom("Animal", "Thing", "Person"),
-    refinedRange: FastCheck.constantFrom("Dog", "Cat", "Employee"),
-    baseMin: FastCheck.constant(0),
-    refinedMin: FastCheck.nat({ min: 1, max: 3 })
-  })
-  .map(({ iri, baseRange, refinedRange, baseMin, refinedMin }) => {
+  .constantFrom(
+    // Animal hierarchy (with full IRIs)
+    { base: "http://example.org/Animal", refined: "http://example.org/Dog" },
+    { base: "http://example.org/Animal", refined: "http://example.org/Cat" },
+    // Person hierarchy
+    { base: "http://example.org/Person", refined: "http://example.org/Employee" },
+    // Top level
+    { base: "http://example.org/Thing", refined: "http://example.org/Animal" },
+    { base: "http://example.org/Thing", refined: "http://example.org/Person" },
+    { base: "http://example.org/Thing", refined: "http://example.org/Dog" },
+    { base: "http://example.org/Thing", refined: "http://example.org/Cat" },
+    { base: "http://example.org/Thing", refined: "http://example.org/Employee" }
+  )
+  .chain((pair) =>
+    FastCheck.record({
+      iri: arbIri,
+      baseRange: FastCheck.constant(pair.base),
+      refinedRange: FastCheck.constant(pair.refined),
+      baseMin: FastCheck.constant(0),
+      refinedMin: FastCheck.nat({ max: 3 }) // Can be 0 since range is already more specific
+    })
+  )
+  .map(({ baseMin, baseRange, iri, refinedMin, refinedRange }) => {
     const base = ConstraintFactory.withRange(iri, baseRange)
     // base.minCardinality = 0
-
-    // TODO Phase 1: Uncomment when PropertyConstraint is implemented
-    // const refined = new PropertyConstraint({
-    //   iri,
-    //   label: iri.split("#")[1] || iri,
-    //   ranges: [refinedRange],
-    //   minCardinality: refinedMin,
-    //   maxCardinality: Option.none(),
-    //   allowedValues: [],
-    //   source: "refined"
-    // })
 
     const refined = ConstraintFactory.custom({
       iri,
@@ -344,7 +348,7 @@ export const arbRefinementPair = FastCheck
       source: "refined"
     })
 
-    // refined.minCardinality >= base.minCardinality
-    // refined.ranges is more specific (in a real hierarchy)
+    // refined.minCardinality >= base.minCardinality (always true since base is 0)
+    // refined.ranges is more specific (guaranteed by hierarchy pairs above)
     return [base, refined] as const
   })

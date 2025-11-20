@@ -55,7 +55,8 @@ describe("Solver", () => {
             ["B", ClassNode.make({ id: "B", label: "Class B", properties: [] })]
           ),
           universalProperties: [],
-          nodeIndexMap: HashMap.make(["A", 0], ["B", 1])
+          nodeIndexMap: HashMap.make(["A", 0], ["B", 1]),
+          disjointWithMap: HashMap.empty()
         }
 
         const results = yield* solveGraph(graph, context, trackingAlgebra)
@@ -91,7 +92,8 @@ describe("Solver", () => {
             ["C", ClassNode.make({ id: "C", label: "Class C", properties: [] })]
           ),
           universalProperties: [],
-          nodeIndexMap: HashMap.make(["A", 0], ["B", 1], ["C", 2])
+          nodeIndexMap: HashMap.make(["A", 0], ["B", 1], ["C", 2]),
+          disjointWithMap: HashMap.empty()
         }
 
         const results = yield* solveGraph(graph, context, trackingAlgebra)
@@ -133,7 +135,8 @@ describe("Solver", () => {
             ["C", ClassNode.make({ id: "C", label: "Class C", properties: [] })]
           ),
           universalProperties: [],
-          nodeIndexMap: HashMap.make(["A", 0], ["B", 1], ["C", 2])
+          nodeIndexMap: HashMap.make(["A", 0], ["B", 1], ["C", 2]),
+          disjointWithMap: HashMap.empty()
         }
 
         const results = yield* solveGraph(graph, context, trackingAlgebra)
@@ -180,7 +183,8 @@ describe("Solver", () => {
             ["E", ClassNode.make({ id: "E", label: "Class E", properties: [] })]
           ),
           universalProperties: [],
-          nodeIndexMap: HashMap.make(["A", 0], ["B", 1], ["C", 2], ["D", 3], ["E", 4])
+          nodeIndexMap: HashMap.make(["A", 0], ["B", 1], ["C", 2], ["D", 3], ["E", 4]),
+          disjointWithMap: HashMap.empty()
         }
 
         const results = yield* solveGraph(graph, context, trackingAlgebra)
@@ -221,7 +225,8 @@ describe("Solver", () => {
             ["D", ClassNode.make({ id: "D", label: "Class D", properties: [] })]
           ),
           universalProperties: [],
-          nodeIndexMap: HashMap.make(["A", 0], ["B", 1], ["C", 2], ["D", 3])
+          nodeIndexMap: HashMap.make(["A", 0], ["B", 1], ["C", 2], ["D", 3]),
+          disjointWithMap: HashMap.empty()
         }
 
         const results = yield* solveGraph(graph, context, trackingAlgebra)
@@ -267,7 +272,8 @@ describe("Solver", () => {
             ["C", ClassNode.make({ id: "C", label: "Class C", properties: [] })]
           ),
           universalProperties: [],
-          nodeIndexMap: HashMap.make(["A", 0], ["B", 1], ["C", 2])
+          nodeIndexMap: HashMap.make(["A", 0], ["B", 1], ["C", 2]),
+          disjointWithMap: HashMap.empty()
         }
 
         const result = yield* Effect.either(solveGraph(graph, context, trackingAlgebra))
@@ -292,7 +298,8 @@ describe("Solver", () => {
         const context: OntologyContext = {
           nodes: HashMap.empty(), // Empty - missing "A"
           universalProperties: [],
-          nodeIndexMap: HashMap.empty()
+          nodeIndexMap: HashMap.empty(),
+          disjointWithMap: HashMap.empty()
         }
 
         const result = yield* Effect.either(solveGraph(graph, context, trackingAlgebra))

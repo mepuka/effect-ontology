@@ -9,7 +9,7 @@
  * 5. Return Graph + Context
  */
 
-import { Data, Effect, Graph, HashMap, Option } from "effect"
+import { Data, Effect, Graph, HashMap, HashSet, Option } from "effect"
 import * as N3 from "n3"
 import { ClassNode, type NodeId, type OntologyContext, type PropertyData } from "./Types.js"
 
@@ -204,11 +204,57 @@ export const parseTurtleToGraph = (
       }
     })
 
-    // 5. Build context (node data store)
+    // 5. Parse owl:disjointWith relationships (bidirectional)
+    const disjointTriples = store.getQuads(
+      null,
+      "http://www.w3.org/2002/07/owl#disjointWith",
+      null,
+      null
+    )
+
+    let disjointWithMap = HashMap.empty<NodeId, Set<NodeId>>()
+
+    // Helper to add to set in HashMap
+    const addToDisjointSet = (
+      map: HashMap.HashMap<NodeId, Set<NodeId>>,
+      key: NodeId,
+      value: NodeId
+    ): HashMap.HashMap<NodeId, Set<NodeId>> => {
+      return Option.match(HashMap.get(map, key), {
+        onNone: () => HashMap.set(map, key, new Set([value])),
+        onSome: (existingSet) => {
+          const newSet = new Set(existingSet)
+          newSet.add(value)
+          return HashMap.set(map, key, newSet)
+        }
+      })
+    }
+
+    for (const quad of disjointTriples) {
+      const class1 = quad.subject.value
+      const class2 = quad.object.value
+
+      // Bidirectional: class1 disjoint class2 AND class2 disjoint class1
+      disjointWithMap = addToDisjointSet(disjointWithMap, class1, class2)
+      disjointWithMap = addToDisjointSet(disjointWithMap, class2, class1)
+    }
+
+    // Convert Set to HashSet for immutability
+    let disjointWithMapImmutable = HashMap.empty<NodeId, HashSet.HashSet<NodeId>>()
+    for (const [key, valueSet] of HashMap.toEntries(disjointWithMap)) {
+      disjointWithMapImmutable = HashMap.set(
+        disjointWithMapImmutable,
+        key,
+        HashSet.fromIterable(valueSet)
+      )
+    }
+
+    // 6. Build context (node data store)
     const context: OntologyContext = {
       nodes: classNodes,
       universalProperties,
-      nodeIndexMap
+      nodeIndexMap,
+      disjointWithMap: disjointWithMapImmutable
     }
 
     return {
