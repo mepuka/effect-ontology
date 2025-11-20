@@ -178,51 +178,146 @@ interface ChunkConfig {
 
 **Implementation Location:** `packages/core/src/Services/Nlp.ts`
 
-### 2. Prompt Cache Algebra
+### 2. EntityCacheService - Effect Service for Prompt Cache
 
-**Purpose:** Enable cross-chunk entity reuse through monoidal cache composition.
+**Purpose:** Enable cross-chunk entity reuse through Effect.Cache-backed service.
 
-**Algebraic Structure:**
+**Service Definition:**
 
 ```typescript
-// EntityCache is a Monoid
-type EntityCache = HashMap<NormalizedLabel, EntityRef>
+// packages/core/src/Services/EntityCache.ts
+import { Effect, Context, Layer, Cache, Data, Duration } from "effect"
 
-∅_cache = HashMap.empty
-c1 ⊕ c2 = HashMap.union(c1, c2)  // Later entries override (idempotence)
+export class EntityRef extends Data.Class<{
+  iri: string
+  label: string
+  type: string
+}> {}
+
+export class EntityCacheService extends Effect.Service<EntityCacheService>()(
+  "EntityCacheService",
+  {
+    effect: Effect.gen(function* () {
+      // Use Effect.Cache for automatic memoization
+      const cache = yield* Cache.make({
+        capacity: 10000,  // Max entities to cache
+        timeToLive: Duration.hours(1),  // Optional expiration
+        lookup: (label: string) =>
+          Effect.fail(new Error(`Entity not found: ${label}`))
+      })
+
+      return {
+        // Get entity by normalized label
+        get: (label: string) =>
+          Cache.get(cache, normalize(label)),
+
+        // Add entity to cache
+        add: (entity: EntityRef) =>
+          Effect.gen(function* () {
+            const normalized = normalize(entity.label)
+            yield* Cache.set(cache, normalized, entity)
+          }),
+
+        // Add multiple entities (from extraction result)
+        addAll: (entities: EntityRef[]) =>
+          Effect.all(
+            entities.map((e) => this.add(e)),
+            { concurrency: 10 }  // Bounded concurrency for cache writes
+          ),
+
+        // Get all cached entities (for prompt rendering)
+        getAll: () =>
+          Effect.sync(() => Cache.values(cache)),
+
+        // Format cache for prompt injection
+        toPromptFragment: () =>
+          Effect.gen(function* () {
+            const entities = yield* this.getAll()
+            return entities
+              .map((e) => `- ${e.label}: ${e.iri} (${e.type})`)
+              .join("\n")
+          })
+      }
+    }),
+    dependencies: []
+  }
+) {
+  /**
+   * Test layer with in-memory Map
+   */
+  static Test = Layer.effect(
+    EntityCacheService,
+    Effect.gen(function* () {
+      const map = new Map<string, EntityRef>()
+      return {
+        get: (label: string) =>
+          Effect.fromNullable(map.get(normalize(label))).pipe(
+            Effect.orElseFail(() => new Error(`Not found: ${label}`))
+          ),
+        add: (entity: EntityRef) =>
+          Effect.sync(() => { map.set(normalize(entity.label), entity) }),
+        addAll: (entities: EntityRef[]) =>
+          Effect.sync(() => entities.forEach(e => map.set(normalize(e.label), e))),
+        getAll: () => Effect.succeed(Array.from(map.values())),
+        toPromptFragment: () =>
+          Effect.succeed(
+            Array.from(map.values())
+              .map((e) => `- ${e.label}: ${e.iri} (${e.type})`)
+              .join("\n")
+          )
+      }
+    })
+  )
+}
+
+// Normalization utility
+const normalize = (label: string): string =>
+  label.toLowerCase().trim().replace(/[^\w\s]/g, "").replace(/\s+/g, " ")
 ```
 
-**Algebraic Laws:**
-1. **Associativity:** `(C1 ⊕ C2) ⊕ C3 = C1 ⊕ (C2 ⊕ C3)`
-2. **Identity:** `C ⊕ ∅ = C`
-3. **Idempotence:** `entity(e) ⊕ entity(e) = entity(e)`
-4. **Monotonicity:** `C1 ⊂ (C1 ⊕ C2)` (never forget entities)
+**Algebraic Properties (Maintained):**
 
-**Prompt Composition:**
-```
-render: (KnowledgeIndex ⊕ EntityCache) → Prompt
-```
+The service wraps a cache that preserves monoidal properties:
 
-**Stateful Stream Pattern:**
+1. **Associativity:** Order of `addAll` calls doesn't affect final state
+2. **Identity:** Empty cache = no entities
+3. **Idempotence:** Adding same entity twice = single entry (Map semantics)
+4. **Monotonicity:** Cache only grows (no deletion in extraction pipeline)
+
+**Stateful Stream Pattern (Updated):**
+
 ```typescript
-Stream.scanEffect(
-  EntityCache.empty,  // Initial state: ∅
-  (cache, chunk) => Effect.gen(function* () {
-    // Compose: K ⊕ Cache
-    const promptWithCache = renderWithCache(knowledgeIndex, cache)
+Stream.fromIterable(chunks).pipe(
+  Stream.mapEffect((chunk) =>
+    Effect.gen(function* () {
+      const entityCache = yield* EntityCacheService
+      const knowledgeIndex = yield* /* ... */
 
-    // Extract
-    const result = yield* extractKnowledgeGraph(chunk, ontology, promptWithCache, schema)
+      // Compose: K ⊕ Cache (via service)
+      const cacheFragment = yield* entityCache.toPromptFragment()
+      const promptWithCache = renderWithCache(knowledgeIndex, cacheFragment)
 
-    // Update: cache' = cache ⊕ newEntities
-    const cache' = EntityCache.union(cache, indexEntitiesByLabel(result.entities))
+      // Extract
+      const result = yield* extractKnowledgeGraph(
+        chunk,
+        ontology,
+        promptWithCache,
+        schema
+      )
 
-    return [result, cache']
-  })
+      // Update cache (side effect in service)
+      yield* entityCache.addAll(indexEntitiesByLabel(result.entities))
+
+      return result
+    })
+  ),
+  Stream.mergeAll({ concurrency: 3 })  // Parallel extraction with shared cache!
 )
 ```
 
-**Implementation Location:** `packages/core/src/Prompt/Cache.ts`
+**Key Benefit:** Service-based cache allows **parallel extraction with shared state**. All concurrent fibers access the same `EntityCacheService`, automatically synchronizing entity knowledge across chunks.
+
+**Implementation Location:** `packages/core/src/Services/EntityCache.ts`
 
 ### 3. Prompt Fragment Algebra (Extension)
 
@@ -268,6 +363,7 @@ export const streamingExtractionPipeline = (
 ) =>
   Effect.gen(function* () {
     const nlp = yield* NlpService
+    const entityCache = yield* EntityCacheService  // Yield cache service!
     const providerLayer = makeLlmProviderLayer(params)
 
     // 1. Catamorphic prompt construction
@@ -277,20 +373,33 @@ export const streamingExtractionPipeline = (
     // 2. Chunk text
     const chunks = yield* nlp.chunkText(text, config.chunkConfig)
 
-    // 3. Stream with cache algebra
+    // 3. Stream with EntityCacheService
     const extractionStream = Stream.fromIterable(chunks).pipe(
-      Stream.scanEffect(
-        EntityCache.empty,
-        (cache, chunk) => Effect.gen(function* () {
-          const promptWithCache = renderWithCache(knowledgeIndex, cache, basePrompt)
+      Stream.mapEffect((chunk) =>
+        Effect.gen(function* () {
+          // Get current cache state for prompt
+          const cacheFragment = yield* entityCache.toPromptFragment()
+          const promptWithCache = renderWithCache(
+            knowledgeIndex,
+            cacheFragment,
+            basePrompt
+          )
+
+          // Extract
           const result = yield* extractKnowledgeGraph(
-            chunk.text, ontology, promptWithCache, schema
+            chunk.text,
+            ontology,
+            promptWithCache,
+            schema
           ).pipe(Effect.provide(providerLayer))
-          const newCache = EntityCache.union(cache, indexEntitiesByLabel(result.entities))
-          return [result, newCache]
+
+          // Update cache (shared across all fibers!)
+          yield* entityCache.addAll(indexEntitiesByLabel(result.entities))
+
+          return result
         })
       ),
-      Stream.map(([result, _]) => result),
+      Stream.mergeAll({ concurrency: 3 }),  // Parallel with shared cache
       Stream.mapEffect(jsonToRdf),
       Stream.mapEffect(validateRdf),
       Stream.filter(({ valid }) => valid),
