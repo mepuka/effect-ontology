@@ -72,29 +72,41 @@ export const extractVocabulary = (ontology: OntologyContext) => {
  */
 
 /**
- * LLM Service for knowledge graph extraction
+ * Extract knowledge graph from text using LLM
  *
- * Provides structured extraction of knowledge graphs from text using a language
- * model with schema validation. Integrates with the Prompt service for contextual
- * instructions and uses Effect Schema for type-safe validation.
+ * Pure function that uses @effect/ai's generateObject to get structured output
+ * matching the provided schema. Takes plain data as input and depends only on
+ * LanguageModel service - no Effect Config.
+ *
+ * **Flow:**
+ * 1. Build prompt from StructuredPrompt + text
+ * 2. Call LanguageModel.generateObject with schema
+ * 3. Extract and return validated value
+ * 4. Map errors to LLMError
+ *
+ * @param text - Input text to extract knowledge from
+ * @param ontology - Ontology context (unused directly, but available for future extensions)
+ * @param prompt - Structured prompt from Prompt service
+ * @param schema - Dynamic schema for validation
+ * @returns Effect yielding validated knowledge graph or error, requires LanguageModel
  *
  * @since 1.0.0
- * @category services
+ * @category extraction
+ *
  * @example
  * ```typescript
- * import { LlmService } from "@effect-ontology/core/Services/Llm"
+ * import { extractKnowledgeGraph } from "@effect-ontology/core/Services/Llm"
  * import { makeKnowledgeGraphSchema } from "@effect-ontology/core/Schema/Factory"
- * import { LanguageModel } from "@effect/ai"
+ * import { makeLlmProviderLayer } from "@effect-ontology/core/Services/LlmProvider"
+ * import { Effect } from "effect"
  *
  * const program = Effect.gen(function* () {
- *   const llm = yield* LlmService
- *
  *   const schema = makeKnowledgeGraphSchema(
  *     ["http://xmlns.com/foaf/0.1/Person"],
  *     ["http://xmlns.com/foaf/0.1/name"]
  *   )
  *
- *   const result = yield* llm.extractKnowledgeGraph(
+ *   const result = yield* extractKnowledgeGraph(
  *     "Alice is a person.",
  *     ontology,
  *     prompt,
@@ -103,90 +115,82 @@ export const extractVocabulary = (ontology: OntologyContext) => {
  *
  *   console.log(result.entities)
  * })
+ *
+ * // Provide LanguageModel layer inline
+ * const params = { provider: "anthropic", anthropic: { ... } }
+ * const providerLayer = makeLlmProviderLayer(params)
+ * Effect.runPromise(program.pipe(Effect.provide(providerLayer)))
  * ```
+ */
+export const extractKnowledgeGraph = <ClassIRI extends string, PropertyIRI extends string>(
+  text: string,
+  _ontology: OntologyContext,
+  prompt: StructuredPrompt,
+  schema: KnowledgeGraphSchema<ClassIRI, PropertyIRI>
+): Effect.Effect<
+  KnowledgeGraphSchema<ClassIRI, PropertyIRI>["Type"],
+  LLMError,
+  LanguageModel.LanguageModel
+> =>
+  Effect.gen(function*() {
+    // Build the complete prompt using @effect/printer
+    const promptText = renderExtractionPrompt(prompt, text)
+
+    // Call LLM with structured output
+    const response = yield* LanguageModel.generateObject({
+      prompt: promptText,
+      schema,
+      objectName: "KnowledgeGraph"
+    })
+
+    // Return the validated value
+    return response.value
+  }).pipe(
+    // Map all errors to LLMError
+    Effect.catchAll((error) =>
+      Effect.fail(
+        new LLMError({
+          module: "extractKnowledgeGraph",
+          method: "generateObject",
+          reason: "ApiError",
+          description: `LLM extraction failed: ${
+            error && typeof error === "object" && "message" in error
+              ? error.message
+              : String(error)
+          }`,
+          cause: error
+        })
+      )
+    )
+  )
+
+/**
+ * LlmService (DEPRECATED - use extractKnowledgeGraph function instead)
+ *
+ * Legacy service class wrapper for backward compatibility.
+ * Will be removed in future version.
+ *
+ * @deprecated Use extractKnowledgeGraph function with Effect.provide instead
+ * @since 1.0.0
+ * @category deprecated
  */
 export class LlmService extends Effect.Service<LlmService>()("LlmService", {
   sync: () => ({
     /**
-     * Extract knowledge graph from text using LLM with tool calling
-     *
-     * Uses @effect/ai's generateObject to get structured output that matches
-     * the provided schema. The schema is dynamically generated based on the
-     * ontology vocabulary, ensuring the LLM only returns valid entities and
-     * properties.
-     *
-     * **Flow:**
-     * 1. Build prompt from StructuredPrompt + text
-     * 2. Call LanguageModel.generateObject with schema
-     * 3. Extract and return validated value
-     * 4. Map errors to LLMError
-     *
-     * @param text - Input text to extract knowledge from
-     * @param ontology - Ontology context (unused directly, but available for future extensions)
-     * @param prompt - Structured prompt from Prompt service
-     * @param schema - Dynamic schema for validation
-     * @returns Effect yielding validated knowledge graph or error
-     *
-     * @since 1.0.0
-     * @category operations
+     * @deprecated Use extractKnowledgeGraph function instead
      */
     extractKnowledgeGraph: <ClassIRI extends string, PropertyIRI extends string>(
       text: string,
-      _ontology: OntologyContext,
+      ontology: OntologyContext,
       prompt: StructuredPrompt,
       schema: KnowledgeGraphSchema<ClassIRI, PropertyIRI>
-    ) =>
-      Effect.gen(function*() {
-        // Build the complete prompt using @effect/printer
-        const promptText = renderExtractionPrompt(prompt, text)
-
-        // Call LLM with structured output using the exported function
-        const response = yield* LanguageModel.generateObject({
-          prompt: promptText,
-          schema,
-          objectName: "KnowledgeGraph"
-        })
-
-        // Return the validated value
-        return response.value
-      }).pipe(
-        // Map all errors to LLMError
-        Effect.catchAll((error) =>
-          Effect.fail(
-            new LLMError({
-              module: "LlmService",
-              method: "extractKnowledgeGraph",
-              reason: "ApiError",
-              description: `LLM extraction failed: ${
-                error && typeof error === "object" && "message" in error
-                  ? error.message
-                  : String(error)
-              }`,
-              cause: error
-            })
-          )
-        )
-      )
+    ) => extractKnowledgeGraph(text, ontology, prompt, schema)
   })
 }) {
   /**
    * Test layer with mock LanguageModel that returns empty knowledge graphs.
    *
-   * Provides a mock LanguageModel service that returns predictable test data
-   * without making actual API calls. The mock returns empty knowledge graphs
-   * by default.
-   *
-   * @example
-   * ```typescript
-   * it.effect("test name", () =>
-   *   Effect.gen(function*() {
-   *     const llm = yield* LlmService
-   *     const result = yield* llm.extractKnowledgeGraph(...)
-   *     expect(result.entities).toEqual([])
-   *   }).pipe(Effect.provide(LlmService.Test))
-   * )
-   * ```
-   *
+   * @deprecated Use makeLlmProviderLayer with test params instead
    * @since 1.0.0
    * @category layers
    */
