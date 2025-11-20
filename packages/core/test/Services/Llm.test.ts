@@ -5,13 +5,13 @@
  */
 
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, HashMap, Layer, Data, Option } from "effect"
+import { Data, Effect, HashMap, Layer, Option } from "effect"
 import { PropertyConstraint } from "../../src/Graph/Constraint.js"
 import { ClassNode } from "../../src/Graph/Types"
 import type { OntologyContext } from "../../src/Graph/Types"
 import { StructuredPrompt } from "../../src/Prompt/Types"
 import { makeKnowledgeGraphSchema } from "../../src/Schema/Factory"
-import { extractVocabulary, LlmService } from "../../src/Services/Llm"
+import { extractKnowledgeGraph, extractVocabulary, LlmService } from "../../src/Services/Llm"
 
 describe("Services.Llm", () => {
   // Test ontology context
@@ -48,7 +48,8 @@ describe("Services.Llm", () => {
       })
     ],
     nodeIndexMap: HashMap.empty(),
-    disjointWithMap: HashMap.empty()
+    disjointWithMap: HashMap.empty(),
+    propertyParentsMap: HashMap.empty()
   }
 
   // Test structured prompt
@@ -121,7 +122,8 @@ describe("Services.Llm", () => {
           ]),
           universalProperties: [],
           nodeIndexMap: HashMap.empty(),
-          disjointWithMap: HashMap.empty()
+          disjointWithMap: HashMap.empty(),
+          propertyParentsMap: HashMap.empty()
         }
 
         const { propertyIris } = extractVocabulary(ontologyWithDuplicates)
@@ -136,7 +138,8 @@ describe("Services.Llm", () => {
           nodes: HashMap.empty(),
           universalProperties: [],
           nodeIndexMap: HashMap.empty(),
-          disjointWithMap: HashMap.empty()
+          disjointWithMap: HashMap.empty(),
+          propertyParentsMap: HashMap.empty()
         }
 
         const { classIris, propertyIris } = extractVocabulary(emptyOntology)
@@ -228,6 +231,40 @@ describe("Services.Llm", () => {
         expect(combined.system).toHaveLength(2)
         expect(combined.user).toHaveLength(1)
         expect(combined.examples).toHaveLength(1)
+      }))
+  })
+
+  describe("extractKnowledgeGraph (pure function)", () => {
+    it.effect("should be a callable function", () =>
+      Effect.sync(() => {
+        // Verify function exists and has correct type
+        expect(extractKnowledgeGraph).toBeDefined()
+        expect(typeof extractKnowledgeGraph).toBe("function")
+      }))
+
+    it.effect("should accept correct parameters", () =>
+      Effect.sync(() => {
+        const schema = makeKnowledgeGraphSchema(
+          ["http://xmlns.com/foaf/0.1/Person"],
+          ["http://xmlns.com/foaf/0.1/name"]
+        )
+
+        const prompt = StructuredPrompt.make({
+          system: ["Extract entities"],
+          user: ["From text"],
+          examples: []
+        })
+
+        // This should compile without errors
+        const _effect = extractKnowledgeGraph(
+          "Alice is a person.",
+          testOntology,
+          prompt,
+          schema
+        )
+
+        // Effect should be defined
+        expect(_effect).toBeDefined()
       }))
   })
 })
