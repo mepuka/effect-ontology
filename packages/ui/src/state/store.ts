@@ -9,6 +9,7 @@ import {
   solveGraph,
   solveToKnowledgeIndex
 } from "@effect-ontology/core/Prompt"
+import { renderToEnrichedPrompt } from "@effect-ontology/core/Prompt/RenderEnriched"
 import {
   dereferenceJSONSchema,
   formatJSONSchema,
@@ -16,7 +17,6 @@ import {
   toJSONSchema
 } from "@effect-ontology/core/Schema/Export"
 import { makeKnowledgeGraphSchema } from "@effect-ontology/core/Schema/Factory"
-import { renderToEnrichedPrompt } from "@effect-ontology/core/Prompt/RenderEnriched"
 import { Effect, Graph, HashMap, Option } from "effect"
 import { runtime } from "../runtime/atoms"
 

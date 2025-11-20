@@ -1,11 +1,11 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, HashMap } from "effect"
-import { EntityDiscoveryService, EntityDiscoveryServiceTest } from "../../src/Services/EntityDiscovery"
 import { EntityRef } from "../../src/Prompt/EntityCache"
+import { EntityDiscoveryService, EntityDiscoveryServiceTest } from "../../src/Services/EntityDiscovery"
 
 describe("EntityDiscoveryService", () => {
   it.effect("should register and retrieve entities", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const discovery = yield* EntityDiscoveryService
 
       const entity = new EntityRef({
@@ -23,7 +23,7 @@ describe("EntityDiscoveryService", () => {
     }).pipe(Effect.provide(EntityDiscoveryServiceTest)))
 
   it.effect("should accumulate entities across multiple registrations", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const discovery = yield* EntityDiscoveryService
 
       yield* discovery.register([

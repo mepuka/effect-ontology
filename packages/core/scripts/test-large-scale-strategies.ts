@@ -10,19 +10,18 @@
  */
 
 import { Effect, HashMap, JSONSchema } from "effect"
-import { readFileSync, writeFileSync, mkdirSync } from "fs"
-import { join, dirname } from "path"
+import { mkdirSync, readFileSync, writeFileSync } from "fs"
+import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { parseTurtleToGraph } from "../src/Graph/Builder.js"
+import * as Inheritance from "../src/Ontology/Inheritance.js"
 import { knowledgeIndexAlgebra } from "../src/Prompt/Algebra.js"
 import { generateEnrichedIndex } from "../src/Prompt/Enrichment.js"
 import type { ContextStrategy } from "../src/Prompt/Focus.js"
 import { selectContext } from "../src/Prompt/Focus.js"
 import { renderToStructuredPrompt } from "../src/Prompt/Render.js"
-import { solveToKnowledgeIndex } from "../src/Prompt/Solver.js"
 import { makeKnowledgeGraphSchema } from "../src/Schema/Factory.js"
 import { extractVocabulary } from "../src/Services/Llm.js"
-import * as Inheritance from "../src/Ontology/Inheritance.js"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -39,12 +38,12 @@ interface TestConfig {
   /** Ontology file name */
   filename: string
   /** Focus nodes for testing Focused/Neighborhood strategies */
-  focusNodes: string[]
+  focusNodes: Array<string>
   /** Human-readable name */
   name: string
 }
 
-const TEST_CONFIGS: TestConfig[] = [
+const TEST_CONFIGS: Array<TestConfig> = [
   {
     filename: "foaf-minimal.ttl",
     name: "FOAF (Minimal)",
@@ -89,7 +88,9 @@ const loadOntology = (filename: string): string => {
 /**
  * Estimate total tokens in prompt
  */
-const estimateTotalTokens = (prompt: { system: string[]; user: string[]; examples: string[] }): number => {
+const estimateTotalTokens = (
+  prompt: { system: Array<string>; user: Array<string>; examples: Array<string> }
+): number => {
   const allText = [...prompt.system, ...prompt.user, ...prompt.examples].join(" ")
   // Simple heuristic: ~1 token per 4 characters + word boundaries
   const charCount = allText.length
@@ -103,7 +104,7 @@ const estimateTotalTokens = (prompt: { system: string[]; user: string[]; example
 const testStrategy = (
   config: TestConfig,
   strategy: ContextStrategy,
-  focusNodes?: string[]
+  focusNodes?: Array<string>
 ) =>
   Effect.gen(function*() {
     console.log(`\n  Testing strategy: ${strategy}`)
@@ -201,7 +202,7 @@ const testStrategy = (
  */
 const generateComparisonReport = (
   config: TestConfig,
-  results: StrategyResult[]
+  results: Array<StrategyResult>
 ): string => {
   const lines = [
     `# Strategy Comparison: ${config.name}`,
@@ -217,7 +218,9 @@ const generateComparisonReport = (
 
   for (const result of results) {
     lines.push(
-      `| ${result.strategy} | ${result.classCount} | ${result.propertyCount} | ${result.totalTokens} | ${result.promptSections.system} | ${result.promptSections.user} | ${result.promptSections.examples} | ${(result.schemaSize / 1024).toFixed(2)} |`
+      `| ${result.strategy} | ${result.classCount} | ${result.propertyCount} | ${result.totalTokens} | ${result.promptSections.system} | ${result.promptSections.user} | ${result.promptSections.examples} | ${
+        (result.schemaSize / 1024).toFixed(2)
+      } |`
     )
   }
 
@@ -228,7 +231,9 @@ const generateComparisonReport = (
     for (const result of results) {
       if (result.strategy !== "Full") {
         const reduction = ((fullResult.totalTokens - result.totalTokens) / fullResult.totalTokens * 100).toFixed(1)
-        lines.push(`- **${result.strategy}**: ${reduction}% reduction (${fullResult.totalTokens} → ${result.totalTokens} tokens)`)
+        lines.push(
+          `- **${result.strategy}**: ${reduction}% reduction (${fullResult.totalTokens} → ${result.totalTokens} tokens)`
+        )
       }
     }
   }
@@ -277,7 +282,7 @@ const main = Effect.gen(function*() {
     console.log(`File: ${config.filename}`)
     console.log(`Focus nodes: ${config.focusNodes.length}`)
 
-    const results: StrategyResult[] = []
+    const results: Array<StrategyResult> = []
 
     // Test Full strategy
     results.push(yield* testStrategy(config, "Full"))

@@ -1,5 +1,5 @@
-import { normalize, EntityRef, fromArray, union, empty, toPromptFragment } from "../src/Prompt/EntityCache"
 import { HashMap } from "effect"
+import { empty, EntityRef, fromArray, normalize, toPromptFragment, union } from "../src/Prompt/EntityCache"
 
 console.log("Testing EntityCache implementation...")
 
@@ -57,7 +57,9 @@ console.log(`Identity law test: ${HashMap.size(identityResult) === HashMap.size(
 console.log("\n=== Testing toPromptFragment ===")
 const fragment = toPromptFragment(cache)
 console.log(`Fragment has ${fragment.length} lines`)
-console.log(`Fragment contains "Alice": ${fragment.some(line => line.includes("Alice")) ? "PASS" : "FAIL"}`)
-console.log(`Fragment contains IRI: ${fragment.some(line => line.includes("http://example.org/Alice")) ? "PASS" : "FAIL"}`)
+console.log(`Fragment contains "Alice": ${fragment.some((line) => line.includes("Alice")) ? "PASS" : "FAIL"}`)
+console.log(
+  `Fragment contains IRI: ${fragment.some((line) => line.includes("http://example.org/Alice")) ? "PASS" : "FAIL"}`
+)
 
 console.log("\n=== All tests completed ===")

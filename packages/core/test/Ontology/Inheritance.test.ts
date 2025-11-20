@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, it } from "@effect/vitest"
-import { Data, Effect, Graph, HashMap, HashSet, Option } from "effect"
+import { Data, Effect, Graph, HashMap, Option } from "effect"
 import { PropertyConstraint } from "../../src/Graph/Constraint.js"
 import { ClassNode, type OntologyContext } from "../../src/Graph/Types.js"
 import * as Inheritance from "../../src/Ontology/Inheritance.js"

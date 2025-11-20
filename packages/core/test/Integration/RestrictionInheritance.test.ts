@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Option } from "effect"
+import { Effect } from "effect"
 import { parseTurtleToGraph } from "../../src/Graph/Builder.js"
 import * as InheritanceService from "../../src/Ontology/Inheritance.js"
 

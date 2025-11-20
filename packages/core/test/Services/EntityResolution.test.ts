@@ -4,7 +4,7 @@ import { mergeGraphsWithResolution } from "../../src/Services/EntityResolution.j
 
 describe("EntityResolution", () => {
   it.effect("should merge entities with same normalized label", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const graph1 = `
         @prefix : <http://example.org/> .
         @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -27,11 +27,10 @@ describe("EntityResolution", () => {
       // Should only have one Person instance
       const personCount = (merged.match(/a :Person/g) || []).length
       expect(personCount).toBe(1)
-    })
-  )
+    }))
 
   it.effect("should NOT merge entities with different normalized labels", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const graph1 = `
         @prefix : <http://example.org/> .
         @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -52,11 +51,10 @@ describe("EntityResolution", () => {
 
       const personCount = (merged.match(/a :Person/g) || []).length
       expect(personCount).toBe(2)
-    })
-  )
+    }))
 
   it.effect("should merge three graphs with overlapping entities", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const graph1 = `
         @prefix : <http://example.org/> .
         @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -83,20 +81,18 @@ describe("EntityResolution", () => {
 
       const personCount = (merged.match(/a :Person/g) || []).length
       expect(personCount).toBe(1)
-    })
-  )
+    }))
 
   it.effect("should handle empty graph array", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const merged = yield* mergeGraphsWithResolution([])
 
       // Should return empty graph
       expect(merged.trim()).toBe("")
-    })
-  )
+    }))
 
   it.effect("should preserve additional properties during merge", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const graph1 = `
         @prefix : <http://example.org/> .
         @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -120,6 +116,5 @@ describe("EntityResolution", () => {
       // But only one label
       const labelCount = (merged.match(/rdfs:label/g) || []).length
       expect(labelCount).toBe(1)
-    })
-  )
+    }))
 })

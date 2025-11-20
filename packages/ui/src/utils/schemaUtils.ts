@@ -254,7 +254,7 @@ export const buildPrefixMap = (iris: Array<string>): Map<string, string> => {
 
       if (!prefix) {
         // Generate a prefix from the namespace
-        const localPart = namespace.replace(/[#\/]$/, "").split(/[#\/]/).pop() || ""
+        const localPart = namespace.replace(/[#/]$/, "").split(/[#/]/).pop() || ""
         prefix = localPart || `ns${counter++}`
       }
 

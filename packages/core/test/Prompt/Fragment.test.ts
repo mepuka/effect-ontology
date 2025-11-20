@@ -231,8 +231,7 @@ describe("Prompt.Fragment", () => {
             ],
             user: [],
             examples: []
-          })
-        )
+          }))
 
         const combined = EnrichedStructuredPrompt.combineAll(prompts)
 

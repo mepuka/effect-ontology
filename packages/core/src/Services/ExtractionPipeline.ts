@@ -64,7 +64,7 @@ export const streamingExtractionPipeline = (
   ontology: OntologyContext,
   config: PipelineConfig = defaultPipelineConfig
 ) =>
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     // 1. Get services
     const nlp = yield* NlpService
     const discovery = yield* EntityDiscoveryService
@@ -79,7 +79,7 @@ export const streamingExtractionPipeline = (
     const extractionStream = chunks.pipe(
       Stream.mapEffect(
         (chunkText) =>
-          Effect.gen(function* () {
+          Effect.gen(function*() {
             // Get and increment chunk index atomically
             const currentChunkIndex = yield* Ref.getAndUpdate(chunkIndexRef, (n) => n + 1)
 

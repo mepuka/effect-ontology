@@ -8,13 +8,13 @@ import { LanguageModel } from "@effect/ai"
 import { Effect, HashMap, JSONSchema } from "effect"
 import { readFileSync } from "fs"
 import { join } from "path"
-import type { LlmProviderParams } from "../src/Services/LlmProvider.js"
-import { makeLlmProviderLayer } from "../src/Services/LlmProvider.js"
 import { parseTurtleToGraph } from "../src/Graph/Builder.js"
 import { knowledgeIndexAlgebra } from "../src/Prompt/Algebra.js"
 import { buildKnowledgeMetadata } from "../src/Prompt/Metadata.js"
 import { solveToKnowledgeIndex } from "../src/Prompt/Solver.js"
 import { makeKnowledgeGraphSchema } from "../src/Schema/Factory.js"
+import type { LlmProviderParams } from "../src/Services/LlmProvider.js"
+import { makeLlmProviderLayer } from "../src/Services/LlmProvider.js"
 
 const loadOntology = (filename: string): string => {
   const path = join(__dirname, "../test/fixtures/ontologies", filename)
@@ -140,7 +140,7 @@ The project is a collaboration between their companies.
         console.log(`   - ${type}: ${name}`)
       }
     }
-  } catch (error) {
+  } catch {
     console.log("⚠️  Response is not valid JSON")
     console.log("   This may need prompt refinement")
   }
