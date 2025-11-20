@@ -147,7 +147,8 @@ export const streamingExtractionPipeline = (
             const knowledgeGraph = yield* extractKnowledgeGraph(chunkText, ontology, prompt, schema)
 
             // E. Convert to RDF Turtle using RdfService (fixes Issue 1: proper escaping)
-            const store = yield* rdf.jsonToStore(knowledgeGraph)
+            // Pass ontology for datatype inference (fixes Issue 4: typed literals)
+            const store = yield* rdf.jsonToStore(knowledgeGraph, ontology)
             const rdfGraph = yield* rdf.storeToTurtle(store)
 
             // F. Update entity discovery (for next chunks) with label extraction (fixes Issue 3)

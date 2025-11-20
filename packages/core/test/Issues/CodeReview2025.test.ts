@@ -18,7 +18,7 @@ describe("Code Review 2025 - Issue Validation", () => {
   describe("Issue 1: Turtle Generation with Special Characters", () => {
     it.effect("should handle quotes in literals", () =>
       Effect.gen(function*() {
-        const rdf = RdfService.make()
+        const rdf = yield* RdfService
 
         const graph = {
           entities: [
@@ -35,21 +35,21 @@ describe("Code Review 2025 - Issue Validation", () => {
           ]
         }
 
-        const store = rdf.jsonToStore(graph)
+        const store = yield* rdf.jsonToStore(graph)
         const turtle = yield* rdf.storeToTurtle(store)
 
-        // Should produce valid Turtle
-        expect(turtle).toContain('"The Boss"') // Escaped quotes
+        // Should produce valid Turtle with escaped quotes
+        expect(turtle).toContain('\\"The Boss\\"') // Backslash-escaped quotes
         expect(turtle).not.toContain('""The Boss""') // No double-escaping
 
         // Should round-trip parse
         const parsedStore = yield* rdf.turtleToStore(turtle)
         expect(parsedStore.size).toBe(store.size)
-      }))
+      }).pipe(Effect.provide(RdfService.Default)))
 
     it.effect("should handle newlines in literals", () =>
       Effect.gen(function*() {
-        const rdf = RdfService.make()
+        const rdf = yield* RdfService
 
         const graph = {
           entities: [
@@ -72,9 +72,9 @@ describe("Code Review 2025 - Issue Validation", () => {
         // Should round-trip parse (newlines properly escaped)
         const parsedStore = yield* rdf.turtleToStore(turtle)
         expect(parsedStore.size).toBe(store.size)
-      }))
+      }).pipe(Effect.provide(RdfService.Default)))
 
-    it.layer(RdfService.Default)("should handle backslashes in literals", () =>
+    it.effect("should handle backslashes in literals", () =>
       Effect.gen(function*() {
         const rdf = yield* RdfService
 
@@ -99,33 +99,30 @@ describe("Code Review 2025 - Issue Validation", () => {
         // Should round-trip parse (backslashes properly escaped)
         const parsedStore = yield* rdf.turtleToStore(turtle)
         expect(parsedStore.size).toBe(store.size)
-      }))
+      }).pipe(Effect.provide(RdfService.Default)))
   })
 
   describe("Issue 2: Direct Children vs All Descendants", () => {
     it("should extract only direct children, not all descendants", () => {
       // Create 3-level hierarchy: Thing > Person > Student
-      const graph = Graph.mutate(Graph.directed(), (g) => {
-        Graph.addNode(g, "Thing" as NodeId)
-        Graph.addNode(g, "Person" as NodeId)
-        Graph.addNode(g, "Student" as NodeId)
-        Graph.addEdge(g, "Person" as NodeId, "Thing" as NodeId)
-        Graph.addEdge(g, "Student" as NodeId, "Person" as NodeId)
+      const graph = Graph.mutate(Graph.directed<NodeId, unknown>(), (g) => {
+        const thingIdx = Graph.addNode(g, "Thing" as NodeId)
+        const personIdx = Graph.addNode(g, "Person" as NodeId)
+        const studentIdx = Graph.addNode(g, "Student" as NodeId)
+        Graph.addEdge(g, personIdx, thingIdx, undefined) // Person -> Thing
+        Graph.addEdge(g, studentIdx, personIdx, undefined) // Student -> Person
       })
 
-      // Find direct children of "Thing"
-      const thingIndex = Graph.findNode(graph, "Thing" as NodeId).pipe(
+      // Find direct children of "Thing" using reverse adjacency (Issue 5 fix)
+      const thingIndex = Graph.findNode(graph, (data: NodeId) => data === "Thing").pipe(
         Option.getOrThrow
       )
 
-      // Find nodes that point to Thing
-      const directChildren: NodeId[] = []
-      for (const [idx, data] of graph) {
-        const neighbors = Graph.neighbors(graph, idx)
-        if (Array.from(neighbors).includes(thingIndex)) {
-          directChildren.push(data)
-        }
-      }
+      // Use Effect Graph's neighborsDirected with "incoming" to get children
+      const childIndices = Graph.neighborsDirected(graph, thingIndex, "incoming")
+      const directChildren = childIndices.map((idx) =>
+        Graph.getNode(graph, idx).pipe(Option.getOrThrow)
+      )
 
       // Should only include "Person", not "Student"
       expect(directChildren).toEqual(["Person"])

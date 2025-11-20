@@ -9,11 +9,16 @@
  */
 
 import { describe, expect, it } from "@effect/vitest"
-import { Data, Option } from "effect"
+import { Data, Graph, HashMap, Option } from "effect"
 import { PropertyConstraint } from "../../src/Graph/Constraint.js"
+import type { NodeId } from "../../src/Graph/Types.js"
 import { ClassNode, PropertyNode } from "../../src/Graph/Types.js"
 import { combineWithUniversal, defaultPromptAlgebra, processUniversalProperties } from "../../src/Prompt/Algebra.js"
 import { StructuredPrompt } from "../../src/Prompt/Types.js"
+
+// Mock graph and predecessors for tests
+const mockGraph = Graph.directed<NodeId, unknown>()
+const mockPredecessors = HashMap.empty<number, number[]>()
 
 describe("Prompt Algebra", () => {
   describe("StructuredPrompt Monoid", () => {
@@ -101,7 +106,7 @@ describe("Prompt Algebra", () => {
         properties: []
       })
 
-      const result = defaultPromptAlgebra(classNode, [])
+      const result = defaultPromptAlgebra(classNode, [], mockGraph, 0, mockPredecessors)
 
       expect(result.system.length).toBeGreaterThan(0)
       expect(result.system[0]).toContain("Class: Animal")
@@ -128,7 +133,7 @@ describe("Prompt Algebra", () => {
         ]
       })
 
-      const result = defaultPromptAlgebra(classNode, [])
+      const result = defaultPromptAlgebra(classNode, [], mockGraph, 0, mockPredecessors)
 
       expect(result.system.length).toBeGreaterThan(0)
       expect(result.system[0]).toContain("Class: Dog")
@@ -157,7 +162,7 @@ describe("Prompt Algebra", () => {
         context: []
       })
 
-      const result = defaultPromptAlgebra(parentClass, [childPrompt1, childPrompt2])
+      const result = defaultPromptAlgebra(parentClass, [childPrompt1, childPrompt2], mockGraph, 0, mockPredecessors)
 
       // Parent definition should be first, followed by children
       expect(result.system[0]).toContain("Class: Animal")
@@ -174,7 +179,7 @@ describe("Prompt Algebra", () => {
         functional: true
       })
 
-      const result = defaultPromptAlgebra(propertyNode, [])
+      const result = defaultPromptAlgebra(propertyNode, [], mockGraph, 0, mockPredecessors)
 
       expect(result.system.length).toBeGreaterThan(0)
       expect(result.system[0]).toContain("Property: hasOwner")

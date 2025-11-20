@@ -7,7 +7,7 @@
  * - Graph edges represent subClassOf relationships (Child -> Parent dependency)
  */
 
-import { FastCheck, HashMap, Schema } from "effect"
+import { FastCheck, Graph, HashMap, Schema } from "effect"
 import { PropertyConstraint } from "./Constraint.js"
 
 /**
@@ -317,20 +317,23 @@ export const OntologyContext = {
 /**
  * GraphAlgebra - The algebra for folding over the graph
  *
- * Type: D × List<R> × G × I → R
+ * Type: D × List<R> × G × I × P → R
  * where D is the node data (OntologyNode),
  * R is the result type (generic, typically StructuredPrompt),
- * G is the dependency graph, and I is the node index
+ * G is the dependency graph, I is the node index,
+ * and P is the predecessors map (reverse adjacency for O(1) parent lookup)
  *
  * @param nodeData - The data of the current node being processed
  * @param childrenResults - Ordered list of results from the node's dependencies (children)
  * @param graph - The full dependency graph for querying direct children/parents (Issue 2 fix)
  * @param nodeIndex - The current node's index in the graph
+ * @param predecessors - Reverse adjacency map: node → array of parent indices (Issue 5 fix: O(1) lookup)
  * @returns The result for the current node
  */
 export type GraphAlgebra<R> = (
   nodeData: OntologyNode,
   childrenResults: ReadonlyArray<R>,
-  graph: import("effect").Graph.Graph<NodeId, unknown, "directed">,
-  nodeIndex: import("effect").Graph.NodeIndex
+  graph: Graph.Graph<NodeId, unknown, "directed">,
+  nodeIndex: Graph.NodeIndex,
+  predecessors: HashMap.HashMap<number, number[]>
 ) => R

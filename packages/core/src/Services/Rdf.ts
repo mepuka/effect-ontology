@@ -18,9 +18,11 @@
  * @since 1.0.0
  */
 
-import { Effect, Layer } from "effect"
+import { Effect, HashMap, Layer, Option } from "effect"
 import * as N3 from "n3"
 import { RdfError } from "../Extraction/Events.js"
+import type { OntologyContext } from "../Graph/Types.js"
+import { isClassNode } from "../Graph/Types.js"
 
 /**
  * Re-exported N3 types for type safety
@@ -55,6 +57,64 @@ export interface KnowledgeGraphEntity {
  */
 export interface KnowledgeGraph {
   readonly entities: ReadonlyArray<KnowledgeGraphEntity>
+}
+
+/**
+ * Helper: Infer RDF datatype from PropertyConstraint ranges
+ *
+ * Maps XSD datatypes to N3.NamedNode for typed literal creation.
+ * Falls back to xsd:string if range is unknown or ambiguous.
+ *
+ * @param propertyIri - The property IRI to look up
+ * @param ontology - Optional ontology context with property definitions
+ * @returns NamedNode for the XSD datatype, or undefined for default xsd:string
+ *
+ * @since 1.0.0
+ * @category helpers
+ */
+const inferDatatype = (
+  propertyIri: string,
+  ontology?: OntologyContext
+): N3.NamedNode | undefined => {
+  if (!ontology) return undefined
+
+  // Find property constraint in ontology
+  let ranges: ReadonlyArray<string> = []
+
+  // Check universal properties first
+  const universalProp = ontology.universalProperties.find(
+    (p) => p.propertyIri === propertyIri
+  )
+  if (universalProp) {
+    ranges = universalProp.ranges
+  } else {
+    // Check class properties
+    for (const node of HashMap.values(ontology.nodes)) {
+      if (isClassNode(node)) {
+        const prop = node.properties.find((p) => p.propertyIri === propertyIri)
+        if (prop) {
+          ranges = prop.ranges
+          break
+        }
+      }
+    }
+  }
+
+  // If single unambiguous XSD range, use it
+  if (ranges.length === 1) {
+    const range = ranges[0]
+
+    // Map common XSD types
+    const xsdBase = "http://www.w3.org/2001/XMLSchema#"
+    if (range.startsWith("xsd:")) {
+      return N3.DataFactory.namedNode(range.replace("xsd:", xsdBase))
+    } else if (range.startsWith(xsdBase)) {
+      return N3.DataFactory.namedNode(range)
+    }
+  }
+
+  // Default: no explicit datatype (defaults to xsd:string)
+  return undefined
 }
 
 /**
@@ -97,7 +157,10 @@ export class RdfService extends Effect.Service<RdfService>()("RdfService", {
      * - Type triple: `<entity> rdf:type <type>`
      * - Property triples: `<entity> <predicate> <object>`
      *
+     * Now supports datatype inference from ontology property ranges.
+     *
      * @param graph - Knowledge graph from makeKnowledgeGraphSchema
+     * @param ontology - Optional ontology context for datatype inference
      * @returns Effect yielding N3.Store or RdfError
      *
      * @since 1.0.0
@@ -110,16 +173,16 @@ export class RdfService extends Effect.Service<RdfService>()("RdfService", {
      *     "@type": "foaf:Person",
      *     properties: [
      *       { predicate: "foaf:name", object: "Alice" },
-     *       { predicate: "foaf:knows", object: { "@id": "_:bob" } }
+     *       { predicate: "foaf:age", object: "30" }  // Will be typed as xsd:integer
      *     ]
      *   }]
      * }
      *
-     * const store = yield* rdf.jsonToStore(graph)
+     * const store = yield* rdf.jsonToStore(graph, ontology)
      * console.log(`Created ${store.size} triples`)
      * ```
      */
-    jsonToStore: (graph: KnowledgeGraph) =>
+    jsonToStore: (graph: KnowledgeGraph, ontology?: OntologyContext) =>
       Effect.sync(() => {
         const store = new N3.Store()
         const { blankNode, literal, namedNode, quad } = N3.DataFactory
@@ -141,13 +204,19 @@ export class RdfService extends Effect.Service<RdfService>()("RdfService", {
             )
           )
 
-          // Add property triples
+          // Add property triples with datatype inference
           for (const prop of entity.properties) {
             const predicate = namedNode(prop.predicate)
 
-            // Object can be literal or reference
+            // Object can be literal (with datatype) or reference
             const object = typeof prop.object === "string"
-              ? literal(prop.object)
+              ? (() => {
+                  // Infer datatype from ontology
+                  const datatype = inferDatatype(prop.predicate, ontology)
+                  return datatype
+                    ? literal(prop.object, datatype)
+                    : literal(prop.object) // Default xsd:string
+                })()
               : createSubject(prop.object["@id"])
 
             store.addQuad(quad(subject, predicate, object))
@@ -290,7 +359,7 @@ export class RdfService extends Effect.Service<RdfService>()("RdfService", {
    * ```
    */
   static readonly Default = Layer.succeed(RdfService, {
-    jsonToStore: (graph) =>
+    jsonToStore: (graph, ontology?) =>
       Effect.sync(() => {
         const store = new N3.Store()
         const { blankNode, literal, namedNode, quad } = N3.DataFactory
@@ -312,13 +381,19 @@ export class RdfService extends Effect.Service<RdfService>()("RdfService", {
             )
           )
 
-          // Add property triples
+          // Add property triples with datatype inference
           for (const prop of entity.properties) {
             const predicate = namedNode(prop.predicate)
 
-            // Object can be literal or reference
+            // Object can be literal (with datatype) or reference
             const object = typeof prop.object === "string"
-              ? literal(prop.object)
+              ? (() => {
+                  // Infer datatype from ontology
+                  const datatype = inferDatatype(prop.predicate, ontology)
+                  return datatype
+                    ? literal(prop.object, datatype)
+                    : literal(prop.object) // Default xsd:string
+                })()
               : createSubject(prop.object["@id"])
 
             store.addQuad(quad(subject, predicate, object))

@@ -8,7 +8,7 @@
  */
 
 import { Doc } from "@effect/printer"
-import { Graph } from "effect"
+import { Graph, HashMap, Option } from "effect"
 import type { PropertyConstraint } from "../Graph/Constraint.js"
 import { isClassNode, isPropertyNode } from "../Graph/Types.js"
 import { KnowledgeUnit } from "./Ast.js"
@@ -57,7 +57,8 @@ export const defaultPromptAlgebra: PromptAlgebra = (
   nodeData,
   childrenResults,
   _graph,
-  _nodeIndex
+  _nodeIndex,
+  _predecessors
 ): StructuredPrompt => {
   // Handle ClassNode
   if (isClassNode(nodeData)) {
@@ -176,21 +177,31 @@ export const knowledgeIndexAlgebra: GraphAlgebra<KnowledgeIndexType> = (
   nodeData,
   childrenResults,
   graph,
-  nodeIndex
+  nodeIndex,
+  predecessors
 ): KnowledgeIndexType => {
   // Handle ClassNode
   if (isClassNode(nodeData)) {
-    // FIX Issue 2: Query direct children from graph, not from recursive results
+    // FIX Issue 5: Use precomputed predecessors for O(1) child lookup
     // Find all nodes that have an edge pointing to this node (direct children)
-    const childIris: string[] = []
-    for (const [idx, data] of graph) {
-      const neighbors = Graph.neighbors(graph, idx)
-      if (Array.from(neighbors).includes(nodeIndex)) {
-        childIris.push(data)
-      }
-    }
+    const childIndices = HashMap.get(predecessors, nodeIndex).pipe(
+      Option.getOrElse(() => [] as number[])
+    )
+    const childIris = childIndices.flatMap((idx: number) =>
+      Graph.getNode(graph, idx).pipe(
+        Option.map((data) => data as string),
+        Option.toArray
+      )
+    )
 
-    // Note: Parents can be queried similarly by looking at neighbors of this node
+    // FIX Issue 5: Use Effect Graph's neighbors for O(deg(v)) parent lookup
+    const parentIndices = Graph.neighbors(graph, nodeIndex)
+    const parentIris = Array.from(parentIndices).flatMap((idx: number) =>
+      Graph.getNode(graph, idx).pipe(
+        Option.map((data) => data as string),
+        Option.toArray
+      )
+    )
 
     // Create definition for this class
     const definition = [
@@ -207,7 +218,7 @@ export const knowledgeIndexAlgebra: GraphAlgebra<KnowledgeIndexType> = (
       properties: nodeData.properties,
       inheritedProperties: [], // Will be computed by InheritanceService
       children: childIris,
-      parents: [] // Will be populated when needed (reverse lookup from graph)
+      parents: parentIris // FIX Issue 5: Now populated using forward adjacency
     })
 
     // Create index with this unit
