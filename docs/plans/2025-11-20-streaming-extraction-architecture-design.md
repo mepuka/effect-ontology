@@ -1,20 +1,20 @@
 # Streaming Knowledge Extraction Architecture Design
 
 **Date:** 2025-11-20
-**Status:** Validated through literature review and architectural exploration
-**Mathematical Rigor:** Practical formalism with proven algebraic foundations
+**Status:** Refined & Validated
+**Mathematical Rigor:** High (Monoidal State, Catamorphisms, Pull-based Streams)
 
 ## Executive Summary
 
 This document presents a **research-validated, algebraically rigorous architecture** for streaming ontology-driven knowledge extraction. The design combines:
 
-1. **Catamorphic prompt construction** - Provably compositional ontology folding
-2. **Monoidal cache algebra** - Stateful prompt enrichment with mathematical guarantees
-3. **Effect-based streaming** - Pull-based backpressure with resource safety
-4. **Multi-purpose NLP service** - Wink-nlp wrapped as Effect service for chunking, BM25, and inline operations
-5. **Entity resolution** - Research-backed deduplication preventing 30-40% node duplication
+1.  **Catamorphic Prompt Construction** - Compositional ontology folding for prompt generation.
+2.  **Monoidal State Algebra** - `SubscriptionRef`-based shared state for accumulating discovered entities across parallel streams.
+3.  **Effect-based Streaming** - `Stream` topology with pull-based backpressure, bounded concurrency, and resource safety.
+4.  **Multi-purpose NLP Service** - `wink-nlp` wrapped as a pure Effect service for semantic chunking and tokenization.
+5.  **Entity Resolution** - Label-based deduplication strategy preventing 30-40% node duplication.
 
-The architecture is **theoretically sound** (validated against category theory, recursion schemes, and FP literature) and **practically aligned** with 2024-2025 state-of-art research in LLM-based knowledge graph construction.
+The architecture is **Effect-native**, leveraging `Layer` for dependency injection, `Stream` for processing, and `Ref` for state management, ensuring testability and composability.
 
 ## Background
 
@@ -23,8 +23,8 @@ The architecture is **theoretically sound** (validated against category theory, 
 The project implements:
 - ✅ Ontology graph representation with OWL/RDFS support
 - ✅ Catamorphic prompt construction via `solveToKnowledgeIndex`
-- ✅ Monoid-based knowledge aggregation (`KnowledgeIndex` with HashMap union)
-- ✅ LLM provider abstraction (data-driven, no Effect Config)
+- ✅ Monoid-based knowledge aggregation (`KnowledgeIndex`)
+- ✅ LLM provider abstraction
 - ✅ SHACL validation service
 
 ### Gaps Addressed by This Design
@@ -32,815 +32,252 @@ The project implements:
 - ❌ **No streaming pipeline** - Currently single-shot extraction
 - ❌ **No chunking strategy** - Cannot handle long texts
 - ❌ **No entity resolution** - Duplicate entities across extractions
-- ❌ **No prompt cache** - No cross-chunk entity reuse
-- ❌ **No NLP service** - Missing semantic chunking, BM25, keywords
+- ❌ **No dynamic context** - Later chunks don't benefit from earlier discoveries
+- ❌ **No NLP service** - Missing semantic chunking capabilities
 
 ## Research Validation
 
 ### Literature Review Findings
 
-A comprehensive research review (see `docs/literature-review-streaming-extraction.md`) validated:
+1.  **Algebraic Foundation (10/10 confidence)**
+    - Catamorphisms over DAGs are the correct abstraction (Milewski 2020).
+    - Monoidal accumulation enables parallel aggregation with correctness guarantees.
 
-1. **Algebraic Foundation (10/10 confidence)**
-   - Catamorphisms over DAGs are the correct abstraction (Milewski 2020, Recursion Schemes)
-   - Monoidal catamorphisms enable parallel graph traversal with correctness guarantees
-   - HashMap-based monoid satisfies associativity, identity, approximate commutativity
+2.  **Stream Processing (9/10 confidence)**
+    - `Effect.Stream` provides robust pull-based backpressure.
+    - `Stream.mergeAll` allows controlled parallelism.
+    - `SubscriptionRef` is the ideal primitive for "live" shared state in concurrent systems.
 
-2. **Stream Processing (9/10 confidence)**
-   - Effect.Stream pull-based backpressure is production-ready
-   - `Stream.mergeAll({ concurrency: 3 })` provides automatic flow control
-   - Fiber-based concurrency with resource-safe interruption
-
-3. **LLM Knowledge Extraction (Production-ready)**
-   - 300-320% ROI reported in 2024-2025 deployments (healthcare, finance)
-   - JSON Schema + SHACL validation is industry standard
-   - **Critical gap:** 45% node duplication without entity resolution (LINK-KG Oct 2024)
-
-4. **NLP Chunking (Research-backed)**
-   - Optimal chunk size: **512 tokens** for entity extraction
-   - Overlap: **100 tokens (20%)** preserves context
-   - Sentence-boundary chunking prevents mid-sentence splits
-
-### Key Research Citations
-
-- **Monoidal Catamorphisms:** Milewski (2020) - Category Theory for Programmers
-- **LINK-KG Entity Resolution:** Oct 2024 - 45% duplication in naive concatenation
-- **Optimal Chunking:** Chen et al. (2024) - 512 tokens optimal for factoid extraction
-- **Effect Streaming Patterns:** Effect-TS docs, production examples (platform/test/HttpClient.test.ts)
+3.  **NLP Chunking (Research-backed)**
+    - Optimal chunk size: **512 tokens** (Chen et al., 2024).
+    - Overlap: **100 tokens (20%)** preserves context.
 
 ## Architectural Design
 
 ### Core Principles
 
-1. **Algebraic Composition** - All operations are composable monoid/functor operations
-2. **Stream-First** - Parallelism emerges naturally from concurrent Effects in streams
-3. **Resource Safety** - Effect's scoped resources and fiber interruption guarantee cleanup
-4. **Practical Formalism** - Use algebraic structures for clarity and correctness, not formal proofs
+1.  **Algebraic Composition** - All data structures (KnowledgeIndex, EntityRegistry) are Monoids.
+2.  **Stream-First** - Processing is defined as a transformation of `Stream<Chunk>`.
+3.  **Shared Mutable State** - Controlled via `Ref.Synchronized` or `SubscriptionRef` to allow parallel workers to share discoveries.
+4.  **Resource Safety** - `Scope` manages the lifecycle of all services.
 
 ### System Overview
 
+```mermaid
+graph TD
+    Input[Text Input] --> NLP[NlpService]
+    NLP -->|Stream<Chunk>| Stream
+    
+    subgraph "Streaming Pipeline"
+        Stream -->|Parallel Workers| Worker1
+        Stream -->|Parallel Workers| Worker2
+        Stream -->|Parallel Workers| Worker3
+        
+        subgraph "Worker Context"
+            Worker1 -->|Read/Write| EDS[EntityDiscoveryService]
+            Worker2 -->|Read/Write| EDS
+            Worker3 -->|Read/Write| EDS
+        end
+        
+        Worker1 -->|ExtractionResult| Merge
+        Worker2 -->|ExtractionResult| Merge
+        Worker3 -->|ExtractionResult| Merge
+    end
+    
+    Merge -->|Stream<Graph>| Validation[SHACL Validation]
+    Validation -->|Stream<ValidGraph>| Resolution[Entity Resolution]
+    Resolution --> Output[Unified Knowledge Graph]
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│ Input: (Text, Ontology, LlmProviderParams)                         │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ Phase 1: Catamorphic Prompt Construction                           │
-│ K = cata(knowledgeIndexAlgebra, Graph(Ontology))                   │
-│ Prompt = render(K)                                                  │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ Phase 2: NLP Chunking (NlpService)                                 │
-│ Chunks = sentencize(text) → semanticChunk(512 tokens, 100 overlap) │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ Phase 3: Streaming Extraction with Cache Algebra                   │
-│ Stream<Chunk> → scanEffect(∅_cache, (cache, chunk) => {            │
-│   prompt' = render(K ⊕ cache)                                       │
-│   result = extractKnowledgeGraph(chunk, ontology, prompt', schema) │
-│   cache' = cache ⊕ indexEntities(result)                            │
-│   return [result, cache']                                           │
-│ }) → Stream<JSON>                                                   │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ Phase 4: JSON → RDF Decomposition                                  │
-│ Stream<JSON> → mapEffect(jsonToRdf) → Stream<RDF>                  │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ Phase 5: SHACL Validation                                           │
-│ Stream<RDF> → mapEffect(validate) → Stream<ValidatedRDF>           │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ Phase 6: Entity Resolution                                          │
-│ graphs = runCollect(stream)                                         │
-│ merged = mergeGraphsWithResolution(graphs, "label-match", 0.9)     │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ Output: Unified RDF Graph                                           │
-└─────────────────────────────────────────────────────────────────────┘
-```
+
+### Data Flow
+
+1.  **Input:** Raw text and Ontology.
+2.  **Preparation:**
+    - `NlpService` chunks text into `Stream<Chunk>`.
+    - `EntityDiscoveryService` initialized with empty state.
+3.  **Extraction (Parallel):**
+    - Workers pull chunks.
+    - **Read Phase:** Worker reads current `EntityDiscoveryService` state to enrich prompt (inject previously found entities).
+    - **Execute Phase:** LLM extracts knowledge.
+    - **Write Phase:** Worker pushes new entities to `EntityDiscoveryService`.
+4.  **Aggregation:**
+    - Results are merged into a stream of RDF graphs.
+5.  **Post-Processing:**
+    - Validation and final Entity Resolution (merging duplicates based on global context).
 
 ## Component Designs
 
 ### 1. NlpService - Effect Service Wrapper
 
-**Purpose:** Wrap wink-nlp as an Effect service for pre-processing and inline pipeline operations.
+**Purpose:** Pure functional wrapper around `wink-nlp` for text processing.
 
 **Interface:**
 ```typescript
 export class NlpService extends Effect.Service<NlpService>()("NlpService", {
-  effect: Effect.sync(() => {
-    const nlp = winkNLP(model)
+  effect: Effect.gen(function* () {
+    const nlp = yield* Effect.sync(() => winkNLP(model))
+    
     return {
-      sentencize: (text: string) => Effect<string[]>
-      tokenize: (text: string) => Effect<string[]>
-      chunkText: (text: string, config: ChunkConfig) => Effect<Chunk[]>
-      createBM25Index: (documents: string[]) => Effect<BM25Index>
-      queryBM25: (index: BM25Index, query: string, topK: number) => Effect<Result[]>
-      extractKeywords: (text: string, topN: number) => Effect<string[]>
+      sentencize: (text: string) => Effect.try(() => nlp.readDoc(text).sentences().out()),
+      
+      streamChunks: (text: string, config: ChunkConfig) => 
+        Stream.fromIterable(nlp.readDoc(text).sentences().out()).pipe(
+          // Implementation of sliding window chunking
+          // Returns Stream<TextChunk>
+        ),
+        
+      extractKeywords: (text: string) => Effect.promise(/* ... */)
     }
   })
-}) {
-  static Test = Layer.succeed(NlpService, {
-    // Mock implementations for testing
-  })
-}
+})
 ```
 
-**Key Features:**
-- **Pure functional operations** - All methods are Effect-wrapped for composability
-- **Multi-purpose utility** - Pre-processing (BM25, chunking) + inline (keywords, query)
-- **Test layer** - Simple mocks for unit testing
+### 2. EntityDiscoveryService - Shared State Manager
 
-**Chunking Configuration (Research-backed):**
-```typescript
-interface ChunkConfig {
-  maxTokens: 512         // Optimal for entity extraction (Chen et al. 2024)
-  overlapTokens: 100     // 20% overlap preserves context
-  sentenceBoundary: true // Never split mid-sentence
-  windowSize: 5          // 5 sentences per chunk (semantic unit)
-  overlapSentences: 2    // 2 sentence overlap
-}
-```
+**Purpose:** Manage the accumulation of discovered entities to provide context for subsequent (or concurrent) extractions.
 
-**Implementation Location:** `packages/core/src/Services/Nlp.ts`
-
-### 2. EntityCacheService - Effect Service for Prompt Cache
-
-**Purpose:** Enable cross-chunk entity reuse through Effect.Cache-backed service.
+**Why not `Effect.Cache`?** `Effect.Cache` is for read-through memoization. Here we need a **shared mutable accumulator** (a State Monad lifted into concurrency). `SubscriptionRef` or `Ref.Synchronized` is the correct primitive.
 
 **Service Definition:**
 
 ```typescript
-// packages/core/src/Services/EntityCache.ts
-import { Effect, Context, Layer, Cache, Data, Duration } from "effect"
+// The Monoid State
+interface EntityRegistry {
+  readonly entities: HashMap.HashMap<string, EntityRef> // Key: Normalized Label
+}
 
-export class EntityRef extends Data.Class<{
-  iri: string
-  label: string
-  type: string
-}> {}
-
-export class EntityCacheService extends Effect.Service<EntityCacheService>()(
-  "EntityCacheService",
+export class EntityDiscoveryService extends Effect.Service<EntityDiscoveryService>()(
+  "EntityDiscoveryService",
   {
     effect: Effect.gen(function* () {
-      // Use Effect.Cache for automatic memoization
-      const cache = yield* Cache.make({
-        capacity: 10000,  // Max entities to cache
-        timeToLive: Duration.hours(1),  // Optional expiration
-        lookup: (label: string) =>
-          Effect.fail(new Error(`Entity not found: ${label}`))
+      // Shared mutable state
+      const state = yield* Ref.Synchronized.make<EntityRegistry>({ 
+        entities: HashMap.empty() 
       })
 
       return {
-        // Get entity by normalized label
-        get: (label: string) =>
-          Cache.get(cache, normalize(label)),
+        // Read current state for prompt injection
+        getSnapshot: () => state.get,
 
-        // Add entity to cache
-        add: (entity: EntityRef) =>
-          Effect.gen(function* () {
-            const normalized = normalize(entity.label)
-            yield* Cache.set(cache, normalized, entity)
-          }),
-
-        // Add multiple entities (from extraction result)
-        addAll: (entities: EntityRef[]) =>
-          Effect.all(
-            entities.map((e) => this.add(e)),
-            { concurrency: 10 }  // Bounded concurrency for cache writes
-          ),
-
-        // Get all cached entities (for prompt rendering)
-        getAll: () =>
-          Effect.sync(() => Cache.values(cache)),
-
-        // Format cache for prompt injection
-        toPromptFragment: () =>
-          Effect.gen(function* () {
-            const entities = yield* this.getAll()
-            return entities
-              .map((e) => `- ${e.label}: ${e.iri} (${e.type})`)
-              .join("\n")
-          })
-      }
-    }),
-    dependencies: []
-  }
-) {
-  /**
-   * Test layer with in-memory Map
-   */
-  static Test = Layer.effect(
-    EntityCacheService,
-    Effect.gen(function* () {
-      const map = new Map<string, EntityRef>()
-      return {
-        get: (label: string) =>
-          Effect.fromNullable(map.get(normalize(label))).pipe(
-            Effect.orElseFail(() => new Error(`Not found: ${label}`))
-          ),
-        add: (entity: EntityRef) =>
-          Effect.sync(() => { map.set(normalize(entity.label), entity) }),
-        addAll: (entities: EntityRef[]) =>
-          Effect.sync(() => entities.forEach(e => map.set(normalize(e.label), e))),
-        getAll: () => Effect.succeed(Array.from(map.values())),
-        toPromptFragment: () =>
-          Effect.succeed(
-            Array.from(map.values())
-              .map((e) => `- ${e.label}: ${e.iri} (${e.type})`)
-              .join("\n")
+        // Write new discoveries (Atomic Update)
+        register: (newEntities: EntityRef[]) => 
+          state.update((current) => ({
+            entities: newEntities.reduce(
+              (map, entity) => HashMap.set(map, normalize(entity.label), entity),
+              current.entities
+            )
+          })),
+          
+        // Generate prompt context from current state
+        toPromptContext: () => 
+          state.get.pipe(
+            Effect.map(registry => formatRegistryForPrompt(registry))
           )
       }
     })
-  )
-}
-
-// Normalization utility
-const normalize = (label: string): string =>
-  label.toLowerCase().trim().replace(/[^\w\s]/g, "").replace(/\s+/g, " ")
-```
-
-**Algebraic Properties (Maintained):**
-
-The service wraps a cache that preserves monoidal properties:
-
-1. **Associativity:** Order of `addAll` calls doesn't affect final state
-2. **Identity:** Empty cache = no entities
-3. **Idempotence:** Adding same entity twice = single entry (Map semantics)
-4. **Monotonicity:** Cache only grows (no deletion in extraction pipeline)
-
-**Stateful Stream Pattern (Updated):**
-
-```typescript
-Stream.fromIterable(chunks).pipe(
-  Stream.mapEffect((chunk) =>
-    Effect.gen(function* () {
-      const entityCache = yield* EntityCacheService
-      const knowledgeIndex = yield* /* ... */
-
-      // Compose: K ⊕ Cache (via service)
-      const cacheFragment = yield* entityCache.toPromptFragment()
-      const promptWithCache = renderWithCache(knowledgeIndex, cacheFragment)
-
-      // Extract
-      const result = yield* extractKnowledgeGraph(
-        chunk,
-        ontology,
-        promptWithCache,
-        schema
-      )
-
-      // Update cache (side effect in service)
-      yield* entityCache.addAll(indexEntitiesByLabel(result.entities))
-
-      return result
-    })
-  ),
-  Stream.mergeAll({ concurrency: 3 })  // Parallel extraction with shared cache!
+  }
 )
 ```
 
-**Key Benefit:** Service-based cache allows **parallel extraction with shared state**. All concurrent fibers access the same `EntityCacheService`, automatically synchronizing entity knowledge across chunks.
+**Concurrency Trade-off:**
+- **Sequential (`Stream.mapEffect`):** Chunk N sees *all* entities from 0..N-1. Maximum context, lower throughput.
+- **Parallel (`Stream.mergeAll`):** Chunk N sees entities from *committed* chunks. If Chunk N and N+1 run in parallel, N+1 might not see N's entities.
+- **Decision:** Use **Parallel** (concurrency ~3). The speedup is worth the slight loss of immediate context. The `EntityResolution` phase at the end handles the final consistency.
 
-**Implementation Location:** `packages/core/src/Services/EntityCache.ts`
+### 3. Streaming Extraction Pipeline
 
-### 3. Prompt Fragment Algebra (Extension)
+**Purpose:** Orchestrate the flow.
 
-**Purpose:** Modular prompt composition with algebraic guarantees.
-
-**Structure:**
-```typescript
-type PromptFragment =
-  | { tag: "OntologyContext", content: KnowledgeIndex }
-  | { tag: "EntityCache", content: EntityCache }
-  | { tag: "Examples", content: Example[] }
-  | { tag: "Instructions", content: string }
-
-// Prompts are free monoids over fragments
-type Prompt = List<PromptFragment>
-
-// Composition
-composePrompt: (fragments: PromptFragment[]) → Prompt
-
-// Rendering is a fold
-render: Prompt → string
-```
-
-**Benefits:**
-- Modular construction - compose fragments independently
-- Cache injection - insert cache at any position
-- A/B testing - swap fragments while preserving others
-- Optimization - remove/reorder based on metrics
-
-**Implementation Location:** `packages/core/src/Prompt/Fragments.ts` (future)
-
-### 4. Streaming Extraction Pipeline
-
-**Purpose:** Orchestrate the full extraction flow with Effect.Stream.
-
-**Main Pipeline:**
 ```typescript
 export const streamingExtractionPipeline = (
   text: string,
   ontology: Ontology,
-  params: LlmProviderParams,
-  config: PipelineConfig
+  params: LlmProviderParams
 ) =>
   Effect.gen(function* () {
     const nlp = yield* NlpService
-    const entityCache = yield* EntityCacheService  // Yield cache service!
-    const providerLayer = makeLlmProviderLayer(params)
-
-    // 1. Catamorphic prompt construction
-    const knowledgeIndex = yield* solveToKnowledgeIndex(ontology)
-    const basePrompt = renderPrompt(knowledgeIndex)
-
-    // 2. Chunk text
-    const chunks = yield* nlp.chunkText(text, config.chunkConfig)
-
-    // 3. Stream with EntityCacheService
-    const extractionStream = Stream.fromIterable(chunks).pipe(
-      Stream.mapEffect((chunk) =>
+    const discovery = yield* EntityDiscoveryService
+    
+    // 1. Chunking
+    const chunks = nlp.streamChunks(text, { size: 512, overlap: 100 })
+    
+    // 2. Extraction Stream
+    const extractionStream = chunks.pipe(
+      Stream.mapEffect((chunk) => 
         Effect.gen(function* () {
-          // Get current cache state for prompt
-          const cacheFragment = yield* entityCache.toPromptFragment()
-          const promptWithCache = renderWithCache(
-            knowledgeIndex,
-            cacheFragment,
-            basePrompt
-          )
-
-          // Extract
-          const result = yield* extractKnowledgeGraph(
-            chunk.text,
-            ontology,
-            promptWithCache,
-            schema
-          ).pipe(Effect.provide(providerLayer))
-
-          // Update cache (shared across all fibers!)
-          yield* entityCache.addAll(indexEntitiesByLabel(result.entities))
-
+          // A. Build Prompt
+          const context = yield* discovery.toPromptContext()
+          const prompt = buildPrompt(ontology, chunk, context)
+          
+          // B. Call LLM
+          const result = yield* extract(prompt, params)
+          
+          // C. Update Shared State (Fire and Forget or Await?)
+          // Await ensures state is updated before this fiber completes, 
+          // increasing chance for other fibers to see it.
+          yield* discovery.register(result.entities)
+          
           return result
         })
       ),
-      Stream.mergeAll({ concurrency: 3 }),  // Parallel with shared cache
-      Stream.mapEffect(jsonToRdf),
-      Stream.mapEffect(validateRdf),
-      Stream.filter(({ valid }) => valid),
-      Stream.map(({ rdf }) => rdf)
+      // 3. Parallelism
+      Stream.mergeAll({ concurrency: 3 }),
+      
+      // 4. Validation & Transformation
+      Stream.mapEffect(validateAndTransform)
     )
-
-    // 4. Collect and deduplicate
-    const graphs = yield* Stream.runCollect(extractionStream)
-    return mergeGraphsWithResolution(Chunk.toArray(graphs), {
-      strategy: "label-match",
-      threshold: 0.9
-    })
+    
+    // 5. Materialize and Resolve
+    const allGraphs = yield* Stream.runCollect(extractionStream)
+    return resolveEntities(allGraphs)
   })
 ```
 
-**Parallel Variant (Alternative):**
-```typescript
-// For scenarios without cache requirement
-Stream.fromIterable(chunks).pipe(
-  Stream.mapEffect((chunk) => extractKnowledgeGraph(...)),
-  Stream.mergeAll({ concurrency: 3 }),  // Automatic backpressure!
-  Stream.mapEffect(jsonToRdf),
-  Stream.mapEffect(validateRdf)
-)
-```
+### 4. Entity Resolution (Post-Processing)
 
-**Error Handling:**
-```typescript
-Stream.mapEffect((chunk) =>
-  extractKnowledgeGraph(...).pipe(Effect.either)  // Capture errors
-).pipe(
-  Stream.filterMap((either) =>
-    Either.match(either, {
-      onLeft: (error) => {
-        console.error("Chunk failed:", error)
-        return Option.none()
-      },
-      onRight: (result) => Option.some(result)
-    })
-  )
-)
-```
-
-**Implementation Location:** `packages/core/src/Services/ExtractionPipeline.ts`
-
-### 5. Entity Resolution
-
-**Purpose:** Prevent 30-40% node duplication through post-extraction merging.
-
-**Research Context:**
-- LINK-KG (Oct 2024): 45% duplication with naive concatenation
-- Label-based matching: 30-40% reduction in duplicates
-- High threshold (0.9): Minimize false positives
+**Purpose:** Merge the stream of graphs into a single coherent graph.
 
 **Algorithm:**
-```typescript
-const mergeGraphsWithResolution = (
-  graphs: RdfGraph[],
-  options: { strategy: "label-match", threshold: number }
-) => {
-  const entityIndex = new Map<string, IRI>()
-  const mergedGraph: Triple[] = []
+1.  **Flatten** all triples.
+2.  **Group** entities by normalized label (and potentially type).
+3.  **Canonicalize** IRIs: If "John Doe" appears as `_:b1` in Chunk A and `_:b2` in Chunk B, merge them to a single IRI (minted or reused).
+4.  **Output** the final graph.
 
-  for (const graph of graphs) {
-    for (const triple of graph) {
-      const label = getLabelOf(triple.subject)
-      const normalized = normalize(label)  // Lowercase, trim, etc.
-
-      if (entityIndex.has(normalized)) {
-        // Reuse existing IRI
-        triple.subject = entityIndex.get(normalized)
-      } else {
-        // First occurrence
-        entityIndex.set(normalized, triple.subject)
-      }
-
-      mergedGraph.push(triple)
-    }
-  }
-
-  return mergedGraph
-}
-```
-
-**Normalization Strategy:**
-```typescript
-const normalize = (label: string): string =>
-  label
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s]/g, "")  // Remove punctuation
-    .replace(/\s+/g, " ")     // Normalize whitespace
-```
-
-**Future Enhancements:**
-- **Phase 2:** LINK-KG prompt cache approach (inject known IRIs in prompts)
-- **Phase 3:** Embedding-based similarity with type-aware matching
-- **Phase 4:** Property overlap scoring for higher confidence
-
-**Implementation Location:** `packages/core/src/Services/EntityResolution.ts`
-
-## Configuration
-
-### Pipeline Configuration
+## Configuration & Tuning
 
 ```typescript
-export interface PipelineConfig {
-  // Chunking
-  chunkConfig: ChunkConfig
-
-  // Concurrency (research-backed: 3 prevents rate limiting)
-  maxConcurrentExtractions: number
-
-  // Cache
-  enablePromptCache: boolean
-  cacheStrategy: "label-index" | "embedding-similarity"
-
-  // Validation
-  strictValidation: boolean  // Fail on invalid chunks vs skip
-
-  // Entity resolution
-  deduplicationStrategy: "label-match" | "embedding" | "link-kg"
-  deduplicationThreshold: number  // 0.9 for high confidence
-}
-```
-
-### Recommended Defaults (MVP)
-
-```typescript
-const defaultConfig: PipelineConfig = {
-  chunkConfig: {
-    maxTokens: 512,
-    overlapTokens: 100,
-    sentenceBoundary: true,
-    windowSize: 5,
-    overlapSentences: 2
-  },
-  maxConcurrentExtractions: 3,
-  enablePromptCache: true,
-  cacheStrategy: "label-index",
-  strictValidation: false,
-  deduplicationStrategy: "label-match",
-  deduplicationThreshold: 0.9
+interface PipelineConfig {
+  concurrency: number;       // Default: 3
+  chunkSize: number;        // Default: 512 tokens
+  overlap: number;          // Default: 100 tokens
+  strictMode: boolean;      // If true, fail on any chunk error
 }
 ```
 
 ## Implementation Phases
 
 ### Phase 1: MVP (Immediate)
+1.  **NlpService:** Refine to support streaming chunks (already partially implemented).
+2.  **EntityDiscoveryService:** Implement using `Ref.Synchronized`.
+3.  **Pipeline:** Implement `streamingExtractionPipeline` with `Stream.mergeAll`.
+4.  **Resolution:** Implement basic label-based merging.
 
-**Goal:** Research-validated streaming pipeline with entity resolution
+### Phase 2: Enhanced Robustness
+1.  **Error Handling:** Implement `Stream.retry` for LLM failures and `Stream.catchAll` for partial results.
+2.  **Observability:** Add logging and metrics for chunk processing times and entity counts.
 
-**Tasks:**
-1. ✅ Validate algebraic foundation (completed via literature review)
-2. Implement `NlpService` with wink-nlp integration
-3. Implement semantic chunking with research-backed config
-4. Implement `EntityCache` monoid with property tests
-5. Implement `streamingExtractionPipeline` with `scanEffect`
-6. Implement label-based entity resolution
-7. Add integration tests with sample texts
-
-**Success Criteria:**
-- Extract from 1000+ word documents with chunking
-- Prevent 30-40% entity duplication
-- Pass property tests for monoid laws
-- All tests passing with `NlpService.Test` layer
-
-### Phase 2: Enhanced Streaming (Next Iteration)
-
-**Goal:** Production-ready error handling and observability
-
-**Tasks:**
-1. Implement `Stream.either` for partial failure handling
-2. Add structured logging for chunk processing
-3. Add metrics (chunks processed, entities extracted, duplicates merged)
-4. Implement resource-safe streams with `acquireRelease`
-5. Add retry logic for transient LLM failures
-6. Optimize concurrency based on provider rate limits
-
-### Phase 3: Advanced Features (Future)
-
-**Goal:** State-of-art extraction quality
-
-**Tasks:**
-1. Upgrade to LINK-KG prompt cache approach
-2. Implement semantic chunking with embeddings (10-15% quality gain)
-3. Implement BM25 corpus indexing for entity merging
-4. Add contextual chunk descriptions (Anthropic 2024 approach)
-5. Implement prompt fragment algebra for modular composition
-6. Add A/B testing framework for prompt optimization
-
-### Phase 4: UI Integration (Extraction Studio)
-
-**Goal:** End-to-end extraction workflow in frontend
-
-**Tasks:**
-1. Implement `ExtractionPanel` component
-2. Add real-time progress tracking via stream events
-3. Implement `ResultsViewer` with JSON/Turtle/Validation tabs
-4. Add chunk visualization with entity highlighting
-5. Implement cache inspection UI
-6. Add export functionality (JSON-LD, Turtle, CSV)
-
-### Phase 5: Production Optimization (Future)
-
-**Goal:** Scale to large corpora
-
-**Tasks:**
-1. Implement distributed extraction (multiple workers)
-2. Add caching layer (Redis) for prompt cache
-3. Implement streaming to disk for large outputs
-4. Add checkpoint/resume for long-running extractions
-5. Optimize BM25 indexing for corpus-level analysis
-6. Add batch processing UI
+### Phase 3: Advanced Features
+1.  **Smart Context:** Use `NlpService` to filter the `EntityRegistry` for relevant entities (e.g., using BM25 or keyword overlap) instead of injecting the entire registry into the prompt.
+2.  **Persistent Cache:** Swap `Ref` for a persistent store (Redis/File) for long-running jobs.
 
 ## Testing Strategy
 
-### Unit Tests
-
-**Monoid Laws (Property-based):**
-```typescript
-import { fc } from "@fast-check/vitest"
-
-describe("EntityCache", () => {
-  it.layer(NlpService.Test)(
-    "satisfies monoid laws",
-    () => Effect.gen(function* () {
-      fc.assert(
-        fc.property(
-          fc.array(entityRefArbitrary),
-          (entities) => {
-            const c1 = EntityCache.fromArray(entities.slice(0, 3))
-            const c2 = EntityCache.fromArray(entities.slice(3, 6))
-            const c3 = EntityCache.fromArray(entities.slice(6))
-
-            // Associativity
-            const left = EntityCache.union(EntityCache.union(c1, c2), c3)
-            const right = EntityCache.union(c1, EntityCache.union(c2, c3))
-            expect(HashMap.size(left)).toBe(HashMap.size(right))
-
-            // Identity
-            const withEmpty = EntityCache.union(c1, EntityCache.empty)
-            expect(HashMap.size(withEmpty)).toBe(HashMap.size(c1))
-          }
-        )
-      )
-    })
-  )
-})
-```
-
-**Chunking Logic:**
-```typescript
-describe("NlpService", () => {
-  it.layer(NlpService.Test)(
-    "chunks text with overlap",
-    () => Effect.gen(function* () {
-      const nlp = yield* NlpService
-      const text = "Sentence 1. Sentence 2. Sentence 3. Sentence 4. Sentence 5."
-      const chunks = yield* nlp.chunkText(text, {
-        maxTokens: 512,
-        overlapTokens: 100,
-        windowSize: 3,
-        overlapSentences: 1
-      })
-
-      expect(chunks.length).toBe(2)
-      expect(chunks[0].sentences).toContain("Sentence 1.")
-      expect(chunks[1].sentences).toContain("Sentence 3.")  // Overlap
-    })
-  )
-})
-```
-
-### Integration Tests
-
-**End-to-End Pipeline:**
-```typescript
-describe("Streaming Extraction Pipeline", () => {
-  it.layer(Layer.merge(NlpService.Test, ShaclService.Test))(
-    "extracts knowledge from chunked text",
-    () => Effect.gen(function* () {
-      const text = "Long article about animals..." // 1000+ words
-      const ontology = loadZooOntology()
-      const params = { provider: "anthropic", ... }
-
-      const result = yield* streamingExtractionPipeline(
-        text,
-        ontology,
-        params,
-        defaultConfig
-      )
-
-      // Verify extraction
-      expect(result.triples.length).toBeGreaterThan(0)
-
-      // Verify deduplication (no label duplicates)
-      const labels = extractLabels(result)
-      const unique = new Set(labels)
-      expect(unique.size).toBe(labels.length)
-    })
-  )
-})
-```
-
-### Performance Tests
-
-**Chunking Performance:**
-```typescript
-describe("Performance", () => {
-  it("chunks large text efficiently", () =>
-    Effect.gen(function* () {
-      const nlp = yield* NlpService
-      const largeText = generateText(10000)  // 10k words
-
-      const start = Date.now()
-      const chunks = yield* nlp.chunkText(largeText, defaultConfig.chunkConfig)
-      const duration = Date.now() - start
-
-      expect(duration).toBeLessThan(1000)  // < 1 second
-      expect(chunks.length).toBeGreaterThan(0)
-    }).pipe(Effect.provide(NlpService.Default))
-  )
-})
-```
-
-## Performance Characteristics
-
-### Research-Backed Settings
-
-| Parameter | Value | Research Basis |
-|-----------|-------|----------------|
-| Chunk size | 512 tokens | Chen et al. (2024) - optimal for factoid extraction |
-| Overlap | 100 tokens (20%) | Standard context preservation |
-| Concurrency | 3 | Prevents rate limiting while maintaining throughput |
-| Deduplication threshold | 0.9 | High confidence, minimal false positives |
-
-### Expected Performance
-
-**Assumptions:**
-- Average chunk extraction: 2 seconds (LLM call)
-- Average text: 2000 words → ~8 chunks
-- Concurrency: 3
-
-**Calculation:**
-- Sequential: 8 chunks × 2s = 16 seconds
-- Parallel (concurrency 3): ⌈8/3⌉ × 2s ≈ 6 seconds
-- **Speedup:** 2.67x
-
-**Entity Resolution:**
-- Label-based matching: O(n) where n = number of entities
-- Expected entities: ~50-100 per 2000 words
-- Resolution time: < 100ms
-
-**Total Pipeline:**
-- Chunking: ~100ms
-- Parallel extraction: ~6 seconds
-- Validation: ~500ms
-- Entity resolution: ~100ms
-- **Total:** ~7 seconds for 2000-word document
-
-### Stream Backpressure
-
-**Pull-based streams provide automatic backpressure:**
-- Consumer controls rate (validation service won't be overwhelmed)
-- Producer (LLM calls) blocks when buffer full
-- No manual flow control needed
-
-## Open Questions & Future Research
-
-### Answered by Literature Review
-
-**Q: Is SHACL streaming validation needed?**
-**A:** No, batch validation is sufficient for MVP. Profile performance before optimizing.
-
-**Q: Should we use paramorphisms instead of catamorphisms?**
-**A:** No, catamorphisms are simpler and sufficient. Only upgrade if you need parent/sibling context during folding.
-
-**Q: How to handle LLM provider switching?**
-**A:** ✅ Already solved by data-driven `LlmProviderParams` architecture.
-
-### Open for Future Exploration
-
-**Q1: Optimal concurrency per provider?**
-- Need empirical testing with rate limit monitoring
-- Consider adaptive concurrency based on response times
-
-**Q2: Semantic chunking vs fixed-size?**
-- Research shows 10-15% quality improvement
-- Requires embeddings (adds complexity)
-- Evaluate cost/benefit for Phase 3
-
-**Q3: BM25 indexing strategy?**
-- How to maintain index across streaming chunks?
-- When to rebuild vs update incrementally?
-- Trade-offs of in-memory vs persisted index
-
-**Q4: Prompt fragment optimization?**
-- Which fragments contribute most to extraction quality?
-- Can we A/B test fragments automatically?
-- How to measure fragment effectiveness?
-
-## References
-
-### Key Papers
-
-1. **Milewski, B. (2020).** *Category Theory for Programmers.* - Monoidal catamorphisms
-2. **Chen et al. (2024).** *Optimal Chunking Strategies for LLM-based Extraction.* - 512 token chunks
-3. **LINK-KG (Oct 2024).** *Cross-Document Entity Resolution for Knowledge Graphs.* - 45% duplication
-4. **Anthropic (2024).** *Contextual Retrieval.* - Chunk description prompting
-
-### Effect-TS Source
-
-- `docs/effect-source/effect/src/Stream.ts` - Stream API
-- `docs/effect-source/platform/test/HttpClient.test.ts` - Test service patterns
-- `docs/effect-source/effect/src/Layer.ts` - Layer composition
-
-### Project Documentation
-
-- `docs/implementation_plan.md` - Original implementation plan
-- `docs/extraction_algebra.md` - Mathematical model
-- `docs/literature-review-streaming-extraction.md` - Comprehensive research review
-
-## Conclusion
-
-This architecture provides a **theoretically rigorous** and **practically validated** foundation for streaming ontology-driven knowledge extraction. The design:
-
-1. ✅ **Validates algebraic model** - Catamorphisms and monoids proven correct
-2. ✅ **Aligns with research** - 2024-2025 state-of-art patterns
-3. ✅ **Solves critical gaps** - Entity resolution prevents 30-40% duplication
-4. ✅ **Enables implementation** - Concrete code patterns with Effect idioms
-5. ✅ **Scales incrementally** - Clear phases from MVP to production
-
-**Next Steps:**
-1. Review and approve this design
-2. Set up git worktree for implementation
-3. Create detailed implementation plan (using `writing-plans` skill)
-4. Execute Phase 1 tasks with TDD approach
-
----
-
-**Approved By:** _____________
-**Date:** _____________
-**Implementation Start:** _____________
+1.  **Unit Tests:** 
+    - Mock `NlpService` to return deterministic chunks.
+    - Mock `LlmProvider` to return known entities.
+    - Verify `EntityDiscoveryService` accumulates state correctly.
+2.  **Property Tests:** 
+    - Verify `EntityRegistry` satisfies Monoid laws (Associativity, Identity).
+3.  **Integration Tests:** 
+    - Run against a known text (e.g., "The quick brown fox...").
+    - Assert that split entities are resolved to single nodes in the final graph.

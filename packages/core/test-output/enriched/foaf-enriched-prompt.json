@@ -1,0 +1,454 @@
+{
+  "system": [
+    {
+      "text": "Class: Agent\nProperties:\n  - personal mailbox: string (optional)\n  - homepage: Document (optional)\n  - depiction: Image (optional)\n  - account: OnlineAccount (optional)\n  - name: string (optional)\n  - age: integer (optional)",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Agent",
+      "propertyIri": null,
+      "fragmentType": "class_definition",
+      "metadata": {
+        "classLabel": "Agent",
+        "classDepth": 0,
+        "propertyLabel": null,
+        "propertyRange": null,
+        "isInherited": false,
+        "tokenCount": 84
+      }
+    },
+    {
+      "text": "Class: Document\nProperties:\n  (no properties)",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Document",
+      "propertyIri": null,
+      "fragmentType": "class_definition",
+      "metadata": {
+        "classLabel": "Document",
+        "classDepth": 0,
+        "propertyLabel": null,
+        "propertyRange": null,
+        "isInherited": false,
+        "tokenCount": 17
+      }
+    },
+    {
+      "text": "Class: Group\nProperties:\n  - member: Agent (optional)",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Group",
+      "propertyIri": null,
+      "fragmentType": "class_definition",
+      "metadata": {
+        "classLabel": "Group",
+        "classDepth": 0,
+        "propertyLabel": null,
+        "propertyRange": null,
+        "isInherited": false,
+        "tokenCount": 21
+      }
+    },
+    {
+      "text": "\nInherited Properties:",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Group",
+      "propertyIri": null,
+      "fragmentType": "metadata",
+      "metadata": {
+        "classLabel": "Group",
+        "classDepth": 0,
+        "propertyLabel": null,
+        "propertyRange": null,
+        "isInherited": false,
+        "tokenCount": 8
+      }
+    },
+    {
+      "text": "  - account (OnlineAccount) [inherited]",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Group",
+      "propertyIri": "http://xmlns.com/foaf/0.1/account",
+      "fragmentType": "property",
+      "metadata": {
+        "classLabel": "Group",
+        "classDepth": 0,
+        "propertyLabel": "account",
+        "propertyRange": "OnlineAccount",
+        "isInherited": true,
+        "tokenCount": 14
+      }
+    },
+    {
+      "text": "  - age (integer) [inherited]",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Group",
+      "propertyIri": "http://xmlns.com/foaf/0.1/age",
+      "fragmentType": "property",
+      "metadata": {
+        "classLabel": "Group",
+        "classDepth": 0,
+        "propertyLabel": "age",
+        "propertyRange": "integer",
+        "isInherited": true,
+        "tokenCount": 12
+      }
+    },
+    {
+      "text": "  - depiction (Image) [inherited]",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Group",
+      "propertyIri": "http://xmlns.com/foaf/0.1/depiction",
+      "fragmentType": "property",
+      "metadata": {
+        "classLabel": "Group",
+        "classDepth": 0,
+        "propertyLabel": "depiction",
+        "propertyRange": "Image",
+        "isInherited": true,
+        "tokenCount": 13
+      }
+    },
+    {
+      "text": "  - homepage (Document) [inherited]",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Group",
+      "propertyIri": "http://xmlns.com/foaf/0.1/homepage",
+      "fragmentType": "property",
+      "metadata": {
+        "classLabel": "Group",
+        "classDepth": 0,
+        "propertyLabel": "homepage",
+        "propertyRange": "Document",
+        "isInherited": true,
+        "tokenCount": 13
+      }
+    },
+    {
+      "text": "  - personal mailbox (string) [inherited]",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Group",
+      "propertyIri": "http://xmlns.com/foaf/0.1/mbox",
+      "fragmentType": "property",
+      "metadata": {
+        "classLabel": "Group",
+        "classDepth": 0,
+        "propertyLabel": "personal mailbox",
+        "propertyRange": "string",
+        "isInherited": true,
+        "tokenCount": 16
+      }
+    },
+    {
+      "text": "  - name (string) [inherited]",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Group",
+      "propertyIri": "http://xmlns.com/foaf/0.1/name",
+      "fragmentType": "property",
+      "metadata": {
+        "classLabel": "Group",
+        "classDepth": 0,
+        "propertyLabel": "name",
+        "propertyRange": "string",
+        "isInherited": true,
+        "tokenCount": 12
+      }
+    },
+    {
+      "text": "Class: Image\nProperties:\n  (no properties)",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Image",
+      "propertyIri": null,
+      "fragmentType": "class_definition",
+      "metadata": {
+        "classLabel": "Image",
+        "classDepth": 0,
+        "propertyLabel": null,
+        "propertyRange": null,
+        "isInherited": false,
+        "tokenCount": 16
+      }
+    },
+    {
+      "text": "Class: Online Account\nProperties:\n  (no properties)",
+      "sourceIri": "http://xmlns.com/foaf/0.1/OnlineAccount",
+      "propertyIri": null,
+      "fragmentType": "class_definition",
+      "metadata": {
+        "classLabel": "Online Account",
+        "classDepth": 0,
+        "propertyLabel": null,
+        "propertyRange": null,
+        "isInherited": false,
+        "tokenCount": 19
+      }
+    },
+    {
+      "text": "Class: Online Chat Account\nProperties:\n  (no properties)",
+      "sourceIri": "http://xmlns.com/foaf/0.1/OnlineChatAccount",
+      "propertyIri": null,
+      "fragmentType": "class_definition",
+      "metadata": {
+        "classLabel": "Online Chat Account",
+        "classDepth": 0,
+        "propertyLabel": null,
+        "propertyRange": null,
+        "isInherited": false,
+        "tokenCount": 21
+      }
+    },
+    {
+      "text": "Class: Online E-commerce Account\nProperties:\n  (no properties)",
+      "sourceIri": "http://xmlns.com/foaf/0.1/OnlineEcommerceAccount",
+      "propertyIri": null,
+      "fragmentType": "class_definition",
+      "metadata": {
+        "classLabel": "Online E-commerce Account",
+        "classDepth": 0,
+        "propertyLabel": null,
+        "propertyRange": null,
+        "isInherited": false,
+        "tokenCount": 23
+      }
+    },
+    {
+      "text": "Class: Online Gaming Account\nProperties:\n  (no properties)",
+      "sourceIri": "http://xmlns.com/foaf/0.1/OnlineGamingAccount",
+      "propertyIri": null,
+      "fragmentType": "class_definition",
+      "metadata": {
+        "classLabel": "Online Gaming Account",
+        "classDepth": 0,
+        "propertyLabel": null,
+        "propertyRange": null,
+        "isInherited": false,
+        "tokenCount": 22
+      }
+    },
+    {
+      "text": "Class: Organization\nProperties:\n  (no properties)",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Organization",
+      "propertyIri": null,
+      "fragmentType": "class_definition",
+      "metadata": {
+        "classLabel": "Organization",
+        "classDepth": 0,
+        "propertyLabel": null,
+        "propertyRange": null,
+        "isInherited": false,
+        "tokenCount": 18
+      }
+    },
+    {
+      "text": "\nInherited Properties:",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Organization",
+      "propertyIri": null,
+      "fragmentType": "metadata",
+      "metadata": {
+        "classLabel": "Organization",
+        "classDepth": 0,
+        "propertyLabel": null,
+        "propertyRange": null,
+        "isInherited": false,
+        "tokenCount": 8
+      }
+    },
+    {
+      "text": "  - account (OnlineAccount) [inherited]",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Organization",
+      "propertyIri": "http://xmlns.com/foaf/0.1/account",
+      "fragmentType": "property",
+      "metadata": {
+        "classLabel": "Organization",
+        "classDepth": 0,
+        "propertyLabel": "account",
+        "propertyRange": "OnlineAccount",
+        "isInherited": true,
+        "tokenCount": 14
+      }
+    },
+    {
+      "text": "  - age (integer) [inherited]",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Organization",
+      "propertyIri": "http://xmlns.com/foaf/0.1/age",
+      "fragmentType": "property",
+      "metadata": {
+        "classLabel": "Organization",
+        "classDepth": 0,
+        "propertyLabel": "age",
+        "propertyRange": "integer",
+        "isInherited": true,
+        "tokenCount": 12
+      }
+    },
+    {
+      "text": "  - depiction (Image) [inherited]",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Organization",
+      "propertyIri": "http://xmlns.com/foaf/0.1/depiction",
+      "fragmentType": "property",
+      "metadata": {
+        "classLabel": "Organization",
+        "classDepth": 0,
+        "propertyLabel": "depiction",
+        "propertyRange": "Image",
+        "isInherited": true,
+        "tokenCount": 13
+      }
+    },
+    {
+      "text": "  - homepage (Document) [inherited]",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Organization",
+      "propertyIri": "http://xmlns.com/foaf/0.1/homepage",
+      "fragmentType": "property",
+      "metadata": {
+        "classLabel": "Organization",
+        "classDepth": 0,
+        "propertyLabel": "homepage",
+        "propertyRange": "Document",
+        "isInherited": true,
+        "tokenCount": 13
+      }
+    },
+    {
+      "text": "  - personal mailbox (string) [inherited]",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Organization",
+      "propertyIri": "http://xmlns.com/foaf/0.1/mbox",
+      "fragmentType": "property",
+      "metadata": {
+        "classLabel": "Organization",
+        "classDepth": 0,
+        "propertyLabel": "personal mailbox",
+        "propertyRange": "string",
+        "isInherited": true,
+        "tokenCount": 16
+      }
+    },
+    {
+      "text": "  - name (string) [inherited]",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Organization",
+      "propertyIri": "http://xmlns.com/foaf/0.1/name",
+      "fragmentType": "property",
+      "metadata": {
+        "classLabel": "Organization",
+        "classDepth": 0,
+        "propertyLabel": "name",
+        "propertyRange": "string",
+        "isInherited": true,
+        "tokenCount": 12
+      }
+    },
+    {
+      "text": "Class: Person\nProperties:\n  - knows: Person (optional)\n  - current project: Project (optional)\n  - past project: Project (optional)\n  - title: string (optional)",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Person",
+      "propertyIri": null,
+      "fragmentType": "class_definition",
+      "metadata": {
+        "classLabel": "Person",
+        "classDepth": 0,
+        "propertyLabel": null,
+        "propertyRange": null,
+        "isInherited": false,
+        "tokenCount": 61
+      }
+    },
+    {
+      "text": "\nInherited Properties:",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Person",
+      "propertyIri": null,
+      "fragmentType": "metadata",
+      "metadata": {
+        "classLabel": "Person",
+        "classDepth": 0,
+        "propertyLabel": null,
+        "propertyRange": null,
+        "isInherited": false,
+        "tokenCount": 8
+      }
+    },
+    {
+      "text": "  - account (OnlineAccount) [inherited]",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Person",
+      "propertyIri": "http://xmlns.com/foaf/0.1/account",
+      "fragmentType": "property",
+      "metadata": {
+        "classLabel": "Person",
+        "classDepth": 0,
+        "propertyLabel": "account",
+        "propertyRange": "OnlineAccount",
+        "isInherited": true,
+        "tokenCount": 14
+      }
+    },
+    {
+      "text": "  - age (integer) [inherited]",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Person",
+      "propertyIri": "http://xmlns.com/foaf/0.1/age",
+      "fragmentType": "property",
+      "metadata": {
+        "classLabel": "Person",
+        "classDepth": 0,
+        "propertyLabel": "age",
+        "propertyRange": "integer",
+        "isInherited": true,
+        "tokenCount": 12
+      }
+    },
+    {
+      "text": "  - depiction (Image) [inherited]",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Person",
+      "propertyIri": "http://xmlns.com/foaf/0.1/depiction",
+      "fragmentType": "property",
+      "metadata": {
+        "classLabel": "Person",
+        "classDepth": 0,
+        "propertyLabel": "depiction",
+        "propertyRange": "Image",
+        "isInherited": true,
+        "tokenCount": 13
+      }
+    },
+    {
+      "text": "  - homepage (Document) [inherited]",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Person",
+      "propertyIri": "http://xmlns.com/foaf/0.1/homepage",
+      "fragmentType": "property",
+      "metadata": {
+        "classLabel": "Person",
+        "classDepth": 0,
+        "propertyLabel": "homepage",
+        "propertyRange": "Document",
+        "isInherited": true,
+        "tokenCount": 13
+      }
+    },
+    {
+      "text": "  - personal mailbox (string) [inherited]",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Person",
+      "propertyIri": "http://xmlns.com/foaf/0.1/mbox",
+      "fragmentType": "property",
+      "metadata": {
+        "classLabel": "Person",
+        "classDepth": 0,
+        "propertyLabel": "personal mailbox",
+        "propertyRange": "string",
+        "isInherited": true,
+        "tokenCount": 16
+      }
+    },
+    {
+      "text": "  - name (string) [inherited]",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Person",
+      "propertyIri": "http://xmlns.com/foaf/0.1/name",
+      "fragmentType": "property",
+      "metadata": {
+        "classLabel": "Person",
+        "classDepth": 0,
+        "propertyLabel": "name",
+        "propertyRange": "string",
+        "isInherited": true,
+        "tokenCount": 12
+      }
+    },
+    {
+      "text": "Class: Project\nProperties:\n  (no properties)",
+      "sourceIri": "http://xmlns.com/foaf/0.1/Project",
+      "propertyIri": null,
+      "fragmentType": "class_definition",
+      "metadata": {
+        "classLabel": "Project",
+        "classDepth": 0,
+        "propertyLabel": null,
+        "propertyRange": null,
+        "isInherited": false,
+        "tokenCount": 16
+      }
+    }
+  ],
+  "user": [],
+  "examples": []
+}

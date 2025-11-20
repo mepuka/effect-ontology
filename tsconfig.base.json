@@ -4,6 +4,8 @@
     "exactOptionalPropertyTypes": true,
     "moduleDetection": "force",
     "composite": true,
+    "allowSyntheticDefaultImports": true,
+    "allowImportingTsExtensions": true,
     "downlevelIteration": true,
     "resolveJsonModule": true,
     "esModuleInterop": false,

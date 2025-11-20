@@ -1,0 +1,96 @@
+Class: Agent
+Properties:
+  - personal mailbox: string (optional)
+  - homepage: Document (optional)
+  - depiction: Image (optional)
+  - account: OnlineAccount (optional)
+  - name: string (optional)
+  - age: integer (optional)
+
+Class: Document
+Properties:
+  (no properties)
+
+Class: Group
+Properties:
+  - member: Agent (optional)
+
+
+Inherited Properties:
+
+  - account (OnlineAccount) [inherited]
+
+  - age (integer) [inherited]
+
+  - depiction (Image) [inherited]
+
+  - homepage (Document) [inherited]
+
+  - personal mailbox (string) [inherited]
+
+  - name (string) [inherited]
+
+Class: Image
+Properties:
+  (no properties)
+
+Class: Online Account
+Properties:
+  (no properties)
+
+Class: Online Chat Account
+Properties:
+  (no properties)
+
+Class: Online E-commerce Account
+Properties:
+  (no properties)
+
+Class: Online Gaming Account
+Properties:
+  (no properties)
+
+Class: Organization
+Properties:
+  (no properties)
+
+
+Inherited Properties:
+
+  - account (OnlineAccount) [inherited]
+
+  - age (integer) [inherited]
+
+  - depiction (Image) [inherited]
+
+  - homepage (Document) [inherited]
+
+  - personal mailbox (string) [inherited]
+
+  - name (string) [inherited]
+
+Class: Person
+Properties:
+  - knows: Person (optional)
+  - current project: Project (optional)
+  - past project: Project (optional)
+  - title: string (optional)
+
+
+Inherited Properties:
+
+  - account (OnlineAccount) [inherited]
+
+  - age (integer) [inherited]
+
+  - depiction (Image) [inherited]
+
+  - homepage (Document) [inherited]
+
+  - personal mailbox (string) [inherited]
+
+  - name (string) [inherited]
+
+Class: Project
+Properties:
+  (no properties)

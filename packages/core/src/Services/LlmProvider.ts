@@ -24,12 +24,12 @@
  * @since 1.0.0
  */
 
-import { LanguageModel } from "@effect/ai"
+import type { LanguageModel } from "@effect/ai"
 import { AnthropicClient, AnthropicLanguageModel } from "@effect/ai-anthropic"
 import { GoogleClient, GoogleLanguageModel } from "@effect/ai-google"
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai"
 import { FetchHttpClient } from "@effect/platform"
-import { Effect, Layer, Redacted } from "effect"
+import { Layer, Redacted } from "effect"
 
 /**
  * Provider Configuration Types
@@ -85,14 +85,18 @@ export interface LlmProviderParams {
  * Anthropic Client Layer
  *
  * Creates AnthropicClient layer from configuration.
+ * Provides HttpClient dependency using FetchHttpClient.
  *
  * @param apiKey - Anthropic API key
- * @returns Layer providing AnthropicClient
+ * @returns Layer providing AnthropicClient (with HttpClient dependency satisfied)
  *
  * @since 1.0.0
  * @category layers
  */
-export const AnthropicClientLive = (apiKey: string) => AnthropicClient.layer({ apiKey: Redacted.make(apiKey) })
+export const AnthropicClientLive = (apiKey: string) =>
+  AnthropicClient.layer({ apiKey: Redacted.make(apiKey) }).pipe(
+    Layer.provide(FetchHttpClient.layer)
+  )
 
 /**
  * Anthropic Language Model Layer
@@ -111,10 +115,11 @@ export const AnthropicLanguageModelLive = (model: string) => AnthropicLanguageMo
  * OpenAI Client Layer
  *
  * Creates OpenAiClient layer from configuration.
+ * Provides HttpClient dependency using FetchHttpClient.
  *
  * @param apiKey - OpenAI API key
  * @param apiUrl - Optional API URL (for OpenRouter compatibility)
- * @returns Layer providing OpenAiClient
+ * @returns Layer providing OpenAiClient (with HttpClient dependency satisfied)
  *
  * @since 1.0.0
  * @category layers
@@ -123,7 +128,9 @@ export const OpenAiClientLive = (apiKey: string, apiUrl?: string) =>
   OpenAiClient.layer({
     apiKey: Redacted.make(apiKey),
     ...(apiUrl && { apiUrl })
-  })
+  }).pipe(
+    Layer.provide(FetchHttpClient.layer)
+  )
 
 /**
  * OpenAI Language Model Layer
