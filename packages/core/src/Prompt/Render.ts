@@ -10,6 +10,8 @@
 import { Effect, HashMap, Option, pipe } from "effect"
 import type { CircularInheritanceError, InheritanceError, InheritanceService } from "../Ontology/Inheritance.js"
 import { KnowledgeUnit } from "./Ast.js"
+import type { PromptContext } from "./Context.js"
+import * as EC from "./EntityCache.js"
 import * as KnowledgeIndex from "./KnowledgeIndex.js"
 import type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
 import { StructuredPrompt } from "./Types.js"
@@ -228,6 +230,42 @@ export const renderWithInheritance = (
       includeInheritedProperties: true
     })
   })
+
+/**
+ * Render PromptContext to StructuredPrompt
+ *
+ * Morphism: P → S where P = K × C (PromptContext), S = StructuredPrompt
+ *
+ * This is the key rendering function for the streaming extraction pipeline.
+ * It fuses static ontology knowledge (K) with dynamic entity discoveries (C)
+ * into a single prompt ready for LLM consumption.
+ *
+ * @param ctx - The prompt context containing both knowledge index and entity cache
+ * @param options - Rendering options for the knowledge index
+ * @returns StructuredPrompt with all fields populated
+ */
+export const renderContext = (
+  ctx: PromptContext,
+  options: RenderOptions = defaultRenderOptions
+): StructuredPrompt => {
+  // 1. Render KnowledgeIndex (static ontology knowledge) → system/user/examples
+  const ontologyPrompt = renderToStructuredPrompt(ctx.index, options)
+
+  // 2. Render EntityCache (dynamic entity discoveries) → context field
+  const entityContext = EC.toPromptFragment(ctx.cache)
+
+  // 3. Combine using StructuredPrompt.combine
+  // This ensures proper monoid composition
+  return StructuredPrompt.combine(
+    ontologyPrompt,
+    StructuredPrompt.make({
+      system: [],
+      user: [],
+      examples: [],
+      context: entityContext
+    })
+  )
+}
 
 /**
  * Render to plain text (for debugging/logging)

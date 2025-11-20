@@ -11,6 +11,9 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Graph, HashMap } from "effect"
+import * as PromptContext from "../../src/Prompt/Context.js"
+import * as EC from "../../src/Prompt/EntityCache.js"
+import { renderContext } from "../../src/Prompt/Render.js"
 import { ClassNode, type GraphAlgebra, type OntologyContext } from "../../src/Graph/Types.js"
 import { GraphCycleError, MissingNodeDataError, solveGraph } from "../../src/Prompt/Solver.js"
 
@@ -321,5 +324,41 @@ describe("Solver", () => {
           }
         }
       }))
+  })
+
+  describe("renderContext", () => {
+    it("should render PromptContext with entity cache in context field", () => {
+      const ctx = PromptContext.make(
+        HashMap.empty(), // Simplified KnowledgeIndex
+        EC.fromArray([
+          new EC.EntityRef({
+            iri: "http://example.org/Alice",
+            label: "Alice",
+            types: ["Person"],
+            foundInChunk: 0,
+            confidence: 1.0
+          })
+        ])
+      )
+
+      const prompt = renderContext(ctx)
+
+      // Verify context field is populated with entity cache fragment
+      expect(prompt.context.length).toBeGreaterThan(0)
+      expect(prompt.context.some((line: string) => line.includes("Alice"))).toBe(true)
+      expect(prompt.context.some((line: string) => line.includes("http://example.org/Alice"))).toBe(true)
+    })
+
+    it("should handle empty entity cache", () => {
+      const ctx = PromptContext.make(
+        HashMap.empty(), // Simplified KnowledgeIndex
+        EC.empty // Empty cache
+      )
+
+      const prompt = renderContext(ctx)
+
+      // Verify context field is empty array when cache is empty
+      expect(prompt.context).toEqual([])
+    })
   })
 })
