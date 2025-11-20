@@ -6,18 +6,21 @@
  * 2. For each chunk (parallel workers):
  *    - Read EntityDiscoveryService state
  *    - Build PromptContext
- *    - Extract knowledge (MOCKED for MVP)
+ *    - Extract knowledge using LLM
  *    - Update EntityDiscoveryService
  * 3. Collect all graphs
  * 4. Merge with EntityResolution
  */
 
+import { LanguageModel } from "@effect/ai"
 import { Effect, HashMap, Ref, Stream } from "effect"
 import type { OntologyContext } from "../Graph/Types.js"
 import * as EC from "../Prompt/EntityCache.js"
 import { renderContext } from "../Prompt/Render.js"
+import { makeKnowledgeGraphSchema } from "../Schema/Factory.js"
 import { EntityDiscoveryService } from "./EntityDiscovery.js"
 import { mergeGraphsWithResolution } from "./EntityResolution.js"
+import { extractKnowledgeGraph, extractVocabulary } from "./Llm.js"
 import { NlpService } from "./Nlp.js"
 
 /**
@@ -42,17 +45,63 @@ export const defaultPipelineConfig: PipelineConfig = {
 }
 
 /**
- * Streaming extraction pipeline (MVP version with mock LLM).
+ * Convert KnowledgeGraph JSON to RDF Turtle string
+ *
+ * Helper function to convert structured extraction output to RDF.
+ *
+ * @param graph - The knowledge graph from LLM extraction
+ * @returns Turtle string representation
+ */
+const knowledgeGraphToTurtle = (graph: {
+  entities: ReadonlyArray<{
+    "@id": string
+    "@type": string
+    properties: ReadonlyArray<{
+      predicate: string
+      object: string | { "@id": string }
+    }>
+  }>
+}): string => {
+  const lines = ["@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> ."]
+
+  for (const entity of graph.entities) {
+    // Entity with type
+    lines.push(`<${entity["@id"]}> a <${entity["@type"]}> ;`)
+
+    // Properties
+    for (let i = 0; i < entity.properties.length; i++) {
+      const prop = entity.properties[i]
+      const isLast = i === entity.properties.length - 1
+
+      if (typeof prop.object === "string") {
+        // Literal value
+        lines.push(`  <${prop.predicate}> "${prop.object}"${isLast ? " ." : " ;"}`)
+      } else {
+        // Object reference
+        lines.push(`  <${prop.predicate}> <${prop.object["@id"]}>${isLast ? " ." : " ;"}`)
+      }
+    }
+
+    lines.push("") // Blank line between entities
+  }
+
+  return lines.join("\n")
+}
+
+/**
+ * Streaming extraction pipeline with real LLM integration.
  *
  * Architecture:
- * 1. Chunk text using NlpService
- * 2. For each chunk (parallel workers):
- *    - Read EntityDiscoveryService state
- *    - Build PromptContext
- *    - Extract knowledge (MOCKED for MVP)
+ * 1. Build KnowledgeIndex from ontology (static knowledge)
+ * 2. Chunk text using NlpService
+ * 3. For each chunk (parallel workers):
+ *    - Read EntityDiscoveryService state (dynamic knowledge)
+ *    - Build PromptContext (K × C)
+ *    - Render to StructuredPrompt (P → S)
+ *    - Extract knowledge using LLM
  *    - Update EntityDiscoveryService
- * 3. Collect all graphs
- * 4. Merge with EntityResolution
+ * 4. Collect all graphs
+ * 5. Merge with EntityResolution
  *
  * @param text - Input text to extract from
  * @param ontology - Ontology context for extraction
@@ -69,13 +118,23 @@ export const streamingExtractionPipeline = (
     const nlp = yield* NlpService
     const discovery = yield* EntityDiscoveryService
 
-    // 2. Create chunk stream
+    // 2. Build KnowledgeIndex from ontology (static knowledge)
+    // TODO: Integrate full knowledge index generation
+    // Requires: graph parameter in pipeline signature
+    // const knowledgeIndex = yield* solveToKnowledgeIndex(graph, ontology, knowledgeIndexAlgebra)
+    const knowledgeIndex = HashMap.empty() // Temporary: empty for initial integration
+
+    // 3. Create schema from ontology vocabulary
+    const { classIris, propertyIris } = extractVocabulary(ontology)
+    const schema = makeKnowledgeGraphSchema(classIris, propertyIris)
+
+    // 4. Create chunk stream
     const chunks = nlp.streamChunks(text, config.windowSize, config.overlap)
 
-    // Track chunk index for mock data (using Ref for concurrency safety)
+    // Track chunk index for provenance
     const chunkIndexRef = yield* Ref.make(0)
 
-    // 3. Extraction stream (parallel workers)
+    // 5. Extraction stream (parallel workers)
     const extractionStream = chunks.pipe(
       Stream.mapEffect(
         (chunkText) =>
@@ -83,49 +142,45 @@ export const streamingExtractionPipeline = (
             // Get and increment chunk index atomically
             const currentChunkIndex = yield* Ref.getAndUpdate(chunkIndexRef, (n) => n + 1)
 
-            // A. Get current entity state
+            // A. Get current entity state (dynamic knowledge)
             const registry = yield* discovery.getSnapshot()
 
             // B. Build prompt context (fuse static ontology + dynamic entities)
-            // For MVP, use empty KnowledgeIndex (no solver needed)
             const promptContext = {
-              index: HashMap.empty(), // Empty for MVP
+              index: knowledgeIndex,
               cache: registry.entities
             }
 
-            // Render context to verify it works (not used in mock extraction)
-            const _prompt = renderContext(promptContext)
+            // C. Render context to StructuredPrompt (P → S)
+            const prompt = renderContext(promptContext)
 
-            // C. Extract knowledge (MOCK for MVP)
-            // Create simple RDF graph with entity from chunk
-            const entityLabel = chunkText.substring(0, 20).trim()
-            const mockGraph = `
-@prefix : <http://example.org/> .
-@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+            // D. Extract knowledge using LLM
+            const knowledgeGraph = yield* extractKnowledgeGraph(chunkText, ontology, prompt, schema)
 
-_:entity${currentChunkIndex} a :Entity ;
-    rdfs:label "${entityLabel}" .
-`.trim()
+            // E. Convert to RDF Turtle
+            const rdfGraph = knowledgeGraphToTurtle(knowledgeGraph)
 
-            // D. Update entity discovery (for next chunks)
-            yield* discovery.register([
-              new EC.EntityRef({
-                iri: `_:entity${currentChunkIndex}`,
-                label: entityLabel,
-                types: ["Entity"],
-                foundInChunk: currentChunkIndex,
-                confidence: 1.0
-              })
-            ])
+            // F. Update entity discovery (for next chunks)
+            const newEntities = knowledgeGraph.entities.map(
+              (entity) =>
+                new EC.EntityRef({
+                  iri: entity["@id"],
+                  label: entity["@id"], // TODO: Extract rdfs:label from properties if available
+                  types: [entity["@type"]],
+                  foundInChunk: currentChunkIndex,
+                  confidence: 1.0 // TODO: Add confidence scoring
+                })
+            )
+            yield* discovery.register(newEntities)
 
-            return mockGraph
+            return rdfGraph
           }),
-        // 4. Parallel execution with concurrency option
+        // 6. Parallel execution with concurrency option
         { concurrency: config.concurrency }
       )
     )
 
-    // 5. Collect and merge
+    // 7. Collect and merge
     const graphs = yield* Stream.runCollect(extractionStream)
     const graphArray = Array.from(graphs)
 
