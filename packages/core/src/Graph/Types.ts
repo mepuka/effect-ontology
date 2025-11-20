@@ -7,7 +7,8 @@
  * - Graph edges represent subClassOf relationships (Child -> Parent dependency)
  */
 
-import { FastCheck, Graph, HashMap, Schema } from "effect"
+import type { Graph } from "effect"
+import { FastCheck, HashMap, Schema } from "effect"
 import { PropertyConstraint } from "./Constraint.js"
 
 /**
@@ -335,5 +336,5 @@ export type GraphAlgebra<R> = (
   childrenResults: ReadonlyArray<R>,
   graph: Graph.Graph<NodeId, unknown, "directed">,
   nodeIndex: Graph.NodeIndex,
-  predecessors: HashMap.HashMap<number, number[]>
+  predecessors: HashMap.HashMap<number, Array<number>>
 ) => R

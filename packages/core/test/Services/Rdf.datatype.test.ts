@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { Data, Effect, HashMap, Option } from "effect"
-import * as N3 from "n3"
+import type * as N3 from "n3"
 import { PropertyConstraint } from "../../src/Graph/Constraint"
 import { ClassNode, OntologyContext } from "../../src/Graph/Types"
 import type { KnowledgeGraph } from "../../src/Services/Rdf"

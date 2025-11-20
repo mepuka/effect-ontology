@@ -321,7 +321,8 @@ export const makeKnowledgeGraphSchema = <
   }).annotations({
     identifier: "KnowledgeGraph",
     title: "Knowledge Graph Extraction",
-    description: "A collection of entities extracted from text, validated against an ontology with core RDF annotations for deduplication"
+    description:
+      "A collection of entities extracted from text, validated against an ontology with core RDF annotations for deduplication"
   })
 }
 
