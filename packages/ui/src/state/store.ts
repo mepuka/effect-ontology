@@ -16,45 +16,139 @@ import {
   toJSONSchema
 } from "@effect-ontology/core/Schema/Export"
 import { makeKnowledgeGraphSchema } from "@effect-ontology/core/Schema/Factory"
+import { renderToEnrichedPrompt } from "@effect-ontology/core/Prompt/RenderEnriched"
 import { Effect, Graph, HashMap, Option } from "effect"
 import { runtime } from "../runtime/atoms"
 
-// Default example turtle
-const DEFAULT_TURTLE = `@prefix : <http://example.org/zoo#> .
-@prefix owl: <http://www.w3.org/2002/07/owl#> .
+// Default example turtle - FOAF (Friend of a Friend) Ontology
+const DEFAULT_TURTLE = `@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-### Classes
+# FOAF Ontology (Simplified)
+# Friend of a Friend vocabulary - a real-world social networking ontology
 
-:Animal a owl:Class ;
-    rdfs:label "Animal" ;
-    rdfs:comment "A living organism" .
+### Core Classes
 
-:Mammal a owl:Class ;
-    rdfs:subClassOf :Animal ;
-    rdfs:label "Mammal" ;
-    rdfs:comment "An animal that feeds its young with milk" .
+foaf:Agent a owl:Class ;
+    rdfs:label "Agent" ;
+    rdfs:comment "An agent (eg. person, group, software or physical artifact)." .
 
-:Pet a owl:Class ;
-    rdfs:label "Pet" ;
-    rdfs:comment "An animal kept for companionship" .
+foaf:Person a owl:Class ;
+    rdfs:subClassOf foaf:Agent ;
+    rdfs:label "Person" ;
+    rdfs:comment "A person." .
 
-:Dog a owl:Class ;
-    rdfs:subClassOf :Mammal, :Pet ;
-    rdfs:label "Dog" ;
-    rdfs:comment "A domesticated canine" .
+foaf:Organization a owl:Class ;
+    rdfs:subClassOf foaf:Agent ;
+    rdfs:label "Organization" ;
+    rdfs:comment "An organization." .
+
+foaf:Group a owl:Class ;
+    rdfs:subClassOf foaf:Agent ;
+    rdfs:label "Group" ;
+    rdfs:comment "A class of Agents." .
+
+foaf:Document a owl:Class ;
+    rdfs:label "Document" ;
+    rdfs:comment "A document." .
+
+foaf:Image a owl:Class ;
+    rdfs:subClassOf foaf:Document ;
+    rdfs:label "Image" ;
+    rdfs:comment "An image." .
+
+foaf:OnlineAccount a owl:Class ;
+    rdfs:label "Online Account" ;
+    rdfs:comment "An online account." .
+
+foaf:OnlineChatAccount a owl:Class ;
+    rdfs:subClassOf foaf:OnlineAccount ;
+    rdfs:label "Online Chat Account" ;
+    rdfs:comment "An online chat account." .
+
+foaf:OnlineEcommerceAccount a owl:Class ;
+    rdfs:subClassOf foaf:OnlineAccount ;
+    rdfs:label "Online E-commerce Account" ;
+    rdfs:comment "An online e-commerce account." .
+
+foaf:OnlineGamingAccount a owl:Class ;
+    rdfs:subClassOf foaf:OnlineAccount ;
+    rdfs:label "Online Gaming Account" ;
+    rdfs:comment "An online gaming account." .
+
+foaf:Project a owl:Class ;
+    rdfs:label "Project" ;
+    rdfs:comment "A project (a collective endeavour of some kind)." .
 
 ### Properties
 
-:hasName a owl:DatatypeProperty ;
-    rdfs:domain :Animal ;
+foaf:name a owl:DatatypeProperty ;
+    rdfs:domain foaf:Agent ;
     rdfs:range xsd:string ;
-    rdfs:label "has name" .
+    rdfs:label "name" ;
+    rdfs:comment "A name for some thing." .
 
-:ownedBy a owl:ObjectProperty ;
-    rdfs:domain :Pet ;
-    rdfs:label "owned by" .
+foaf:mbox a owl:ObjectProperty ;
+    rdfs:domain foaf:Agent ;
+    rdfs:label "personal mailbox" ;
+    rdfs:comment "A personal mailbox, ie. an Internet mailbox associated with exactly one owner." .
+
+foaf:knows a owl:ObjectProperty ;
+    rdfs:domain foaf:Person ;
+    rdfs:range foaf:Person ;
+    rdfs:label "knows" ;
+    rdfs:comment "A person known by this person (indicating some level of reciprocated interaction between the parties)." .
+
+foaf:member a owl:ObjectProperty ;
+    rdfs:domain foaf:Group ;
+    rdfs:range foaf:Agent ;
+    rdfs:label "member" ;
+    rdfs:comment "Indicates a member of a Group." .
+
+foaf:homepage a owl:ObjectProperty ;
+    rdfs:domain foaf:Agent ;
+    rdfs:range foaf:Document ;
+    rdfs:label "homepage" ;
+    rdfs:comment "A homepage for some thing." .
+
+foaf:depiction a owl:ObjectProperty ;
+    rdfs:domain foaf:Agent ;
+    rdfs:range foaf:Image ;
+    rdfs:label "depiction" ;
+    rdfs:comment "A depiction of some thing." .
+
+foaf:account a owl:ObjectProperty ;
+    rdfs:domain foaf:Agent ;
+    rdfs:range foaf:OnlineAccount ;
+    rdfs:label "account" ;
+    rdfs:comment "Indicates an account held by this Agent." .
+
+foaf:currentProject a owl:ObjectProperty ;
+    rdfs:domain foaf:Person ;
+    rdfs:range foaf:Project ;
+    rdfs:label "current project" ;
+    rdfs:comment "A current project this person works on." .
+
+foaf:pastProject a owl:ObjectProperty ;
+    rdfs:domain foaf:Person ;
+    rdfs:range foaf:Project ;
+    rdfs:label "past project" ;
+    rdfs:comment "A project this person has previously worked on." .
+
+foaf:age a owl:DatatypeProperty ;
+    rdfs:domain foaf:Agent ;
+    rdfs:range xsd:integer ;
+    rdfs:label "age" ;
+    rdfs:comment "The age in years of some agent." .
+
+foaf:title a owl:DatatypeProperty ;
+    rdfs:domain foaf:Person ;
+    rdfs:range xsd:string ;
+    rdfs:label "title" ;
+    rdfs:comment "Title (Mr, Mrs, Ms, Dr. etc)" .
 `
 
 // ============================================================================
@@ -377,5 +471,33 @@ export const schemaStatsAtom = runtime.atom((get) =>
 
     const { anthropic } = yield* schemaEffect
     return getSchemaStats(anthropic)
+  })
+)
+
+/**
+ * 13. Enriched Prompts Atom
+ *
+ * Generates EnrichedStructuredPrompt with full provenance tracking.
+ * Each prompt fragment includes metadata for interactive tooltips.
+ *
+ * Dependencies: knowledgeIndexAtom
+ */
+export const enrichedPromptsAtom = runtime.atom((get) =>
+  Effect.gen(function*() {
+    const indexResult = get(knowledgeIndexAtom)
+
+    const indexEffect = Result.match(indexResult, {
+      onInitial: () => Effect.fail("Index not yet loaded"),
+      onFailure: (failure) => Effect.failCause(failure.cause),
+      onSuccess: (success) => Effect.succeed(success.value)
+    })
+
+    const index = yield* indexEffect
+
+    // Render to enriched prompt with inherited properties
+    return renderToEnrichedPrompt(index, {
+      includeInheritedProperties: true,
+      sortStrategy: "topological"
+    })
   })
 )
