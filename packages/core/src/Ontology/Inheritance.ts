@@ -10,6 +10,7 @@
 import { Context, Data, Effect, Graph, HashMap, HashSet } from "effect"
 import type { PropertyConstraint } from "../Graph/Constraint.js"
 import type { NodeId, OntologyContext } from "../Graph/Types.js"
+import { meet } from "./Constraint.js"
 
 /**
  * Errors that can occur during inheritance resolution
@@ -339,7 +340,8 @@ const getEffectivePropertiesImpl = (
   classIri: string,
   _graph: Graph.Graph<NodeId, unknown, "directed">,
   context: OntologyContext,
-  getAncestorsCached: (iri: string) => Effect.Effect<ReadonlyArray<string>, InheritanceError | CircularInheritanceError>
+  getAncestorsCached: (iri: string) => Effect.Effect<ReadonlyArray<string>, InheritanceError | CircularInheritanceError>,
+  service: InheritanceService
 ): Effect.Effect<ReadonlyArray<PropertyConstraint>, InheritanceError | CircularInheritanceError> =>
   Effect.gen(function*() {
     // Get own properties
@@ -379,7 +381,8 @@ const getEffectivePropertiesImpl = (
       }
     }
 
-    // Deduplicate by property IRI (child wins)
+    // Refine properties using meet operation (lattice fold)
+    // This properly combines constraints from multiple inheritance paths
     const propertyMap = new Map<string, PropertyConstraint>()
 
     // Add ancestor properties first
@@ -387,9 +390,19 @@ const getEffectivePropertiesImpl = (
       propertyMap.set(prop.propertyIri, prop)
     }
 
-    // Override with own properties
+    // Refine with own properties using meet
     for (const prop of ownProperties) {
-      propertyMap.set(prop.propertyIri, prop)
+      const existing = propertyMap.get(prop.propertyIri)
+      if (existing) {
+        // Use meet to refine: result = existing ⊓ prop
+        const refined = yield* meet(existing, prop).pipe(
+          Effect.provideService(InheritanceService, service),
+          Effect.catchAll(() => Effect.succeed(prop)) // On error, use child's constraint
+        )
+        propertyMap.set(prop.propertyIri, refined)
+      } else {
+        propertyMap.set(prop.propertyIri, prop)
+      }
     }
 
     return Array.from(propertyMap.values())
@@ -522,28 +535,35 @@ export const make = (
   context: OntologyContext
 ): Effect.Effect<InheritanceService, never, never> =>
   Effect.gen(function*() {
-    // Create cached version of getAncestorsImpl
-    // Effect.cachedFunction wraps the computation, returning a function that memoizes results
+    // Phase 1: Create cached functions
     const getAncestorsCached = yield* Effect.cachedFunction(
       (iri: string) => getAncestorsImpl(iri, graph, context)
     )
 
-    // Wrap getEffectiveProperties with caching too
-    // This benefits from getAncestorsCached internally
-    const getEffectivePropertiesCached = yield* Effect.cachedFunction(
-      (iri: string) => getEffectivePropertiesImpl(iri, graph, context, getAncestorsCached)
-    )
-
-    // Create simple wrappers for getParents and getChildren (no caching needed)
     const getParents = (iri: string) => getParentsImpl(iri, graph, context)
     const getChildren = (iri: string) => getChildrenImpl(iri, graph, context)
-
-    // Implement isSubclass using cached ancestors
     const isSubclass = (child: string, parent: string) => isSubclassImpl(child, parent, getAncestorsCached)
-
-    // Implement areDisjoint using context and cached ancestors
     const areDisjoint = (class1: string, class2: string) => areDisjointImpl(class1, class2, context, getAncestorsCached)
 
+    // Phase 2: Create partial service for meet operation
+    const partialService: InheritanceService = {
+      getAncestors: getAncestorsCached,
+      getEffectiveProperties: () => Effect.dieMessage("Not yet initialized"),
+      getParents,
+      getChildren,
+      isSubclass,
+      areDisjoint
+    }
+
+    // Phase 3: Create getEffectiveProperties with access to service
+    const getEffectivePropertiesWithService = (iri: string) =>
+      getEffectivePropertiesImpl(iri, graph, context, getAncestorsCached, partialService)
+
+    const getEffectivePropertiesCached = yield* Effect.cachedFunction(
+      getEffectivePropertiesWithService
+    )
+
+    // Phase 4: Return complete service
     return {
       getAncestors: getAncestorsCached,
       getEffectiveProperties: getEffectivePropertiesCached,
