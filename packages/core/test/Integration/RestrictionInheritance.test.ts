@@ -75,7 +75,7 @@ describe("Integration: Restriction Parsing + Inheritance + Constraint Refinement
 
       // Test 1: Person has hasPet from domain (range: Animal, minCard: 0)
       const personProps = yield* service.getEffectiveProperties("http://example.org/pets#Person")
-      const personHasPet = personProps.find(p => p.propertyIri === "http://example.org/pets#hasPet")
+      const personHasPet = personProps.find((p) => p.propertyIri === "http://example.org/pets#hasPet")
 
       expect(personHasPet).toBeDefined()
       expect(personHasPet?.ranges).toContain("http://example.org/pets#Animal")
@@ -84,7 +84,7 @@ describe("Integration: Restriction Parsing + Inheritance + Constraint Refinement
 
       // Test 2: PetOwner refines to minCard: 1 (inherited domain + restriction)
       const petOwnerProps = yield* service.getEffectiveProperties("http://example.org/pets#PetOwner")
-      const petOwnerHasPet = petOwnerProps.find(p => p.propertyIri === "http://example.org/pets#hasPet")
+      const petOwnerHasPet = petOwnerProps.find((p) => p.propertyIri === "http://example.org/pets#hasPet")
 
       expect(petOwnerHasPet).toBeDefined()
       expect(petOwnerHasPet?.ranges).toContain("http://example.org/pets#Animal")
@@ -93,7 +93,7 @@ describe("Integration: Restriction Parsing + Inheritance + Constraint Refinement
 
       // Test 3: DogOwner refines to range: Dog, minCard: 1
       const dogOwnerProps = yield* service.getEffectiveProperties("http://example.org/pets#DogOwner")
-      const dogOwnerHasPet = dogOwnerProps.find(p => p.propertyIri === "http://example.org/pets#hasPet")
+      const dogOwnerHasPet = dogOwnerProps.find((p) => p.propertyIri === "http://example.org/pets#hasPet")
 
       expect(dogOwnerHasPet).toBeDefined()
       expect(dogOwnerHasPet?.ranges).toContain("http://example.org/pets#Dog")
@@ -102,7 +102,7 @@ describe("Integration: Restriction Parsing + Inheritance + Constraint Refinement
 
       // Test 4: CatOwner has range: Cat (allValuesFrom)
       const catOwnerProps = yield* service.getEffectiveProperties("http://example.org/pets#CatOwner")
-      const catOwnerHasPet = catOwnerProps.find(p => p.propertyIri === "http://example.org/pets#hasPet")
+      const catOwnerHasPet = catOwnerProps.find((p) => p.propertyIri === "http://example.org/pets#hasPet")
 
       expect(catOwnerHasPet).toBeDefined()
       expect(catOwnerHasPet?.ranges).toContain("http://example.org/pets#Cat")

@@ -146,10 +146,10 @@ export const parseRestriction = (
 }
 
 /**
- * Check if a value is a blank node ID
+ * Check if a quad term is a blank node
  */
-const isBlankNode = (value: string): boolean => {
-  return value.startsWith("_:")
+const isBlankNode = (term: N3.Term): boolean => {
+  return term.termType === "BlankNode"
 }
 
 class ParseError extends Data.TaggedError("ParseError")<{
@@ -316,11 +316,13 @@ export const parseTurtleToGraph = (
     // First pass: Parse restrictions and attach to classes
     for (const quad of subClassTriples) {
       const childIri = quad.subject.value
-      const parentIri = quad.object.value
+      const parentTerm = quad.object
 
-      if (isBlankNode(parentIri)) {
+      if (isBlankNode(parentTerm)) {
         // Parent is a restriction blank node
-        const restrictionOption = parseRestriction(store, parentIri)
+        // N3 stores blank nodes with "_:" prefix for queries
+        const blankNodeId = parentTerm.value.startsWith("_:") ? parentTerm.value : `_:${parentTerm.value}`
+        const restrictionOption = parseRestriction(store, blankNodeId)
 
         Option.match(restrictionOption, {
           onNone: () => {
@@ -331,17 +333,14 @@ export const parseTurtleToGraph = (
             classNodes = Option.match(HashMap.get(classNodes, childIri), {
               onNone: () => classNodes,
               onSome: (classNode) => {
-                if (classNode._tag === "Class") {
-                  return HashMap.set(
-                    classNodes,
-                    childIri,
-                    ClassNode.make({
-                      ...classNode,
-                      properties: [...classNode.properties, constraint]
-                    })
-                  )
-                }
-                return classNodes
+                return HashMap.set(
+                  classNodes,
+                  childIri,
+                  ClassNode.make({
+                    ...classNode,
+                    properties: [...classNode.properties, constraint]
+                  })
+                )
               }
             })
           }
@@ -363,10 +362,11 @@ export const parseTurtleToGraph = (
       // Skip blank node parents (they're restrictions, not classes)
       for (const quad of subClassTriples) {
         const childIri = quad.subject.value
-        const parentIri = quad.object.value
+        const parentTerm = quad.object
 
         // Only create edges for named class parents
-        if (!isBlankNode(parentIri)) {
+        if (!isBlankNode(parentTerm)) {
+          const parentIri = parentTerm.value
           Option.flatMap(
             HashMap.get(nodeIndexMap, childIri),
             (childIdx) =>
