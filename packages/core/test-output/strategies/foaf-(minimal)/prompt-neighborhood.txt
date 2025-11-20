@@ -1,0 +1,23 @@
+=== Neighborhood Strategy Prompt ===
+SYSTEM INSTRUCTIONS (3 sections):
+[1] Class: Agent
+Properties:
+  - personal mailbox: string (optional)
+  - homepage: Document (optional)
+  - depiction: Image (optional)
+  - account: OnlineAccount (optional)
+  - name: string (optional)
+  - age: integer (optional)
+[2] Class: Organization
+Properties:
+  (no properties)
+[3] Class: Person
+Properties:
+  - knows: Person (optional)
+  - current project: Project (optional)
+  - past project: Project (optional)
+  - title: string (optional)
+=== Statistics ===
+Classes: 3
+Properties: 10
+Estimated Tokens: 163

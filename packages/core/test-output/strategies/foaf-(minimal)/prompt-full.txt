@@ -1,0 +1,47 @@
+=== Full Strategy Prompt ===
+SYSTEM INSTRUCTIONS (11 sections):
+[1] Class: Online Account
+Properties:
+  (no properties)
+[2] Class: Online E-commerce Account
+Properties:
+  (no properties)
+[3] Class: Online Chat Account
+Properties:
+  (no properties)
+[4] Class: Online Gaming Account
+Properties:
+  (no properties)
+[5] Class: Document
+Properties:
+  (no properties)
+[6] Class: Image
+Properties:
+  (no properties)
+[7] Class: Project
+Properties:
+  (no properties)
+[8] Class: Agent
+Properties:
+  - personal mailbox: string (optional)
+  - homepage: Document (optional)
+  - depiction: Image (optional)
+  - account: OnlineAccount (optional)
+  - name: string (optional)
+  - age: integer (optional)
+[9] Class: Group
+Properties:
+  - member: Agent (optional)
+[10] Class: Organization
+Properties:
+  (no properties)
+[11] Class: Person
+Properties:
+  - knows: Person (optional)
+  - current project: Project (optional)
+  - past project: Project (optional)
+  - title: string (optional)
+=== Statistics ===
+Classes: 11
+Properties: 11
+Estimated Tokens: 317

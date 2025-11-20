@@ -1,4 +1,4 @@
-import { HashMap, Data } from "effect"
+import { Data, HashMap } from "effect"
 
 /**
  * Entity Reference with provenance metadata
@@ -6,7 +6,7 @@ import { HashMap, Data } from "effect"
 export class EntityRef extends Data.Class<{
   readonly iri: string
   readonly label: string
-  readonly types: string[]
+  readonly types: Array<string>
   readonly foundInChunk: number
   readonly confidence: number
 }> {}
@@ -51,13 +51,12 @@ export const fromArray = (entities: ReadonlyArray<EntityRef>): EntityCache =>
  * Union two EntityCaches (monoid operation)
  * Later entries override earlier ones (last-write-wins)
  */
-export const union = (c1: EntityCache, c2: EntityCache): EntityCache =>
-  HashMap.union(c1, c2)
+export const union = (c1: EntityCache, c2: EntityCache): EntityCache => HashMap.union(c1, c2)
 
 /**
  * Format EntityCache for prompt injection
  */
-export const toPromptFragment = (cache: EntityCache): string[] => {
+export const toPromptFragment = (cache: EntityCache): Array<string> => {
   const entries = Array.from(HashMap.entries(cache))
   if (entries.length === 0) return []
 
@@ -65,8 +64,7 @@ export const toPromptFragment = (cache: EntityCache): string[] => {
     "### Known Entities",
     "We have already identified the following entities:",
     ...entries.map(
-      ([_, entity]) =>
-        `- ${entity.label}: ${entity.iri} (${entity.types.join(", ")})`
+      ([_, entity]) => `- ${entity.label}: ${entity.iri} (${entity.types.join(", ")})`
     )
   ]
 }

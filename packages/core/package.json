@@ -18,7 +18,10 @@
     "./Services/Rdf": "./src/Services/Rdf.ts",
     "./Services/Shacl": "./src/Services/Shacl.ts",
     "./Services/LlmProvider": "./src/Services/LlmProvider.ts",
-    "./Services/Nlp": "./src/Services/Nlp.ts"
+    "./Services/Nlp": "./src/Services/Nlp.ts",
+    "./Services/EntityDiscovery": "./src/Services/EntityDiscovery.ts",
+    "./Services/EntityResolution": "./src/Services/EntityResolution.ts",
+    "./Services/ExtractionPipeline": "./src/Services/ExtractionPipeline.ts"
   },
   "scripts": {
     "build": "tsc --skipLibCheck --project tsconfig.build.json",
