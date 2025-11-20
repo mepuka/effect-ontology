@@ -14,6 +14,8 @@
  */
 
 import { Data, Effect, Equal, Option, Schema } from "effect"
+import { InheritanceService } from "./Inheritance.js"
+import type { DisjointnessResult } from "./Inheritance.js"
 
 /**
  * Source of a constraint
@@ -31,24 +33,129 @@ export class MeetError extends Data.TaggedError("MeetError")<{
 }> {}
 
 /**
- * Intersect two range arrays (set intersection)
+ * Intersect two range arrays with semantic disjointness checking
  *
  * Empty array = unconstrained (Top behavior)
  * Non-empty intersection = refined ranges
  *
+ * **Semantic Behavior:**
+ * - If ranges share literal values, return intersection
+ * - If ranges don't share literals BUT overlap semantically, keep stricter one
+ * - If disjoint → return [] (signals Bottom/unsatisfiable)
+ * - If unknown → accumulate BUT prefer overlapping classes
+ *
+ * **Associativity Fix:**
+ * When one input has accumulated ranges and the other has a single range that
+ * overlaps with part of the accumulation, we return just the overlapping parts
+ * to maintain associativity.
+ *
  * @internal
  */
+/**
+ * Simplify ranges by removing subsumed classes
+ * Keeps only the most specific classes
+ *
+ * Returns empty array if ranges represent an unsatisfiable intersection type
+ * (e.g., must be both Cat AND Dog, which is impossible if Cat and Dog are disjoint)
+ */
+const simplifyRanges = (
+  ranges: ReadonlyArray<string>,
+  isSubclass: (child: string, parent: string) => Effect.Effect<boolean, never>,
+  areDisjoint: (class1: string, class2: string) => Effect.Effect<DisjointnessResult, never>
+): Effect.Effect<ReadonlyArray<string>, never> =>
+  Effect.gen(function*() {
+    if (ranges.length === 0) return []
+    if (ranges.length === 1) return [...ranges]
+
+    // For intersection types (multiple ranges), check if any pair is disjoint
+    // If we have [A, B] and A is disjoint from B, this is Bottom (unsatisfiable)
+    for (let i = 0; i < ranges.length; i++) {
+      for (let j = i + 1; j < ranges.length; j++) {
+        const disjointness = yield* areDisjoint(ranges[i], ranges[j])
+        if (disjointness._tag === "Disjoint") {
+          // Disjoint intersection type → unsatisfiable → Bottom
+          return []
+        }
+      }
+    }
+
+    // Remove subsumed classes - keep only most specific
+    const simplified: Array<string> = []
+    for (const candidate of ranges) {
+      let isSubsumed = false
+      for (const other of ranges) {
+        if (candidate !== other) {
+          // Check if 'other' is more specific than 'candidate' (other ⊑ candidate)
+          const otherIsSubclass = yield* isSubclass(other, candidate)
+          if (otherIsSubclass) {
+            // 'other' is a subclass of 'candidate', so 'candidate' is redundant
+            isSubsumed = true
+            break
+          }
+        }
+      }
+      if (!isSubsumed) {
+        simplified.push(candidate)
+      }
+    }
+    return simplified.sort()
+  })
+
 const intersectRanges = (
   a: ReadonlyArray<string>,
-  b: ReadonlyArray<string>
-): ReadonlyArray<string> => {
-  // Empty means unconstrained
-  if (a.length === 0) return b
-  if (b.length === 0) return a
+  b: ReadonlyArray<string>,
+  areDisjoint: (class1: string, class2: string) => Effect.Effect<DisjointnessResult, never>,
+  isSubclass: (child: string, parent: string) => Effect.Effect<boolean, never>
+): Effect.Effect<ReadonlyArray<string>, never> =>
+  Effect.gen(function*() {
+    // Empty means unconstrained
+    if (a.length === 0) return yield* simplifyRanges(b, isSubclass, areDisjoint)
+    if (b.length === 0) return yield* simplifyRanges(a, isSubclass, areDisjoint)
 
-  // Literal string intersection (subclass reasoning future work)
-  return a.filter((range) => b.includes(range))
-}
+    // Simplify inputs first (intersection types should be simplified)
+    const aSimplified = yield* simplifyRanges(a, isSubclass, areDisjoint)
+    const bSimplified = yield* simplifyRanges(b, isSubclass, areDisjoint)
+
+    // If either simplified to Bottom (empty), the result is Bottom
+    if (aSimplified.length === 0 || bSimplified.length === 0) return []
+
+    // Literal string intersection
+    const setA = new Set(aSimplified)
+    const setB = new Set(bSimplified)
+    const literalIntersection = Array.from(setA).filter((x) => setB.has(x))
+
+    // If intersection is non-empty, return it (already simplified)
+    if (literalIntersection.length > 0) {
+      return literalIntersection.sort()
+    }
+
+    // No literal intersection - check semantic relationships
+    let hasDisjoint = false
+    let hasOverlapping = false
+
+    // Check if ANY pair is disjoint
+    for (const rangeA of aSimplified) {
+      for (const rangeB of bSimplified) {
+        const disjointness = yield* areDisjoint(rangeA, rangeB)
+
+        if (disjointness._tag === "Disjoint") {
+          hasDisjoint = true
+        } else if (disjointness._tag === "Overlapping") {
+          hasOverlapping = true
+        }
+      }
+    }
+
+    // If we found ANY disjoint pair AND no overlapping pairs, signal Bottom
+    // This means the constraints are definitely unsatisfiable
+    if (hasDisjoint && !hasOverlapping) {
+      return []
+    }
+
+    // Accumulate simplified constraints and simplify again
+    const accumulated = Array.from(new Set([...aSimplified, ...bSimplified]))
+    return yield* simplifyRanges(accumulated, isSubclass, areDisjoint)
+  })
 
 /**
  * Take minimum of two optional numbers
@@ -75,15 +182,22 @@ const minOption = (
 /**
  * Intersect two arrays (generic set intersection)
  *
+ * Sorts results for canonical ordering (ensures commutativity)
+ *
  * @internal
  */
 const intersectArrays = <T>(
   a: ReadonlyArray<T>,
   b: ReadonlyArray<T>
 ): ReadonlyArray<T> => {
-  if (a.length === 0) return b
-  if (b.length === 0) return a
-  return a.filter((item) => b.includes(item))
+  if (a.length === 0) return [...b].sort()
+  if (b.length === 0) return [...a].sort()
+  const intersection = a.filter((item) => b.includes(item))
+  // If intersection is empty, accumulate (similar to ranges)
+  if (intersection.length === 0) {
+    return Array.from(new Set([...a, ...b])).sort()
+  }
+  return intersection.sort()
 }
 
 /**
@@ -126,9 +240,20 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
   propertyIri: Schema.String,
 
   /**
-   * Human-readable label
+   * Human-readable annotations (join-semilattice for metadata)
+   * Changed from single label to array to form a Join-Semilattice (Union) for metadata
+   * Ensures commutativity: meet(a,b) annotations = meet(b,a) annotations (set union)
    */
-  label: Schema.String,
+  annotations: Schema.DataFromSelf(Schema.Array(Schema.String)).pipe(
+    Schema.optional,
+    Schema.withDefaults({
+      constructor: () => Data.array([]),
+      decoding: () => Data.array([])
+    })
+  ),
+
+  // Legacy support for single label construction
+  label: Schema.String.pipe(Schema.optional),
 
   /**
    * Range constraints (intersection semantics)
@@ -184,7 +309,7 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
   static top(iri: string, label: string): PropertyConstraint {
     return PropertyConstraint.make({
       propertyIri: iri,
-      label,
+      annotations: Data.array([label]),
       ranges: Data.array([]),
       minCardinality: 0,
       maxCardinality: Option.none(),
@@ -203,7 +328,7 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
   static bottom(iri: string, label: string): PropertyConstraint {
     return PropertyConstraint.make({
       propertyIri: iri,
-      label,
+      annotations: Data.array([label]),
       ranges: Data.array([]),
       minCardinality: 1,
       maxCardinality: Option.some(0), // Contradiction: min > max
@@ -237,6 +362,51 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
       this.allowedValues.length === 0
     )
   }
+
+  /**
+   * Semantic equality - compares only semantic fields (not metadata)
+   *
+   * Two constraints are semantically equal if they represent the same
+   * position in the constraint lattice, regardless of their derivation
+   * history (annotations, source).
+   *
+   * Mathematical Justification:
+   *   In lattice theory, equality is defined by the partial order.
+   *   Metadata (annotations, source, label) describes the derivation path,
+   *   not the semantic position in the lattice.
+   *
+   * @param other - Constraint to compare with
+   * @returns true if semantically equal (same constraints, ignoring metadata)
+   *
+   * @example
+   * ```typescript
+   * const a = PropertyConstraint.make({
+   *   propertyIri: "hasPet",
+   *   annotations: ["from parent"],
+   *   ranges: ["Dog"],
+   *   minCardinality: 1
+   * })
+   *
+   * const b = PropertyConstraint.make({
+   *   propertyIri: "hasPet",
+   *   annotations: ["from restriction"],
+   *   ranges: ["Dog"],
+   *   minCardinality: 1
+   * })
+   *
+   * a.semanticEquals(b) // true - same constraints
+   * Equal.equals(a, b)  // false - different annotations
+   * ```
+   */
+  semanticEquals(other: PropertyConstraint): boolean {
+    return (
+      this.propertyIri === other.propertyIri &&
+      Equal.equals(this.ranges, other.ranges) &&
+      this.minCardinality === other.minCardinality &&
+      Equal.equals(this.maxCardinality, other.maxCardinality) &&
+      Equal.equals(this.allowedValues, other.allowedValues)
+    )
+  }
 }
 
 /**
@@ -249,6 +419,8 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
  * - Idempotence: a ⊓ a = a
  * - Identity: a ⊓ ⊤ = a
  * - Absorption: a ⊓ ⊥ = ⊥
+ *
+ * **Requirements**: Requires InheritanceService in context for semantic reasoning.
  *
  * @param a - First constraint
  * @param b - Second constraint
@@ -268,67 +440,62 @@ export class PropertyConstraint extends Schema.Class<PropertyConstraint>(
  *   minCardinality: 1
  * })
  *
- * const result = yield* meet(animal, dog)
+ * const result = yield* meet(animal, dog).pipe(
+ *   Effect.provide(InheritanceService.Test)
+ * )
  * // Result: ranges = ["Dog"], minCardinality = 1
  * ```
  */
 export const meet = (
   a: PropertyConstraint,
   b: PropertyConstraint
-): Effect.Effect<PropertyConstraint, MeetError> => {
-  // Precondition: same property IRI
-  if (a.propertyIri !== b.propertyIri) {
-    return Effect.fail(
-      new MeetError({
-        propertyA: a.propertyIri,
-        propertyB: b.propertyIri,
-        message: `Cannot meet constraints for different properties: ${a.propertyIri} vs ${b.propertyIri}`
-      })
-    )
-  }
-
-  // Pure computation from here - wrap in Effect.sync for lazy evaluation
-  return Effect.sync(() => {
-    // Short-circuit: Idempotence (a ⊓ a = a)
-    // Compare only semantic fields (exclude label/source metadata)
-    if (
-      Equal.equals(a.ranges, b.ranges) &&
-      a.minCardinality === b.minCardinality &&
-      Equal.equals(a.maxCardinality, b.maxCardinality) &&
-      Equal.equals(a.allowedValues, b.allowedValues)
-    ) {
-      // Semantic equality, but may differ in label/source
-      // If fully equal (including metadata), return as-is
-      if (Equal.equals(a, b)) {
-        return a
-      }
-      // Otherwise normalize label for commutativity
-      const canonicalLabel = a.label.length < b.label.length
-        ? a.label
-        : a.label.length > b.label.length
-        ? b.label
-        : a.label < b.label
-        ? a.label
-        : b.label
-
-      return PropertyConstraint.make({
-        propertyIri: a.propertyIri,
-        label: canonicalLabel,
-        ranges: a.ranges, // Already Data.array
-        minCardinality: a.minCardinality,
-        maxCardinality: a.maxCardinality,
-        allowedValues: a.allowedValues, // Already Data.array
-        source: "refined"
-      })
+): Effect.Effect<PropertyConstraint, MeetError, InheritanceService> =>
+  Effect.gen(function*() {
+    // Precondition: same property IRI
+    if (a.propertyIri !== b.propertyIri) {
+      return yield* Effect.fail(
+        new MeetError({
+          propertyA: a.propertyIri,
+          propertyB: b.propertyIri,
+          message: `Cannot meet constraints for different properties: ${a.propertyIri} vs ${b.propertyIri}`
+        })
+      )
     }
+
+    // Short-circuit: Idempotence (a ⊓ a = a)
+    // Check full equality first (including annotations)
+    if (Equal.equals(a, b)) {
+      return a
+    }
+
+    // Short-circuit: Identity with Top (a ⊓ ⊤ = a)
+    if (b.isTop()) return a
+    if (a.isTop()) return b
 
     // Short-circuit: Bottom absorbs everything
     if (a.isBottom() || b.isBottom()) {
-      return PropertyConstraint.bottom(a.propertyIri, a.label)
+      return PropertyConstraint.bottom(
+        a.propertyIri,
+        a.annotations[0] || "bottom"
+      )
     }
 
-    // Refine ranges (intersection semantics)
-    const refinedRanges = intersectRanges(a.ranges, b.ranges)
+    // Get InheritanceService from context for semantic reasoning
+    const inheritanceService = yield* InheritanceService
+
+    // Refine ranges (intersection semantics with disjointness checking and subsumption)
+    const refinedRanges = yield* intersectRanges(
+      a.ranges,
+      b.ranges,
+      (class1, class2) =>
+        inheritanceService.areDisjoint(class1, class2).pipe(
+          Effect.catchAll(() => Effect.succeed({ _tag: "Unknown" as const }))
+        ),
+      (child, parent) =>
+        inheritanceService.isSubclass(child, parent).pipe(
+          Effect.catchAll(() => Effect.succeed(false))
+        )
+    )
 
     // Refine cardinality (take stricter bounds)
     const minCard = Math.max(a.minCardinality, b.minCardinality)
@@ -337,35 +504,33 @@ export const meet = (
     // Refine allowed values (intersection)
     const refinedValues = intersectArrays(a.allowedValues, b.allowedValues)
 
+    // Merge annotations (Set Union) - sorted for canonical ordering
+    const annotations = Data.array(
+      Array.from(new Set([...a.annotations, ...b.annotations])).sort()
+    )
+
     // Check for cardinality contradictions
     const hasCardinalityContradiction = Option.match(maxCard, {
       onNone: () => false,
       onSome: (max) => minCard > max
     })
 
-    // Check for allowedValues contradictions:
-    // If both constraints have non-empty allowedValues and their intersection is empty,
-    // this is unsatisfiable (no value can satisfy both constraints)
+    // Check for allowedValues contradictions
     const hasAllowedValuesContradiction = a.allowedValues.length > 0 &&
       b.allowedValues.length > 0 &&
       refinedValues.length === 0
 
-    if (hasCardinalityContradiction || hasAllowedValuesContradiction) {
-      return PropertyConstraint.bottom(a.propertyIri, a.label)
-    }
+    // Check for range contradictions (empty refined ranges from non-empty inputs)
+    const hasRangeContradiction = refinedRanges.length === 0 &&
+      (a.ranges.length > 0 || b.ranges.length > 0)
 
-    // Choose canonical label (prefer shorter, then lexicographically smaller)
-    const canonicalLabel = a.label.length < b.label.length
-      ? a.label
-      : a.label.length > b.label.length
-      ? b.label
-      : a.label < b.label
-      ? a.label
-      : b.label
+    if (hasCardinalityContradiction || hasAllowedValuesContradiction || hasRangeContradiction) {
+      return PropertyConstraint.bottom(a.propertyIri, annotations[0])
+    }
 
     return PropertyConstraint.make({
       propertyIri: a.propertyIri,
-      label: canonicalLabel,
+      annotations,
       ranges: Data.array(refinedRanges),
       minCardinality: minCard,
       maxCardinality: maxCard,
@@ -373,21 +538,24 @@ export const meet = (
       source: "refined"
     })
   })
-}
 
 /**
  * Refinement relation (⊑) - checks if a is stricter than b
+ *
+ * Supports semantic subclass checking via InheritanceService.
  *
  * Mathematical definition: a ⊑ b ⟺ a ⊓ b = a
  *
  * Practical: a refines b if all of a's constraints are at least as strict as b's:
  * - a.minCardinality ≥ b.minCardinality
  * - a.maxCardinality ≤ b.maxCardinality (if both defined)
- * - a.ranges ⊆ b.ranges (or b has no ranges)
+ * - a.ranges ⊆ b.ranges (with semantic subclass reasoning)
+ *
+ * **Requirements**: Requires InheritanceService in context for semantic reasoning.
  *
  * @param a - First constraint (potentially stricter)
  * @param b - Second constraint (potentially looser)
- * @returns true if a refines b
+ * @returns Effect<boolean> true if a refines b
  *
  * @example
  * ```typescript
@@ -403,39 +571,64 @@ export const meet = (
  *   minCardinality: 1
  * })
  *
- * refines(dog, animal) // true - Dog is stricter than Animal
- * refines(animal, dog) // false - Animal is looser than Dog
+ * // With semantic subclass reasoning via InheritanceService
+ * yield* refines(dog, animal).pipe(
+ *   Effect.provide(InheritanceService.Test)
+ * ) // true - Dog is subclass of Animal
  * ```
  */
 export const refines = (
   a: PropertyConstraint,
   b: PropertyConstraint
-): boolean => {
-  if (a.propertyIri !== b.propertyIri) return false
+): Effect.Effect<boolean, never, InheritanceService> =>
+  Effect.gen(function*() {
+    if (a.propertyIri !== b.propertyIri) return false
 
-  // Bottom refines nothing (except Bottom)
-  if (a.isBottom()) return b.isBottom()
+    // Bottom refines everything
+    if (a.isBottom()) return true
+    // If b is Bottom but a is not, fail
+    if (b.isBottom()) return false
 
-  // Everything refines Top
-  if (b.isTop()) return true
+    // Everything refines Top
+    if (b.isTop()) return true
 
-  // Top refines only Top
-  if (a.isTop()) return b.isTop()
+    // Check cardinality: a's interval must be subset of b's
+    const minRefines = a.minCardinality >= b.minCardinality
+    const maxRefines = Option.match(a.maxCardinality, {
+      onNone: () => Option.isNone(b.maxCardinality),
+      onSome: (aMax) =>
+        Option.match(b.maxCardinality, {
+          onNone: () => true,
+          onSome: (bMax) => aMax <= bMax
+        })
+    })
 
-  // Check cardinality: a's interval must be subset of b's
-  const minRefines = a.minCardinality >= b.minCardinality
-  const maxRefines = Option.match(a.maxCardinality, {
-    onNone: () => Option.isNone(b.maxCardinality), // unbounded refines only unbounded
-    onSome: (aMax) =>
-      Option.match(b.maxCardinality, {
-        onNone: () => true, // bounded refines unbounded
-        onSome: (bMax) => aMax <= bMax
-      })
+    if (!minRefines || !maxRefines) return false
+
+    // Check ranges: a's ranges must be subclasses of b's ranges
+    // Logic: For every required range in B, A must satisfy it (be a subclass)
+    if (b.ranges.length === 0) return true // B has no range constraints
+    if (a.ranges.length === 0) return false // A is unconstrained, B is constrained
+
+    // Get InheritanceService from context for semantic subclass reasoning
+    const inheritanceService = yield* InheritanceService
+
+    // For every range 'req' in B, does A imply 'req'?
+    // A implies 'req' if ANY of A's ranges is a subclass of 'req'
+    // (Intersection Semantics: A is (Dog AND Robot). B is (Animal). Dog <= Animal, so A <= B)
+    for (const reqRange of b.ranges) {
+      let satisfied = false
+      for (const candidate of a.ranges) {
+        const isSubclassResult = yield* inheritanceService.isSubclass(candidate, reqRange).pipe(
+          Effect.catchAll(() => Effect.succeed(candidate === reqRange))
+        )
+        if (isSubclassResult) {
+          satisfied = true
+          break
+        }
+      }
+      if (!satisfied) return false
+    }
+
+    return true
   })
-
-  // Check ranges: a's ranges must be subclasses of b's ranges
-  // For now, simple containment (subclass reasoning future work)
-  const rangesRefine = b.ranges.length === 0 || a.ranges.every((aRange) => b.ranges.includes(aRange))
-
-  return minRefines && maxRefines && rangesRefine
-}

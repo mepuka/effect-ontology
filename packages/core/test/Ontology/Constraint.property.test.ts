@@ -37,12 +37,10 @@ import { Effect, Equal, FastCheck, Option } from "effect"
 // Import test utilities
 import {
   arbBottomCandidate,
-  arbBottomConstraint,
   arbConstraint,
   arbConstraintPair,
   arbConstraintTriple,
-  arbRefinementPair,
-  arbTopConstraint
+  arbRefinementPair
 } from "../fixtures/test-utils/Arbitraries.js"
 
 import { ConstraintFactory } from "../fixtures/test-utils/ConstraintFactory.js"
@@ -50,12 +48,25 @@ import { ConstraintFactory } from "../fixtures/test-utils/ConstraintFactory.js"
 import type { PropertyConstraint } from "../../src/Ontology/Constraint.js"
 import { meet, refines } from "../../src/Ontology/Constraint.js"
 
+import { TestHierarchyLayer } from "../fixtures/test-graphs.js"
+
 /**
  * Helper: Run meet operation synchronously for property-based tests
  *
  * Unwraps the Effect, throwing on error (which will fail the test)
+ * Provides InheritanceService via TestHierarchyLayer
  */
-const runMeet = (a: PropertyConstraint, b: PropertyConstraint): PropertyConstraint => Effect.runSync(meet(a, b))
+const runMeet = (a: PropertyConstraint, b: PropertyConstraint): PropertyConstraint =>
+  Effect.runSync(meet(a, b).pipe(Effect.provide(TestHierarchyLayer)))
+
+/**
+ * Helper: Run refines operation synchronously for property-based tests
+ *
+ * Uses test hierarchy for semantic subclass reasoning via InheritanceService
+ * Unwraps the Effect, throwing on error (which will fail the test)
+ */
+const runRefines = (a: PropertyConstraint, b: PropertyConstraint): boolean =>
+  Effect.runSync(refines(a, b).pipe(Effect.provide(TestHierarchyLayer)))
 
 /**
  * Test Suite: Lattice Laws
@@ -94,9 +105,9 @@ describe("PropertyConstraint - Lattice Laws (Property-Based)", () => {
         const left = runMeet(runMeet(a, b), c)
         const right = runMeet(a, runMeet(b, c))
 
-        // Verify structural equality using Effect's Equal.equals
-        // This handles nested Option, arrays, etc. correctly
-        return Equal.equals(left, right)
+        // Use semantic equality - lattice laws apply to semantic fields only
+        // Metadata (annotations, source) may differ but constraints are equivalent
+        return left.semanticEquals(right)
       }),
       { numRuns: 1000 }
     )
@@ -131,7 +142,8 @@ describe("PropertyConstraint - Lattice Laws (Property-Based)", () => {
         const ab = runMeet(a, b)
         const ba = runMeet(b, a)
 
-        return Equal.equals(ab, ba)
+        // Use semantic equality - annotations may differ in order but constraints are equivalent
+        return ab.semanticEquals(ba)
       }),
       { numRuns: 1000 }
     )
@@ -266,13 +278,13 @@ describe("PropertyConstraint - Lattice Laws (Property-Based)", () => {
     FastCheck.assert(
       FastCheck.property(arbConstraintTriple, ([a, b, c]) => {
         // Only test if a actually refines b
-        if (!refines(b, a)) return true // Skip if precondition doesn't hold
+        if (!runRefines(b, a)) return true // Skip if precondition doesn't hold
 
         const ac = runMeet(a, c)
         const bc = runMeet(b, c)
 
         // If a ⊑ b, then (a ⊓ c) ⊑ (b ⊓ c)
-        return refines(bc, ac)
+        return runRefines(bc, ac)
       }),
       { numRuns: 500 }
     )
@@ -314,9 +326,10 @@ describe("PropertyConstraint - Lattice Laws (Property-Based)", () => {
           // Bottom is a special case (refines everything)
           if (result.isBottom()) return true
 
-          // Result should refine both a and b
-          const refinesA = refines(a, result)
-          const refinesB = refines(b, result)
+          // Result should refine both a and b (result ⊑ a and result ⊑ b)
+          // This is the definition of greatest lower bound
+          const refinesA = runRefines(result, a)
+          const refinesB = runRefines(result, b)
 
           return refinesA && refinesB
         }),
@@ -438,8 +451,8 @@ describe("PropertyConstraint - Lattice Laws (Property-Based)", () => {
     () => {
       FastCheck.assert(
         FastCheck.property(arbRefinementPair, ([base, refined]) => {
-          // Refined should be stricter than base
-          return refines(base, refined)
+          // Refined should be stricter than base: refined ⊑ base
+          return runRefines(refined, base)
         }),
         { numRuns: 1000 }
       )

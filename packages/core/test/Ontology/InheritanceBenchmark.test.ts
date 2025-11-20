@@ -97,7 +97,8 @@ function createDeepHierarchy(depth: number) {
   const context = {
     nodes,
     universalProperties: [],
-    nodeIndexMap
+    nodeIndexMap,
+    disjointWithMap: HashMap.empty()
   }
 
   return { graph, context }

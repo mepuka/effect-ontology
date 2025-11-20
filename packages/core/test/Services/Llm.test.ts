@@ -43,7 +43,8 @@ describe("Services.Llm", () => {
         range: "xsd:string"
       }
     ],
-    nodeIndexMap: HashMap.empty()
+    nodeIndexMap: HashMap.empty(),
+    disjointWithMap: HashMap.empty()
   }
 
   // Test structured prompt
@@ -113,7 +114,8 @@ describe("Services.Llm", () => {
             ]
           ]),
           universalProperties: [],
-          nodeIndexMap: HashMap.empty()
+          nodeIndexMap: HashMap.empty(),
+          disjointWithMap: HashMap.empty()
         }
 
         const { propertyIris } = extractVocabulary(ontologyWithDuplicates)
@@ -127,7 +129,8 @@ describe("Services.Llm", () => {
         const emptyOntology: OntologyContext = {
           nodes: HashMap.empty(),
           universalProperties: [],
-          nodeIndexMap: HashMap.empty()
+          nodeIndexMap: HashMap.empty(),
+          disjointWithMap: HashMap.empty()
         }
 
         const { classIris, propertyIris } = extractVocabulary(emptyOntology)

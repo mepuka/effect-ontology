@@ -34,7 +34,8 @@ describe("Services.Extraction", () => {
       ]
     ]),
     universalProperties: [],
-    nodeIndexMap: HashMap.fromIterable([["http://xmlns.com/foaf/0.1/Person", 0]])
+    nodeIndexMap: HashMap.fromIterable([["http://xmlns.com/foaf/0.1/Person", 0]]),
+    disjointWithMap: HashMap.empty()
   }
 
   // Test graph (single node, no edges)

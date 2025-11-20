@@ -205,7 +205,8 @@ export const arbOntologyContext: fc.Arbitrary<OntologyContext> = fc
     return {
       nodes,
       universalProperties,
-      nodeIndexMap
+      nodeIndexMap,
+      disjointWithMap: HashMap.empty()
     }
   })
 
@@ -229,7 +230,8 @@ export const arbOntologyContextNonEmpty: fc.Arbitrary<OntologyContext> = fc
     return {
       nodes,
       universalProperties,
-      nodeIndexMap
+      nodeIndexMap,
+      disjointWithMap: HashMap.empty()
     }
   })
 
@@ -242,7 +244,8 @@ export const arbOntologyContextNonEmpty: fc.Arbitrary<OntologyContext> = fc
 export const arbEmptyOntology: fc.Arbitrary<OntologyContext> = fc.constant({
   nodes: HashMap.empty(),
   universalProperties: [],
-  nodeIndexMap: HashMap.empty()
+  nodeIndexMap: HashMap.empty(),
+  disjointWithMap: HashMap.empty()
 })
 
 /**
@@ -254,7 +257,8 @@ export const arbOntologyContextSingleClass: fc.Arbitrary<OntologyContext> = arbC
   (classNode) => ({
     nodes: HashMap.fromIterable([[classNode.id, classNode]]),
     universalProperties: [],
-    nodeIndexMap: HashMap.fromIterable([[classNode.id, 0]])
+    nodeIndexMap: HashMap.fromIterable([[classNode.id, 0]]),
+    disjointWithMap: HashMap.empty()
   })
 )
 
@@ -277,7 +281,8 @@ export const arbOntologyContextWithUniversalProps: fc.Arbitrary<OntologyContext>
     return {
       nodes,
       universalProperties,
-      nodeIndexMap
+      nodeIndexMap,
+      disjointWithMap: HashMap.empty()
     }
   })
 

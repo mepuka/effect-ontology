@@ -47,7 +47,7 @@ export class ConstraintFactory {
   static withRange(iri: string, rangeClass: string): PropertyConstraint {
     return PropertyConstraint.make({
       propertyIri: iri,
-      label: iri.split("#")[1] || iri,
+      annotations: Data.array([iri.split("#")[1] || iri]),
       ranges: Data.array([rangeClass]),
       minCardinality: 0,
       maxCardinality: Option.none(),
@@ -81,7 +81,7 @@ export class ConstraintFactory {
   ): PropertyConstraint {
     return PropertyConstraint.make({
       propertyIri: iri,
-      label: iri.split("#")[1] || iri,
+      annotations: Data.array([iri.split("#")[1] || iri]),
       ranges: Data.array([]),
       minCardinality: min,
       maxCardinality: max !== undefined ? Option.some(max) : Option.none(),
@@ -111,7 +111,7 @@ export class ConstraintFactory {
   static someValuesFrom(iri: string, rangeClass: string): PropertyConstraint {
     return PropertyConstraint.make({
       propertyIri: iri,
-      label: iri.split("#")[1] || iri,
+      annotations: Data.array([iri.split("#")[1] || iri]),
       ranges: Data.array([rangeClass]),
       minCardinality: 1, // Must have at least one
       maxCardinality: Option.none(),
@@ -141,7 +141,7 @@ export class ConstraintFactory {
   static allValuesFrom(iri: string, rangeClass: string): PropertyConstraint {
     return PropertyConstraint.make({
       propertyIri: iri,
-      label: iri.split("#")[1] || iri,
+      annotations: Data.array([iri.split("#")[1] || iri]),
       ranges: Data.array([rangeClass]),
       minCardinality: 0, // Doesn't assert existence
       maxCardinality: Option.none(),
@@ -168,7 +168,7 @@ export class ConstraintFactory {
   static hasValue(iri: string, value: string): PropertyConstraint {
     return PropertyConstraint.make({
       propertyIri: iri,
-      label: iri.split("#")[1] || iri,
+      annotations: Data.array([iri.split("#")[1] || iri]),
       ranges: Data.array([]),
       minCardinality: 1,
       maxCardinality: Option.some(1),
@@ -227,7 +227,7 @@ export class ConstraintFactory {
   static functional(iri: string, rangeClass?: string): PropertyConstraint {
     return PropertyConstraint.make({
       propertyIri: iri,
-      label: iri.split("#")[1] || iri,
+      annotations: Data.array([iri.split("#")[1] || iri]),
       ranges: Data.array(rangeClass ? [rangeClass] : []),
       minCardinality: 0,
       maxCardinality: Option.some(1),
@@ -253,9 +253,10 @@ export class ConstraintFactory {
     allowedValues?: ReadonlyArray<string>
     source?: "domain" | "restriction" | "refined"
   }): PropertyConstraint {
+    const label = params.label || params.iri.split("#")[1] || params.iri
     return PropertyConstraint.make({
       propertyIri: params.iri,
-      label: params.label || params.iri.split("#")[1] || params.iri,
+      annotations: Data.array([label]),
       ranges: Data.array(params.ranges || []),
       minCardinality: params.minCardinality ?? 0,
       maxCardinality: params.maxCardinality !== undefined

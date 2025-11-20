@@ -219,7 +219,8 @@ export const isPropertyNode = (node: OntologyNode): node is PropertyNode => node
  * const context = OntologyContext.make({
  *   nodes: HashMap.empty(),
  *   universalProperties: [],
- *   nodeIndexMap: HashMap.empty()
+ *   nodeIndexMap: HashMap.empty(),
+ *   disjointWithMap: HashMap.empty()
  * })
  * ```
  */
@@ -253,7 +254,28 @@ export const OntologyContextSchema = Schema.Struct({
   nodeIndexMap: Schema.HashMap({
     key: NodeIdSchema,
     value: Schema.Number
-  })
+  }),
+
+  /**
+   * Disjointness relationships (owl:disjointWith)
+   *
+   * Maps each class IRI to the set of class IRIs it is disjoint with.
+   * This is bidirectional: if A disjoint B, then both A->B and B->A are stored.
+   *
+   * Used by InheritanceService.areDisjoint for O(1) disjointness checking.
+   *
+   * @since 1.1.0
+   */
+  disjointWithMap: Schema.HashMap({
+    key: NodeIdSchema,
+    value: Schema.HashSet(NodeIdSchema)
+  }).pipe(
+    Schema.optional,
+    Schema.withDefaults({
+      constructor: () => HashMap.empty(),
+      decoding: () => HashMap.empty()
+    })
+  )
 })
 
 /**
@@ -310,7 +332,8 @@ export const OntologyContext = {
   empty: (): OntologyContext => ({
     nodes: HashMap.empty(),
     universalProperties: [],
-    nodeIndexMap: HashMap.empty()
+    nodeIndexMap: HashMap.empty(),
+    disjointWithMap: HashMap.empty()
   })
 }
 

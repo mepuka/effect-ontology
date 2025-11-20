@@ -24,7 +24,8 @@ describe("ShaclService", () => {
         const ontology: OntologyContext = {
           nodes: HashMap.empty(),
           universalProperties: [],
-          nodeIndexMap: HashMap.empty()
+          nodeIndexMap: HashMap.empty(),
+          disjointWithMap: HashMap.empty()
         }
 
         const shacl = yield* ShaclService
@@ -76,7 +77,8 @@ describe("ShaclService", () => {
         const _ontology: OntologyContext = {
           nodes: HashMap.empty(),
           universalProperties: [],
-          nodeIndexMap: HashMap.empty()
+          nodeIndexMap: HashMap.empty(),
+          disjointWithMap: HashMap.empty()
         }
 
         // Validate using custom shapes
@@ -388,7 +390,8 @@ describe("ShaclService", () => {
         const ontology: OntologyContext = {
           nodes: HashMap.set(HashMap.empty(), personClass.id, personClass),
           universalProperties: [],
-          nodeIndexMap: HashMap.empty()
+          nodeIndexMap: HashMap.empty(),
+          disjointWithMap: HashMap.empty()
         }
 
         const shapes = shacl.generateShaclShapes(ontology)
@@ -430,7 +433,8 @@ describe("ShaclService", () => {
         const ontology: OntologyContext = {
           nodes: HashMap.set(HashMap.empty(), personClass.id, personClass),
           universalProperties: [],
-          nodeIndexMap: HashMap.empty()
+          nodeIndexMap: HashMap.empty(),
+          disjointWithMap: HashMap.empty()
         }
 
         const shapes = shacl.generateShaclShapes(ontology)
@@ -480,7 +484,8 @@ describe("ShaclService", () => {
             organizationClass
           ),
           universalProperties: [],
-          nodeIndexMap: HashMap.empty()
+          nodeIndexMap: HashMap.empty(),
+          disjointWithMap: HashMap.empty()
         }
 
         const shapes = shacl.generateShaclShapes(ontology)
@@ -510,7 +515,8 @@ describe("ShaclService", () => {
         const ontology: OntologyContext = {
           nodes: HashMap.set(HashMap.empty(), thingClass.id, thingClass),
           universalProperties: [],
-          nodeIndexMap: HashMap.empty()
+          nodeIndexMap: HashMap.empty(),
+          disjointWithMap: HashMap.empty()
         }
 
         const shapes = shacl.generateShaclShapes(ontology)
@@ -555,7 +561,8 @@ describe("ShaclService", () => {
               range: "http://www.w3.org/2001/XMLSchema#string"
             }
           ],
-          nodeIndexMap: HashMap.empty()
+          nodeIndexMap: HashMap.empty(),
+          disjointWithMap: HashMap.empty()
         }
 
         const shapes = shacl.generateShaclShapes(ontology)

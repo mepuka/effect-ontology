@@ -10,9 +10,10 @@
  */
 
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Graph, HashMap } from "effect"
+import { Effect, Graph, HashMap, HashSet } from "effect"
 import { ClassNode, type OntologyContext } from "../../src/Graph/Types.js"
 import * as Inheritance from "../../src/Ontology/Inheritance.js"
+import { buildLinearChain, buildTestGraph } from "../fixtures/test-graphs.js"
 
 describe("InheritanceService", () => {
   describe("Linear Chain", () => {
@@ -185,68 +186,155 @@ describe("InheritanceService", () => {
         expect(result._tag).toBe("Left")
       }).pipe(Effect.runPromise))
   })
+
+  describe("Subclass Checking", () => {
+    it("should support reflexivity (A ⊑ A)", () =>
+      Effect.gen(function*() {
+        const { context, graph } = buildLinearChain()
+        const service = yield* Inheritance.make(graph, context)
+
+        const result = yield* service.isSubclass("http://example.org/A", "http://example.org/A")
+        expect(result).toBe(true)
+      }).pipe(Effect.runPromise))
+
+    it("should check direct subclass (Dog ⊑ Animal)", () =>
+      Effect.gen(function*() {
+        const { context, graph } = buildWithProperties()
+        const service = yield* Inheritance.make(graph, context)
+
+        // Employee ⊑ Person (direct)
+        const result = yield* service.isSubclass(
+          "http://example.org/Employee",
+          "http://example.org/Person"
+        )
+        expect(result).toBe(true)
+      }).pipe(Effect.runPromise))
+
+    it("should check transitive subclass (D ⊑ A via B, C)", () =>
+      Effect.gen(function*() {
+        const { context, graph } = buildLinearChain()
+        const service = yield* Inheritance.make(graph, context)
+
+        // D ⊑ A (transitive: D -> C -> B -> A)
+        const result = yield* service.isSubclass("http://example.org/D", "http://example.org/A")
+        expect(result).toBe(true)
+      }).pipe(Effect.runPromise))
+
+    it("should reject wrong direction (Animal ⊑ Dog = false)", () =>
+      Effect.gen(function*() {
+        const { context, graph } = buildWithProperties()
+        const service = yield* Inheritance.make(graph, context)
+
+        // Person ⊑ Employee (wrong direction)
+        const result = yield* service.isSubclass(
+          "http://example.org/Person",
+          "http://example.org/Employee"
+        )
+        expect(result).toBe(false)
+      }).pipe(Effect.runPromise))
+
+    it("should reject unrelated classes", () =>
+      Effect.gen(function*() {
+        const { context, graph } = buildLinearChain()
+        const service = yield* Inheritance.make(graph, context)
+
+        // A and D are related, but A is not a subclass of D
+        const result = yield* service.isSubclass("http://example.org/A", "http://example.org/D")
+        expect(result).toBe(false)
+      }).pipe(Effect.runPromise))
+  })
+
+  describe("Disjointness Checking", () => {
+    it("should detect explicit disjointness (Dog disjoint Cat)", () =>
+      Effect.gen(function*() {
+        const { context, graph } = buildTestGraph({
+          subClassOf: [],
+          disjointWith: [["http://example.org/Dog", "http://example.org/Cat"]]
+        })
+        const service = yield* Inheritance.make(graph, context)
+
+        const result = yield* service.areDisjoint(
+          "http://example.org/Dog",
+          "http://example.org/Cat"
+        )
+        expect(result._tag).toBe("Disjoint")
+      }).pipe(Effect.runPromise))
+
+    it("should detect transitive disjointness (Dog disjoint Person via Animal)", () =>
+      Effect.gen(function*() {
+        const { context, graph } = buildTestGraph({
+          subClassOf: [
+            ["http://example.org/Dog", "http://example.org/Animal"],
+            ["http://example.org/Animal", "http://example.org/Thing"],
+            ["http://example.org/Person", "http://example.org/Thing"]
+          ],
+          disjointWith: [["http://example.org/Animal", "http://example.org/Person"]]
+        })
+        const service = yield* Inheritance.make(graph, context)
+
+        // Dog ⊑ Animal, Animal disjoint Person, so Dog disjoint Person
+        const result = yield* service.areDisjoint(
+          "http://example.org/Dog",
+          "http://example.org/Person"
+        )
+        expect(result._tag).toBe("Disjoint")
+      }).pipe(Effect.runPromise))
+
+    it("should detect overlap (Dog and Animal overlap)", () =>
+      Effect.gen(function*() {
+        const { context, graph } = buildTestGraph({
+          subClassOf: [["http://example.org/Dog", "http://example.org/Animal"]],
+          disjointWith: []
+        })
+        const service = yield* Inheritance.make(graph, context)
+
+        // Dog ⊑ Animal, so they overlap
+        const result = yield* service.areDisjoint(
+          "http://example.org/Dog",
+          "http://example.org/Animal"
+        )
+        expect(result._tag).toBe("Overlapping")
+      }).pipe(Effect.runPromise))
+
+    it("should return Unknown for unrelated classes", () =>
+      Effect.gen(function*() {
+        const { context, graph } = buildTestGraph({
+          subClassOf: [],
+          disjointWith: [],
+          classes: [
+            { id: "http://example.org/Dog", label: "Dog" },
+            { id: "http://example.org/Car", label: "Car" }
+          ]
+        })
+        const service = yield* Inheritance.make(graph, context)
+
+        // Dog and Car are unrelated (no subclass or disjoint relationship)
+        const result = yield* service.areDisjoint(
+          "http://example.org/Dog",
+          "http://example.org/Car"
+        )
+        expect(result._tag).toBe("Unknown")
+      }).pipe(Effect.runPromise))
+
+    it("should handle symmetric disjointness", () =>
+      Effect.gen(function*() {
+        const { context, graph } = buildTestGraph({
+          subClassOf: [],
+          disjointWith: [["http://example.org/Dog", "http://example.org/Cat"]]
+        })
+        const service = yield* Inheritance.make(graph, context)
+
+        // Cat disjoint Dog (reverse of Dog disjoint Cat)
+        const result = yield* service.areDisjoint(
+          "http://example.org/Cat",
+          "http://example.org/Dog"
+        )
+        expect(result._tag).toBe("Disjoint")
+      }).pipe(Effect.runPromise))
+  })
 })
 
 // Test Helpers
-
-function buildLinearChain() {
-  const classA = ClassNode.make({
-    id: "http://example.org/A",
-    label: "A",
-    properties: []
-  })
-
-  const classB = ClassNode.make({
-    id: "http://example.org/B",
-    label: "B",
-    properties: []
-  })
-
-  const classC = ClassNode.make({
-    id: "http://example.org/C",
-    label: "C",
-    properties: []
-  })
-
-  const classD = ClassNode.make({
-    id: "http://example.org/D",
-    label: "D",
-    properties: []
-  })
-
-  let nodes = HashMap.empty<string, ClassNode>()
-  nodes = HashMap.set(nodes, "http://example.org/A", classA)
-  nodes = HashMap.set(nodes, "http://example.org/B", classB)
-  nodes = HashMap.set(nodes, "http://example.org/C", classC)
-  nodes = HashMap.set(nodes, "http://example.org/D", classD)
-
-  let nodeIndexMap = HashMap.empty<string, number>()
-
-  const graph = Graph.mutate(Graph.directed<string, null>(), (mutable) => {
-    const aIdx = Graph.addNode(mutable, "http://example.org/A")
-    const bIdx = Graph.addNode(mutable, "http://example.org/B")
-    const cIdx = Graph.addNode(mutable, "http://example.org/C")
-    const dIdx = Graph.addNode(mutable, "http://example.org/D")
-
-    nodeIndexMap = HashMap.set(nodeIndexMap, "http://example.org/A", aIdx)
-    nodeIndexMap = HashMap.set(nodeIndexMap, "http://example.org/B", bIdx)
-    nodeIndexMap = HashMap.set(nodeIndexMap, "http://example.org/C", cIdx)
-    nodeIndexMap = HashMap.set(nodeIndexMap, "http://example.org/D", dIdx)
-
-    // D -> C -> B -> A
-    Graph.addEdge(mutable, dIdx, cIdx, null)
-    Graph.addEdge(mutable, cIdx, bIdx, null)
-    Graph.addEdge(mutable, bIdx, aIdx, null)
-  })
-
-  const context: OntologyContext = {
-    nodes,
-    universalProperties: [],
-    nodeIndexMap
-  }
-
-  return { graph, context }
-}
 
 function buildDiamond() {
   const classA = ClassNode.make({
@@ -302,7 +390,8 @@ function buildDiamond() {
   const context: OntologyContext = {
     nodes,
     universalProperties: [],
-    nodeIndexMap
+    nodeIndexMap,
+    disjointWithMap: HashMap.empty()
   }
 
   return { graph, context }
@@ -341,7 +430,8 @@ function buildWithProperties() {
   const context: OntologyContext = {
     nodes,
     universalProperties: [],
-    nodeIndexMap
+    nodeIndexMap,
+    disjointWithMap: HashMap.empty()
   }
 
   return { graph, context }
@@ -390,7 +480,8 @@ function buildMultiLevelProperties() {
   const context: OntologyContext = {
     nodes,
     universalProperties: [],
-    nodeIndexMap
+    nodeIndexMap,
+    disjointWithMap: HashMap.empty()
   }
 
   return { graph, context }
