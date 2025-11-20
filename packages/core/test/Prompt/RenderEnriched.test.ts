@@ -5,8 +5,10 @@
  */
 
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, HashMap, Option } from "effect"
+import { Data, Effect, HashMap, Option } from "effect"
+import { PropertyConstraint } from "../../src/Graph/Constraint"
 import { KnowledgeUnit } from "../../src/Prompt/Ast"
+import { EnrichedStructuredPrompt } from "../../src/Prompt/Fragment"
 import { renderEnrichedStats, renderToEnrichedPrompt } from "../../src/Prompt/RenderEnriched"
 
 describe("Prompt.RenderEnriched", () => {
@@ -16,13 +18,13 @@ describe("Prompt.RenderEnriched", () => {
       iri: "http://xmlns.com/foaf/0.1/Person",
       label: "Person",
       definition: "Person: A human being.",
-      depth: 0,
       properties: [
-        {
+        PropertyConstraint.make({
           propertyIri: "http://xmlns.com/foaf/0.1/name",
           label: "name",
-          ranges: ["xsd:string"]
-        }
+          ranges: Data.array(["xsd:string"]),
+          maxCardinality: Option.none()
+        })
       ],
       inheritedProperties: [],
       parents: [],
@@ -33,20 +35,21 @@ describe("Prompt.RenderEnriched", () => {
       iri: "http://xmlns.com/foaf/0.1/Agent",
       label: "Agent",
       definition: "Agent: A software or human actor.",
-      depth: 1,
       properties: [
-        {
+        PropertyConstraint.make({
           propertyIri: "http://xmlns.com/foaf/0.1/mbox",
           label: "mbox",
-          ranges: ["xsd:string"]
-        }
+          ranges: Data.array(["xsd:string"]),
+          maxCardinality: Option.none()
+        })
       ],
       inheritedProperties: [
-        {
+        PropertyConstraint.make({
           propertyIri: "http://xmlns.com/foaf/0.1/name",
           label: "name",
-          ranges: ["xsd:string"]
-        }
+          ranges: Data.array(["xsd:string"]),
+          maxCardinality: Option.none()
+        })
       ],
       parents: ["http://xmlns.com/foaf/0.1/Person"],
       children: []
@@ -215,7 +218,6 @@ describe("Prompt.RenderEnriched", () => {
             iri: "test:Class",
             label: "TestClass",
             definition: "TestClass: A test class.",
-            depth: 0,
             properties: [],
             inheritedProperties: [],
             parents: [],
@@ -224,7 +226,7 @@ describe("Prompt.RenderEnriched", () => {
         ])
         const prompt2 = renderToEnrichedPrompt(singleUnitIndex)
 
-        const combined = prompt1.constructor.combine(prompt1, prompt2)
+        const combined = EnrichedStructuredPrompt.combine(prompt1, prompt2)
 
         expect(combined.system.length).toBe(prompt1.system.length + prompt2.system.length)
       }))

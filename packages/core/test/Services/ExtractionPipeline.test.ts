@@ -10,16 +10,16 @@
 
 import { LanguageModel } from "@effect/ai"
 import { describe, expect, it } from "@effect/vitest"
-import { Data, Effect, Graph as EffectGraph, HashMap, Layer, Option } from "effect"
+import { Data, Effect, Graph, HashMap, Layer, Option } from "effect"
 import { PropertyConstraint } from "../../src/Graph/Constraint.js"
 import { ClassNode } from "../../src/Graph/Types"
-import type { Graph, OntologyContext } from "../../src/Graph/Types"
+import type { NodeId, OntologyContext } from "../../src/Graph/Types"
 import { EntityDiscoveryServiceLive } from "../../src/Services/EntityDiscovery.js"
 import { streamingExtractionPipeline } from "../../src/Services/ExtractionPipeline.js"
 import { NlpServiceLive } from "../../src/Services/Nlp.js"
 
 // Mock graph for testing (empty directed graph)
-const mockGraph: Graph = EffectGraph.directed()
+const mockGraph: Graph.Graph<NodeId, unknown> = Graph.directed()
 
 // Mock ontology context for testing
 const mockOntology: OntologyContext = {
