@@ -1,0 +1,10 @@
+{
+  "ontology": "FOAF",
+  "classes": 11,
+  "properties": 11,
+  "promptLength": 4429,
+  "jsonSchemaLength": 3432,
+  "jsonSchemaPercentage": "77.5%",
+  "estimatedTokens": 317,
+  "estimatedCost": "$0.009510"
+}
