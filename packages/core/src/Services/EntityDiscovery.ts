@@ -1,6 +1,6 @@
 import { Context, Effect, HashMap, Layer, Ref } from "effect"
-import type { EntityRef, EntityRegistry } from "../Prompt/EntityCache"
-import * as EC from "../Prompt/EntityCache"
+import type { EntityRef, EntityRegistry } from "../Prompt/EntityCache.js"
+import * as EC from "../Prompt/EntityCache.js"
 
 /**
  * EntityDiscoveryService Interface

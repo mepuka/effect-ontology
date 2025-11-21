@@ -1,7 +1,7 @@
 import { HashMap } from "effect"
-import type { EntityCache } from "./EntityCache"
-import * as EC from "./EntityCache"
-import type { KnowledgeIndex } from "./KnowledgeIndex"
+import type { EntityCache } from "./EntityCache.js"
+import * as EC from "./EntityCache.js"
+import type { KnowledgeIndex } from "./KnowledgeIndex.js"
 
 /**
  * PromptContext - Product Monoid of KnowledgeIndex and EntityCache
