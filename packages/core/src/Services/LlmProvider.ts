@@ -215,34 +215,30 @@ export const makeLlmProviderLayer = (
   switch (params.provider) {
     case "anthropic": {
       const config = providerConfig as AnthropicConfig
-      return Layer.provideMerge(
-        AnthropicLanguageModelLive(config.model),
-        AnthropicClientLive(config.apiKey)
-      ) as Layer.Layer<LanguageModel.LanguageModel>
+      return AnthropicLanguageModelLive(config.model).pipe(
+        Layer.provide(AnthropicClientLive(config.apiKey))
+      )
     }
 
     case "openai": {
       const config = providerConfig as OpenAIConfig
-      return Layer.provideMerge(
-        OpenAiLanguageModelLive(config.model),
-        OpenAiClientLive(config.apiKey)
-      ) as Layer.Layer<LanguageModel.LanguageModel>
+      return OpenAiLanguageModelLive(config.model).pipe(
+        Layer.provide(OpenAiClientLive(config.apiKey))
+      )
     }
 
     case "gemini": {
       const config = providerConfig as GeminiConfig
-      return Layer.provideMerge(
-        GoogleLanguageModelLive(config.model),
-        GoogleClientLive(config.apiKey)
+      return GoogleLanguageModelLive(config.model).pipe(
+        Layer.provide(GoogleClientLive(config.apiKey))
       )
     }
 
     case "openrouter": {
       const config = providerConfig as OpenRouterConfig
-      return Layer.provideMerge(
-        OpenAiLanguageModelLive(config.model),
-        OpenAiClientLive(config.apiKey, "https://openrouter.ai/api/v1")
-      ) as Layer.Layer<LanguageModel.LanguageModel>
+      return OpenAiLanguageModelLive(config.model).pipe(
+        Layer.provide(OpenAiClientLive(config.apiKey, "https://openrouter.ai/api/v1"))
+      )
     }
 
     default: {

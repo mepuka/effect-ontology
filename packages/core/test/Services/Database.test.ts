@@ -1,4 +1,3 @@
-import { SqlClient } from "@effect/sql"
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
 import { Database, DatabaseLive } from "../../src/Services/Database.js"

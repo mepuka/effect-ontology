@@ -81,7 +81,7 @@ const testLayer = OntologyCacheLive
 
 describe("OntologyCache", () => {
   it("should compute KnowledgeIndex on cache miss", async () => {
-    const result = await Effect.gen(function*() {
+    const _result = await Effect.gen(function*() {
       const cache = yield* OntologyCache
 
       const testOntology = createTestOntology([

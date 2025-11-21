@@ -12,6 +12,7 @@
  * - Idempotent writes (same content = same file, retry-safe)
  * - Hash verification (return hash for validation)
  */
+import type { Error as PError } from "@effect/platform"
 import { FileSystem } from "@effect/platform"
 import { Context, Effect, Hash, Layer } from "effect"
 
@@ -50,19 +51,19 @@ export interface ArtifactStore {
       readonly hash: number
       readonly hexHash: string
     },
-    never,
+    PError.PlatformError,
     never
   >
 
   /**
    * Load artifact from filesystem
    */
-  readonly load: (path: string) => Effect.Effect<string, never, never>
+  readonly load: (path: string) => Effect.Effect<string, PError.PlatformError, never>
 
   /**
    * Delete all artifacts for a run
    */
-  readonly delete: (runId: string) => Effect.Effect<void, never, never>
+  readonly delete: (runId: string) => Effect.Effect<void, PError.PlatformError, never>
 }
 
 /**
@@ -77,8 +78,11 @@ const makeArtifactStore = Effect.gen(function*() {
   const fs = yield* FileSystem.FileSystem
   const baseDir = "extraction_data"
 
-  // Ensure base directory exists
-  yield* fs.makeDirectory(baseDir, { recursive: true })
+  // Ensure base directory exists (ignore if already exists)
+  yield* Effect.orElseSucceed(
+    fs.makeDirectory(baseDir, { recursive: true }),
+    () => void 0
+  )
 
   return {
     save: (runId: string, key: string, content: string) =>
@@ -95,7 +99,10 @@ const makeArtifactStore = Effect.gen(function*() {
         const lastSlash = path.lastIndexOf("/")
         if (lastSlash > 0) {
           const parentDir = path.substring(0, lastSlash)
-          yield* fs.makeDirectory(parentDir, { recursive: true })
+          yield* Effect.orElseSucceed(
+            fs.makeDirectory(parentDir, { recursive: true }),
+            () => void 0
+          )
         }
 
         // Write file (idempotent - overwrites if exists)
@@ -107,7 +114,7 @@ const makeArtifactStore = Effect.gen(function*() {
     load: (path: string) => fs.readFileString(path),
 
     delete: (runId: string) => fs.remove(`${baseDir}/${runId}`, { recursive: true })
-  } as ArtifactStore
+  } satisfies ArtifactStore
 })
 
 /**

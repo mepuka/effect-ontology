@@ -1,3 +1,4 @@
+import { LanguageModel } from "@effect/ai"
 import { BunFileSystem } from "@effect/platform-bun"
 import { Effect, Graph, HashMap, Layer } from "effect"
 import { describe, expect, it } from "vitest"
@@ -6,7 +7,7 @@ import * as EC from "../../src/Prompt/EntityCache.js"
 import { ArtifactStore, ArtifactStoreLive } from "../../src/Services/ArtifactStore.js"
 import { Database, DatabaseLive } from "../../src/Services/Database.js"
 import { EntityDiscoveryService, EntityDiscoveryServiceLive } from "../../src/Services/EntityDiscovery.js"
-import { OntologyCache, OntologyCacheLive } from "../../src/Services/OntologyCache.js"
+import { OntologyCacheLive } from "../../src/Services/OntologyCache.js"
 import { RdfService } from "../../src/Services/Rdf.js"
 import { RunService, RunServiceLive } from "../../src/Services/RunService.js"
 import { CreateRunParams } from "../../src/Services/WorkflowTypes.js"
@@ -19,13 +20,20 @@ import {
   saveFinalArtifactActivity
 } from "../../src/Workflow/Activities.js"
 
+// Mock LanguageModel layer for testing (never actually called due to preExtractedRdf)
+const MockLanguageModelLayer = Layer.succeed(LanguageModel.LanguageModel, {
+  generate: () => Effect.die("LanguageModel.generate should not be called in tests with preExtractedRdf"),
+  stream: () => Effect.die("LanguageModel.stream should not be called in tests")
+} as any)
+
 // Test layer providing all required services
 const testLayer = Layer.provideMerge(
   Layer.mergeAll(
     RunServiceLive,
     OntologyCacheLive,
     EntityDiscoveryServiceLive,
-    RdfService.Default
+    RdfService.Default,
+    MockLanguageModelLayer
   ),
   Layer.merge(DatabaseLive, Layer.provideMerge(ArtifactStoreLive, BunFileSystem.layer))
 )
@@ -46,7 +54,7 @@ describe("Workflow Activities", () => {
     it("should load input text from DB + ArtifactStore", async () => {
       const program = Effect.gen(function*() {
         const runService = yield* RunService
-        const db = yield* Database
+        const _db = yield* Database
 
         // Create a run with input text
         const params = new CreateRunParams({
@@ -89,8 +97,10 @@ describe("Workflow Activities", () => {
         const testRdf = `@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 <http://example.org/Alice> rdfs:label "Alice" .`
 
+        const testRunId = "test-run-process-batch"
         // Process first batch with pre-extracted RDF (no LLM)
         const result = yield* processBatchActivity({
+          runId: testRunId,
           chunks: ["Alice lives in New York.", "Bob works at Microsoft."],
           batchIndex: 0,
           ontology: testOntology,
@@ -127,8 +137,10 @@ describe("Workflow Activities", () => {
         const testRdf = `@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 <http://example.org/Bob> rdfs:label "Bob" .`
 
+        const testRunId2 = "test-run-process-batch-2"
         // Process batch with checkpoint
         const result = yield* processBatchActivity({
+          runId: testRunId2,
           chunks: ["New chunk text"],
           batchIndex: 1,
           ontology: testOntology,
@@ -140,7 +152,7 @@ describe("Workflow Activities", () => {
 
         // Verify entity was restored
         expect(result.entities).toBeDefined()
-        const snapshot = yield* discovery.getSnapshot()
+        const snapshot = yield* discovery.getSnapshot(testRunId2)
         expect(HashMap.has(snapshot.entities, "alice")).toBe(true)
       })
 
@@ -228,6 +240,67 @@ describe("Workflow Activities", () => {
         const loadedJson = yield* artifactStore.load(result.checkpointResult.path)
         expect(loadedJson).toBeDefined()
         expect(loadedJson).toContain("Alice")
+      })
+
+      await Effect.runPromise(program.pipe(Effect.provide(testLayer)))
+    })
+
+    it("should rollback both writes on transaction failure", async () => {
+      const program = Effect.gen(function*() {
+        const runService = yield* RunService
+        const db = yield* Database
+
+        // Create a run
+        const params = new CreateRunParams({
+          inputText: "Test input",
+          ontology: testOntology,
+          llmProvider: "anthropic",
+          model: "claude-3-5-sonnet-20241022"
+        })
+        const { runId } = yield* runService.create(params)
+
+        // Create entity cache
+        const entityCache = HashMap.make([
+          "alice",
+          new EC.EntityRef({
+            iri: "http://example.org/Alice",
+            label: "Alice",
+            types: ["http://example.org/Person"],
+            foundInChunk: 0,
+            confidence: 1.0
+          })
+        ])
+
+        const turtleRdf = `@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+<http://example.org/Alice> rdfs:label "Alice" .`
+
+        // Try to save with invalid batch_index (will cause constraint violation)
+        // This simulates a transaction failure
+        const invalidBatchIndex = -1 // Invalid - should cause constraint violation
+
+        yield* saveBatchWithCheckpointActivity({
+          runId,
+          batchIndex: invalidBatchIndex,
+          turtleRdf,
+          entityCache
+        }).pipe(Effect.exit)
+
+        // Verify transaction rolled back - neither record should exist
+        const batches = yield* db.client<{ count: number }>`
+          SELECT COUNT(*) as count
+          FROM batch_artifacts
+          WHERE run_id = ${runId} AND batch_index = ${invalidBatchIndex}
+        `
+
+        const checkpoints = yield* db.client<{ count: number }>`
+          SELECT COUNT(*) as count
+          FROM run_checkpoints
+          WHERE run_id = ${runId} AND batch_index = ${invalidBatchIndex}
+        `
+
+        // Both should be 0 (transaction rolled back)
+        expect(batches[0].count).toBe(0)
+        expect(checkpoints[0].count).toBe(0)
       })
 
       await Effect.runPromise(program.pipe(Effect.provide(testLayer)))

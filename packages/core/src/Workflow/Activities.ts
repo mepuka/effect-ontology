@@ -17,13 +17,12 @@
  * - Atomic transactions for batch + checkpoint saves
  */
 
-import type { Graph } from "effect"
-import { Effect, HashMap } from "effect"
+import type { Graph, HashMap } from "effect"
+import { Effect } from "effect"
+import type { NodeId } from "../Graph/Types.js"
 import type { EntityRef } from "../Prompt/EntityCache.js"
 import { deserializeEntityCache, serializeEntityCache } from "../Prompt/EntityCache.js"
-import { knowledgeIndexAlgebra } from "../Prompt/Algebra.js"
 import { renderToStructuredPrompt } from "../Prompt/Render.js"
-import { solveToKnowledgeIndex } from "../Prompt/Solver.js"
 import { makeKnowledgeGraphSchema } from "../Schema/Factory.js"
 import { ArtifactStore } from "../Services/ArtifactStore.js"
 import { Database } from "../Services/Database.js"
@@ -33,7 +32,6 @@ import { extractKnowledgeGraph, extractVocabulary } from "../Services/Llm.js"
 import { OntologyCache } from "../Services/OntologyCache.js"
 import { RdfService } from "../Services/Rdf.js"
 import { RunService } from "../Services/RunService.js"
-import type { NodeId } from "../Graph/Types.js"
 
 // ============================================================================
 // Activity Input Types
@@ -44,6 +42,7 @@ export interface LoadInputTextInput {
 }
 
 export interface ProcessBatchInput {
+  readonly runId: string
   readonly chunks: ReadonlyArray<string>
   readonly batchIndex: number
   readonly ontology: any // OntologyContext - using any to avoid circular imports
@@ -63,6 +62,10 @@ export interface SaveBatchWithCheckpointInput {
 export interface LoadCheckpointInput {
   readonly runId: string
   readonly batchIndex: number
+}
+
+export interface FindLastCheckpointInput {
+  readonly runId: string
 }
 
 export interface MergeAllBatchesInput {
@@ -136,16 +139,16 @@ export const processBatchActivity = (input: ProcessBatchInput) =>
     const cache = yield* OntologyCache
     const rdf = yield* RdfService
 
-    // Restore or reset entity state
+    // Restore or reset entity state for this run
     if (input.initialEntitySnapshot) {
-      yield* discovery.restore(input.initialEntitySnapshot)
+      yield* discovery.restore(input.runId, input.initialEntitySnapshot)
     } else {
-      yield* discovery.reset()
+      yield* discovery.reset(input.runId)
     }
 
     // If pre-extracted RDF provided (testing), skip LLM extraction
     if (input.preExtractedRdf) {
-      const snapshot = yield* discovery.getSnapshot()
+      const snapshot = yield* discovery.getSnapshot(input.runId)
       return {
         entities: snapshot.entities,
         rdf: input.preExtractedRdf
@@ -167,8 +170,7 @@ export const processBatchActivity = (input: ProcessBatchInput) =>
     // Process each chunk sequentially (entity accumulation requires order)
     const allKnowledgeGraphs = yield* Effect.forEach(
       input.chunks,
-      (chunkText) =>
-        extractKnowledgeGraph(chunkText, input.ontology, prompt, schema),
+      (chunkText) => extractKnowledgeGraph(chunkText, input.ontology, prompt, schema),
       { concurrency: 1 } // Sequential to maintain entity order
     )
 
@@ -186,8 +188,8 @@ export const processBatchActivity = (input: ProcessBatchInput) =>
     // Merge all RDF outputs
     const mergedRdf = yield* mergeGraphsWithResolution(allTurtles)
 
-    // Get final entity snapshot
-    const snapshot = yield* discovery.getSnapshot()
+    // Get final entity snapshot for this run
+    const snapshot = yield* discovery.getSnapshot(input.runId)
 
     return {
       entities: snapshot.entities,
@@ -235,32 +237,70 @@ export const saveBatchWithCheckpointActivity = (input: SaveBatchWithCheckpointIn
       checkpointJson
     )
 
-    // 2. THEN update DB atomically (both or neither)
-    yield* Effect.all(
-      [
-        db.client`
+    // 2. THEN update DB atomically (both or neither) in a single transaction
+    yield* db.client.withTransaction(
+      Effect.gen(function*() {
+        yield* db.client`
           INSERT INTO batch_artifacts (run_id, batch_index, turtle_path, turtle_hash)
           VALUES (${input.runId}, ${input.batchIndex}, ${batchResult.path}, ${batchResult.hexHash})
           ON CONFLICT (run_id, batch_index) DO UPDATE SET
             turtle_path = ${batchResult.path},
             turtle_hash = ${batchResult.hexHash}
-        `,
-        db.client`
+        `
+        yield* db.client`
           INSERT INTO run_checkpoints (run_id, batch_index, entity_snapshot_path, entity_snapshot_hash)
           VALUES (${input.runId}, ${input.batchIndex}, ${checkpointResult.path}, ${checkpointResult.hexHash})
           ON CONFLICT (run_id, batch_index) DO UPDATE SET
             entity_snapshot_path = ${checkpointResult.path},
             entity_snapshot_hash = ${checkpointResult.hexHash}
         `
-      ],
-      { concurrency: 2 }
+      })
     )
 
     return { batchResult, checkpointResult }
   })
 
 // ============================================================================
-// Activity 4: Load Checkpoint
+// Activity 4: Find Last Checkpoint
+// ============================================================================
+
+/**
+ * Find the most recent checkpoint for a run
+ *
+ * Returns the last completed batch checkpoint, if any.
+ * Returns null if no checkpoints exist yet.
+ *
+ * Steps:
+ * 1. Query run_checkpoints table for max batch_index
+ * 2. Return checkpoint record or null
+ */
+export const findLastCheckpointActivity = (input: FindLastCheckpointInput) =>
+  Effect.gen(function*() {
+    const db = yield* Database
+
+    // Get most recent checkpoint (max batch_index)
+    const rows = yield* db.client<{
+      batch_index: number
+      entity_snapshot_path: string
+      entity_snapshot_hash: string
+      created_at: string
+    }>`
+      SELECT batch_index, entity_snapshot_path, entity_snapshot_hash, created_at
+      FROM run_checkpoints
+      WHERE run_id = ${input.runId}
+      ORDER BY batch_index DESC
+      LIMIT 1
+    `
+
+    if (rows.length === 0) {
+      return null
+    }
+
+    return rows[0]
+  })
+
+// ============================================================================
+// Activity 5: Load Checkpoint
 // ============================================================================
 
 /**
@@ -300,7 +340,7 @@ export const loadCheckpointActivity = (input: LoadCheckpointInput) =>
   })
 
 // ============================================================================
-// Activity 5: Merge All Batches
+// Activity 6: Merge All Batches
 // ============================================================================
 
 /**
@@ -365,18 +405,31 @@ export const mergeAllBatchesActivity = (input: MergeAllBatchesInput) =>
       new Map(batches.map((b) => [b.turtle_hash, b])).values()
     )
 
-    // Load all batch RDF files (parallel with bounded concurrency)
-    const turtles = yield* Effect.all(
-      uniqueBatches.map((batch) => artifactStore.load(batch.turtle_path)),
-      { concurrency: 10 }
+    // Incremental merge to avoid loading all batches into memory at once
+    // Merge one batch at a time with accumulated result
+    const mergedRdf = yield* Effect.reduce(
+      uniqueBatches,
+      "", // Start with empty graph
+      (accumulated, batch) =>
+        Effect.gen(function*() {
+          // Load current batch
+          const turtle = yield* artifactStore.load(batch.turtle_path)
+
+          // If accumulated is empty, return first batch
+          if (accumulated === "") {
+            return turtle
+          }
+
+          // Merge accumulated result with current batch (two graphs at a time)
+          return yield* mergeGraphsWithResolution([accumulated, turtle])
+        })
     )
 
-    // Merge using existing EntityResolution logic
-    return yield* mergeGraphsWithResolution(turtles)
+    return mergedRdf
   })
 
 // ============================================================================
-// Activity 6: Save Final Artifact
+// Activity 7: Save Final Artifact
 // ============================================================================
 
 /**
@@ -393,7 +446,7 @@ export const saveFinalArtifactActivity = (input: SaveFinalArtifactInput) =>
     const runService = yield* RunService
 
     // Save final merged RDF
-    const { path, hexHash } = yield* artifactStore.save(
+    const { hexHash, path } = yield* artifactStore.save(
       input.runId,
       "final_output.ttl",
       input.mergedTurtle
