@@ -25,6 +25,12 @@ export interface Database {
    * SqlClient for executing queries
    */
   readonly client: SqlClient.SqlClient
+
+  /**
+   * Validate that database is file-based (not in-memory)
+   * Fails if database is in-memory, which would lose data on process exit
+   */
+  readonly validateProduction: () => Effect.Effect<void, Error>
 }
 
 /**
@@ -35,15 +41,14 @@ export const Database = Context.GenericTag<Database>("@effect-ontology/core/Data
 /**
  * Create database service implementation
  */
-const makeDatabase = Effect.gen(
-  function*() {
-    const sql = yield* SqlClient.SqlClient
+const makeDatabase = Effect.gen(function*() {
+  const sql = yield* SqlClient.SqlClient
 
-    // Execute schema statements individually
-    // Using CREATE TABLE IF NOT EXISTS makes this idempotent
-    yield* sql.unsafe(`PRAGMA foreign_keys = ON`)
+  // Execute schema statements individually
+  // Using CREATE TABLE IF NOT EXISTS makes this idempotent
+  yield* sql.unsafe(`PRAGMA foreign_keys = ON`)
 
-    yield* sql.unsafe(`
+  yield* sql.unsafe(`
     CREATE TABLE IF NOT EXISTS extraction_runs (
       run_id TEXT PRIMARY KEY,
       status TEXT NOT NULL CHECK(status IN ('queued', 'running', 'completed', 'failed')),
@@ -53,6 +58,9 @@ const makeDatabase = Effect.gen(
       total_batches INTEGER,
       batches_completed INTEGER DEFAULT 0
         CHECK(total_batches IS NULL OR batches_completed <= total_batches),
+      window_size INTEGER,
+      overlap INTEGER,
+      batch_size INTEGER,
       final_turtle_path TEXT,
       final_turtle_hash TEXT,
       error_message TEXT,
@@ -61,11 +69,11 @@ const makeDatabase = Effect.gen(
     )
   `)
 
-    yield* sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_extraction_runs_status ON extraction_runs(status)`)
-    yield* sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_extraction_runs_created ON extraction_runs(created_at)`)
-    yield* sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_extraction_runs_ontology_hash ON extraction_runs(ontology_hash)`)
+  yield* sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_extraction_runs_status ON extraction_runs(status)`)
+  yield* sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_extraction_runs_created ON extraction_runs(created_at)`)
+  yield* sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_extraction_runs_ontology_hash ON extraction_runs(ontology_hash)`)
 
-    yield* sql.unsafe(`
+  yield* sql.unsafe(`
     CREATE TABLE IF NOT EXISTS run_checkpoints (
       run_id TEXT NOT NULL,
       batch_index INTEGER NOT NULL,
@@ -77,7 +85,7 @@ const makeDatabase = Effect.gen(
     )
   `)
 
-    yield* sql.unsafe(`
+  yield* sql.unsafe(`
     CREATE TABLE IF NOT EXISTS run_artifacts (
       run_id TEXT NOT NULL,
       artifact_type TEXT NOT NULL CHECK(artifact_type IN ('input_text', 'final_turtle')),
@@ -89,7 +97,7 @@ const makeDatabase = Effect.gen(
     )
   `)
 
-    yield* sql.unsafe(`
+  yield* sql.unsafe(`
     CREATE TABLE IF NOT EXISTS batch_artifacts (
       run_id TEXT NOT NULL,
       batch_index INTEGER NOT NULL,
@@ -101,13 +109,34 @@ const makeDatabase = Effect.gen(
     )
   `)
 
-    yield* sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_batch_artifacts_run ON batch_artifacts(run_id)`)
+  yield* sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_batch_artifacts_run ON batch_artifacts(run_id)`)
 
-    return {
-      client: sql
-    } satisfies Database
-  }
-)
+  return {
+    client: sql,
+    validateProduction: () =>
+      Effect.gen(function*() {
+        // Check if database is in-memory by querying database_list
+        // In-memory databases have empty, null, or ":memory:" file paths
+        const result = yield* sql<{ name: string; file: string | null }>`
+          PRAGMA database_list
+        `
+
+        // Find the main database (name = 'main')
+        const mainDb = result.find((row) => row.name === "main")
+
+        // For in-memory databases, the file will be empty, null, or ":memory:"
+        const isInMemory = !mainDb || !mainDb.file || mainDb.file === "" || mainDb.file === ":memory:"
+
+        if (isInMemory) {
+          return yield* Effect.fail(
+            new Error(
+              "Database is in-memory. Use DatabaseFileLive for production to ensure data persistence."
+            )
+          )
+        }
+      })
+  } satisfies Database
+})
 
 /**
  * Live layer - provides in-memory SQLite for tests

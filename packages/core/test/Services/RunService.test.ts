@@ -1,7 +1,7 @@
 import { BunFileSystem } from "@effect/platform-bun"
 import { Effect, HashMap, Layer, Option } from "effect"
 import { describe, expect, it } from "vitest"
-import type { OntologyContext } from "../../src/Graph/Types.js"
+import { ClassNode, type OntologyContext } from "../../src/Graph/Types.js"
 import { ArtifactStore, ArtifactStoreLive } from "../../src/Services/ArtifactStore.js"
 import { Database, DatabaseLive } from "../../src/Services/Database.js"
 import { hashOntology, RunService, RunServiceLive } from "../../src/Services/RunService.js"
@@ -40,13 +40,14 @@ describe("RunService", () => {
         propertyParentsMap: HashMap.empty()
       }
 
+      const personNode = new ClassNode({
+        _tag: "Class",
+        id: "http://example.org/Person",
+        label: "Person"
+      })
+
       const ontology2: OntologyContext = {
-        nodes: HashMap.make(["http://example.org/Person", {
-          _tag: "Class" as const,
-          id: "http://example.org/Person",
-          label: "Person",
-          properties: []
-        }]),
+        nodes: HashMap.make(["http://example.org/Person", personNode]),
         universalProperties: [],
         nodeIndexMap: HashMap.empty(),
         disjointWithMap: HashMap.empty(),

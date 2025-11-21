@@ -23,6 +23,12 @@ export {
 } from "./EntityDiscovery.js"
 
 export { mergeGraphsWithResolution, ParseError, type RdfGraph } from "./EntityResolution.js"
+export {
+  WorkflowManagerService,
+  type WorkflowManagerService as WorkflowManagerServiceType,
+  WorkflowManagerServiceLive,
+  WorkflowManagerServiceTest
+} from "./WorkflowManager.js"
 
 export { defaultPipelineConfig, type PipelineConfig, streamingExtractionPipeline } from "./ExtractionPipeline.js"
 

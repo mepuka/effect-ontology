@@ -109,6 +109,10 @@ export const streamingExtractionPipeline = (
     const discovery = yield* EntityDiscoveryService
     const rdf = yield* RdfService
 
+    // Generate a unique runId for this pipeline execution
+    // ExtractionPipeline is a standalone function, so we create a temporary runId
+    const pipelineRunId = crypto.randomUUID()
+
     // 2. Build KnowledgeIndex from ontology graph (static knowledge)
     // Uses catamorphic fold over graph DAG to create queryable index
     const knowledgeIndex = yield* solveToKnowledgeIndex(graph, ontology, knowledgeIndexAlgebra)
@@ -132,7 +136,7 @@ export const streamingExtractionPipeline = (
             const currentChunkIndex = yield* Ref.getAndUpdate(chunkIndexRef, (n) => n + 1)
 
             // A. Get current entity state (dynamic knowledge)
-            const registry = yield* discovery.getSnapshot()
+            const registry = yield* discovery.getSnapshot(pipelineRunId)
 
             // B. Build prompt context (fuse static ontology + dynamic entities)
             const promptContext = {
@@ -162,7 +166,7 @@ export const streamingExtractionPipeline = (
                   confidence: 1.0 // TODO: Add confidence scoring
                 })
             )
-            yield* discovery.register(newEntities)
+            yield* discovery.register(pipelineRunId, newEntities)
 
             return rdfGraph
           }),

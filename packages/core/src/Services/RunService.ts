@@ -38,8 +38,8 @@ export const hashOntology = (ontology: OntologyContext): number => {
 
   // Sort universal properties for stability
   const sortedUniversalProps = ontology.universalProperties
-    .map((p) => ({ property: p.property, ranges: Array.from(p.ranges).sort() }))
-    .sort((a, b) => a.property.localeCompare(b.property))
+    .map((p) => ({ propertyIri: p.propertyIri, ranges: Array.from(p.ranges).sort() }))
+    .sort((a, b) => a.propertyIri.localeCompare(b.propertyIri))
 
   // Create serializable representation (include key discriminators only)
   const serializable = {
@@ -69,9 +69,12 @@ export interface RunService {
   /**
    * Create new extraction run
    * Validates input size, saves input text, computes ontology hash
+   * @param params - Run creation parameters
+   * @param runId - Optional pre-generated runId (if not provided, will be generated)
    */
   readonly create: (
-    params: CreateRunParams
+    params: CreateRunParams,
+    runId?: string
   ) => Effect.Effect<{ runId: string; ontologyHash: number }, Error>
 
   /**
@@ -99,6 +102,17 @@ export interface RunService {
     runId: string,
     batchesCompleted: number,
     totalBatches: number
+  ) => Effect.Effect<void, Error>
+
+  /**
+   * Update chunking parameters for a run
+   * Called after run creation to store windowSize, overlap, and batchSize for resume capability
+   */
+  readonly updateChunkingParams: (
+    runId: string,
+    windowSize: number,
+    overlap: number,
+    batchSize: number
   ) => Effect.Effect<void, Error>
 
   /**
@@ -136,7 +150,7 @@ const makeRunService = Effect.gen(function*() {
   const db = yield* Database
 
   return {
-    create: (params: CreateRunParams) =>
+    create: (params: CreateRunParams, providedRunId?: string) =>
       Effect.gen(function*() {
         // Input validation - 10MB limit
         const MAX_TEXT_SIZE = 10_000_000
@@ -146,8 +160,8 @@ const makeRunService = Effect.gen(function*() {
           )
         }
 
-        // Generate run ID
-        const runId = crypto.randomUUID()
+        // Use provided runId or generate new one
+        const runId = providedRunId || crypto.randomUUID()
 
         // Compute ontology hash
         const ontologyHash = hashOntology(params.ontology)
@@ -236,6 +250,23 @@ const makeRunService = Effect.gen(function*() {
           UPDATE extraction_runs
           SET batches_completed = ${batchesCompleted},
               total_batches = ${totalBatches},
+              updated_at = datetime('now')
+          WHERE run_id = ${runId}
+        `
+      }),
+
+    updateChunkingParams: (
+      runId: string,
+      windowSize: number,
+      overlap: number,
+      batchSize: number
+    ) =>
+      Effect.gen(function*() {
+        yield* db.client`
+          UPDATE extraction_runs
+          SET window_size = ${windowSize},
+              overlap = ${overlap},
+              batch_size = ${batchSize},
               updated_at = datetime('now')
           WHERE run_id = ${runId}
         `

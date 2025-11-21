@@ -5,34 +5,39 @@ import * as EC from "../Prompt/EntityCache"
 /**
  * EntityDiscoveryService Interface
  *
- * Manages the accumulation of discovered entities across parallel stream workers.
- * Uses Ref for atomic updates in concurrent context.
+ * Manages the accumulation of discovered entities per run.
+ * Uses runId-keyed state map to support concurrent runs without interference.
  */
 export interface EntityDiscoveryService {
   /**
-   * Get current snapshot of entity registry
+   * Get current snapshot of entity registry for a run
    */
-  readonly getSnapshot: () => Effect.Effect<EntityRegistry>
+  readonly getSnapshot: (runId: string) => Effect.Effect<EntityRegistry>
 
   /**
-   * Register new entities (atomic update)
+   * Register new entities (atomic update) for a run
    */
-  readonly register: (newEntities: ReadonlyArray<EntityRef>) => Effect.Effect<void>
+  readonly register: (runId: string, newEntities: ReadonlyArray<EntityRef>) => Effect.Effect<void>
 
   /**
-   * Generate prompt context from current state
+   * Generate prompt context from current state for a run
    */
-  readonly toPromptContext: () => Effect.Effect<ReadonlyArray<string>>
+  readonly toPromptContext: (runId: string) => Effect.Effect<ReadonlyArray<string>>
 
   /**
-   * Restore entity cache from checkpoint (for resume)
+   * Restore entity cache from checkpoint (for resume) for a run
    */
-  readonly restore: (cache: HashMap.HashMap<string, EntityRef>) => Effect.Effect<void>
+  readonly restore: (runId: string, cache: HashMap.HashMap<string, EntityRef>) => Effect.Effect<void>
 
   /**
    * Reset entity cache to empty (for new run)
    */
-  readonly reset: () => Effect.Effect<void>
+  readonly reset: (runId: string) => Effect.Effect<void>
+
+  /**
+   * Clean up state for a completed run
+   */
+  readonly cleanup: (runId: string) => Effect.Effect<void>
 }
 
 /**
@@ -43,26 +48,69 @@ export const EntityDiscoveryService = Context.GenericTag<EntityDiscoveryService>
 )
 
 /**
- * Create entity discovery service implementation with isolated state
+ * Create entity discovery service implementation with per-run isolated state
+ * Uses runId-keyed state map to support concurrent runs
  */
 const makeEntityDiscoveryService = Effect.gen(function*() {
-  // Shared mutable state
-  const state = yield* Ref.make<EntityRegistry>({
-    entities: EC.empty
-  })
+  // Map of runId -> Ref<EntityRegistry> for per-run state isolation
+  const stateByRun = yield* Ref.make(HashMap.empty<string, Ref.Ref<EntityRegistry>>())
+
+  /**
+   * Get or create state for a specific run
+   */
+  const getOrCreateRunState = (runId: string) =>
+    Effect.gen(function*() {
+      const map = yield* Ref.get(stateByRun)
+      const existing = HashMap.get(map, runId)
+      if (existing._tag === "Some") {
+        return existing.value
+      }
+
+      // Create new state for this run
+      const newState = yield* Ref.make<EntityRegistry>({
+        entities: EC.empty
+      })
+      yield* Ref.update(stateByRun, HashMap.set(runId, newState))
+      return newState
+    })
 
   return {
-    getSnapshot: () => Ref.get(state),
-    register: (newEntities: ReadonlyArray<EntityRef>) =>
-      Ref.update(state, (current) => ({
-        entities: newEntities.reduce(
-          (cache, entity) => HashMap.set(cache, EC.normalize(entity.label), entity),
-          current.entities
-        )
-      })),
-    toPromptContext: () => Ref.get(state).pipe(Effect.map((registry) => EC.toPromptFragment(registry.entities))),
-    restore: (cache: HashMap.HashMap<string, EntityRef>) => Ref.set(state, { entities: cache }),
-    reset: () => Ref.set(state, { entities: EC.empty })
+    getSnapshot: (runId: string) =>
+      Effect.gen(function*() {
+        const state = yield* getOrCreateRunState(runId)
+        return yield* Ref.get(state)
+      }),
+    register: (runId: string, newEntities: ReadonlyArray<EntityRef>) =>
+      Effect.gen(function*() {
+        const state = yield* getOrCreateRunState(runId)
+        yield* Ref.update(state, (current) => ({
+          entities: newEntities.reduce(
+            (cache, entity) => HashMap.set(cache, EC.normalize(entity.label), entity),
+            current.entities
+          )
+        }))
+      }),
+    toPromptContext: (runId: string) =>
+      Effect.gen(function*() {
+        const state = yield* getOrCreateRunState(runId)
+        const registry = yield* Ref.get(state)
+        return EC.toPromptFragment(registry.entities)
+      }),
+    restore: (runId: string, cache: HashMap.HashMap<string, EntityRef>) =>
+      Effect.gen(function*() {
+        const state = yield* getOrCreateRunState(runId)
+        yield* Ref.set(state, { entities: cache })
+      }),
+    reset: (runId: string) =>
+      Effect.gen(function*() {
+        const state = yield* getOrCreateRunState(runId)
+        yield* Ref.set(state, { entities: EC.empty })
+      }),
+    /**
+     * Clean up state for a completed run
+     */
+    cleanup: (runId: string) =>
+      Ref.update(stateByRun, HashMap.remove(runId))
   }
 })
 
