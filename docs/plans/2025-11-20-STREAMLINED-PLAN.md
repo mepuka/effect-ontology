@@ -12,6 +12,7 @@
 **This is a single-user research tool becoming a production pipeline, NOT a distributed system.**
 
 Based on agent analysis:
+
 - ✅ Existing code already has merge logic, chunking, validation
 - ✅ Current retry + timeout is sufficient protection
 - ❌ Rate limiting is over-engineering for single-user tool
@@ -39,6 +40,7 @@ Based on agent analysis:
 **Files:** `package.json`
 
 Add dependencies:
+
 ```json
 {
   "@effect/sql": "^0.12.0",
@@ -51,6 +53,7 @@ Add dependencies:
 Run: `bun install`
 
 Commit:
+
 ```bash
 git commit -m "chore: add SQL and platform dependencies for workflow"
 ```
@@ -60,12 +63,14 @@ git commit -m "chore: add SQL and platform dependencies for workflow"
 ## Task 2: Create ArtifactStore Service ✅ UNCHANGED
 
 **Files:**
+
 - Create: `packages/core/src/Services/ArtifactStore.ts`
 - Create: `packages/core/test/Services/ArtifactStore.test.ts`
 
 **Implementation:** (from FINAL plan, Task 2 - no changes needed)
 
 Simple FileSystem wrapper with:
+
 - `save(runId, key, content)` → `{ path, hash }`
 - `load(path)` → `content`
 - `delete(runId)` → cleanup
@@ -73,6 +78,7 @@ Simple FileSystem wrapper with:
 **Test:** Verify idempotent saves, consistent hashing
 
 Commit:
+
 ```bash
 git commit -m "feat(workflow): add ArtifactStore for blob storage"
 ```
@@ -82,12 +88,14 @@ git commit -m "feat(workflow): add ArtifactStore for blob storage"
 ## Task 3: Add EntityCache Serialization ✅ UNCHANGED
 
 **Files:**
+
 - Modify: `packages/core/src/Prompt/EntityCache.ts`
 - Create: `packages/core/test/Prompt/EntityCache.serialization.test.ts`
 
 **Implementation:** (from FINAL plan, Task 3 - no changes needed)
 
 Add Schema-based encoder/decoder:
+
 ```typescript
 export const serializeEntityCache = (cache: HashMap<string, EntityRef>) =>
   encodeEntityCache(cache).pipe(Effect.map(JSON.stringify))
@@ -99,6 +107,7 @@ export const deserializeEntityCache = (json: string) =>
 **Test:** HashMap roundtrip, empty cache
 
 Commit:
+
 ```bash
 git commit -m "feat(workflow): add EntityCache serialization for checkpoints"
 ```
@@ -108,6 +117,7 @@ git commit -m "feat(workflow): add EntityCache serialization for checkpoints"
 ## Task 4: Add Database Schema ✅ UNCHANGED
 
 **Files:**
+
 - Create: `packages/core/src/Services/Schema.sql`
 - Create: `packages/core/src/Services/Database.ts`
 - Create: `packages/core/test/Services/Database.test.ts`
@@ -115,6 +125,7 @@ git commit -m "feat(workflow): add EntityCache serialization for checkpoints"
 **Schema:** (from FINAL plan, Task 4)
 
 Tables:
+
 - `extraction_runs` - run lifecycle, optimistic locking (status_version)
 - `run_checkpoints` - batch index, entity snapshot path/hash
 - `run_artifacts` - final outputs
@@ -123,6 +134,7 @@ Tables:
 **Test:** Schema initialization, indexes, transactions
 
 Commit:
+
 ```bash
 git commit -m "feat(workflow): add SQLite schema for run orchestration"
 ```
@@ -132,6 +144,7 @@ git commit -m "feat(workflow): add SQLite schema for run orchestration"
 ## Task 5: Add Effect Schemas ✅ UNCHANGED
 
 **Files:**
+
 - Create: `packages/core/src/Services/WorkflowTypes.ts`
 - Create: `packages/core/test/Services/WorkflowTypes.test.ts`
 
@@ -143,6 +156,7 @@ git commit -m "feat(workflow): add SQLite schema for run orchestration"
 - `RunCheckpoint` class
 
 Commit:
+
 ```bash
 git commit -m "feat(workflow): add Effect schemas for domain types"
 ```
@@ -152,10 +166,12 @@ git commit -m "feat(workflow): add Effect schemas for domain types"
 ## Task 6: Add restore() and reset() to EntityDiscoveryService ✅ UNCHANGED
 
 **Files:**
+
 - Modify: `packages/core/src/Services/EntityDiscovery.ts`
 - Create: `packages/core/test/Services/EntityDiscovery.restore.test.ts`
 
 **Methods:**
+
 ```typescript
 restore: (snapshot: HashMap<string, EntityRef>) => Effect<void>
 reset: () => Effect<void>
@@ -164,6 +180,7 @@ reset: () => Effect<void>
 **Test:** Restore from serialized snapshot, reset clears state
 
 Commit:
+
 ```bash
 git commit -m "feat(workflow): add restore/reset for entity state management"
 ```
@@ -173,6 +190,7 @@ git commit -m "feat(workflow): add restore/reset for entity state management"
 ## Task 7: Implement RunService with Utilities ✏️ MODIFIED
 
 **Files:**
+
 - Create: `packages/core/src/Services/RunService.ts`
 - Create: `packages/core/test/Services/RunService.test.ts`
 
@@ -198,7 +216,7 @@ export const hashOntology = (ontology: OntologyContext): string => {
 const MAX_CHUNK_COUNT = 1000
 
 create: (params: CreateRunParams) =>
-  Effect.gen(function*() {
+  Effect.gen(function* () {
     // Estimate chunk count (not hard limit)
     const estimatedChunks = Math.ceil(
       params.inputText.length / (params.config.windowSize * 100)
@@ -206,7 +224,9 @@ create: (params: CreateRunParams) =>
 
     if (estimatedChunks > MAX_CHUNK_COUNT) {
       yield* Effect.log(
-        `Warning: Large input (~${estimatedChunks} chunks, ~$${estimatedChunks * 0.01} cost)`
+        `Warning: Large input (~${estimatedChunks} chunks, ~$${
+          estimatedChunks * 0.01
+        } cost)`
       )
     }
 
@@ -214,7 +234,11 @@ create: (params: CreateRunParams) =>
     const ontologyHash = hashOntology(params.ontology)
 
     // Save input text
-    const { path } = yield* artifactStore.save(runId, "input.txt", params.inputText)
+    const { path } = yield* artifactStore.save(
+      runId,
+      "input.txt",
+      params.inputText
+    )
 
     // Insert run
     yield* sql`INSERT INTO extraction_runs ...`
@@ -224,12 +248,14 @@ create: (params: CreateRunParams) =>
 ```
 
 **Test:**
+
 - Optimistic locking (stale version fails)
 - Checkpoint UPSERT
 - OntologyHash stored and retrievable
 - Large input warning (not failure)
 
 Commit:
+
 ```bash
 git commit -m "feat(workflow): implement RunService with ontology hashing and input validation"
 ```
@@ -246,15 +272,16 @@ git commit -m "feat(workflow): implement RunService with ontology hashing and in
 4. **CircuitBreaker doesn't exist** - API not in Effect
 
 **Current protection (already exists):**
+
 ```typescript
 // packages/core/src/Services/Llm.ts:145-164
 Effect.timeout(Duration.seconds(30)),
-Effect.retry(
-  Schedule.exponential(Duration.seconds(1)).pipe(
-    Schedule.union(Schedule.recurs(3)),
-    Schedule.jittered
+  Effect.retry(
+    Schedule.exponential(Duration.seconds(1)).pipe(
+      Schedule.union(Schedule.recurs(3)),
+      Schedule.jittered
+    )
   )
-)
 ```
 
 **If rate limiting is needed later:** Add as optional config per user's API tier.
@@ -266,6 +293,7 @@ Effect.retry(
 ## Task 9: Add Ontology Cache Service ✏️ SIMPLIFIED
 
 **Files:**
+
 - Create: `packages/core/src/Services/OntologyCache.ts`
 - Create: `packages/core/test/Services/OntologyCache.test.ts`
 
@@ -288,12 +316,15 @@ import { extractVocabulary } from "./Llm.js"
 export class OntologyCacheService extends Effect.Service<OntologyCacheService>()(
   "OntologyCacheService",
   {
-    effect: Effect.gen(function*() {
+    effect: Effect.gen(function* () {
       // Map of hash -> { graph, ontology }
-      const ontologyStore = new Map<string, {
-        graph: Graph.Graph<NodeId, unknown>
-        ontology: OntologyContext
-      }>()
+      const ontologyStore = new Map<
+        string,
+        {
+          graph: Graph.Graph<NodeId, unknown>
+          ontology: OntologyContext
+        }
+      >()
 
       // Cache knowledge indexes by hash (O(1) lookup)
       const indexCache = yield* Cache.make({
@@ -302,9 +333,15 @@ export class OntologyCacheService extends Effect.Service<OntologyCacheService>()
         lookup: (hash: string) => {
           const stored = ontologyStore.get(hash)
           if (!stored) {
-            return Effect.fail(new Error(`Ontology not found for hash: ${hash}`))
+            return Effect.fail(
+              new Error(`Ontology not found for hash: ${hash}`)
+            )
           }
-          return solveToKnowledgeIndex(stored.graph, stored.ontology, knowledgeIndexAlgebra)
+          return solveToKnowledgeIndex(
+            stored.graph,
+            stored.ontology,
+            knowledgeIndexAlgebra
+          )
         }
       })
 
@@ -315,10 +352,14 @@ export class OntologyCacheService extends Effect.Service<OntologyCacheService>()
         lookup: (hash: string) => {
           const stored = ontologyStore.get(hash)
           if (!stored) {
-            return Effect.fail(new Error(`Ontology not found for hash: ${hash}`))
+            return Effect.fail(
+              new Error(`Ontology not found for hash: ${hash}`)
+            )
           }
           const { classIris, propertyIris } = extractVocabulary(stored.ontology)
-          return Effect.succeed(makeKnowledgeGraphSchema(classIris, propertyIris))
+          return Effect.succeed(
+            makeKnowledgeGraphSchema(classIris, propertyIris)
+          )
         }
       })
 
@@ -326,7 +367,11 @@ export class OntologyCacheService extends Effect.Service<OntologyCacheService>()
         /**
          * Register ontology for caching
          */
-        register: (hash: string, graph: Graph.Graph<NodeId, unknown>, ontology: OntologyContext) =>
+        register: (
+          hash: string,
+          graph: Graph.Graph<NodeId, unknown>,
+          ontology: OntologyContext
+        ) =>
           Effect.sync(() => {
             ontologyStore.set(hash, { graph, ontology })
           }),
@@ -334,14 +379,12 @@ export class OntologyCacheService extends Effect.Service<OntologyCacheService>()
         /**
          * Get cached knowledge index
          */
-        getKnowledgeIndex: (hash: string) =>
-          indexCache.get(hash),
+        getKnowledgeIndex: (hash: string) => indexCache.get(hash),
 
         /**
          * Get cached schema
          */
-        getSchema: (hash: string) =>
-          schemaCache.get(hash)
+        getSchema: (hash: string) => schemaCache.get(hash)
       }
     }),
     dependencies: []
@@ -350,6 +393,7 @@ export class OntologyCacheService extends Effect.Service<OntologyCacheService>()
 ```
 
 **Test:**
+
 - Register ontology, get index (cached)
 - Same hash returns cached instance
 - Different hash computes new index
@@ -358,6 +402,7 @@ export class OntologyCacheService extends Effect.Service<OntologyCacheService>()
 **Note:** Simplified from FINAL plan - no deep equality on Graph objects, just hash-string keys.
 
 Commit:
+
 ```bash
 git commit -m "feat(workflow): add ontology cache with hash-only keys for O(1) lookup"
 ```
@@ -367,6 +412,7 @@ git commit -m "feat(workflow): add ontology cache with hash-only keys for O(1) l
 ## Task 10: Implement Workflow Activities ✏️ EXTENDED
 
 **Files:**
+
 - Create: `packages/core/src/Workflow/Activities.ts`
 - Create: `packages/core/test/Workflow/Activities.test.ts`
 
@@ -375,9 +421,11 @@ git commit -m "feat(workflow): add ontology cache with hash-only keys for O(1) l
 ### 1. loadInputTextActivity (NEW - from gap analysis)
 
 ```typescript
-export const loadInputTextActivity = Effect.gen(function*(
-  { runId }: { runId: string }
-) {
+export const loadInputTextActivity = Effect.gen(function* ({
+  runId
+}: {
+  runId: string
+}) {
   const sql = yield* SqlClient.SqlClient
   const artifactStore = yield* ArtifactStore
 
@@ -398,9 +446,11 @@ export const loadInputTextActivity = Effect.gen(function*(
 ### 2. saveEntitySnapshotActivity (from FINAL plan)
 
 ```typescript
-export const saveEntitySnapshotActivity = Effect.gen(function*(
-  input: { runId: string; batchIndex: number; cache: HashMap<string, EntityRef> }
-) {
+export const saveEntitySnapshotActivity = Effect.gen(function* (input: {
+  runId: string
+  batchIndex: number
+  cache: HashMap<string, EntityRef>
+}) {
   const artifactStore = yield* ArtifactStore
 
   // Serialize cache
@@ -419,9 +469,11 @@ export const saveEntitySnapshotActivity = Effect.gen(function*(
 ### 3. loadEntitySnapshotActivity (from FINAL plan)
 
 ```typescript
-export const loadEntitySnapshotActivity = Effect.gen(function*(
-  { path }: { path: string }
-) {
+export const loadEntitySnapshotActivity = Effect.gen(function* ({
+  path
+}: {
+  path: string
+}) {
   const artifactStore = yield* ArtifactStore
   const json = yield* artifactStore.load(path)
   return yield* deserializeEntityCache(json)
@@ -431,7 +483,7 @@ export const loadEntitySnapshotActivity = Effect.gen(function*(
 ### 4. extractBatchActivity (SIMPLIFIED - no rate limiting)
 
 ```typescript
-export const extractBatchActivity = Effect.gen(function*(
+export const extractBatchActivity = Effect.gen(function* (
   input: ExtractBatchInput
 ) {
   const discovery = yield* EntityDiscoveryService
@@ -453,26 +505,27 @@ export const extractBatchActivity = Effect.gen(function*(
   // Process chunks (NO rate limiting - rely on existing retry logic)
   const graphs = yield* Effect.forEach(
     input.batch,
-    (chunkText, chunkOffset) => Effect.gen(function*() {
-      const registry = yield* discovery.getSnapshot()
+    (chunkText, chunkOffset) =>
+      Effect.gen(function* () {
+        const registry = yield* discovery.getSnapshot()
 
-      const promptContext = {
-        index: knowledgeIndex,
-        cache: registry
-      }
-      const prompt = renderContext(promptContext)
+        const promptContext = {
+          index: knowledgeIndex,
+          cache: registry
+        }
+        const prompt = renderContext(promptContext)
 
-      // LLM call with existing timeout + retry (Llm.ts already has this)
-      const kg = yield* extractKnowledgeGraph(
-        chunkText,
-        input.ontology,
-        prompt,
-        schema
-      )
+        // LLM call with existing timeout + retry (Llm.ts already has this)
+        const kg = yield* extractKnowledgeGraph(
+          chunkText,
+          input.ontology,
+          prompt,
+          schema
+        )
 
-      // Convert to RDF
-      return yield* rdf.convertToRdf(kg, input.ontology)
-    }),
+        // Convert to RDF
+        return yield* rdf.convertToRdf(kg, input.ontology)
+      }),
     { concurrency: input.concurrency }
   )
 
@@ -495,9 +548,7 @@ export const extractBatchActivity = Effect.gen(function*(
 }).pipe(
   Effect.timeout("5 minutes"),
   Effect.retry(
-    Schedule.exponential("1 second").pipe(
-      Schedule.compose(Schedule.recurs(3))
-    )
+    Schedule.exponential("1 second").pipe(Schedule.compose(Schedule.recurs(3)))
   )
 )
 ```
@@ -505,22 +556,20 @@ export const extractBatchActivity = Effect.gen(function*(
 ### 5. saveBatchWithCheckpointActivity (from FINAL plan - atomic)
 
 ```typescript
-export const saveBatchWithCheckpointActivity = Effect.gen(function*(
-  input: {
-    runId: string
-    batchIndex: number
-    turtlePath: string
-    turtleHash: string
-    chunkCount: number
-    entitySnapshotPath: string
-    entitySnapshotHash: string
-  }
-) {
+export const saveBatchWithCheckpointActivity = Effect.gen(function* (input: {
+  runId: string
+  batchIndex: number
+  turtlePath: string
+  turtleHash: string
+  chunkCount: number
+  entitySnapshotPath: string
+  entitySnapshotHash: string
+}) {
   const sql = yield* SqlClient.SqlClient
 
   // ATOMIC: Both writes in single transaction
   yield* sql.withTransaction(
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       // 1. Write batch artifact
       yield* sql`
         INSERT INTO batch_artifacts
@@ -556,9 +605,13 @@ export const saveBatchWithCheckpointActivity = Effect.gen(function*(
 ### 6. mergeAllBatchesActivity (NEW - uses existing merge logic)
 
 ```typescript
-export const mergeAllBatchesActivity = Effect.gen(function*(
-  { runId, batchCount }: { runId: string; batchCount: number }
-) {
+export const mergeAllBatchesActivity = Effect.gen(function* ({
+  runId,
+  batchCount
+}: {
+  runId: string
+  batchCount: number
+}) {
   const sql = yield* SqlClient.SqlClient
   const artifactStore = yield* ArtifactStore
   const rdf = yield* RdfService
@@ -580,13 +633,12 @@ export const mergeAllBatchesActivity = Effect.gen(function*(
 
   // Deduplicate by hash (handles orphaned retries)
   const uniqueBatches = Array.from(
-    new Map(batches.map(b => [b.turtle_hash, b])).values()
+    new Map(batches.map((b) => [b.turtle_hash, b])).values()
   )
 
   // Load all batch turtles
-  const turtles = yield* Effect.forEach(
-    uniqueBatches,
-    batch => artifactStore.load(batch.turtle_path)
+  const turtles = yield* Effect.forEach(uniqueBatches, (batch) =>
+    artifactStore.load(batch.turtle_path)
   )
 
   // Merge using existing RDF service
@@ -598,9 +650,10 @@ export const mergeAllBatchesActivity = Effect.gen(function*(
 ### 7. saveFinalArtifactActivity (from FINAL plan)
 
 ```typescript
-export const saveFinalArtifactActivity = Effect.gen(function*(
-  input: { runId: string; turtle: string }
-) {
+export const saveFinalArtifactActivity = Effect.gen(function* (input: {
+  runId: string
+  turtle: string
+}) {
   const sql = yield* SqlClient.SqlClient
   const artifactStore = yield* ArtifactStore
 
@@ -626,6 +679,7 @@ export const saveFinalArtifactActivity = Effect.gen(function*(
 ```
 
 **Test:**
+
 - Load input text (DB → FileSystem)
 - Save/load entity snapshot (serialization roundtrip)
 - Extract batch (LLM → RDF → merge → file)
@@ -634,6 +688,7 @@ export const saveFinalArtifactActivity = Effect.gen(function*(
 - Save final artifact (UPSERT idempotency)
 
 Commit:
+
 ```bash
 git commit -m "feat(workflow): implement all workflow activities with simplified protection"
 ```
@@ -643,6 +698,7 @@ git commit -m "feat(workflow): implement all workflow activities with simplified
 ## Task 11: Implement ExtractionWorkflow ✏️ MODIFIED
 
 **Files:**
+
 - Create: `packages/core/src/Workflow/ExtractionWorkflow.ts`
 - Create: `packages/core/test/Workflow/ExtractionWorkflow.test.ts`
 
@@ -669,7 +725,10 @@ const chunk = <T>(array: T[], size: number): T[][] => {
 import { Effect, HashMap } from "effect"
 import type { Graph } from "effect"
 import type { NodeId, OntologyContext } from "../Graph/Types.js"
-import type { PipelineConfigSchema, RunCheckpoint } from "../Services/WorkflowTypes.js"
+import type {
+  PipelineConfigSchema,
+  RunCheckpoint
+} from "../Services/WorkflowTypes.js"
 import { RunService } from "../Services/RunService.js"
 import { NlpService } from "../Services/Nlp.js"
 import {
@@ -692,7 +751,7 @@ interface ExtractionWorkflowInput {
 
 export const ExtractionWorkflow = {
   run: (input: ExtractionWorkflowInput) =>
-    Effect.gen(function*() {
+    Effect.gen(function* () {
       const runService = yield* RunService
       const nlp = yield* NlpService
 
@@ -736,27 +795,33 @@ export const ExtractionWorkflow = {
       )
 
       // 6. Process batches (skip completed ones on resume)
-      for (let batchIndex = startBatchIndex; batchIndex < batches.length; batchIndex++) {
+      for (
+        let batchIndex = startBatchIndex;
+        batchIndex < batches.length;
+        batchIndex++
+      ) {
         const batch = batches[batchIndex]
 
         // Extract batch (uses cache for ontology)
-        const { turtlePath, turtleHash, newEntitySnapshot } = yield* extractBatchActivity({
-          runId: input.runId,
-          batch,
-          batchIndex,
-          ontologyHash: input.ontologyHash,
-          ontologyGraph: input.ontologyGraph,
-          ontology: input.ontology,
-          concurrency: input.config.concurrency,
-          initialEntitySnapshot: entitySnapshot
-        })
+        const { turtlePath, turtleHash, newEntitySnapshot } =
+          yield* extractBatchActivity({
+            runId: input.runId,
+            batch,
+            batchIndex,
+            ontologyHash: input.ontologyHash,
+            ontologyGraph: input.ontologyGraph,
+            ontology: input.ontology,
+            concurrency: input.config.concurrency,
+            initialEntitySnapshot: entitySnapshot
+          })
 
         // Save entity snapshot
-        const { path: snapshotPath, hash: snapshotHash } = yield* saveEntitySnapshotActivity({
-          runId: input.runId,
-          batchIndex,
-          cache: newEntitySnapshot
-        })
+        const { path: snapshotPath, hash: snapshotHash } =
+          yield* saveEntitySnapshotActivity({
+            runId: input.runId,
+            batchIndex,
+            cache: newEntitySnapshot
+          })
 
         // Atomic save: batch artifact + checkpoint
         yield* saveBatchWithCheckpointActivity({
@@ -795,18 +860,18 @@ export const ExtractionWorkflow = {
         "succeeded"
       )
 
-      return { runId: input.runId, turtlePath: `extraction_data/${input.runId}/final.ttl` }
-    }).pipe(
-      Effect.ensuring(
-        Effect.log(`Workflow ${input.runId} terminated`)
-      )
-    )
+      return {
+        runId: input.runId,
+        turtlePath: `extraction_data/${input.runId}/final.ttl`
+      }
+    }).pipe(Effect.ensuring(Effect.log(`Workflow ${input.runId} terminated`)))
 }
 ```
 
 **Note:** SHACL validation step **deferred** (can add as optional flag later - not blocking)
 
 **Test:**
+
 - Full workflow execution
 - Resume from checkpoint
 - Batch skipping on resume
@@ -814,6 +879,7 @@ export const ExtractionWorkflow = {
 - Optimistic locking prevents concurrent updates
 
 Commit:
+
 ```bash
 git commit -m "feat(workflow): implement ExtractionWorkflow with resume and checkpointing"
 ```
@@ -827,6 +893,7 @@ git commit -m "feat(workflow): implement ExtractionWorkflow with resume and chec
 **Task 14:** Export all services (from FINAL plan)
 
 Commits:
+
 ```bash
 git commit -m "test(workflow): add end-to-end extraction pipeline test"
 git commit -m "feat(workflow): add cleanup service with TTL policy"
@@ -838,6 +905,7 @@ git commit -m "feat(workflow): export all workflow services"
 ## Task 15: Add CLI Runner ✏️ SIMPLIFIED
 
 **Files:**
+
 - Create: `packages/core/scripts/run-extraction.ts`
 
 **Simplified implementation (defer real ontology until needed):**
@@ -934,6 +1002,7 @@ Effect.runPromise(program.pipe(Effect.provide(MainLive)))
 **Note:** CLI runner is example code for testing, not production. Real usage will be frontend UI.
 
 Commit:
+
 ```bash
 git commit -m "feat(workflow): add CLI runner with complete layer stack"
 ```
@@ -946,6 +1015,7 @@ git commit -m "feat(workflow): add CLI runner with complete layer stack"
 **Task 17:** Final verification (tests, type check, lint, build)
 
 Commits:
+
 ```bash
 git commit -m "docs: add workflow architecture and usage guide"
 git commit -m "chore: production workflow implementation complete"
@@ -958,6 +1028,7 @@ git commit -m "chore: production workflow implementation complete"
 ### What Changed from FINAL Plan:
 
 **Removed (Over-Engineering):**
+
 - ❌ Task 8: Rate limiting and circuit breaking
 - ❌ Provider-specific rate limits
 - ❌ SHACL validation step (deferred to optional)
@@ -965,6 +1036,7 @@ git commit -m "chore: production workflow implementation complete"
 - ❌ Cache deep equality optimization (use hash-only keys from start)
 
 **Added (Missing Pieces):**
+
 - ✅ `loadInputTextActivity` (Task 10)
 - ✅ `mergeAllBatchesActivity` (Task 10)
 - ✅ `hashOntology` utility (Task 7)
@@ -973,6 +1045,7 @@ git commit -m "chore: production workflow implementation complete"
 - ✅ Chunk count warning (Task 7)
 
 **Simplified:**
+
 - Cache uses hash-only keys (O(1) lookup)
 - No rate limiter service (rely on existing retry)
 - No circuit breaker (API doesn't exist)
@@ -990,6 +1063,7 @@ git commit -m "chore: production workflow implementation complete"
 ### Validation:
 
 Run against real FOAF ontology:
+
 - ✅ Checkpoints save/restore correctly
 - ✅ Retries are idempotent
 - ✅ Merge handles 100+ chunks without duplicates

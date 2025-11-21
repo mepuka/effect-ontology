@@ -35,14 +35,15 @@ export const Database = Context.GenericTag<Database>("@effect-ontology/core/Data
 /**
  * Create database service implementation
  */
-const makeDatabase = Effect.gen(function*(_) {
-  const sql = yield* SqlClient.SqlClient
+const makeDatabase = Effect.gen(
+  function*() {
+    const sql = yield* SqlClient.SqlClient
 
-  // Execute schema statements individually
-  // Using CREATE TABLE IF NOT EXISTS makes this idempotent
-  yield* sql.unsafe(`PRAGMA foreign_keys = ON`)
+    // Execute schema statements individually
+    // Using CREATE TABLE IF NOT EXISTS makes this idempotent
+    yield* sql.unsafe(`PRAGMA foreign_keys = ON`)
 
-  yield* sql.unsafe(`
+    yield* sql.unsafe(`
     CREATE TABLE IF NOT EXISTS extraction_runs (
       run_id TEXT PRIMARY KEY,
       status TEXT NOT NULL CHECK(status IN ('queued', 'running', 'completed', 'failed')),
@@ -60,11 +61,11 @@ const makeDatabase = Effect.gen(function*(_) {
     )
   `)
 
-  yield* sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_extraction_runs_status ON extraction_runs(status)`)
-  yield* sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_extraction_runs_created ON extraction_runs(created_at)`)
-  yield* sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_extraction_runs_ontology_hash ON extraction_runs(ontology_hash)`)
+    yield* sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_extraction_runs_status ON extraction_runs(status)`)
+    yield* sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_extraction_runs_created ON extraction_runs(created_at)`)
+    yield* sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_extraction_runs_ontology_hash ON extraction_runs(ontology_hash)`)
 
-  yield* sql.unsafe(`
+    yield* sql.unsafe(`
     CREATE TABLE IF NOT EXISTS run_checkpoints (
       run_id TEXT NOT NULL,
       batch_index INTEGER NOT NULL,
@@ -76,7 +77,7 @@ const makeDatabase = Effect.gen(function*(_) {
     )
   `)
 
-  yield* sql.unsafe(`
+    yield* sql.unsafe(`
     CREATE TABLE IF NOT EXISTS run_artifacts (
       run_id TEXT NOT NULL,
       artifact_type TEXT NOT NULL CHECK(artifact_type IN ('input_text', 'final_turtle')),
@@ -88,7 +89,7 @@ const makeDatabase = Effect.gen(function*(_) {
     )
   `)
 
-  yield* sql.unsafe(`
+    yield* sql.unsafe(`
     CREATE TABLE IF NOT EXISTS batch_artifacts (
       run_id TEXT NOT NULL,
       batch_index INTEGER NOT NULL,
@@ -100,12 +101,13 @@ const makeDatabase = Effect.gen(function*(_) {
     )
   `)
 
-  yield* sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_batch_artifacts_run ON batch_artifacts(run_id)`)
+    yield* sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_batch_artifacts_run ON batch_artifacts(run_id)`)
 
-  return {
-    client: sql
-  } satisfies Database
-})
+    return {
+      client: sql
+    } satisfies Database
+  }
+)
 
 /**
  * Live layer - provides in-memory SQLite for tests

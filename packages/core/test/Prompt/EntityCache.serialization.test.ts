@@ -1,10 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, HashMap } from "effect"
-import { EntityRef } from "../../src/Prompt/EntityCache.js"
-import {
-  serializeEntityCache,
-  deserializeEntityCache
-} from "../../src/Prompt/EntityCache.js"
+import { deserializeEntityCache, EntityRef, serializeEntityCache } from "../../src/Prompt/EntityCache.js"
 
 describe("EntityCache serialization", () => {
   it.effect("should serialize and deserialize empty cache", () =>
@@ -15,8 +11,7 @@ describe("EntityCache serialization", () => {
       const restored = yield* deserializeEntityCache(json)
 
       expect(HashMap.size(restored)).toBe(0)
-    })
-  )
+    }))
 
   it.effect("should roundtrip single entity", () =>
     Effect.gen(function*() {
@@ -41,8 +36,7 @@ describe("EntityCache serialization", () => {
       expect(restoredEntity.types).toEqual(["http://xmlns.com/foaf/0.1/Person"])
       expect(restoredEntity.foundInChunk).toBe(0)
       expect(restoredEntity.confidence).toBe(0.95)
-    })
-  )
+    }))
 
   it.effect("should roundtrip multiple entities", () =>
     Effect.gen(function*() {
@@ -79,8 +73,7 @@ describe("EntityCache serialization", () => {
       const restoredBob = HashMap.unsafeGet(restored, "bob")
       expect(restoredBob.iri).toBe("http://example.org/Bob")
       expect(restoredBob.types).toEqual(["http://xmlns.com/foaf/0.1/Person", "http://example.org/Agent"])
-    })
-  )
+    }))
 
   it.effect("should preserve types array order", () =>
     Effect.gen(function*() {
@@ -99,8 +92,7 @@ describe("EntityCache serialization", () => {
 
       const restoredEntity = HashMap.unsafeGet(restored, "thing")
       expect(restoredEntity.types).toEqual(["http://a.org/TypeA", "http://b.org/TypeB", "http://c.org/TypeC"])
-    })
-  )
+    }))
 
   it.effect("should fail on invalid JSON", () =>
     Effect.gen(function*() {
@@ -109,8 +101,7 @@ describe("EntityCache serialization", () => {
       )
 
       expect(result._tag).toBe("Left")
-    })
-  )
+    }))
 
   it.effect("should fail on missing required fields", () =>
     Effect.gen(function*() {
@@ -125,8 +116,7 @@ describe("EntityCache serialization", () => {
       )
 
       expect(result._tag).toBe("Left")
-    })
-  )
+    }))
 
   it.effect("should handle entities with empty types array", () =>
     Effect.gen(function*() {
@@ -145,8 +135,7 @@ describe("EntityCache serialization", () => {
 
       const restoredEntity = HashMap.unsafeGet(restored, "unknown")
       expect(restoredEntity.types).toEqual([])
-    })
-  )
+    }))
 
   it.effect("should produce valid JSON string", () =>
     Effect.gen(function*() {
@@ -169,6 +158,5 @@ describe("EntityCache serialization", () => {
       const parsed = JSON.parse(json)
       expect(parsed).toHaveProperty("entries")
       expect(Array.isArray(parsed.entries)).toBe(true)
-    })
-  )
+    }))
 })

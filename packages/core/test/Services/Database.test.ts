@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest"
 import { Database, DatabaseLive } from "../../src/Services/Database.js"
 
 describe("Database", () => {
-
   it("should initialize schema with all tables", async () => {
     const program = Effect.gen(function*() {
       const db = yield* Database

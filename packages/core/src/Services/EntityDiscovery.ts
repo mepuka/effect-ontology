@@ -61,8 +61,7 @@ const makeEntityDiscoveryService = Effect.gen(function*() {
         )
       })),
     toPromptContext: () => Ref.get(state).pipe(Effect.map((registry) => EC.toPromptFragment(registry.entities))),
-    restore: (cache: HashMap.HashMap<string, EntityRef>) =>
-      Ref.set(state, { entities: cache }),
+    restore: (cache: HashMap.HashMap<string, EntityRef>) => Ref.set(state, { entities: cache }),
     reset: () => Ref.set(state, { entities: EC.empty })
   }
 })

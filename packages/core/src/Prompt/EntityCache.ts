@@ -1,4 +1,4 @@
-import { Data, HashMap, Effect, Schema } from "effect"
+import { Data, Effect, HashMap, Schema } from "effect"
 
 /**
  * Entity Reference with provenance metadata
@@ -113,9 +113,7 @@ const encodeEntityCache = (cache: HashMap.HashMap<string, EntityRef>) =>
  */
 const decodeEntityCache = (data: unknown) =>
   Schema.decodeUnknown(EntityCacheSchema)(data).pipe(
-    Effect.map(({ entries }) =>
-      HashMap.fromIterable(entries.map(([key, refData]) => [key, new EntityRef(refData)]))
-    )
+    Effect.map(({ entries }) => HashMap.fromIterable(entries.map(([key, refData]) => [key, new EntityRef(refData)])))
   )
 
 /**
@@ -133,7 +131,5 @@ export const serializeEntityCache = (cache: HashMap.HashMap<string, EntityRef>) 
  */
 export const deserializeEntityCache = (json: string) =>
   Schema.decodeUnknown(Schema.parseJson(EntityCacheSchema))(json).pipe(
-    Effect.map(({ entries }) =>
-      HashMap.fromIterable(entries.map(([key, refData]) => [key, new EntityRef(refData)]))
-    )
+    Effect.map(({ entries }) => HashMap.fromIterable(entries.map(([key, refData]) => [key, new EntityRef(refData)])))
   )
