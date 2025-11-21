@@ -1,13 +1,14 @@
 import React from "react"
 import ReactDOM from "react-dom/client"
 import { RegistryProvider } from "@effect-atom/atom-react"
-import { App } from "./App"
+import { RouterProvider } from "@tanstack/react-router"
+import { router } from "./router"
 import "./index.css"
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <RegistryProvider>
-      <App />
+      <RouterProvider router={router} />
     </RegistryProvider>
   </React.StrictMode>
 )

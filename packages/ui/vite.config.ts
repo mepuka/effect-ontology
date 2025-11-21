@@ -5,12 +5,14 @@ import path from "path"
 import wasm from "vite-plugin-wasm"
 import topLevelAwait from "vite-plugin-top-level-await"
 import { nodePolyfills } from "vite-plugin-node-polyfills"
+import { TanStackRouterVite } from "@tanstack/router-plugin/vite"
 
 export default defineConfig({
   // Load .env from monorepo root (two directories up from packages/ui)
   envDir: path.resolve(__dirname, "../../"),
 
   plugins: [
+    TanStackRouterVite(),
     react(),
     tailwindcss(),
     wasm(),
