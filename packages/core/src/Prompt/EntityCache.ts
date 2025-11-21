@@ -111,7 +111,7 @@ const encodeEntityCache = (cache: HashMap.HashMap<string, EntityRef>) =>
 /**
  * Decode plain object to HashMap
  */
-const decodeEntityCache = (data: unknown) =>
+const _decodeEntityCache = (data: unknown) =>
   Schema.decodeUnknown(EntityCacheSchema)(data).pipe(
     Effect.map(({ entries }) => HashMap.fromIterable(entries.map(([key, refData]) => [key, new EntityRef(refData)])))
   )

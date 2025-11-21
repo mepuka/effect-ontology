@@ -43,6 +43,7 @@
     "@effect/sql": "^0.48.0",
     "@effect/sql-sqlite-bun": "^0.49.0",
     "@effect/typeclass": "^0.38.0",
+    "@effect/workflow": "^0.13.0",
     "@zazuko/env": "^3.0.1",
     "effect": "^3.19.6",
     "jotai": "^2.15.1",
