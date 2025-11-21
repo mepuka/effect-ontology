@@ -163,9 +163,17 @@ const result = yield* rateLimiter(task)
 
 **Use:** `2025-11-20-STREAMLINED-PLAN.md`
 
+**Implementation Guide:** `IMPLEMENTATION-NOTES.md` ⭐ **READ THIS FIRST**
+
 **Timeline:** 3-4 days
 
 **Approach:** superpowers:executing-plans with batch checkpoints
+
+**Key Implementation Rules:**
+- ✅ Use `Schema.parseJson` for JSON parsing (not `JSON.parse`)
+- ✅ Use `Hash.string` for hashing (not Node.js `crypto`)
+- ✅ Use numeric hashes internally, hex strings for filesystem/DB
+- ✅ Use Effect's built-in modules, not external libraries
 
 **Validation:**
 - Run against real FOAF ontology
