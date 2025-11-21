@@ -30,6 +30,7 @@
     "lucide-react": "^0.554.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "reaflow": "^5.4.1",
     "tailwind-merge": "^2.5.5"
   },
   "devDependencies": {

@@ -1,16 +1,23 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useAtomValue } from '@effect-atom/atom-react'
+import { useAtom, useAtomValue } from '@effect-atom/atom-react'
 import { Result } from '@effect-atom/atom'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { DataTable } from '@/components/DataTable'
 import { ColumnDef } from '@tanstack/react-table'
+import { Loader2, Play, AlertCircle, CheckCircle } from 'lucide-react'
 import {
   ontologyClassesTableAtom,
   ontologyPropertiesTableAtom,
   extractedTriplesTableAtom,
   runningPromptsTableAtom
 } from '@/state/tableData'
+import {
+  extractionInputAtom,
+  extractionStatusAtom,
+  runExtractionAtom,
+  type ExtractionStatus
+} from '@/state/extraction'
 
 export const Route = createFileRoute('/extractions')({
   component: ExtractionsPage,
@@ -163,19 +170,24 @@ function ExtractionsPage() {
   return (
     <div className="container mx-auto py-8">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Data Views</h1>
+        <h1 className="text-3xl font-bold mb-2">Extractions</h1>
         <p className="text-muted-foreground">
-          Browse ontology classes, properties, extracted triples, and generated prompts
+          Extract knowledge from text and browse ontology data
         </p>
       </div>
 
-      <Tabs defaultValue="classes" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+      <Tabs defaultValue="extract" className="w-full">
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="extract">Extract</TabsTrigger>
           <TabsTrigger value="classes">Classes</TabsTrigger>
           <TabsTrigger value="properties">Properties</TabsTrigger>
           <TabsTrigger value="triples">Triples</TabsTrigger>
           <TabsTrigger value="prompts">Prompts</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="extract" className="mt-6">
+          <ExtractionView />
+        </TabsContent>
 
         <TabsContent value="classes" className="mt-6">
           <OntologyClassesView />
@@ -315,4 +327,113 @@ function RunningPromptsView() {
       </CardContent>
     </Card>
   )
+}
+
+function ExtractionView() {
+  const [inputText, setInputText] = useAtom(extractionInputAtom)
+  const status = useAtomValue(extractionStatusAtom)
+  const extractionResult = useAtomValue(runExtractionAtom)
+
+  return (
+    <div className="grid grid-cols-2 gap-6">
+      {/* Input Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Extract Knowledge</CardTitle>
+          <CardDescription>
+            Enter text to extract structured knowledge using the loaded ontology
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <textarea
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder="Enter text to extract knowledge from...
+
+Example: Alice is a software engineer at Acme Corp. She knows Bob, who works as a designer. They are both members of the Design Team."
+            className="w-full h-48 p-3 border rounded-md resize-none text-sm font-mono"
+          />
+          <div className="flex items-center justify-between">
+            <StatusBadge status={status} />
+            <button
+              disabled={status._tag === 'running' || !inputText.trim()}
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+            >
+              {status._tag === 'running' ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Extracting...
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4" />
+                  Extract
+                </>
+              )}
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Results Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Extraction Results</CardTitle>
+          <CardDescription>
+            Structured knowledge graph extracted from input text
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {status._tag === 'idle' && (
+            <div className="text-muted-foreground text-sm text-center py-8">
+              Enter text and click Extract to see results
+            </div>
+          )}
+          {status._tag === 'running' && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          {status._tag === 'success' && (
+            <pre className="text-xs font-mono bg-muted p-4 rounded-md overflow-auto max-h-64">
+              {JSON.stringify(status.result, null, 2)}
+            </pre>
+          )}
+          {status._tag === 'error' && (
+            <div className="bg-destructive/10 border border-destructive/20 rounded-md p-4 text-sm text-destructive">
+              {status.message}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function StatusBadge({ status }: { status: ExtractionStatus }) {
+  switch (status._tag) {
+    case 'idle':
+      return <span className="text-xs text-muted-foreground">Ready</span>
+    case 'running':
+      return (
+        <span className="text-xs text-blue-500 flex items-center gap-1">
+          <Loader2 className="w-3 h-3 animate-spin" />
+          Running
+        </span>
+      )
+    case 'success':
+      return (
+        <span className="text-xs text-green-500 flex items-center gap-1">
+          <CheckCircle className="w-3 h-3" />
+          Done
+        </span>
+      )
+    case 'error':
+      return (
+        <span className="text-xs text-red-500 flex items-center gap-1">
+          <AlertCircle className="w-3 h-3" />
+          Error
+        </span>
+      )
+  }
 }
