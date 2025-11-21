@@ -70,7 +70,7 @@ describe("EntityDiscoveryService", () => {
         ])
 
         // Restore cache
-        yield* discovery.restoreEntityCache(initialCache)
+        yield* discovery.restore(initialCache)
 
         // Verify cache was restored
         const snapshot = yield* discovery.getSnapshot()
@@ -100,14 +100,14 @@ describe("EntityDiscoveryService", () => {
             })
           ]
         ])
-        yield* discovery.restoreEntityCache(cache)
+        yield* discovery.restore(cache)
 
         // Verify cache has entities
         const populated = yield* discovery.getSnapshot()
         expect(HashMap.size(populated.entities)).toBe(1)
 
         // Reset cache
-        yield* discovery.resetEntityCache()
+        yield* discovery.reset()
 
         // Verify cache is empty
         const empty = yield* discovery.getSnapshot()
@@ -131,7 +131,7 @@ describe("EntityDiscoveryService", () => {
             })
           ]
         ])
-        yield* discovery.restoreEntityCache(checkpoint)
+        yield* discovery.restore(checkpoint)
 
         // Register new entity (should merge with restored cache)
         yield* discovery.register([
