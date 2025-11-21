@@ -23,6 +23,16 @@ export interface EntityDiscoveryService {
    * Generate prompt context from current state
    */
   readonly toPromptContext: () => Effect.Effect<ReadonlyArray<string>>
+
+  /**
+   * Restore entity cache from checkpoint (for resume)
+   */
+  readonly restoreEntityCache: (cache: HashMap.HashMap<string, EntityRef>) => Effect.Effect<void>
+
+  /**
+   * Reset entity cache to empty (for new run)
+   */
+  readonly resetEntityCache: () => Effect.Effect<void>
 }
 
 /**
@@ -50,7 +60,10 @@ const makeEntityDiscoveryService = Effect.gen(function*() {
           current.entities
         )
       })),
-    toPromptContext: () => Ref.get(state).pipe(Effect.map((registry) => EC.toPromptFragment(registry.entities)))
+    toPromptContext: () => Ref.get(state).pipe(Effect.map((registry) => EC.toPromptFragment(registry.entities))),
+    restoreEntityCache: (cache: HashMap.HashMap<string, EntityRef>) =>
+      Ref.set(state, { entities: cache }),
+    resetEntityCache: () => Ref.set(state, { entities: EC.empty })
   }
 })
 
