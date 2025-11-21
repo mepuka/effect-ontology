@@ -1,4 +1,4 @@
-import { Data, HashMap } from "effect"
+import { Data, HashMap, Effect, Schema } from "effect"
 
 /**
  * Entity Reference with provenance metadata
@@ -6,10 +6,22 @@ import { Data, HashMap } from "effect"
 export class EntityRef extends Data.Class<{
   readonly iri: string
   readonly label: string
-  readonly types: Array<string>
+  readonly types: ReadonlyArray<string>
   readonly foundInChunk: number
   readonly confidence: number
 }> {}
+
+/**
+ * Schema for EntityRef (for serialization)
+ * NOTE: EntityRef is Data.Class, this is just for encoding/decoding
+ */
+const EntityRefSchema = Schema.Struct({
+  iri: Schema.String,
+  label: Schema.String,
+  types: Schema.Array(Schema.String),
+  foundInChunk: Schema.Int,
+  confidence: Schema.Number
+})
 
 /**
  * Entity Cache - HashMap indexed by normalized labels
@@ -68,3 +80,60 @@ export const toPromptFragment = (cache: EntityCache): Array<string> => {
     )
   ]
 }
+
+/**
+ * EntityCache as array of entries (for JSON serialization)
+ */
+const EntityCacheSchema = Schema.Struct({
+  entries: Schema.Array(Schema.Tuple(Schema.String, EntityRefSchema))
+})
+
+/**
+ * Encode HashMap to plain object
+ */
+const encodeEntityCache = (cache: HashMap.HashMap<string, EntityRef>) =>
+  Effect.succeed({
+    entries: Array.from(HashMap.entries(cache)).map(
+      ([key, ref]) =>
+        [
+          key,
+          {
+            iri: ref.iri,
+            label: ref.label,
+            types: Array.from(ref.types),
+            foundInChunk: ref.foundInChunk,
+            confidence: ref.confidence
+          }
+        ] as const
+    )
+  })
+
+/**
+ * Decode plain object to HashMap
+ */
+const decodeEntityCache = (data: unknown) =>
+  Schema.decodeUnknown(EntityCacheSchema)(data).pipe(
+    Effect.map(({ entries }) =>
+      HashMap.fromIterable(entries.map(([key, refData]) => [key, new EntityRef(refData)]))
+    )
+  )
+
+/**
+ * Serialize HashMap to JSON string
+ * Uses Schema.parseJson for encoding
+ */
+export const serializeEntityCache = (cache: HashMap.HashMap<string, EntityRef>) =>
+  encodeEntityCache(cache).pipe(
+    Effect.flatMap((data) => Schema.encodeUnknown(Schema.parseJson(EntityCacheSchema))(data))
+  )
+
+/**
+ * Deserialize JSON string to HashMap
+ * Uses Schema.parseJson for decoding
+ */
+export const deserializeEntityCache = (json: string) =>
+  Schema.decodeUnknown(Schema.parseJson(EntityCacheSchema))(json).pipe(
+    Effect.map(({ entries }) =>
+      HashMap.fromIterable(entries.map(([key, refData]) => [key, new EntityRef(refData)]))
+    )
+  )
