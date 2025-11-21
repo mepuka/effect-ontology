@@ -14,7 +14,7 @@ import { Data, Effect, Graph, HashMap, Layer, Option } from "effect"
 import { PropertyConstraint } from "../../src/Graph/Constraint.js"
 import { ClassNode } from "../../src/Graph/Types"
 import type { NodeId, OntologyContext } from "../../src/Graph/Types"
-import { EntityDiscoveryServiceLive } from "../../src/Services/EntityDiscovery.js"
+import { EntityDiscoveryService, EntityDiscoveryServiceLive } from "../../src/Services/EntityDiscovery.js"
 import { streamingExtractionPipeline } from "../../src/Services/ExtractionPipeline.js"
 import { NlpServiceLive } from "../../src/Services/Nlp.js"
 import { RdfService } from "../../src/Services/Rdf.js"
@@ -116,5 +116,29 @@ describe("ExtractionPipeline", () => {
       // Should have at least one entity from mock LLM
       expect(result).toContain("Person")
       expect(result).toContain("name")
+    }).pipe(Effect.provide(TestLayers)))
+
+  it.effect("should use provided runId for entity discovery", () =>
+    Effect.gen(function*() {
+      const testRunId = "test-run-id-12345"
+      const discovery = yield* EntityDiscoveryService
+      const text = "This is a test sentence. Another sentence here."
+
+      // Run pipeline with provided runId
+      const result = yield* streamingExtractionPipeline(
+        text,
+        mockGraph,
+        mockOntology,
+        undefined,
+        testRunId
+      )
+
+      // Verify result is valid
+      expect(result).toContain("@prefix")
+
+      // Verify entities were registered with the provided runId
+      const snapshot = yield* discovery.getSnapshot(testRunId)
+      // Should have at least one entity from mock LLM
+      expect(HashMap.size(snapshot.entities)).toBeGreaterThan(0)
     }).pipe(Effect.provide(TestLayers)))
 })
