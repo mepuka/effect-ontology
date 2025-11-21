@@ -50,7 +50,8 @@ const makeDatabase = Effect.gen(function*(_) {
       ontology_hash TEXT NOT NULL,
       input_text_path TEXT NOT NULL,
       total_batches INTEGER,
-      batches_completed INTEGER DEFAULT 0,
+      batches_completed INTEGER DEFAULT 0
+        CHECK(total_batches IS NULL OR batches_completed <= total_batches),
       final_turtle_path TEXT,
       final_turtle_hash TEXT,
       error_message TEXT,
@@ -61,6 +62,7 @@ const makeDatabase = Effect.gen(function*(_) {
 
   yield* sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_extraction_runs_status ON extraction_runs(status)`)
   yield* sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_extraction_runs_created ON extraction_runs(created_at)`)
+  yield* sql.unsafe(`CREATE INDEX IF NOT EXISTS idx_extraction_runs_ontology_hash ON extraction_runs(ontology_hash)`)
 
   yield* sql.unsafe(`
     CREATE TABLE IF NOT EXISTS run_checkpoints (

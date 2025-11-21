@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS extraction_runs (
 
   -- Progress tracking
   total_batches INTEGER,  -- Total number of batches to process
-  batches_completed INTEGER DEFAULT 0,  -- Number of batches completed so far
+  batches_completed INTEGER DEFAULT 0  -- Number of batches completed so far
+    CHECK(total_batches IS NULL OR batches_completed <= total_batches),
 
   -- Output tracking
   final_turtle_path TEXT,  -- Path to final merged RDF graph
@@ -41,6 +42,9 @@ CREATE INDEX IF NOT EXISTS idx_extraction_runs_status ON extraction_runs(status)
 
 -- Index for timestamp queries
 CREATE INDEX IF NOT EXISTS idx_extraction_runs_created ON extraction_runs(created_at);
+
+-- Index for cache lookups by ontology hash
+CREATE INDEX IF NOT EXISTS idx_extraction_runs_ontology_hash ON extraction_runs(ontology_hash);
 
 -- ============================================================================
 -- Table: run_checkpoints

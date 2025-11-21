@@ -322,4 +322,123 @@ describe("Database", () => {
 
     await Effect.runPromise(program)
   })
+
+  it("should support transactions with rollback", async () => {
+    const program = Effect.gen(function*(_) {
+      const db = yield* Database
+      const sql = db.client
+
+      // Start transaction, insert, rollback
+      yield* sql`BEGIN TRANSACTION`
+      yield* sql`
+        INSERT INTO extraction_runs
+        (run_id, status, ontology_hash, input_text_path)
+        VALUES ('txn-test', 'queued', 'abc123', '/path/to/input')
+      `
+      yield* sql`ROLLBACK`
+
+      // Verify insert was rolled back
+      const result = yield* sql<{ count: number }>`
+        SELECT COUNT(*) as count FROM extraction_runs WHERE run_id = 'txn-test'
+      `
+      expect(result[0].count).toBe(0)
+
+      // Start transaction, insert, commit
+      yield* sql`BEGIN TRANSACTION`
+      yield* sql`
+        INSERT INTO extraction_runs
+        (run_id, status, ontology_hash, input_text_path)
+        VALUES ('txn-test-2', 'queued', 'def456', '/path/to/input')
+      `
+      yield* sql`COMMIT`
+
+      // Verify insert was committed
+      const result2 = yield* sql<{ count: number }>`
+        SELECT COUNT(*) as count FROM extraction_runs WHERE run_id = 'txn-test-2'
+      `
+      expect(result2[0].count).toBe(1)
+    }).pipe(Effect.provide(DatabaseLive))
+
+    await Effect.runPromise(program)
+  })
+
+  it("should support resume workflow from checkpoint", async () => {
+    const program = Effect.gen(function*(_) {
+      const db = yield* Database
+      const sql = db.client
+
+      // 1. Create run
+      yield* sql`
+        INSERT INTO extraction_runs
+        (run_id, status, ontology_hash, input_text_path, total_batches, batches_completed)
+        VALUES ('resume-test', 'running', 'ont123', '/input.txt', 5, 2)
+      `
+
+      // 2. Save checkpoint for batch 0
+      yield* sql`
+        INSERT INTO run_checkpoints
+        (run_id, batch_index, entity_snapshot_path, entity_snapshot_hash)
+        VALUES ('resume-test', 0, '/snapshot_0.json', 'snap0hash')
+      `
+
+      // 3. Save checkpoint for batch 1
+      yield* sql`
+        INSERT INTO run_checkpoints
+        (run_id, batch_index, entity_snapshot_path, entity_snapshot_hash)
+        VALUES ('resume-test', 1, '/snapshot_1.json', 'snap1hash')
+      `
+
+      // 4. Save batch artifacts for completed batches
+      yield* sql`
+        INSERT INTO batch_artifacts
+        (run_id, batch_index, turtle_path, turtle_hash)
+        VALUES ('resume-test', 0, '/batch_0.ttl', 'hash0')
+      `
+      yield* sql`
+        INSERT INTO batch_artifacts
+        (run_id, batch_index, turtle_path, turtle_hash)
+        VALUES ('resume-test', 1, '/batch_1.ttl', 'hash1')
+      `
+
+      // 5. Query to find last checkpoint (resume point)
+      const lastCheckpoint = yield* sql<{
+        batch_index: number
+        entity_snapshot_path: string
+      }>`
+        SELECT batch_index, entity_snapshot_path
+        FROM run_checkpoints
+        WHERE run_id = 'resume-test'
+        ORDER BY batch_index DESC
+        LIMIT 1
+      `
+      expect(lastCheckpoint[0].batch_index).toBe(1)
+      expect(lastCheckpoint[0].entity_snapshot_path).toBe("/snapshot_1.json")
+
+      // 6. Query to find completed batches
+      const completedBatches = yield* sql<{ batch_index: number }>`
+        SELECT batch_index
+        FROM batch_artifacts
+        WHERE run_id = 'resume-test'
+        ORDER BY batch_index
+      `
+      expect(completedBatches.length).toBe(2)
+      expect(completedBatches.map((b) => b.batch_index)).toEqual([0, 1])
+
+      // 7. Verify run state
+      const runState = yield* sql<{
+        batches_completed: number
+        total_batches: number
+      }>`
+        SELECT batches_completed, total_batches
+        FROM extraction_runs
+        WHERE run_id = 'resume-test'
+      `
+      expect(runState[0].batches_completed).toBe(2)
+      expect(runState[0].total_batches).toBe(5)
+
+      // Resume workflow: Load checkpoint 1, continue from batch 2
+    }).pipe(Effect.provide(DatabaseLive))
+
+    await Effect.runPromise(program)
+  })
 })
