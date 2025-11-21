@@ -408,12 +408,15 @@ Example: Alice is a software engineer at Acme Corp. She knows Bob, who works as 
           )}
           {status._tag === 'success' && (
             <div className="space-y-4">
-              <div className="flex items-center gap-2 text-green-600 text-sm">
-                <CheckCircle className="w-4 h-4" />
-                Extraction complete
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-green-600 text-sm">
+                  <CheckCircle className="w-4 h-4" />
+                  Extraction complete
+                </div>
+                <span className="text-xs text-muted-foreground font-mono">Turtle RDF</span>
               </div>
-              <pre className="text-xs font-mono bg-muted p-4 rounded-md overflow-auto max-h-80">
-                {JSON.stringify(status.result, null, 2)}
+              <pre className="text-xs font-mono bg-muted p-4 rounded-md overflow-auto max-h-80 whitespace-pre-wrap">
+                {status.result}
               </pre>
             </div>
           )}

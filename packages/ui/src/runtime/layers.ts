@@ -8,6 +8,8 @@
  * @since 1.0.0
  */
 
+import { EntityDiscoveryServiceLive } from "@effect-ontology/core/Services/EntityDiscovery"
+import { NlpServiceLive } from "@effect-ontology/core/Services/Nlp"
 import { RdfService } from "@effect-ontology/core/Services/Rdf"
 import { ShaclService } from "@effect-ontology/core/Services/Shacl"
 import { KeyValueStore } from "@effect/platform"
@@ -17,12 +19,14 @@ import { Layer } from "effect"
 /**
  * Complete frontend runtime layer
  *
- * Provides only stateless services - NO LLM config or LanguageModel.
+ * Provides stateless services and extraction pipeline dependencies.
  * Atoms provide LanguageModel inline using Effect.provide() per call.
  *
  * **Services Provided:**
  * - RdfService: RDF parsing operations
  * - ShaclService: SHACL validation operations
+ * - NlpService: NLP operations (chunking, tokenization, etc.)
+ * - EntityDiscoveryService: Entity accumulation for extraction
  * - KeyValueStore: Browser localStorage
  *
  * **NOT Provided (by design):**
@@ -37,7 +41,7 @@ import { Layer } from "effect"
  * import { runtime } from "./runtime/atoms"
  * import { browserConfigAtom } from "./state/config"
  * import { makeLlmProviderLayer } from "@effect-ontology/core/Services/LlmProvider"
- * import { extractKnowledgeGraph } from "@effect-ontology/core/Services/Llm"
+ * import { streamingExtractionPipeline } from "@effect-ontology/core/Services/ExtractionPipeline"
  *
  * const extractionAtom = runtime.atom((get) =>
  *   Effect.gen(function*() {
@@ -47,8 +51,8 @@ import { Layer } from "effect"
  *     // Compose provider layer inline
  *     const providerLayer = makeLlmProviderLayer(config)
  *
- *     // Provide layer per-call
- *     return yield* extractKnowledgeGraph(...)
+ *     // Use streaming pipeline with chunking
+ *     return yield* streamingExtractionPipeline(text, graph, ontology, pipelineConfig)
  *       .pipe(Effect.provide(providerLayer))
  *   })
  * )
@@ -57,6 +61,8 @@ import { Layer } from "effect"
 export const FrontendRuntimeLayer = Layer.mergeAll(
   RdfService.Default,
   ShaclService.Default,
+  NlpServiceLive,
+  EntityDiscoveryServiceLive,
   BrowserKeyValueStore.layerLocalStorage
 )
 
