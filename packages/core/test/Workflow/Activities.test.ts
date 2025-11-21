@@ -1,5 +1,5 @@
 import { BunFileSystem } from "@effect/platform-bun"
-import { Effect, HashMap, Layer } from "effect"
+import { Effect, Graph, HashMap, Layer } from "effect"
 import { describe, expect, it } from "vitest"
 import type { OntologyContext } from "../../src/Graph/Types.js"
 import * as EC from "../../src/Prompt/EntityCache.js"
@@ -15,8 +15,7 @@ import {
   loadInputTextActivity,
   mergeAllBatchesActivity,
   processBatchActivity,
-  saveBatchArtifactActivity,
-  saveEntitySnapshotActivity,
+  saveBatchWithCheckpointActivity,
   saveFinalArtifactActivity
 } from "../../src/Workflow/Activities.js"
 
@@ -31,7 +30,7 @@ const testLayer = Layer.provideMerge(
   Layer.merge(DatabaseLive, Layer.provideMerge(ArtifactStoreLive, BunFileSystem.layer))
 )
 
-// Minimal test ontology
+// Minimal test ontology and graph
 const testOntology: OntologyContext = {
   nodes: HashMap.empty(),
   universalProperties: [],
@@ -39,6 +38,8 @@ const testOntology: OntologyContext = {
   disjointWithMap: HashMap.empty(),
   propertyParentsMap: HashMap.empty()
 }
+
+const testGraph = Graph.directed<string, unknown>()
 
 describe("Workflow Activities", () => {
   describe("loadInputTextActivity", () => {
@@ -83,21 +84,25 @@ describe("Workflow Activities", () => {
   })
 
   describe("processBatchActivity", () => {
-    it("should process chunks and generate RDF output", async () => {
+    it("should process chunks with preExtractedRdf (testing mode)", async () => {
       const program = Effect.gen(function*() {
-        // Process first batch (mock extraction for now - no LLM)
+        const testRdf = `@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+<http://example.org/Alice> rdfs:label "Alice" .`
+
+        // Process first batch with pre-extracted RDF (no LLM)
         const result = yield* processBatchActivity({
           chunks: ["Alice lives in New York.", "Bob works at Microsoft."],
           batchIndex: 0,
           ontology: testOntology,
+          ontologyGraph: testGraph,
           ontologyHash: 12345,
-          rdfOutputs: [] // Empty - no actual LLM extraction in this test
+          preExtractedRdf: testRdf // Testing mode - skip LLM
         })
 
         // Verify structure
         expect(result.entities).toBeDefined()
-        expect(result.rdf).toBeDefined()
-        expect(HashMap.isEmpty(result.entities)).toBe(true) // No LLM extraction = no entities
+        expect(result.rdf).toBe(testRdf)
+        expect(HashMap.isEmpty(result.entities)).toBe(true) // No entities in this test
       })
 
       await Effect.runPromise(program.pipe(Effect.provide(testLayer)))
@@ -119,14 +124,18 @@ describe("Workflow Activities", () => {
           })
         ])
 
+        const testRdf = `@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+<http://example.org/Bob> rdfs:label "Bob" .`
+
         // Process batch with checkpoint
         const result = yield* processBatchActivity({
           chunks: ["New chunk text"],
           batchIndex: 1,
           ontology: testOntology,
+          ontologyGraph: testGraph,
           ontologyHash: 12345,
           initialEntitySnapshot: initialEntities,
-          rdfOutputs: []
+          preExtractedRdf: testRdf
         })
 
         // Verify entity was restored
@@ -139,8 +148,8 @@ describe("Workflow Activities", () => {
     })
   })
 
-  describe("saveEntitySnapshotActivity", () => {
-    it("should save checkpoint to DB + ArtifactStore", async () => {
+  describe("saveBatchWithCheckpointActivity", () => {
+    it("should atomically save batch and checkpoint", async () => {
       const program = Effect.gen(function*() {
         const runService = yield* RunService
         const db = yield* Database
@@ -167,72 +176,25 @@ describe("Workflow Activities", () => {
           })
         ])
 
-        // Save checkpoint
-        const result = yield* saveEntitySnapshotActivity({
-          runId,
-          batchIndex: 0,
-          entityCache
-        })
-
-        // Verify return value
-        expect(result.path).toBeDefined()
-        expect(result.hexHash).toBeDefined()
-
-        // Verify DB record
-        const checkpoints = yield* db.client<{
-          entity_snapshot_path: string
-          entity_snapshot_hash: string
-        }>`
-          SELECT entity_snapshot_path, entity_snapshot_hash
-          FROM run_checkpoints
-          WHERE run_id = ${runId} AND batch_index = 0
-        `
-
-        expect(checkpoints.length).toBe(1)
-        expect(checkpoints[0].entity_snapshot_path).toBe(result.path)
-        expect(checkpoints[0].entity_snapshot_hash).toBe(result.hexHash)
-
-        // Verify file exists and contains serialized data
-        const loadedJson = yield* artifactStore.load(result.path)
-        expect(loadedJson).toBeDefined()
-        expect(loadedJson).toContain("Alice")
-      })
-
-      await Effect.runPromise(program.pipe(Effect.provide(testLayer)))
-    })
-  })
-
-  describe("saveBatchArtifactActivity", () => {
-    it("should save batch RDF to DB + ArtifactStore", async () => {
-      const program = Effect.gen(function*() {
-        const runService = yield* RunService
-        const db = yield* Database
-        const artifactStore = yield* ArtifactStore
-
-        // Create a run
-        const params = new CreateRunParams({
-          inputText: "Test input",
-          ontology: testOntology,
-          llmProvider: "anthropic",
-          model: "claude-3-5-sonnet-20241022"
-        })
-        const { runId } = yield* runService.create(params)
-
-        // Save batch artifact
+        // Batch RDF
         const turtleRdf = `@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 <http://example.org/Alice> rdfs:label "Alice" .`
 
-        const result = yield* saveBatchArtifactActivity({
+        // Save both atomically
+        const result = yield* saveBatchWithCheckpointActivity({
           runId,
           batchIndex: 0,
-          turtleRdf
+          turtleRdf,
+          entityCache
         })
 
-        // Verify return value
-        expect(result.path).toBeDefined()
-        expect(result.hexHash).toBeDefined()
+        // Verify return values
+        expect(result.batchResult.path).toBeDefined()
+        expect(result.batchResult.hexHash).toBeDefined()
+        expect(result.checkpointResult.path).toBeDefined()
+        expect(result.checkpointResult.hexHash).toBeDefined()
 
-        // Verify DB record
+        // Verify both DB records exist
         const batches = yield* db.client<{
           turtle_path: string
           turtle_hash: string
@@ -242,13 +204,30 @@ describe("Workflow Activities", () => {
           WHERE run_id = ${runId} AND batch_index = 0
         `
 
-        expect(batches.length).toBe(1)
-        expect(batches[0].turtle_path).toBe(result.path)
-        expect(batches[0].turtle_hash).toBe(result.hexHash)
+        const checkpoints = yield* db.client<{
+          entity_snapshot_path: string
+          entity_snapshot_hash: string
+        }>`
+          SELECT entity_snapshot_path, entity_snapshot_hash
+          FROM run_checkpoints
+          WHERE run_id = ${runId} AND batch_index = 0
+        `
 
-        // Verify file content
-        const loadedRdf = yield* artifactStore.load(result.path)
+        expect(batches.length).toBe(1)
+        expect(batches[0].turtle_path).toBe(result.batchResult.path)
+        expect(batches[0].turtle_hash).toBe(result.batchResult.hexHash)
+
+        expect(checkpoints.length).toBe(1)
+        expect(checkpoints[0].entity_snapshot_path).toBe(result.checkpointResult.path)
+        expect(checkpoints[0].entity_snapshot_hash).toBe(result.checkpointResult.hexHash)
+
+        // Verify both files exist
+        const loadedRdf = yield* artifactStore.load(result.batchResult.path)
         expect(loadedRdf).toBe(turtleRdf)
+
+        const loadedJson = yield* artifactStore.load(result.checkpointResult.path)
+        expect(loadedJson).toBeDefined()
+        expect(loadedJson).toContain("Alice")
       })
 
       await Effect.runPromise(program.pipe(Effect.provide(testLayer)))
@@ -281,9 +260,13 @@ describe("Workflow Activities", () => {
           })
         ])
 
-        yield* saveEntitySnapshotActivity({
+        const turtleRdf = `@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+<http://example.org/Bob> rdfs:label "Bob" .`
+
+        yield* saveBatchWithCheckpointActivity({
           runId,
           batchIndex: 0,
+          turtleRdf,
           entityCache: originalCache
         })
 
@@ -345,16 +328,20 @@ describe("Workflow Activities", () => {
         const batch1 = `@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 <http://example.org/Bob> rdfs:label "Bob" .`
 
-        yield* saveBatchArtifactActivity({
+        const emptyCache = HashMap.empty<string, EC.EntityRef>()
+
+        yield* saveBatchWithCheckpointActivity({
           runId,
           batchIndex: 0,
-          turtleRdf: batch0
+          turtleRdf: batch0,
+          entityCache: emptyCache
         })
 
-        yield* saveBatchArtifactActivity({
+        yield* saveBatchWithCheckpointActivity({
           runId,
           batchIndex: 1,
-          turtleRdf: batch1
+          turtleRdf: batch1,
+          entityCache: emptyCache
         })
 
         // Merge all batches
@@ -387,16 +374,19 @@ describe("Workflow Activities", () => {
         const batchRdf = `@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 <http://example.org/Charlie> rdfs:label "Charlie" .`
 
-        const result1 = yield* saveBatchArtifactActivity({
+        const emptyCache = HashMap.empty<string, EC.EntityRef>()
+
+        const result1 = yield* saveBatchWithCheckpointActivity({
           runId,
           batchIndex: 0,
-          turtleRdf: batchRdf
+          turtleRdf: batchRdf,
+          entityCache: emptyCache
         })
 
         // Manually insert duplicate with different batch_index (orphaned retry scenario)
         yield* db.client`
           INSERT INTO batch_artifacts (run_id, batch_index, turtle_path, turtle_hash)
-          VALUES (${runId}, 99, ${result1.path}, ${result1.hexHash})
+          VALUES (${runId}, 99, ${result1.batchResult.path}, ${result1.batchResult.hexHash})
         `
 
         // Verify deduplication happens BEFORE file load
