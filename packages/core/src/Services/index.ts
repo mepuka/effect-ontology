@@ -48,3 +48,23 @@ export { NlpError, NlpService, type NlpService as NlpServiceType, NlpServiceLive
 export { RdfEnvironment, type RdfEnvironment as RdfEnvironmentType } from "./RdfEnvironment.js"
 
 export { ShaclService, type ShaclService as ShaclServiceType } from "./Shacl.js"
+
+export {
+  type ChunkingConfig,
+  type ChunkingStrategy,
+  type CharacterChunkingConfig,
+  type ChunkInfo,
+  type SemanticChunkingConfig,
+  ChunkingError,
+  chunkText,
+  chunkTextByCharacters,
+  chunkTextBySentences,
+  defaultCharacterConfig,
+  defaultSemanticConfig,
+  estimateChunkCount,
+  getChunkCoverage,
+  makeCharacterChunkingConfig,
+  makeSemanticChunkingConfig,
+  previewChunks,
+  streamChunks
+} from "./ChunkingStrategy.js"

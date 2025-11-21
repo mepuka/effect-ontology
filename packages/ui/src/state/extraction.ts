@@ -2,18 +2,20 @@
  * Extraction State Atoms
  *
  * Manages the state for knowledge graph extraction from text.
+ * Uses the streaming extraction pipeline with chunking support.
  * Uses the data-driven LLM provider approach (no Effect Config).
  */
 
 import { Atom, Result } from "@effect-atom/atom"
-import { extractKnowledgeGraph } from "@effect-ontology/core/Services/Llm"
+import {
+  streamingExtractionPipeline,
+  type PipelineConfig
+} from "@effect-ontology/core/Services/ExtractionPipeline"
 import { makeLlmProviderLayer } from "@effect-ontology/core/Services/LlmProvider"
-import { makeKnowledgeGraphSchema } from "@effect-ontology/core/Schema/Factory"
-import { solveGraph, defaultPromptAlgebra } from "@effect-ontology/core/Prompt"
-import { isClassNode } from "@effect-ontology/core/Graph/Types"
-import { Effect, HashMap } from "effect"
+import { Effect } from "effect"
 import { runtime } from "../runtime/atoms"
 import { browserConfigAtom } from "./config"
+import { chunkingConfigAtom } from "./chunking"
 import { ontologyGraphAtom } from "./store"
 
 /**
@@ -22,20 +24,43 @@ import { ontologyGraphAtom } from "./store"
 export const extractionInputAtom = Atom.make("")
 
 /**
+ * Extraction progress state
+ */
+export interface ExtractionProgress {
+  readonly currentChunk: number
+  readonly totalChunks: number
+  readonly currentPhase: "chunking" | "extracting" | "merging" | "done"
+}
+
+/**
  * Extraction status
  */
 export type ExtractionStatus =
   | { _tag: "idle" }
-  | { _tag: "running" }
-  | { _tag: "success"; result: any }
+  | { _tag: "running"; progress?: ExtractionProgress }
+  | { _tag: "success"; result: string } // Result is Turtle RDF
   | { _tag: "error"; message: string }
 
 export const extractionStatusAtom = Atom.make<ExtractionStatus>({ _tag: "idle" })
 
 /**
+ * Map chunking config to pipeline config
+ */
+const toPipelineConfig = (chunkingConfig: {
+  strategy: string
+  windowSize: number
+  overlap: number
+}): PipelineConfig => ({
+  concurrency: 3, // Default concurrency
+  windowSize: chunkingConfig.strategy === "semantic" ? chunkingConfig.windowSize : 5, // Convert char window to approx sentences
+  overlap: chunkingConfig.strategy === "semantic" ? chunkingConfig.overlap : 2
+})
+
+/**
  * Run extraction atom
  *
- * Triggers extraction using the current ontology and input text.
+ * Triggers extraction using the streaming pipeline with chunking.
+ * Uses the current ontology, input text, and chunking configuration.
  * Composes the LLM provider layer inline from browserConfigAtom.
  */
 export const runExtractionAtom = runtime.atom((get) =>
@@ -79,58 +104,29 @@ export const runExtractionAtom = runtime.atom((get) =>
       return null
     }
 
+    // Get chunking config
+    const chunkingConfig = get(chunkingConfigAtom)
+    const pipelineConfig = toPipelineConfig(chunkingConfig)
+
     // Set running status
-    yield* Atom.set(extractionStatusAtom, { _tag: "running" })
-
-    // Build prompt using the prompt algebra
-    const prompts = yield* solveGraph(graph, context, defaultPromptAlgebra)
-
-    // Get the first prompt (root class) or build a combined one
-    const promptEntries = [...HashMap.entries(prompts)]
-    if (promptEntries.length === 0) {
-      yield* Atom.set(extractionStatusAtom, {
-        _tag: "error",
-        message: "No prompts generated from ontology"
-      })
-      return null
-    }
-
-    // Use the first prompt for now
-    const [_nodeId, prompt] = promptEntries[0]
-
-    // Extract class and property IRIs
-    const classIris: string[] = []
-    const propertyIris: string[] = []
-
-    for (const node of HashMap.values(context.nodes)) {
-      if (isClassNode(node)) {
-        classIris.push(node.id)
-        for (const prop of node.properties) {
-          if (!propertyIris.includes(prop.propertyIri)) {
-            propertyIris.push(prop.propertyIri)
-          }
-        }
+    yield* Atom.set(extractionStatusAtom, {
+      _tag: "running",
+      progress: {
+        currentChunk: 0,
+        totalChunks: 0,
+        currentPhase: "chunking"
       }
-    }
-
-    for (const prop of context.universalProperties) {
-      if (!propertyIris.includes(prop.propertyIri)) {
-        propertyIris.push(prop.propertyIri)
-      }
-    }
-
-    // Create schema
-    const schema = makeKnowledgeGraphSchema(classIris, propertyIris)
+    })
 
     // Create provider layer
     const providerLayer = makeLlmProviderLayer(config)
 
-    // Run extraction
-    const result = yield* extractKnowledgeGraph(
+    // Run streaming extraction pipeline
+    const result = yield* streamingExtractionPipeline(
       inputText,
+      graph,
       context,
-      prompt,
-      schema
+      pipelineConfig
     ).pipe(
       Effect.provide(providerLayer),
       Effect.catchAll((error) =>
@@ -154,3 +150,8 @@ export const runExtractionAtom = runtime.atom((get) =>
     return result
   })
 )
+
+/**
+ * Reset extraction state
+ */
+export const resetExtractionAtom = Atom.make(null)

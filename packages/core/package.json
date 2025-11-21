@@ -21,7 +21,8 @@
     "./Services/Nlp": "./src/Services/Nlp.ts",
     "./Services/EntityDiscovery": "./src/Services/EntityDiscovery.ts",
     "./Services/EntityResolution": "./src/Services/EntityResolution.ts",
-    "./Services/ExtractionPipeline": "./src/Services/ExtractionPipeline.ts"
+    "./Services/ExtractionPipeline": "./src/Services/ExtractionPipeline.ts",
+    "./Services/ChunkingStrategy": "./src/Services/ChunkingStrategy.ts"
   },
   "scripts": {
     "build": "tsc --skipLibCheck --project tsconfig.build.json",

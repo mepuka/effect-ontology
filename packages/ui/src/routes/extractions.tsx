@@ -5,7 +5,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { DataTable } from '@/components/DataTable'
 import { ColumnDef } from '@tanstack/react-table'
-import { Loader2, Play, AlertCircle, CheckCircle } from 'lucide-react'
+import { Loader2, Play, AlertCircle, CheckCircle, Layers } from 'lucide-react'
+import { ChunkPreview, ChunkPreviewCompact } from '@/components/ChunkPreview'
 import {
   ontologyClassesTableAtom,
   ontologyPropertiesTableAtom,
@@ -335,13 +336,13 @@ function ExtractionView() {
   const extractionResult = useAtomValue(runExtractionAtom)
 
   return (
-    <div className="grid grid-cols-2 gap-6">
-      {/* Input Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Extract Knowledge</CardTitle>
+    <div className="grid grid-cols-3 gap-4">
+      {/* Input Panel */}
+      <Card className="col-span-1">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Input Text</CardTitle>
           <CardDescription>
-            Enter text to extract structured knowledge using the loaded ontology
+            Enter text to extract knowledge from
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -351,9 +352,13 @@ function ExtractionView() {
             placeholder="Enter text to extract knowledge from...
 
 Example: Alice is a software engineer at Acme Corp. She knows Bob, who works as a designer. They are both members of the Design Team."
-            className="w-full h-48 p-3 border rounded-md resize-none text-sm font-mono"
+            className="w-full h-64 p-3 border rounded-md resize-none text-sm font-mono"
           />
-          <div className="flex items-center justify-between">
+
+          {/* Compact chunk stats */}
+          <ChunkPreviewCompact />
+
+          <div className="flex items-center justify-between pt-2">
             <StatusBadge status={status} />
             <button
               disabled={status._tag === 'running' || !inputText.trim()}
@@ -375,32 +380,52 @@ Example: Alice is a software engineer at Acme Corp. She knows Bob, who works as 
         </CardContent>
       </Card>
 
-      {/* Results Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Extraction Results</CardTitle>
+      {/* Chunk Preview Panel */}
+      <div className="col-span-1">
+        <ChunkPreview />
+      </div>
+
+      {/* Results Panel */}
+      <Card className="col-span-1">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Extraction Results</CardTitle>
           <CardDescription>
-            Structured knowledge graph extracted from input text
+            Structured knowledge graph from input text
           </CardDescription>
         </CardHeader>
         <CardContent>
           {status._tag === 'idle' && (
             <div className="text-muted-foreground text-sm text-center py-8">
+              <Layers className="w-8 h-8 mx-auto mb-2 opacity-50" />
               Enter text and click Extract to see results
             </div>
           )}
           {status._tag === 'running' && (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            <div className="flex flex-col items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground mb-2" />
+              <span className="text-sm text-muted-foreground">Processing chunks...</span>
             </div>
           )}
           {status._tag === 'success' && (
-            <pre className="text-xs font-mono bg-muted p-4 rounded-md overflow-auto max-h-64">
-              {JSON.stringify(status.result, null, 2)}
-            </pre>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-green-600 text-sm">
+                  <CheckCircle className="w-4 h-4" />
+                  Extraction complete
+                </div>
+                <span className="text-xs text-muted-foreground font-mono">Turtle RDF</span>
+              </div>
+              <pre className="text-xs font-mono bg-muted p-4 rounded-md overflow-auto max-h-80 whitespace-pre-wrap">
+                {status.result}
+              </pre>
+            </div>
           )}
           {status._tag === 'error' && (
             <div className="bg-destructive/10 border border-destructive/20 rounded-md p-4 text-sm text-destructive">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertCircle className="w-4 h-4" />
+                Extraction failed
+              </div>
               {status.message}
             </div>
           )}
