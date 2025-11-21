@@ -126,7 +126,7 @@ const providerParams: LlmProviderParams = {
   provider: (process.env.VITE_LLM_PROVIDER || "anthropic") as LlmProviderParams["provider"],
   anthropic: {
     apiKey: process.env.VITE_LLM_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY || "",
-    model: process.env.VITE_LLM_ANTHROPIC_MODEL || "claude-3-haiku-20240307",
+    model: process.env.VITE_LLM_ANTHROPIC_MODEL || "claude-haiku-4-5-20251001",
     maxTokens: Number(process.env.VITE_LLM_ANTHROPIC_MAX_TOKENS) || 4096,
     temperature: Number(process.env.VITE_LLM_ANTHROPIC_TEMPERATURE) || 0.0
   },
@@ -151,6 +151,8 @@ const providerParams: LlmProviderParams = {
     siteName: process.env.VITE_LLM_OPENROUTER_SITE_NAME
   }
 }
+
+console.log("providerParams", providerParams)
 
 // Create language model layer from params
 const LanguageModelLayer = makeLlmProviderLayer(providerParams)

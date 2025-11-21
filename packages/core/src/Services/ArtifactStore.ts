@@ -1,0 +1,110 @@
+/**
+ * ArtifactStore Service - FileSystem abstraction for large blobs
+ *
+ * Stores artifacts too large for SQLite (>1GB blob limit):
+ * - Input text - Original text to be processed
+ * - Batch outputs - RDF graphs for each batch (10 chunks per batch)
+ * - Entity snapshots - Serialized entity registry for checkpoints
+ * - Final artifacts - Merged RDF output
+ *
+ * Features:
+ * - Content-addressed filenames (include hash for idempotency)
+ * - Idempotent writes (same content = same file, retry-safe)
+ * - Hash verification (return hash for validation)
+ */
+import { FileSystem } from "@effect/platform"
+import { Effect, Hash } from "effect"
+
+/**
+ * Hash content using Effect's Hash module
+ * Returns numeric hash for internal use
+ */
+export const hashContent = (content: string): number => Hash.string(content)
+
+/**
+ * Convert numeric hash to hex string for filesystem
+ * Padded to 16 characters for consistent width
+ * Uses unsigned 32-bit integer to avoid negative values
+ */
+const hashToHex = (hash: number): string => {
+  // Convert to unsigned 32-bit integer to avoid negative hex
+  const unsigned = hash >>> 0
+  return unsigned.toString(16).padStart(16, "0")
+}
+
+/**
+ * ArtifactStore Interface
+ */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export interface ArtifactStore {
+  /**
+   * Save artifact to filesystem
+   * Returns path, numeric hash, and hex hash for validation
+   */
+  readonly save: (
+    runId: string,
+    key: string,
+    content: string
+  ) => Effect.Effect<
+    {
+      readonly path: string
+      readonly hash: number
+      readonly hexHash: string
+    },
+    never,
+    never
+  >
+
+  /**
+   * Load artifact from filesystem
+   */
+  readonly load: (path: string) => Effect.Effect<string, never, never>
+
+  /**
+   * Delete all artifacts for a run
+   */
+  readonly delete: (runId: string) => Effect.Effect<void, never, never>
+}
+
+/**
+ * ArtifactStore Service
+ */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export class ArtifactStore extends Effect.Service<ArtifactStore>()("ArtifactStore", {
+  effect: Effect.gen(function*() {
+    const fs = yield* FileSystem.FileSystem
+    const baseDir = "extraction_data"
+
+    // Ensure base directory exists
+    yield* fs.makeDirectory(baseDir, { recursive: true })
+
+    return {
+      save: (runId: string, key: string, content: string) =>
+        Effect.gen(function*() {
+          // Compute hash
+          const hash = hashContent(content)
+          const hexHash = hashToHex(hash)
+
+          // Build path
+          const runDir = `${baseDir}/${runId}`
+          const path = `${runDir}/${key}`
+
+          // Ensure all parent directories exist (handles nested keys)
+          const lastSlash = path.lastIndexOf("/")
+          if (lastSlash > 0) {
+            const parentDir = path.substring(0, lastSlash)
+            yield* fs.makeDirectory(parentDir, { recursive: true })
+          }
+
+          // Write file (idempotent - overwrites if exists)
+          yield* fs.writeFileString(path, content)
+
+          return { path, hash, hexHash }
+        }),
+
+      load: (path: string) => fs.readFileString(path),
+
+      delete: (runId: string) => fs.remove(`${baseDir}/${runId}`, { recursive: true })
+    }
+  })
+}) {}
