@@ -2,10 +2,10 @@ import { FileSystem } from "@effect/platform"
 import { BunFileSystem } from "@effect/platform-bun"
 import { Effect, Layer } from "effect"
 import { describe, expect, it } from "vitest"
-import { ArtifactStore } from "../../src/Services/ArtifactStore.js"
+import { ArtifactStore, ArtifactStoreLive } from "../../src/Services/ArtifactStore.js"
 
 describe("ArtifactStore", () => {
-  const testLayer = Layer.provideMerge(ArtifactStore.Default, BunFileSystem.layer)
+  const testLayer = Layer.provideMerge(ArtifactStoreLive, BunFileSystem.layer)
 
   it("should save and load artifact", async () => {
     const program = Effect.gen(function*() {
