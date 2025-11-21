@@ -1,0 +1,29 @@
+{
+  "name": "@effect-ontology/cli",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "effect-ontology": "./dist/main.js"
+  },
+  "exports": {
+    ".": "./src/main.ts"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "dev": "bunx tsx src/main.ts",
+    "check": "tsc -b tsconfig.json"
+  },
+  "dependencies": {
+    "@effect/cli": "^0.72.1",
+    "@effect/platform": "^0.93.3",
+    "@effect/platform-bun": "^0.84.0",
+    "@effect-ontology/core": "workspace:*",
+    "effect": "^3.19.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.2",
+    "tsx": "^4.17.0",
+    "typescript": "^5.6.2"
+  }
+}
