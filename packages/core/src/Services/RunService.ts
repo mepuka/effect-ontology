@@ -15,15 +15,11 @@
  * - Artifact tracking (input text, final output)
  */
 
-import { Context, Effect, Hash, Layer, Option } from "effect"
+import { Context, Effect, Hash, HashMap, Layer, Option } from "effect"
 import type { OntologyContext } from "../Graph/Types.js"
 import { ArtifactStore } from "./ArtifactStore.js"
 import { Database } from "./Database.js"
-import {
-  CreateRunParams,
-  ExtractionRun,
-  type RunStatus
-} from "./WorkflowTypes.js"
+import type { CreateRunParams, ExtractionRun, RunStatus } from "./WorkflowTypes.js"
 
 /**
  * Hash ontology using Effect's Hash.string
@@ -35,22 +31,20 @@ import {
  * @returns Numeric hash (convert to hex for DB storage)
  */
 export const hashOntology = (ontology: OntologyContext): number => {
-  // Convert HashMap to plain object for serialization
-  const classMapObj = Object.fromEntries(ontology.classMap)
-  const propertyMapObj = Object.fromEntries(ontology.propertyMap)
+  // Extract nodes and convert to canonical representation
+  const nodesArray = Array.from(HashMap.entries(ontology.nodes))
+    .map(([k, v]) => ({ id: k, label: v.label, type: v._tag }))
+    .sort((a, b) => a.id.localeCompare(b.id)) // Canonical ordering
 
-  // Sort keys for canonical ordering (ensures stable hashes across runs)
-  const sortedClassMap = Object.fromEntries(
-    Object.entries(classMapObj).sort(([a], [b]) => a.localeCompare(b))
-  )
-  const sortedPropertyMap = Object.fromEntries(
-    Object.entries(propertyMapObj).sort(([a], [b]) => a.localeCompare(b))
-  )
+  // Sort universal properties for stability
+  const sortedUniversalProps = ontology.universalProperties
+    .map((p) => ({ property: p.property, ranges: Array.from(p.ranges).sort() }))
+    .sort((a, b) => a.property.localeCompare(b.property))
 
-  // Create serializable representation (exclude graph which has circular refs)
+  // Create serializable representation (include key discriminators only)
   const serializable = {
-    classMap: sortedClassMap,
-    propertyMap: sortedPropertyMap
+    nodes: nodesArray,
+    universalProperties: sortedUniversalProps
   }
 
   // Convert to JSON - sorted keys ensure deterministic output

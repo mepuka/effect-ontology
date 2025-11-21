@@ -1,11 +1,11 @@
 import { BunFileSystem } from "@effect/platform-bun"
 import { Effect, HashMap, Layer, Option } from "effect"
 import { describe, expect, it } from "vitest"
-import { Database, DatabaseLive } from "../../src/Services/Database.js"
-import { ArtifactStore, ArtifactStoreLive } from "../../src/Services/ArtifactStore.js"
-import { RunService, RunServiceLive, hashOntology } from "../../src/Services/RunService.js"
-import { CreateRunParams } from "../../src/Services/WorkflowTypes.js"
 import type { OntologyContext } from "../../src/Graph/Types.js"
+import { ArtifactStore, ArtifactStoreLive } from "../../src/Services/ArtifactStore.js"
+import { Database, DatabaseLive } from "../../src/Services/Database.js"
+import { hashOntology, RunService, RunServiceLive } from "../../src/Services/RunService.js"
+import { CreateRunParams } from "../../src/Services/WorkflowTypes.js"
 
 // Test layer providing Database + ArtifactStore + RunService + FileSystem
 const testLayer = Layer.provideMerge(
@@ -17,9 +17,11 @@ describe("RunService", () => {
   describe("hashOntology", () => {
     it("should produce consistent hashes for same ontology", () => {
       const ontology: OntologyContext = {
-        graph: null as any, // Mock - not used in hash
-        classMap: HashMap.empty(),
-        propertyMap: HashMap.empty()
+        nodes: HashMap.empty(),
+        universalProperties: [],
+        nodeIndexMap: HashMap.empty(),
+        disjointWithMap: HashMap.empty(),
+        propertyParentsMap: HashMap.empty()
       }
 
       const hash1 = hashOntology(ontology)
@@ -31,15 +33,24 @@ describe("RunService", () => {
 
     it("should produce different hashes for different ontologies", () => {
       const ontology1: OntologyContext = {
-        graph: null as any,
-        classMap: HashMap.empty(),
-        propertyMap: HashMap.empty()
+        nodes: HashMap.empty(),
+        universalProperties: [],
+        nodeIndexMap: HashMap.empty(),
+        disjointWithMap: HashMap.empty(),
+        propertyParentsMap: HashMap.empty()
       }
 
       const ontology2: OntologyContext = {
-        graph: null as any,
-        classMap: HashMap.make(["http://example.org/Person", { id: "test-node" } as any]),
-        propertyMap: HashMap.empty()
+        nodes: HashMap.make(["http://example.org/Person", {
+          _tag: "Class" as const,
+          id: "http://example.org/Person",
+          label: "Person",
+          properties: []
+        }]),
+        universalProperties: [],
+        nodeIndexMap: HashMap.empty(),
+        disjointWithMap: HashMap.empty(),
+        propertyParentsMap: HashMap.empty()
       }
 
       const hash1 = hashOntology(ontology1)
@@ -60,9 +71,11 @@ describe("RunService", () => {
         const params = new CreateRunParams({
           inputText: "Test input text for extraction",
           ontology: {
-            graph: null as any,
-            classMap: HashMap.empty(),
-            propertyMap: HashMap.empty()
+            nodes: HashMap.empty(),
+            universalProperties: [],
+            nodeIndexMap: HashMap.empty(),
+            disjointWithMap: HashMap.empty(),
+            propertyParentsMap: HashMap.empty()
           },
           llmProvider: "anthropic",
           model: "claude-3-5-sonnet-20241022"
@@ -127,9 +140,11 @@ describe("RunService", () => {
         const params = new CreateRunParams({
           inputText: largeText,
           ontology: {
-            graph: null as any,
-            classMap: HashMap.empty(),
-            propertyMap: HashMap.empty()
+            nodes: HashMap.empty(),
+            universalProperties: [],
+            nodeIndexMap: HashMap.empty(),
+            disjointWithMap: HashMap.empty(),
+            propertyParentsMap: HashMap.empty()
           },
           llmProvider: "anthropic",
           model: "claude-3-5-sonnet-20241022"
@@ -155,9 +170,11 @@ describe("RunService", () => {
         const params = new CreateRunParams({
           inputText: "Test text",
           ontology: {
-            graph: null as any,
-            classMap: HashMap.empty(),
-            propertyMap: HashMap.empty()
+            nodes: HashMap.empty(),
+            universalProperties: [],
+            nodeIndexMap: HashMap.empty(),
+            disjointWithMap: HashMap.empty(),
+            propertyParentsMap: HashMap.empty()
           },
           llmProvider: "anthropic",
           model: "claude-3-5-sonnet-20241022"
@@ -202,9 +219,11 @@ describe("RunService", () => {
         const params = new CreateRunParams({
           inputText: "Test text",
           ontology: {
-            graph: null as any,
-            classMap: HashMap.empty(),
-            propertyMap: HashMap.empty()
+            nodes: HashMap.empty(),
+            universalProperties: [],
+            nodeIndexMap: HashMap.empty(),
+            disjointWithMap: HashMap.empty(),
+            propertyParentsMap: HashMap.empty()
           },
           llmProvider: "anthropic",
           model: "claude-3-5-sonnet-20241022"
@@ -240,9 +259,11 @@ describe("RunService", () => {
         const params = new CreateRunParams({
           inputText: "Test text",
           ontology: {
-            graph: null as any,
-            classMap: HashMap.empty(),
-            propertyMap: HashMap.empty()
+            nodes: HashMap.empty(),
+            universalProperties: [],
+            nodeIndexMap: HashMap.empty(),
+            disjointWithMap: HashMap.empty(),
+            propertyParentsMap: HashMap.empty()
           },
           llmProvider: "anthropic",
           model: "claude-3-5-sonnet-20241022"
@@ -283,9 +304,11 @@ describe("RunService", () => {
         const params = new CreateRunParams({
           inputText: "Test text",
           ontology: {
-            graph: null as any,
-            classMap: HashMap.empty(),
-            propertyMap: HashMap.empty()
+            nodes: HashMap.empty(),
+            universalProperties: [],
+            nodeIndexMap: HashMap.empty(),
+            disjointWithMap: HashMap.empty(),
+            propertyParentsMap: HashMap.empty()
           },
           llmProvider: "anthropic",
           model: "claude-3-5-sonnet-20241022"
@@ -324,9 +347,11 @@ describe("RunService", () => {
         const params = new CreateRunParams({
           inputText: "Test text",
           ontology: {
-            graph: null as any,
-            classMap: HashMap.empty(),
-            propertyMap: HashMap.empty()
+            nodes: HashMap.empty(),
+            universalProperties: [],
+            nodeIndexMap: HashMap.empty(),
+            disjointWithMap: HashMap.empty(),
+            propertyParentsMap: HashMap.empty()
           },
           llmProvider: "anthropic",
           model: "claude-3-5-sonnet-20241022"
@@ -384,9 +409,11 @@ describe("RunService", () => {
         const params = new CreateRunParams({
           inputText: "Test text",
           ontology: {
-            graph: null as any,
-            classMap: HashMap.empty(),
-            propertyMap: HashMap.empty()
+            nodes: HashMap.empty(),
+            universalProperties: [],
+            nodeIndexMap: HashMap.empty(),
+            disjointWithMap: HashMap.empty(),
+            propertyParentsMap: HashMap.empty()
           },
           llmProvider: "anthropic",
           model: "claude-3-5-sonnet-20241022"
@@ -423,9 +450,11 @@ describe("RunService", () => {
         const db = yield* Database
 
         const ontology: OntologyContext = {
-          graph: null as any,
-          classMap: HashMap.empty(),
-          propertyMap: HashMap.empty()
+          nodes: HashMap.empty(),
+          universalProperties: [],
+          nodeIndexMap: HashMap.empty(),
+          disjointWithMap: HashMap.empty(),
+          propertyParentsMap: HashMap.empty()
         }
 
         const params = new CreateRunParams({
@@ -435,7 +464,7 @@ describe("RunService", () => {
           model: "claude-3-5-sonnet-20241022"
         })
 
-        const { runId, ontologyHash } = yield* runService.create(params)
+        const { ontologyHash, runId } = yield* runService.create(params)
 
         // Verify numeric hash
         expect(typeof ontologyHash).toBe("number")

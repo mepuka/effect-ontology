@@ -13,12 +13,12 @@
  * Based on: docs/plans/2025-11-20-STREAMLINED-PLAN.md Task 9
  */
 
-import { Effect, Context, Layer } from "effect"
+import { Context, Effect, Layer } from "effect"
 import type { Graph } from "effect"
-import { solveToKnowledgeIndex } from "../Prompt/Solver.js"
-import { knowledgeIndexAlgebra } from "../Prompt/Algebra.js"
 import type { OntologyContext } from "../Graph/Types.js"
+import { knowledgeIndexAlgebra } from "../Prompt/Algebra.js"
 import type { KnowledgeIndex } from "../Prompt/KnowledgeIndex.js"
+import { solveToKnowledgeIndex } from "../Prompt/Solver.js"
 
 /**
  * OntologyCache Service Interface
@@ -57,7 +57,7 @@ interface CacheEntry {
 /**
  * Create OntologyCache implementation
  */
-const makeOntologyCache = Effect.gen(function*() {
+const makeOntologyCache = Effect.sync(() => {
   // Simple Map: numeric hash -> KnowledgeIndex with timestamp
   const cacheMap = new Map<number, CacheEntry>()
 

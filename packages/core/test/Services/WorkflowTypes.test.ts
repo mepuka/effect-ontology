@@ -1,20 +1,20 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Schema } from "effect"
 import {
-  RunStatus,
   ArtifactType,
-  ExtractionRun,
-  RunCheckpoint,
-  RunArtifact,
   BatchArtifact,
   CreateRunParams,
-  ResumeRunParams
+  ExtractionRun,
+  ResumeRunParams,
+  RunArtifact,
+  RunCheckpoint,
+  RunStatus
 } from "../../src/Services/WorkflowTypes.js"
 
 describe("WorkflowTypes", () => {
   describe("RunStatus", () => {
     it.effect("should validate valid statuses", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const queued = yield* Schema.decodeUnknown(RunStatus)("queued")
         expect(queued).toBe("queued")
 
@@ -26,22 +26,20 @@ describe("WorkflowTypes", () => {
 
         const failed = yield* Schema.decodeUnknown(RunStatus)("failed")
         expect(failed).toBe("failed")
-      })
-    )
+      }))
 
     it.effect("should reject invalid status", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const result = yield* Effect.either(
           Schema.decodeUnknown(RunStatus)("invalid")
         )
         expect(result._tag).toBe("Left")
-      })
-    )
+      }))
   })
 
   describe("ArtifactType", () => {
     it.effect("should validate valid artifact types", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const inputText = yield* Schema.decodeUnknown(ArtifactType)(
           "input_text"
         )
@@ -51,22 +49,20 @@ describe("WorkflowTypes", () => {
           "final_turtle"
         )
         expect(finalTurtle).toBe("final_turtle")
-      })
-    )
+      }))
 
     it.effect("should reject invalid artifact type", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const result = yield* Effect.either(
           Schema.decodeUnknown(ArtifactType)("invalid")
         )
         expect(result._tag).toBe("Left")
-      })
-    )
+      }))
   })
 
   describe("ExtractionRun", () => {
     it.effect("should construct ExtractionRun with all fields", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const run = new ExtractionRun({
           run_id: "test-123",
           status: "queued",
@@ -92,11 +88,10 @@ describe("WorkflowTypes", () => {
         expect(run.final_turtle_path).toBe("/path/to/final.ttl")
         expect(run.final_turtle_hash).toBe("def456")
         expect(run.error_message).toBe(null)
-      })
-    )
+      }))
 
     it.effect("should construct ExtractionRun with nullable fields as null", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const run = new ExtractionRun({
           run_id: "test-456",
           status: "running",
@@ -117,11 +112,10 @@ describe("WorkflowTypes", () => {
         expect(run.final_turtle_path).toBe(null)
         expect(run.final_turtle_hash).toBe(null)
         expect(run.error_message).toBe(null)
-      })
-    )
+      }))
 
     it.effect("should reject non-integer for status_version", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const result = yield* Effect.either(
           Schema.decodeUnknown(ExtractionRun)({
             run_id: "test-789",
@@ -139,13 +133,12 @@ describe("WorkflowTypes", () => {
           })
         )
         expect(result._tag).toBe("Left")
-      })
-    )
+      }))
   })
 
   describe("RunCheckpoint", () => {
     it.effect("should construct RunCheckpoint", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const checkpoint = new RunCheckpoint({
           run_id: "test-123",
           batch_index: 5,
@@ -158,11 +151,10 @@ describe("WorkflowTypes", () => {
         expect(checkpoint.batch_index).toBe(5)
         expect(checkpoint.entity_snapshot_path).toBe("/path/to/snapshot.json")
         expect(checkpoint.entity_snapshot_hash).toBe("hash123")
-      })
-    )
+      }))
 
     it.effect("should reject non-integer for batch_index", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const result = yield* Effect.either(
           Schema.decodeUnknown(RunCheckpoint)({
             run_id: "test-123",
@@ -173,13 +165,12 @@ describe("WorkflowTypes", () => {
           })
         )
         expect(result._tag).toBe("Left")
-      })
-    )
+      }))
   })
 
   describe("RunArtifact", () => {
     it.effect("should construct RunArtifact", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const artifact = new RunArtifact({
           run_id: "test-123",
           artifact_type: "input_text",
@@ -192,13 +183,12 @@ describe("WorkflowTypes", () => {
         expect(artifact.artifact_type).toBe("input_text")
         expect(artifact.artifact_path).toBe("/path/to/artifact.txt")
         expect(artifact.artifact_hash).toBe("hash456")
-      })
-    )
+      }))
   })
 
   describe("BatchArtifact", () => {
     it.effect("should construct BatchArtifact", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const batchArtifact = new BatchArtifact({
           run_id: "test-123",
           batch_index: 3,
@@ -211,13 +201,12 @@ describe("WorkflowTypes", () => {
         expect(batchArtifact.batch_index).toBe(3)
         expect(batchArtifact.turtle_path).toBe("/path/to/batch-3.ttl")
         expect(batchArtifact.turtle_hash).toBe("hash789")
-      })
-    )
+      }))
   })
 
   describe("CreateRunParams", () => {
     it.effect("should construct CreateRunParams", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const params = new CreateRunParams({
           inputText: "Sample text to extract from",
           ontology: { classes: [], properties: [] },
@@ -228,11 +217,10 @@ describe("WorkflowTypes", () => {
         expect(params.inputText).toBe("Sample text to extract from")
         expect(params.llmProvider).toBe("anthropic")
         expect(params.model).toBe("claude-3-5-sonnet-20241022")
-      })
-    )
+      }))
 
     it.effect("should reject missing required fields", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const result = yield* Effect.either(
           Schema.decodeUnknown(CreateRunParams)({
             inputText: "Sample text",
@@ -241,28 +229,25 @@ describe("WorkflowTypes", () => {
           })
         )
         expect(result._tag).toBe("Left")
-      })
-    )
+      }))
   })
 
   describe("ResumeRunParams", () => {
     it.effect("should construct ResumeRunParams", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const params = new ResumeRunParams({
           runId: "test-123"
         })
 
         expect(params.runId).toBe("test-123")
-      })
-    )
+      }))
 
     it.effect("should reject missing runId", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const result = yield* Effect.either(
           Schema.decodeUnknown(ResumeRunParams)({})
         )
         expect(result._tag).toBe("Left")
-      })
-    )
+      }))
   })
 })

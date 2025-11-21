@@ -12,21 +12,12 @@
  * - Identical hash: Same ontology hash returns same cached index
  */
 
+import { Effect, Graph, HashMap } from "effect"
 import { describe, expect, it } from "vitest"
-import { Effect, Graph, HashMap, Hash } from "effect"
-import { OntologyCache, OntologyCacheLive } from "../../src/Services/OntologyCache.js"
-import type { OntologyContext } from "../../src/Graph/Types.js"
 import { ClassNode } from "../../src/Graph/index.js"
-
-/**
- * Helper: Simple hash function for testing
- * (hashOntology from RunService has a bug with the new OntologyContext structure)
- */
-const hashOntologyForTest = (ontology: OntologyContext): number => {
-  // Just hash the nodes field which is the primary discriminator
-  const nodesArray = Array.from(HashMap.entries(ontology.nodes)).map(([k, v]) => [k, v.id])
-  return Hash.string(JSON.stringify(nodesArray))
-}
+import type { OntologyContext } from "../../src/Graph/Types.js"
+import { OntologyCache, OntologyCacheLive } from "../../src/Services/OntologyCache.js"
+import { hashOntology } from "../../src/Services/RunService.js"
 
 /**
  * Helper: Create test ontology with specific classes
@@ -56,7 +47,7 @@ const createTestOntology = (classes: Array<{ id: string; label: string }>): Onto
  * Helper: Create test graph from ontology classes
  */
 const createTestGraph = (
-  classes: Array<{ id: string; children?: string[] }>
+  classes: Array<{ id: string; children?: Array<string> }>
 ): Graph.Graph<string, unknown> => {
   // Build graph with class hierarchy using Graph.mutate
   const graph = Graph.mutate(Graph.directed<string, null>(), (mutable) => {
@@ -101,7 +92,7 @@ describe("OntologyCache", () => {
         { id: "http://example.org/Person" },
         { id: "http://example.org/Student", children: ["http://example.org/Person"] }
       ])
-      const hash = hashOntologyForTest(testOntology)
+      const hash = hashOntology(testOntology)
 
       const index = yield* cache.getKnowledgeIndex(hash, testOntology, testGraph)
 
@@ -118,7 +109,7 @@ describe("OntologyCache", () => {
         { id: "http://example.org/Person", label: "Person" }
       ])
       const testGraph = createTestGraph([{ id: "http://example.org/Person" }])
-      const hash = hashOntologyForTest(testOntology)
+      const hash = hashOntology(testOntology)
 
       // First call - cache miss
       const index1 = yield* cache.getKnowledgeIndex(hash, testOntology, testGraph)
@@ -139,13 +130,13 @@ describe("OntologyCache", () => {
         { id: "http://example.org/Person", label: "Person" }
       ])
       const graph1 = createTestGraph([{ id: "http://example.org/Person" }])
-      const hash1 = hashOntologyForTest(ontology1)
+      const hash1 = hashOntology(ontology1)
 
       const ontology2 = createTestOntology([
         { id: "http://example.org/Organization", label: "Organization" }
       ])
       const graph2 = createTestGraph([{ id: "http://example.org/Organization" }])
-      const hash2 = hashOntologyForTest(ontology2)
+      const hash2 = hashOntology(ontology2)
 
       // Get first index
       const index1 = yield* cache.getKnowledgeIndex(hash1, ontology1, graph1)
@@ -174,7 +165,7 @@ describe("OntologyCache", () => {
           { id: `http://example.org/Class${i}`, label: `Class${i}` }
         ])
         const graph = createTestGraph([{ id: `http://example.org/Class${i}` }])
-        const hash = hashOntologyForTest(ontology)
+        const hash = hashOntology(ontology)
         ontologies.push({ ontology, graph, hash })
       }
 
@@ -221,7 +212,7 @@ describe("OntologyCache", () => {
         { id: "http://example.org/Person", label: "Person" }
       ])
       const testGraph = createTestGraph([{ id: "http://example.org/Person" }])
-      const hash = hashOntologyForTest(testOntology)
+      const hash = hashOntology(testOntology)
 
       // First call - cache miss
       const index1 = yield* cache.getKnowledgeIndex(hash, testOntology, testGraph)
@@ -253,13 +244,13 @@ describe("OntologyCache", () => {
         { id: "http://example.org/Person", label: "Person" }
       ])
       const graph1 = createTestGraph([{ id: "http://example.org/Person" }])
-      const hash1 = hashOntologyForTest(ontology1)
+      const hash1 = hashOntology(ontology1)
 
       const ontology2 = createTestOntology([
         { id: "http://example.org/Person", label: "Person" }
       ])
       const graph2 = createTestGraph([{ id: "http://example.org/Person" }])
-      const hash2 = hashOntologyForTest(ontology2)
+      const hash2 = hashOntology(ontology2)
 
       // Hashes should be identical
       expect(hash1).toBe(hash2)
