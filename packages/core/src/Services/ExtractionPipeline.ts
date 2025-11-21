@@ -95,13 +95,15 @@ const extractLabel = (
  * @param graph - Ontology graph (classes, properties, hierarchy)
  * @param ontology - Ontology context (prefixes, metadata)
  * @param config - Pipeline configuration (concurrency, chunk size)
+ * @param runId - Optional runId for integration with WorkflowManager. If not provided, generates a unique ID internally.
  * @returns Effect yielding unified RDF graph in Turtle format
  */
 export const streamingExtractionPipeline = (
   text: string,
   graph: Graph.Graph<NodeId, unknown>,
   ontology: OntologyContext,
-  config: PipelineConfig = defaultPipelineConfig
+  config: PipelineConfig = defaultPipelineConfig,
+  runId?: string
 ) =>
   Effect.gen(function*() {
     // 1. Get services
@@ -109,9 +111,10 @@ export const streamingExtractionPipeline = (
     const discovery = yield* EntityDiscoveryService
     const rdf = yield* RdfService
 
-    // Generate a unique runId for this pipeline execution
-    // ExtractionPipeline is a standalone function, so we create a temporary runId
-    const pipelineRunId = crypto.randomUUID()
+    // Use provided runId or generate a unique runId for this pipeline execution
+    // If runId is provided, it enables integration with WorkflowManager system
+    // If not provided, the pipeline works standalone with an internally generated ID
+    const pipelineRunId = runId ?? crypto.randomUUID()
 
     // 2. Build KnowledgeIndex from ontology graph (static knowledge)
     // Uses catamorphic fold over graph DAG to create queryable index
