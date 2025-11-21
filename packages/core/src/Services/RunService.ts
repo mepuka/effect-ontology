@@ -39,13 +39,21 @@ export const hashOntology = (ontology: OntologyContext): number => {
   const classMapObj = Object.fromEntries(ontology.classMap)
   const propertyMapObj = Object.fromEntries(ontology.propertyMap)
 
+  // Sort keys for canonical ordering (ensures stable hashes across runs)
+  const sortedClassMap = Object.fromEntries(
+    Object.entries(classMapObj).sort(([a], [b]) => a.localeCompare(b))
+  )
+  const sortedPropertyMap = Object.fromEntries(
+    Object.entries(propertyMapObj).sort(([a], [b]) => a.localeCompare(b))
+  )
+
   // Create serializable representation (exclude graph which has circular refs)
   const serializable = {
-    classMap: classMapObj,
-    propertyMap: propertyMapObj
+    classMap: sortedClassMap,
+    propertyMap: sortedPropertyMap
   }
 
-  // Convert to JSON (no need for key sorting - content determines uniqueness)
+  // Convert to JSON - sorted keys ensure deterministic output
   const canonical = JSON.stringify(serializable)
   return Hash.string(canonical)
 }
@@ -193,27 +201,35 @@ const makeRunService = Effect.gen(function*() {
 
     updateStatus: (runId: string, status: RunStatus, expectedVersion: number) =>
       Effect.gen(function*() {
-        // First check current version
-        const rows = yield* db.client<{ status_version: number }>`
-          SELECT status_version FROM extraction_runs WHERE run_id = ${runId}
-        `
-
-        if (rows.length === 0 || rows[0].status_version !== expectedVersion) {
-          return yield* Effect.fail(
-            new Error(
-              `Optimistic lock failure: expected version ${expectedVersion}`
-            )
-          )
-        }
-
-        // Update with version increment
+        // Atomic UPDATE with version check in WHERE clause (prevents race condition)
         yield* db.client`
           UPDATE extraction_runs
           SET status = ${status},
               status_version = status_version + 1,
               updated_at = datetime('now')
           WHERE run_id = ${runId}
+            AND status_version = ${expectedVersion}
         `
+
+        // Check if update succeeded using SQLite's changes() function
+        const changes = yield* db.client<{ changes: number }>`SELECT changes() as changes`
+
+        if (changes[0].changes === 0) {
+          // Disambiguate: run not found vs version mismatch
+          const rows = yield* db.client<{ status_version: number }>`
+            SELECT status_version FROM extraction_runs WHERE run_id = ${runId}
+          `
+
+          if (rows.length === 0) {
+            return yield* Effect.fail(new Error(`Run ${runId} not found`))
+          }
+
+          return yield* Effect.fail(
+            new Error(
+              `Optimistic lock failure: expected version ${expectedVersion}, found ${rows[0].status_version}`
+            )
+          )
+        }
       }),
 
     updateProgress: (
