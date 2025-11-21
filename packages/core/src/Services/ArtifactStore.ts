@@ -13,7 +13,7 @@
  * - Hash verification (return hash for validation)
  */
 import { FileSystem } from "@effect/platform"
-import { Effect, Hash } from "effect"
+import { Context, Effect, Hash, Layer } from "effect"
 
 /**
  * Hash content using Effect's Hash module
@@ -35,7 +35,6 @@ const hashToHex = (hash: number): string => {
 /**
  * ArtifactStore Interface
  */
-// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export interface ArtifactStore {
   /**
    * Save artifact to filesystem
@@ -67,44 +66,51 @@ export interface ArtifactStore {
 }
 
 /**
- * ArtifactStore Service
+ * Service Tag
  */
-// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
-export class ArtifactStore extends Effect.Service<ArtifactStore>()("ArtifactStore", {
-  effect: Effect.gen(function*() {
-    const fs = yield* FileSystem.FileSystem
-    const baseDir = "extraction_data"
+export const ArtifactStore = Context.GenericTag<ArtifactStore>("@effect-ontology/core/ArtifactStore")
 
-    // Ensure base directory exists
-    yield* fs.makeDirectory(baseDir, { recursive: true })
+/**
+ * Create artifact store service implementation
+ */
+const makeArtifactStore = Effect.gen(function*() {
+  const fs = yield* FileSystem.FileSystem
+  const baseDir = "extraction_data"
 
-    return {
-      save: (runId: string, key: string, content: string) =>
-        Effect.gen(function*() {
-          // Compute hash
-          const hash = hashContent(content)
-          const hexHash = hashToHex(hash)
+  // Ensure base directory exists
+  yield* fs.makeDirectory(baseDir, { recursive: true })
 
-          // Build path
-          const runDir = `${baseDir}/${runId}`
-          const path = `${runDir}/${key}`
+  return {
+    save: (runId: string, key: string, content: string) =>
+      Effect.gen(function*() {
+        // Compute hash
+        const hash = hashContent(content)
+        const hexHash = hashToHex(hash)
 
-          // Ensure all parent directories exist (handles nested keys)
-          const lastSlash = path.lastIndexOf("/")
-          if (lastSlash > 0) {
-            const parentDir = path.substring(0, lastSlash)
-            yield* fs.makeDirectory(parentDir, { recursive: true })
-          }
+        // Build path
+        const runDir = `${baseDir}/${runId}`
+        const path = `${runDir}/${key}`
 
-          // Write file (idempotent - overwrites if exists)
-          yield* fs.writeFileString(path, content)
+        // Ensure all parent directories exist (handles nested keys)
+        const lastSlash = path.lastIndexOf("/")
+        if (lastSlash > 0) {
+          const parentDir = path.substring(0, lastSlash)
+          yield* fs.makeDirectory(parentDir, { recursive: true })
+        }
 
-          return { path, hash, hexHash }
-        }),
+        // Write file (idempotent - overwrites if exists)
+        yield* fs.writeFileString(path, content)
 
-      load: (path: string) => fs.readFileString(path),
+        return { path, hash, hexHash }
+      }),
 
-      delete: (runId: string) => fs.remove(`${baseDir}/${runId}`, { recursive: true })
-    }
-  })
-}) {}
+    load: (path: string) => fs.readFileString(path),
+
+    delete: (runId: string) => fs.remove(`${baseDir}/${runId}`, { recursive: true })
+  } as ArtifactStore
+})
+
+/**
+ * Live layer - requires FileSystem
+ */
+export const ArtifactStoreLive = Layer.effect(ArtifactStore, makeArtifactStore)
