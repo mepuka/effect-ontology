@@ -501,7 +501,6 @@ CRITICAL: Only extract relationships between the entities listed above. Use thei
       schema,
       objectName: "TripleGraph"
     }).pipe(
-      Effect.withSpan("llm.extract-triples"),
       // Add timeout (30 seconds)
       Effect.timeout(Duration.seconds(30)),
       // Retry with exponential backoff (max 3 retries)
@@ -528,6 +527,27 @@ CRITICAL: Only extract relationships between the entities listed above. Use thei
     // which extend beyond PropertyIRI, but the structure matches TripleGraph
     const tripleGraph = response.value as unknown as TripleGraph<ClassIRI, PropertyIRI>
 
+    // Annotate span with LLM metadata
+    const tracingCtx = yield* Effect.serviceOption(TracingContext)
+    const model = Option.match(tracingCtx, {
+      onNone: () => "unknown",
+      onSome: (ctx) => ctx.model
+    })
+    const provider = Option.match(tracingCtx, {
+      onNone: () => "unknown",
+      onSome: (ctx) => ctx.provider
+    })
+
+    yield* annotateLlmCall({
+      model,
+      provider,
+      promptLength: promptText.length,
+      promptText,
+      inputTokens: response.usage?.inputTokens,
+      outputTokens: response.usage?.outputTokens
+    })
+    yield* Effect.annotateCurrentSpan(LlmAttributes.TRIPLE_COUNT, tripleGraph.triples.length)
+
     // Log LLM call completion
     yield* Effect.log("LLM triple extraction call completed", {
       tripleCount: tripleGraph.triples.length,
@@ -540,6 +560,7 @@ CRITICAL: Only extract relationships between the entities listed above. Use thei
 
     return tripleGraph
   }).pipe(
+    Effect.withSpan("llm.extract-triples"),
     // Map all other errors to LLMError
     Effect.catchAll((error) => {
       // If it's already an LLMError, pass it through
