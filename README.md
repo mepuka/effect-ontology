@@ -221,6 +221,57 @@ packages/core/src/
 
 The codebase includes property-based tests verifying monoid laws, topological ordering guarantees, and inheritance correctness. All tests use Effect's test layer pattern for dependency injection.
 
+## Tracing
+
+OpenTelemetry tracing can be enabled to capture LLM call metrics and performance insights:
+
+```bash
+# Enable tracing (default: true)
+export TRACING_ENABLED=true
+
+# Jaeger endpoint (default: http://localhost:14268/api/traces)
+export JAEGER_ENDPOINT=http://localhost:14268/api/traces
+```
+
+### Running Jaeger Locally
+
+To visualize traces, run Jaeger using Docker:
+
+```bash
+docker run -d --name jaeger \
+  -p 16686:16686 \
+  -p 14268:14268 \
+  jaegertracing/all-in-one:latest
+```
+
+Then view traces at **http://localhost:16686**
+
+### What Gets Traced
+
+The extraction pipeline automatically annotates spans with:
+
+- **LLM Provider**: Model name and provider (Anthropic, OpenAI, Google, etc.)
+- **Token Usage**: Input/output token counts for cost tracking
+- **Estimated Cost**: Calculated cost in USD based on token usage
+- **Extraction Metrics**: Entity and triple counts per extraction
+- **Request Details**: Prompt text and response text (optional)
+
+This enables:
+- Performance debugging of LLM calls
+- Cost attribution and billing
+- Bottleneck identification
+- Quality monitoring of extractions
+
+### Disabling Tracing
+
+To disable tracing:
+
+```bash
+export TRACING_ENABLED=false
+```
+
+Or omit the environment variable (tracing is enabled by default).
+
 ## References
 
 - **Engineering Specification**: `docs/effect_ontology_engineering_spec.md` - Formal mathematical specification
