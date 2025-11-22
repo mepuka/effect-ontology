@@ -12,8 +12,8 @@
  *   effect-ontology <command> [options]
  */
 
-import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { Command } from "@effect/cli"
+import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { Effect } from "effect"
 import { cli } from "./cli.js"
 

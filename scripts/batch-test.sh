@@ -114,15 +114,29 @@ run_test() {
     # Record start time
     local start_time=$(date +%s.%N)
 
+    # Convert paths to absolute (required because working directory may change)
+    # Construct absolute paths manually (works on both macOS and Linux)
+    local abs_text_file
+    local abs_ontology_file
+    local abs_output_file
+    
+    # For existing files, use cd + pwd to get absolute path
+    abs_text_file=$(cd "$(dirname "$text_file")" && pwd)/$(basename "$text_file")
+    abs_ontology_file=$(cd "$(dirname "$ontology_file")" && pwd)/$(basename "$ontology_file")
+    # For output file (may not exist yet), construct from RESULTS_DIR
+    abs_output_file="$RESULTS_DIR/$(basename "$output_file")"
+
     # Build CLI args
+    # NOTE: Effect CLI requires options to come BEFORE arguments
+    # See: https://effect.website/docs/guides/cli/options#important-note-on-argument-order
     local cli_args=(
-        "$text_file"
-        "-o" "$ontology_file"
-        "-O" "$output_file"
+        "--ontology" "$abs_ontology_file"
+        "-O" "$abs_output_file"
         "-c" "$concurrency"
         "-w" "$window_size"
         "--overlap" "$overlap"
         "--provider" "$PROVIDER"
+        "$abs_text_file"
     )
 
     if [[ "$VERBOSE" == "true" ]]; then
@@ -130,10 +144,12 @@ run_test() {
     fi
 
     # Run extraction
+    # Load .env file from project root (Bun doesn't auto-load .env files)
+    # Run directly without --cwd to avoid argument parsing issues
     local exit_code=0
     (
         cd "$PROJECT_ROOT"
-        bun run --cwd packages/cli src/main.ts extract "${cli_args[@]}"
+        bun --env-file=.env packages/cli/src/main.ts extract "${cli_args[@]}"
     ) > "$log_file" 2>&1 || exit_code=$?
 
     # Record end time

@@ -5,7 +5,7 @@
  */
 
 import { Command } from "@effect/cli"
-import { Console, Effect } from "effect"
+import { Console } from "effect"
 import { extractCommand } from "./commands/extract.js"
 
 /**
@@ -21,8 +21,7 @@ Commands:
   extract     Extract knowledge graph from text using ontology
 
 Run 'effect-ontology <command> --help' for more information on a command.
-`)
-)
+`))
 
 /**
  * Full CLI with all subcommands

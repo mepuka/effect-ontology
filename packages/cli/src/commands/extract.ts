@@ -11,19 +11,16 @@
  *   effect-ontology extract docs/paper.md --ontology schema.ttl --provider openai
  */
 
+import { parseTurtleToGraph } from "@effect-ontology/core/Graph/Builder"
+import { EntityDiscoveryServiceLive } from "@effect-ontology/core/Services/EntityDiscovery"
+import { defaultPipelineConfig, streamingExtractionPipeline } from "@effect-ontology/core/Services/ExtractionPipeline"
+import { extractVocabulary } from "@effect-ontology/core/Services/Llm"
+import { makeLlmProviderLayer } from "@effect-ontology/core/Services/LlmProvider"
+import { NlpServiceLive } from "@effect-ontology/core/Services/Nlp"
+import { RdfService } from "@effect-ontology/core/Services/Rdf"
 import { Args, Command, Options } from "@effect/cli"
 import { FileSystem } from "@effect/platform"
 import { Effect, Option } from "effect"
-import { parseTurtleToGraph } from "@effect-ontology/core/Graph/Builder"
-import {
-  defaultPipelineConfig,
-  streamingExtractionPipeline
-} from "@effect-ontology/core/Services/ExtractionPipeline"
-import { extractVocabulary } from "@effect-ontology/core/Services/Llm"
-import { makeLlmProviderLayer } from "@effect-ontology/core/Services/LlmProvider"
-import { EntityDiscoveryServiceLive } from "@effect-ontology/core/Services/EntityDiscovery"
-import { NlpServiceLive } from "@effect-ontology/core/Services/Nlp"
-import { RdfService } from "@effect-ontology/core/Services/Rdf"
 import { loadProviderParams, validateProviderConfig } from "../utils/env.js"
 import * as Output from "../utils/output.js"
 

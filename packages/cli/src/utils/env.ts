@@ -5,8 +5,8 @@
  * with support for CLI overrides.
  */
 
-import { Effect, Option } from "effect"
 import type { LlmProviderParams } from "@effect-ontology/core/Services/LlmProvider"
+import { Effect, Option } from "effect"
 
 /**
  * Load provider params from environment variables.
@@ -75,9 +75,9 @@ export const validateProviderConfig = (
       return yield* Effect.fail(
         new Error(
           `Missing API key for ${params.provider}. Set one of:\n` +
-          `  VITE_LLM_${params.provider.toUpperCase()}_API_KEY\n` +
-          `  ${params.provider.toUpperCase()}_API_KEY\n` +
-          `Or add to .env file.`
+            `  VITE_LLM_${params.provider.toUpperCase()}_API_KEY\n` +
+            `  ${params.provider.toUpperCase()}_API_KEY\n` +
+            `Or add to .env file.`
         )
       )
     }
