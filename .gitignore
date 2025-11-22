@@ -15,3 +15,9 @@ scratchpad/*
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Test outputs and artifacts
+test-results/
+extraction_data/
+outputs/
+packages/core/test-output/
