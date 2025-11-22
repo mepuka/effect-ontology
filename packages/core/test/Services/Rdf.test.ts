@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
+import type { TripleGraph } from "../../src/Schema/TripleFactory.js"
 import type { KnowledgeGraph } from "../../src/Services/Rdf"
 import { RdfService } from "../../src/Services/Rdf"
 
@@ -401,6 +402,144 @@ describe("Services.Rdf", () => {
           null
         )
         expect(aliceTriples2[0].object.value).toBe("Bob")
+      }).pipe(Effect.provide(RdfService.Default)))
+  })
+
+  describe("RdfService - triplesToStore", () => {
+    it.effect("should convert single triple with literal property", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const tripleGraph: TripleGraph = {
+          triples: [
+            {
+              subject: "Alice",
+              subject_type: "http://xmlns.com/foaf/0.1/Person",
+              predicate: "http://xmlns.com/foaf/0.1/name",
+              object: "Alice"
+            }
+          ]
+        }
+
+        const store = yield* rdf.triplesToStore(tripleGraph)
+
+        // Should have 3 triples: type + label + name
+        expect(store.size).toBe(3)
+
+        // Check type triple exists
+        const typeTriples = store.getQuads(
+          null,
+          "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+          "http://xmlns.com/foaf/0.1/Person",
+          null
+        )
+        expect(typeTriples).toHaveLength(1)
+
+        // Check label triple exists
+        const labelTriples = store.getQuads(
+          null,
+          "http://www.w3.org/2000/01/rdf-schema#label",
+          null,
+          null
+        )
+        expect(labelTriples).toHaveLength(1)
+        expect(labelTriples[0].object.value).toBe("Alice")
+
+        // Check name triple exists
+        const nameTriples = store.getQuads(
+          null,
+          "http://xmlns.com/foaf/0.1/name",
+          null,
+          null
+        )
+        expect(nameTriples).toHaveLength(1)
+        expect(nameTriples[0].object.value).toBe("Alice")
+      }).pipe(Effect.provide(RdfService.Default)))
+
+    it.effect("should handle triple with object reference", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const tripleGraph: TripleGraph = {
+          triples: [
+            {
+              subject: "Alice",
+              subject_type: "http://xmlns.com/foaf/0.1/Person",
+              predicate: "http://xmlns.com/foaf/0.1/knows",
+              object: {
+                value: "Bob",
+                type: "http://xmlns.com/foaf/0.1/Person"
+              }
+            }
+          ]
+        }
+
+        const store = yield* rdf.triplesToStore(tripleGraph)
+
+        // Should have 5 triples:
+        // - Alice type
+        // - Alice label
+        // - Alice knows Bob
+        // - Bob type
+        // - Bob label
+        expect(store.size).toBe(5)
+
+        // Check knows triple has named node object
+        const knowsTriples = store.getQuads(
+          null,
+          "http://xmlns.com/foaf/0.1/knows",
+          null,
+          null
+        )
+        expect(knowsTriples).toHaveLength(1)
+        expect(knowsTriples[0].object.termType).toBe("NamedNode")
+      }).pipe(Effect.provide(RdfService.Default)))
+
+    it.effect("should handle multiple triples", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const tripleGraph: TripleGraph = {
+          triples: [
+            {
+              subject: "Alice",
+              subject_type: "http://xmlns.com/foaf/0.1/Person",
+              predicate: "http://xmlns.com/foaf/0.1/name",
+              object: "Alice"
+            },
+            {
+              subject: "Bob",
+              subject_type: "http://xmlns.com/foaf/0.1/Person",
+              predicate: "http://xmlns.com/foaf/0.1/name",
+              object: "Bob"
+            }
+          ]
+        }
+
+        const store = yield* rdf.triplesToStore(tripleGraph)
+
+        // Should have 6 triples: 2 types + 2 labels + 2 names
+        expect(store.size).toBe(6)
+
+        // Check both persons exist
+        const typeTriples = store.getQuads(
+          null,
+          "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
+          "http://xmlns.com/foaf/0.1/Person",
+          null
+        )
+        expect(typeTriples).toHaveLength(2)
+      }).pipe(Effect.provide(RdfService.Default)))
+
+    it.effect("should handle empty triples array", () =>
+      Effect.gen(function*() {
+        const rdf = yield* RdfService
+
+        const tripleGraph: TripleGraph = { triples: [] }
+
+        const store = yield* rdf.triplesToStore(tripleGraph)
+
+        expect(store.size).toBe(0)
       }).pipe(Effect.provide(RdfService.Default)))
   })
 })

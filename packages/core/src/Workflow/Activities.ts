@@ -23,15 +23,19 @@ import type { NodeId } from "../Graph/Types.js"
 import type { EntityRef } from "../Prompt/EntityCache.js"
 import { deserializeEntityCache, serializeEntityCache } from "../Prompt/EntityCache.js"
 import { renderToStructuredPrompt } from "../Prompt/Render.js"
-import { makeKnowledgeGraphSchema } from "../Schema/Factory.js"
 import { ArtifactStore } from "../Services/ArtifactStore.js"
 import { Database } from "../Services/Database.js"
 import { EntityDiscoveryService } from "../Services/EntityDiscovery.js"
 import { mergeGraphsWithResolution } from "../Services/EntityResolution.js"
-import { extractKnowledgeGraph, extractVocabulary } from "../Services/Llm.js"
+import {
+  extractKnowledgeGraphTwoStage,
+  extractVocabulary
+} from "../Services/Llm.js"
 import { OntologyCache } from "../Services/OntologyCache.js"
 import { RdfService } from "../Services/Rdf.js"
 import { RunService } from "../Services/RunService.js"
+import type { TripleGraph } from "../Schema/TripleFactory.js"
+import * as EC from "../Prompt/EntityCache.js"
 
 // ============================================================================
 // Activity Input Types
@@ -75,6 +79,52 @@ export interface MergeAllBatchesInput {
 export interface SaveFinalArtifactInput {
   readonly runId: string
   readonly mergedTurtle: string
+}
+
+/**
+ * Extract entities from triple graph for entity discovery
+ *
+ * @internal
+ */
+const extractEntitiesFromTriples = (
+  tripleGraph: TripleGraph<string, string>,
+  chunkIndex: number
+): Array<EC.EntityRef> => {
+  const entityMap = new Map<string, EC.EntityRef>()
+
+  for (const triple of tripleGraph.triples) {
+    // Add subject entity
+    if (!entityMap.has(triple.subject)) {
+      entityMap.set(
+        triple.subject,
+        new EC.EntityRef({
+          iri: triple.subject, // Will be converted to IRI by RdfService
+          label: triple.subject, // Human-readable name
+          types: [triple.subject_type],
+          foundInChunk: chunkIndex,
+          confidence: 1.0
+        })
+      )
+    }
+
+    // Add object entity if it's a reference (not a literal)
+    if (typeof triple.object === "object") {
+      if (!entityMap.has(triple.object.value)) {
+        entityMap.set(
+          triple.object.value,
+          new EC.EntityRef({
+            iri: triple.object.value, // Will be converted to IRI by RdfService
+            label: triple.object.value, // Human-readable name
+            types: [triple.object.type],
+            foundInChunk: chunkIndex,
+            confidence: 1.0
+          })
+        )
+      }
+    }
+  }
+
+  return Array.from(entityMap.values())
 }
 
 // ============================================================================
@@ -162,24 +212,32 @@ export const processBatchActivity = (input: ProcessBatchInput) =>
       input.ontologyGraph
     )
 
-    // Generate prompt and schema
+    // Generate prompt (no schema needed for two-stage extraction)
     const prompt = renderToStructuredPrompt(knowledgeIndex)
-    const { classIris, propertyIris } = extractVocabulary(input.ontology)
-    const schema = makeKnowledgeGraphSchema(classIris as any, propertyIris as any)
 
     // Process each chunk sequentially (entity accumulation requires order)
-    const allKnowledgeGraphs = yield* Effect.forEach(
+    // Using two-stage triple extraction for better entity consistency
+    const allTripleGraphs = yield* Effect.forEach(
       input.chunks,
-      (chunkText) => extractKnowledgeGraph(chunkText, input.ontology, prompt, schema),
+      (chunkText) =>
+        extractKnowledgeGraphTwoStage(chunkText, input.ontology, prompt),
       { concurrency: 1 } // Sequential to maintain entity order
     )
 
-    // Convert all knowledge graphs to RDF and merge
+    // Extract entities from triples and register with discovery service
+    let chunkIndex = 0
+    for (const tripleGraph of allTripleGraphs) {
+      const entities = extractEntitiesFromTriples(tripleGraph, chunkIndex)
+      yield* discovery.register(input.runId, entities)
+      chunkIndex++
+    }
+
+    // Convert all triple graphs to RDF and merge
     const allTurtles = yield* Effect.forEach(
-      allKnowledgeGraphs,
-      (kg) =>
+      allTripleGraphs,
+      (tripleGraph) =>
         Effect.gen(function*() {
-          const store = yield* rdf.jsonToStore(kg, input.ontology)
+          const store = yield* rdf.triplesToStore(tripleGraph, input.ontology)
           return yield* rdf.storeToTurtle(store)
         }),
       { concurrency: 10 } // Bounded parallel RDF conversion

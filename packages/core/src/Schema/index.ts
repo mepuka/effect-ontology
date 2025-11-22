@@ -4,3 +4,4 @@
 export * from "./Export.js"
 export * from "./Factory.js"
 export * from "./Metadata.js"
+export * from "./TripleFactory.js"

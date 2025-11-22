@@ -288,6 +288,11 @@ export const mergeGraphsWithResolution = (
       return ""
     }
 
+    // Log merge start
+    yield* Effect.log("Entity resolution merge started", {
+      graphCount: graphs.length
+    })
+
     // 1. Parse all graphs to stores (bounded concurrency)
     const stores = yield* Effect.all(graphs.map(parseGraphToStore), {
       concurrency: 3
@@ -306,15 +311,35 @@ export const mergeGraphsWithResolution = (
 
     // 4. Extract all entities with labels
     const entities = extractEntitiesWithLabels(mergedStore)
+    const entitiesBefore = entities.length
 
     // 5. Build IRI mapping (duplicate -> canonical)
     const iriMapping = buildIriMapping(entities)
+    const duplicatesResolved = HashMap.size(iriMapping)
 
     // 6. Replace IRIs in merged store
     const resolvedStore = replaceIrisInStore(mergedStore, iriMapping)
 
+    // Count entities after resolution
+    const entitiesAfter = extractEntitiesWithLabels(resolvedStore).length
+
+    // Log deduplication stats
+    yield* Effect.log("Entity resolution deduplication", {
+      entitiesBefore,
+      entitiesAfter,
+      duplicatesResolved
+    })
+
     // 7. Serialize to Turtle
     const result = yield* serializeStore(resolvedStore)
 
+    // Log merge completion
+    yield* Effect.log("Entity resolution merge completed", {
+      graphCount: graphs.length,
+      finalTriples: resolvedStore.size
+    })
+
     return result
-  })
+  }).pipe(
+    Effect.withSpan("entity-resolution.merge")
+  )

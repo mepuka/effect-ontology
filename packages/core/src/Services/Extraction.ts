@@ -29,8 +29,8 @@ import { generateEnrichedIndex } from "../Prompt/Enrichment.js"
 import { type ContextStrategy, selectContext } from "../Prompt/Focus.js"
 import { renderToStructuredPrompt } from "../Prompt/Render.js"
 import { type SolverError } from "../Prompt/Solver.js"
-import { EmptyVocabularyError, makeKnowledgeGraphSchema } from "../Schema/Factory.js"
-import { extractKnowledgeGraph, extractVocabulary } from "./Llm.js"
+import type { TripleGraph } from "../Schema/TripleFactory.js"
+import { extractKnowledgeGraphTwoStage, extractVocabulary } from "./Llm.js"
 import { RdfService } from "./Rdf.js"
 import { ShaclService } from "./Shacl.js"
 
@@ -238,54 +238,25 @@ export class ExtractionPipeline extends Effect.Service<ExtractionPipeline>()(
             // Stage 2c: Render KnowledgeIndex to StructuredPrompt
             const combinedPrompt = renderToStructuredPrompt(focusedIndex)
 
-            // Stage 3: Extract vocabulary for schema generation
-            const { classIris, propertyIris } = extractVocabulary(
-              request.ontology
-            )
+            // Stage 3: Extract vocabulary (for two-stage extraction)
+            // No schema generation needed - two-stage extraction handles it internally
 
-            // Generate dynamic schema with vocabulary constraints
-            // Wrap in Effect.try to catch EmptyVocabularyError defect
-            const schema = yield* Effect.try({
-              try: () => makeKnowledgeGraphSchema(classIris, propertyIris),
-              catch: (error) => {
-                // Convert EmptyVocabularyError to LLMError
-                if (error instanceof EmptyVocabularyError) {
-                  return new LLMError({
-                    module: "ExtractionPipeline",
-                    method: "extract",
-                    reason: "ValidationFailed",
-                    description: `Empty vocabulary: no ${error.type} found in ontology`,
-                    cause: error
-                  })
-                }
-                // Re-throw unknown errors as LLMError
-                return new LLMError({
-                  module: "ExtractionPipeline",
-                  method: "extract",
-                  reason: "ValidationFailed",
-                  description: "Failed to create knowledge graph schema",
-                  cause: error
-                })
-              }
-            })
-
-            // Stage 4: Call LLM with structured output
-            const knowledgeGraph = yield* extractKnowledgeGraph(
+            // Stage 4: Call LLM with two-stage triple extraction
+            const tripleGraph = yield* extractKnowledgeGraphTwoStage(
               request.text,
               request.ontology,
-              combinedPrompt,
-              schema
+              combinedPrompt
             )
 
-            // Stage 5: Emit JSONParsed event
+            // Stage 5: Emit JSONParsed event (using triple count)
             yield* eventBus.publish(
               ExtractionEvent.JSONParsed({
-                count: knowledgeGraph.entities.length
+                count: tripleGraph.triples.length
               })
             )
 
-            // Stage 6: Convert JSON to RDF
-            const store = yield* rdf.jsonToStore(knowledgeGraph)
+            // Stage 6: Convert triples to RDF
+            const store = yield* rdf.triplesToStore(tripleGraph, request.ontology)
 
             // Stage 7: Emit RDFConstructed event
             yield* eventBus.publish(

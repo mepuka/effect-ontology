@@ -5,6 +5,11 @@ import { ClassNode } from "../../src/Graph/Types.js"
 import { PropertyConstraint } from "../../src/Ontology/Constraint.js"
 import { makeKnowledgeGraphSchema } from "../../src/Schema/Factory.js"
 
+/**
+ * @deprecated These tests are for the deprecated makeKnowledgeGraphSchema function.
+ * New code should use makeTripleSchema from TripleFactory.ts instead.
+ * These tests are kept for backward compatibility validation.
+ */
 describe("Schema Factory", () => {
   const classIris = ["http://example.org/Person"]
   const propertyIris = ["http://example.org/name", "http://example.org/knows"]

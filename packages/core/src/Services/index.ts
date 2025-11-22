@@ -22,6 +22,8 @@ export {
   EntityDiscoveryServiceTest
 } from "./EntityDiscovery.js"
 
+export { FocusingService, type FocusingService as FocusingServiceType, FocusingServiceLive } from "./Focusing.js"
+
 export { mergeGraphsWithResolution, ParseError, type RdfGraph } from "./EntityResolution.js"
 export {
   WorkflowManagerService,
@@ -32,7 +34,18 @@ export {
 
 export { defaultPipelineConfig, type PipelineConfig, streamingExtractionPipeline } from "./ExtractionPipeline.js"
 
+/**
+ * @deprecated Use extractKnowledgeGraphTwoStage() instead. This function will be removed in v2.0.
+ */
 export { extractKnowledgeGraph } from "./Llm.js"
+
+export {
+  extractEntities,
+  extractKnowledgeGraphTriple,
+  extractKnowledgeGraphTwoStage,
+  extractTriples,
+  extractVocabulary
+} from "./Llm.js"
 
 export {
   type AnthropicConfig,
@@ -50,12 +63,11 @@ export { RdfEnvironment, type RdfEnvironment as RdfEnvironmentType } from "./Rdf
 export { ShaclService, type ShaclService as ShaclServiceType } from "./Shacl.js"
 
 export {
-  type ChunkingConfig,
-  type ChunkingStrategy,
   type CharacterChunkingConfig,
   type ChunkInfo,
-  type SemanticChunkingConfig,
+  type ChunkingConfig,
   ChunkingError,
+  type ChunkingStrategy,
   chunkText,
   chunkTextByCharacters,
   chunkTextBySentences,
@@ -66,5 +78,6 @@ export {
   makeCharacterChunkingConfig,
   makeSemanticChunkingConfig,
   previewChunks,
+  type SemanticChunkingConfig,
   streamChunks
 } from "./ChunkingStrategy.js"

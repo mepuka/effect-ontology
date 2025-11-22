@@ -155,7 +155,7 @@ export class RdfError extends S.TaggedError<RdfError>(
 )("RdfError", {
   module: S.String,
   method: S.String,
-  reason: S.Literal("InvalidQuad", "ParseError", "StoreError"),
+  reason: S.Literal("InvalidQuad", "InvalidTriple", "ParseError", "StoreError"),
   description: S.optional(S.String),
   cause: S.optional(S.Unknown)
 }) {}
