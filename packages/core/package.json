@@ -23,7 +23,8 @@
     "./Services/EntityResolution": "./src/Services/EntityResolution.ts",
     "./Services/ExtractionPipeline": "./src/Services/ExtractionPipeline.ts",
     "./Services/Focusing": "./src/Services/Focusing.ts",
-    "./Services/ChunkingStrategy": "./src/Services/ChunkingStrategy.ts"
+    "./Services/ChunkingStrategy": "./src/Services/ChunkingStrategy.ts",
+    "./Telemetry": "./src/Telemetry/index.ts"
   },
   "scripts": {
     "build": "tsc --skipLibCheck --project tsconfig.build.json",
