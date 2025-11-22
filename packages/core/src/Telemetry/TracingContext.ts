@@ -8,7 +8,7 @@
  * @since 1.0.0
  */
 
-import { Effect, Layer } from "effect"
+import { Context, Layer } from "effect"
 
 /**
  * Tracing context interface
@@ -21,20 +21,28 @@ export interface TracingContextShape {
   readonly provider: string
 }
 
+const TracingContextTag = Context.GenericTag<TracingContextShape>("TracingContext")
+
 /**
- * TracingContext service
+ * TracingContext tag and utilities
  *
  * Provides model/provider info for LLM span annotations.
  *
  * @since 1.0.0
  * @category services
  */
-export class TracingContext extends Effect.Service<TracingContext>()("TracingContext", {
-  succeed: {
+export const TracingContext = Object.assign(TracingContextTag, {
+  /**
+   * Default layer with unknown model/provider
+   *
+   * @since 1.0.0
+   * @category layers
+   */
+  Default: Layer.succeed(TracingContextTag, {
     model: "unknown",
     provider: "unknown"
-  } as TracingContextShape
-}) {
+  }),
+
   /**
    * Create a TracingContext layer with specific model/provider
    *
@@ -45,6 +53,9 @@ export class TracingContext extends Effect.Service<TracingContext>()("TracingCon
    * @since 1.0.0
    * @category constructors
    */
-  static make = (model: string, provider: string): Layer.Layer<TracingContext> =>
-    Layer.succeed(TracingContext, TracingContext.of({ model, provider }))
-}
+  make: (model: string, provider: string) =>
+    Layer.succeed(TracingContextTag, {
+      model,
+      provider
+    })
+})

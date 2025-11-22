@@ -15,7 +15,9 @@
  */
 
 import { LanguageModel } from "@effect/ai"
-import { Array as A, Duration, Effect, HashMap, Schedule, Schema as S } from "effect"
+import { Array as A, Duration, Effect, HashMap, Option, Schedule, Schema as S } from "effect"
+import { annotateLlmCall, LlmAttributes } from "../Telemetry/LlmAttributes.js"
+import { TracingContext } from "../Telemetry/TracingContext.js"
 import { LLMError } from "../Extraction/Events.js"
 import { isClassNode, type OntologyContext } from "../Graph/Types.js"
 import { renderExtractionPrompt } from "../Prompt/PromptDoc.js"
@@ -309,7 +311,6 @@ export const extractEntities = <ClassIRI extends string>(
       schema,
       objectName: "EntityList"
     }).pipe(
-      Effect.withSpan("llm.extract-entities"),
       Effect.timeout(Duration.seconds(30)),
       Effect.retry(
         Schedule.exponential(Duration.seconds(1)).pipe(
@@ -330,6 +331,27 @@ export const extractEntities = <ClassIRI extends string>(
 
     const entities = Array.from(response.value.entities)
 
+    // Annotate span with LLM metadata
+    const tracingCtx = yield* Effect.serviceOption(TracingContext)
+    const model = Option.match(tracingCtx, {
+      onNone: () => "unknown",
+      onSome: (ctx) => ctx.model
+    })
+    const provider = Option.match(tracingCtx, {
+      onNone: () => "unknown",
+      onSome: (ctx) => ctx.provider
+    })
+
+    yield* annotateLlmCall({
+      model,
+      provider,
+      promptLength: promptText.length,
+      promptText,
+      inputTokens: response.usage?.inputTokens,
+      outputTokens: response.usage?.outputTokens
+    })
+    yield* Effect.annotateCurrentSpan(LlmAttributes.ENTITY_COUNT, entities.length)
+
     // Log LLM call completion
     yield* Effect.log("LLM entity extraction call completed", {
       entityCount: entities.length,
@@ -338,6 +360,7 @@ export const extractEntities = <ClassIRI extends string>(
 
     return entities
   }).pipe(
+    Effect.withSpan("llm.extract-entities"),
     Effect.catchAll((error) => {
       if (error instanceof LLMError) {
         return Effect.gen(function*() {
