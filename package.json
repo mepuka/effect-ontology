@@ -104,5 +104,8 @@
   },
   "pnpm": {
     "patchedDependencies": {}
+  },
+  "overrides": {
+    "@effect-atom/atom": "0.4.3"
   }
 }

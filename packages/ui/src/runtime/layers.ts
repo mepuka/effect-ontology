@@ -9,6 +9,7 @@
  */
 
 import { EntityDiscoveryServiceLive } from "@effect-ontology/core/Services/EntityDiscovery"
+import { FocusingServiceLive } from "@effect-ontology/core/Services/Focusing"
 import { NlpServiceLive } from "@effect-ontology/core/Services/Nlp"
 import { RdfService } from "@effect-ontology/core/Services/Rdf"
 import { ShaclService } from "@effect-ontology/core/Services/Shacl"
@@ -58,12 +59,23 @@ import { Layer } from "effect"
  * )
  * ```
  */
-export const FrontendRuntimeLayer = Layer.mergeAll(
+// Base services that have no dependencies
+const BaseServicesLayer = Layer.mergeAll(
   RdfService.Default,
   ShaclService.Default,
   NlpServiceLive,
   EntityDiscoveryServiceLive,
   BrowserKeyValueStore.layerLocalStorage
+)
+
+// FocusingServiceLive depends on NlpService
+const FocusingLayer = FocusingServiceLive.pipe(
+  Layer.provide(NlpServiceLive)
+)
+
+export const FrontendRuntimeLayer = Layer.mergeAll(
+  BaseServicesLayer,
+  FocusingLayer
 )
 
 /**

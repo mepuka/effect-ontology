@@ -1,10 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useAtom, useAtomValue } from '@effect-atom/atom-react'
 import { Result } from '@effect-atom/atom'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { DataTable } from '@/components/DataTable'
-import { ColumnDef } from '@tanstack/react-table'
+import type { ColumnDef } from '@tanstack/react-table'
 import { Loader2, Play, AlertCircle, CheckCircle, Layers } from 'lucide-react'
 import { ChunkPreview, ChunkPreviewCompact } from '@/components/ChunkPreview'
 import {
@@ -53,7 +52,7 @@ const classColumns: ColumnDef<any>[] = [
 const propertyColumns: ColumnDef<any>[] = [
   {
     accessorKey: 'propertyIri',
-    header: 'Property IRI',
+    header: 'Property',
     cell: ({ row }) => (
       <span className="font-mono text-xs">
         {row.original.propertyIri.split(/[/#]/).pop()}
@@ -74,19 +73,19 @@ const propertyColumns: ColumnDef<any>[] = [
     header: 'Range',
     cell: ({ row }) => (
       <span className="text-xs text-muted-foreground">
-        {row.original.range.split(/[/#]/).pop()}
+        {row.original.range}
       </span>
     ),
   },
   {
-    accessorKey: 'minCount',
+    accessorKey: 'minCardinality',
     header: 'Min',
-    cell: ({ row }) => row.original.minCount ?? '—',
+    cell: ({ row }) => row.original.minCardinality ?? '0',
   },
   {
-    accessorKey: 'maxCount',
+    accessorKey: 'maxCardinality',
     header: 'Max',
-    cell: ({ row }) => row.original.maxCount ?? '—',
+    cell: ({ row }) => row.original.maxCardinality ?? '*',
   },
 ]
 
@@ -131,306 +130,309 @@ const tripleColumns: ColumnDef<any>[] = [
 
 const promptColumns: ColumnDef<any>[] = [
   {
-    accessorKey: 'classId',
-    header: 'Class',
+    accessorKey: 'section',
+    header: 'Section',
     cell: ({ row }) => (
-      <span className="font-mono text-xs">
-        {row.original.classId.split(/[/#]/).pop()}
+      <span className="rounded-full bg-secondary px-2 py-1 text-xs">
+        {row.original.section}
       </span>
     ),
   },
   {
-    accessorKey: 'sectionType',
-    header: 'Section',
+    accessorKey: 'fragmentType',
+    header: 'Type',
+    cell: ({ row }) => (
+      <span className="font-mono text-xs text-muted-foreground">
+        {row.original.fragmentType}
+      </span>
+    ),
   },
   {
     accessorKey: 'text',
-    header: 'Prompt Text',
+    header: 'Content',
     cell: ({ row }) => (
-      <div className="max-w-md truncate text-sm">
+      <div className="max-w-md truncate text-sm font-mono">
         {row.original.text}
       </div>
     ),
   },
   {
-    accessorKey: 'fragmentCount',
-    header: 'Fragments',
-  },
-  {
-    accessorKey: 'sources',
-    header: 'Sources',
+    accessorKey: 'sourceIri',
+    header: 'Source',
     cell: ({ row }) => (
       <span className="text-xs text-muted-foreground">
-        {row.original.sources}
+        {row.original.sourceIri.split(/[/#]/).pop()}
+      </span>
+    ),
+  },
+  {
+    accessorKey: 'tokenCount',
+    header: 'Tokens',
+    cell: ({ row }) => (
+      <span className="text-xs tabular-nums">
+        {row.original.tokenCount}
       </span>
     ),
   },
 ]
 
 function ExtractionsPage() {
+  const classesResult = useAtomValue(ontologyClassesTableAtom) as Result.Result<any, any>
+  const propertiesResult = useAtomValue(ontologyPropertiesTableAtom) as Result.Result<any, any>
+  const triplesResult = useAtomValue(extractedTriplesTableAtom) as Result.Result<any, any>
+  const status = useAtomValue(extractionStatusAtom)
+
+  // Calculate stats
+  const classCount = Result.match(classesResult, {
+    onInitial: () => 0,
+    onFailure: () => 0,
+    onSuccess: (s) => s.value.length,
+  })
+  const propertyCount = Result.match(propertiesResult, {
+    onInitial: () => 0,
+    onFailure: () => 0,
+    onSuccess: (s) => s.value.length,
+  })
+  const tripleCount = Result.match(triplesResult, {
+    onInitial: () => 0,
+    onFailure: () => 0,
+    onSuccess: (s) => s.value.length,
+  })
+
   return (
-    <div className="container mx-auto py-8">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Extractions</h1>
-        <p className="text-muted-foreground">
-          Extract knowledge from text and browse ontology data
-        </p>
+    <div className="h-[calc(100vh-4rem)] flex flex-col bg-background">
+      {/* Header bar with stats */}
+      <header className="border-b bg-card px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-6">
+          <h1 className="text-lg font-semibold">Live Data Viewer</h1>
+          <div className="flex items-center gap-4 text-sm">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-depth-2" />
+              <span className="text-muted-foreground">Classes:</span>
+              <span className="font-mono font-medium">{classCount}</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-depth-4" />
+              <span className="text-muted-foreground">Properties:</span>
+              <span className="font-mono font-medium">{propertyCount}</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-depth-5" />
+              <span className="text-muted-foreground">Triples:</span>
+              <span className="font-mono font-medium">{tripleCount}</span>
+            </span>
+          </div>
+        </div>
+        <StatusBadge status={status} />
+      </header>
+
+      {/* Main content */}
+      <div className="flex-1 overflow-hidden">
+        <Tabs defaultValue="extract" className="h-full flex flex-col">
+          <div className="border-b bg-card/50 px-6">
+            <TabsList className="h-10 rounded-none bg-transparent p-0 gap-0">
+              <TabsTrigger
+                value="extract"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
+              >
+                Extract
+              </TabsTrigger>
+              <TabsTrigger
+                value="ontology"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
+              >
+                Ontology
+              </TabsTrigger>
+              <TabsTrigger
+                value="triples"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
+              >
+                Triples
+              </TabsTrigger>
+              <TabsTrigger
+                value="prompts"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent"
+              >
+                Prompts
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          <div className="flex-1 overflow-auto">
+            <TabsContent value="extract" className="mt-0 h-full">
+              <ExtractionView />
+            </TabsContent>
+
+            <TabsContent value="ontology" className="mt-0 h-full p-6">
+              <div className="grid grid-cols-2 gap-6 h-full">
+                <div className="overflow-auto">
+                  <h2 className="text-sm font-medium mb-3 text-muted-foreground uppercase tracking-wide">Classes</h2>
+                  {Result.match(classesResult, {
+                    onInitial: () => <LoadingState />,
+                    onFailure: (failure) => <ErrorState error={String(failure.cause)} />,
+                    onSuccess: (success) => (
+                      <DataTable columns={classColumns} data={success.value} pageSize={15} />
+                    ),
+                  })}
+                </div>
+                <div className="overflow-auto">
+                  <h2 className="text-sm font-medium mb-3 text-muted-foreground uppercase tracking-wide">Properties</h2>
+                  {Result.match(propertiesResult, {
+                    onInitial: () => <LoadingState />,
+                    onFailure: (failure) => <ErrorState error={String(failure.cause)} />,
+                    onSuccess: (success) => (
+                      <DataTable columns={propertyColumns} data={success.value} pageSize={15} />
+                    ),
+                  })}
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="triples" className="mt-0 h-full p-6">
+              <div className="h-full overflow-auto">
+                <h2 className="text-sm font-medium mb-3 text-muted-foreground uppercase tracking-wide">RDF Triples</h2>
+                {Result.match(triplesResult, {
+                  onInitial: () => <LoadingState />,
+                  onFailure: (failure) => <ErrorState error={String(failure.cause)} />,
+                  onSuccess: (success) => (
+                    <DataTable columns={tripleColumns} data={success.value} pageSize={20} />
+                  ),
+                })}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="prompts" className="mt-0 h-full p-6">
+              <RunningPromptsView />
+            </TabsContent>
+          </div>
+        </Tabs>
       </div>
-
-      <Tabs defaultValue="extract" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="extract">Extract</TabsTrigger>
-          <TabsTrigger value="classes">Classes</TabsTrigger>
-          <TabsTrigger value="properties">Properties</TabsTrigger>
-          <TabsTrigger value="triples">Triples</TabsTrigger>
-          <TabsTrigger value="prompts">Prompts</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="extract" className="mt-6">
-          <ExtractionView />
-        </TabsContent>
-
-        <TabsContent value="classes" className="mt-6">
-          <OntologyClassesView />
-        </TabsContent>
-
-        <TabsContent value="properties" className="mt-6">
-          <OntologyPropertiesView />
-        </TabsContent>
-
-        <TabsContent value="triples" className="mt-6">
-          <ExtractedTriplesView />
-        </TabsContent>
-
-        <TabsContent value="prompts" className="mt-6">
-          <RunningPromptsView />
-        </TabsContent>
-      </Tabs>
     </div>
   )
 }
 
-function OntologyClassesView() {
-  const result = useAtomValue(ontologyClassesTableAtom) as Result.Result<any, any>
-
+function LoadingState() {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Ontology Classes</CardTitle>
-        <CardDescription>
-          Classes defined in the ontology with property counts
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {Result.match(result, {
-          onInitial: () => <div className="text-muted-foreground">Loading...</div>,
-          onFailure: (failure) => (
-            <div className="text-destructive">Error: {String(failure.cause)}</div>
-          ),
-          onSuccess: (success) => (
-            <DataTable
-              columns={classColumns}
-              data={success.value}
-              pageSize={20}
-            />
-          ),
-        })}
-      </CardContent>
-    </Card>
+    <div className="flex items-center justify-center py-8 text-muted-foreground">
+      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+      Loading...
+    </div>
   )
 }
 
-function OntologyPropertiesView() {
-  const result = useAtomValue(ontologyPropertiesTableAtom) as Result.Result<any, any>
-
+function ErrorState({ error }: { error: string }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Ontology Properties</CardTitle>
-        <CardDescription>
-          Properties with domain, range, and cardinality constraints
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {Result.match(result, {
-          onInitial: () => <div className="text-muted-foreground">Loading...</div>,
-          onFailure: (failure) => (
-            <div className="text-destructive">Error: {String(failure.cause)}</div>
-          ),
-          onSuccess: (success) => (
-            <DataTable
-              columns={propertyColumns}
-              data={success.value}
-              pageSize={20}
-            />
-          ),
-        })}
-      </CardContent>
-    </Card>
+    <div className="flex items-center gap-2 text-destructive py-4">
+      <AlertCircle className="w-4 h-4" />
+      <span className="text-sm">{error}</span>
+    </div>
   )
 }
 
-function ExtractedTriplesView() {
-  const result = useAtomValue(extractedTriplesTableAtom) as Result.Result<any, any>
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Extracted RDF Triples</CardTitle>
-        <CardDescription>
-          Subject-predicate-object triples derived from the ontology
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {Result.match(result, {
-          onInitial: () => <div className="text-muted-foreground">Loading...</div>,
-          onFailure: (failure) => (
-            <div className="text-destructive">Error: {String(failure.cause)}</div>
-          ),
-          onSuccess: (success) => (
-            <DataTable
-              columns={tripleColumns}
-              data={success.value}
-              pageSize={20}
-            />
-          ),
-        })}
-      </CardContent>
-    </Card>
-  )
-}
 
 function RunningPromptsView() {
   const result = useAtomValue(runningPromptsTableAtom) as Result.Result<any, any>
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Generated Prompts</CardTitle>
-        <CardDescription>
-          Prompts generated from the ontology with provenance tracking
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {Result.match(result, {
-          onInitial: () => <div className="text-muted-foreground">Loading...</div>,
-          onFailure: (failure) => (
-            <div className="text-destructive">Error: {String(failure.cause)}</div>
-          ),
-          onSuccess: (success) => (
-            <DataTable
-              columns={promptColumns}
-              data={success.value}
-              pageSize={10}
-            />
-          ),
-        })}
-      </CardContent>
-    </Card>
+    <div className="h-full overflow-auto">
+      <h2 className="text-sm font-medium mb-3 text-muted-foreground uppercase tracking-wide">
+        Generated Prompts
+      </h2>
+      {Result.match(result, {
+        onInitial: () => <LoadingState />,
+        onFailure: (failure) => <ErrorState error={String(failure.cause)} />,
+        onSuccess: (success) => (
+          <DataTable columns={promptColumns} data={success.value} pageSize={15} />
+        ),
+      })}
+    </div>
   )
 }
 
 function ExtractionView() {
   const [inputText, setInputText] = useAtom(extractionInputAtom)
   const status = useAtomValue(extractionStatusAtom)
-  const extractionResult = useAtomValue(runExtractionAtom)
+  const _extractionResult = useAtomValue(runExtractionAtom)
 
   return (
-    <div className="grid grid-cols-3 gap-4">
+    <div className="h-full grid grid-cols-3 gap-0 divide-x">
       {/* Input Panel */}
-      <Card className="col-span-1">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Input Text</CardTitle>
-          <CardDescription>
-            Enter text to extract knowledge from
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <textarea
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            placeholder="Enter text to extract knowledge from...
-
-Example: Alice is a software engineer at Acme Corp. She knows Bob, who works as a designer. They are both members of the Design Team."
-            className="w-full h-64 p-3 border rounded-md resize-none text-sm font-mono"
-          />
-
-          {/* Compact chunk stats */}
+      <div className="flex flex-col p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">Input</h2>
+          <button
+            disabled={status._tag === 'running' || !inputText.trim()}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded text-xs font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {status._tag === 'running' ? (
+              <>
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Running
+              </>
+            ) : (
+              <>
+                <Play className="w-3 h-3" />
+                Extract
+              </>
+            )}
+          </button>
+        </div>
+        <textarea
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          placeholder="Enter text to extract knowledge from..."
+          className="flex-1 p-3 border rounded-md resize-none text-sm font-mono bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+        <div className="mt-3">
           <ChunkPreviewCompact />
-
-          <div className="flex items-center justify-between pt-2">
-            <StatusBadge status={status} />
-            <button
-              disabled={status._tag === 'running' || !inputText.trim()}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-            >
-              {status._tag === 'running' ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Extracting...
-                </>
-              ) : (
-                <>
-                  <Play className="w-4 h-4" />
-                  Extract
-                </>
-              )}
-            </button>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Chunk Preview Panel */}
-      <div className="col-span-1">
+      <div className="p-4 overflow-auto">
+        <h2 className="text-sm font-medium mb-3 text-muted-foreground uppercase tracking-wide">Chunks</h2>
         <ChunkPreview />
       </div>
 
       {/* Results Panel */}
-      <Card className="col-span-1">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Extraction Results</CardTitle>
-          <CardDescription>
-            Structured knowledge graph from input text
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <div className="flex flex-col p-4">
+        <h2 className="text-sm font-medium mb-3 text-muted-foreground uppercase tracking-wide">Output</h2>
+        <div className="flex-1 overflow-auto">
           {status._tag === 'idle' && (
-            <div className="text-muted-foreground text-sm text-center py-8">
-              <Layers className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              Enter text and click Extract to see results
+            <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+              <Layers className="w-10 h-10 mb-3 opacity-30" />
+              <p className="text-sm">No extraction yet</p>
             </div>
           )}
           {status._tag === 'running' && (
-            <div className="flex flex-col items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground mb-2" />
-              <span className="text-sm text-muted-foreground">Processing chunks...</span>
+            <div className="h-full flex flex-col items-center justify-center">
+              <Loader2 className="w-6 h-6 animate-spin text-primary mb-3" />
+              <p className="text-sm text-muted-foreground">Processing...</p>
             </div>
           )}
           {status._tag === 'success' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-green-600 text-sm">
-                  <CheckCircle className="w-4 h-4" />
-                  Extraction complete
-                </div>
-                <span className="text-xs text-muted-foreground font-mono">Turtle RDF</span>
+            <div className="h-full flex flex-col">
+              <div className="flex items-center gap-2 text-green-600 text-sm mb-3">
+                <CheckCircle className="w-4 h-4" />
+                <span>Complete</span>
+                <span className="ml-auto text-xs text-muted-foreground font-mono">turtle</span>
               </div>
-              <pre className="text-xs font-mono bg-muted p-4 rounded-md overflow-auto max-h-80 whitespace-pre-wrap">
+              <pre className="flex-1 text-xs font-mono bg-muted/50 p-3 rounded overflow-auto whitespace-pre-wrap">
                 {status.result}
               </pre>
             </div>
           )}
           {status._tag === 'error' && (
-            <div className="bg-destructive/10 border border-destructive/20 rounded-md p-4 text-sm text-destructive">
-              <div className="flex items-center gap-2 mb-2">
+            <div className="p-4 bg-destructive/5 border border-destructive/20 rounded text-sm text-destructive">
+              <div className="flex items-center gap-2 mb-2 font-medium">
                 <AlertCircle className="w-4 h-4" />
-                Extraction failed
+                Error
               </div>
-              {status.message}
+              <p className="text-xs">{status.message}</p>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   )
 }

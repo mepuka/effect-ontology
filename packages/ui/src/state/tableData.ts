@@ -1,6 +1,6 @@
 import { runtime } from "../runtime/atoms"
 import { ontologyGraphAtom, enrichedPromptsAtom } from "./store"
-import { Effect, HashMap } from "effect"
+import { Effect, Graph, HashMap, Option } from "effect"
 import { Result } from "@effect-atom/atom"
 import { isClassNode } from "@effect-ontology/core/Graph/Types"
 
@@ -58,8 +58,8 @@ export const ontologyPropertiesTableAtom = runtime.atom((get) =>
       propertyIri: string
       domain: string
       range: string
-      minCount?: number
-      maxCount?: number
+      minCardinality?: number
+      maxCardinality?: string
     }> = []
 
     for (const node of HashMap.values(context.nodes)) {
@@ -68,9 +68,9 @@ export const ontologyPropertiesTableAtom = runtime.atom((get) =>
           properties.push({
             propertyIri: prop.propertyIri,
             domain: node.id,
-            range: prop.range,
-            minCount: prop.minCount,
-            maxCount: prop.maxCount
+            range: prop.ranges.join(" | ") || "(any)",
+            minCardinality: prop.minCardinality,
+            maxCardinality: Option.isSome(prop.maxCardinality) ? String(prop.maxCardinality.value) : "*"
           })
         }
       }
@@ -81,9 +81,9 @@ export const ontologyPropertiesTableAtom = runtime.atom((get) =>
       properties.push({
         propertyIri: prop.propertyIri,
         domain: "(universal)",
-        range: prop.range,
-        minCount: prop.minCount,
-        maxCount: prop.maxCount
+        range: prop.ranges.join(" | ") || "(any)",
+        minCardinality: prop.minCardinality,
+        maxCardinality: Option.isSome(prop.maxCardinality) ? String(prop.maxCardinality.value) : "*"
       })
     }
 
@@ -138,25 +138,25 @@ export const extractedTriplesTableAtom = runtime.atom((get) =>
           triples.push({
             subject: node.id,
             predicate: prop.propertyIri,
-            object: prop.range,
+            object: prop.ranges.join(" | ") || "(any)",
             type: "property"
           })
         }
       }
     }
 
-    // Extract subClassOf relationships from graph
-    for (const [_idx, nodeId] of graph.nodes) {
-      const edges = graph.adj.get(nodeId)
-      if (edges) {
-        for (const parentId of edges.keys()) {
-          triples.push({
-            subject: nodeId,
-            predicate: "rdfs:subClassOf",
-            object: parentId,
-            type: "hierarchy"
-          })
-        }
+    // Extract subClassOf relationships from graph edges
+    // Each edge represents a subClassOf relationship (source -> target = child -> parent)
+    for (const [_edgeIdx, edge] of Graph.edges(graph)) {
+      const childId = graph.nodes.get(edge.source)
+      const parentId = graph.nodes.get(edge.target)
+      if (childId && parentId) {
+        triples.push({
+          subject: childId,
+          predicate: "rdfs:subClassOf",
+          object: parentId,
+          type: "hierarchy"
+        })
       }
     }
 
@@ -181,25 +181,49 @@ export const runningPromptsTableAtom = runtime.atom((get) =>
     const enriched = yield* enrichedEffect
 
     // Extract prompt fragments for display
-    const prompts = []
+    // EnrichedStructuredPrompt has system, user, examples arrays of PromptFragment
+    const prompts: Array<{
+      section: string
+      fragmentType: string
+      text: string
+      fullText: string
+      sourceIri: string
+      tokenCount: number
+    }> = []
 
-    for (const section of enriched.sections) {
-      const text = section.fragments.map(f => f.text).join("")
-      const sources = new Set<string>()
-
-      for (const frag of section.fragments) {
-        for (const src of frag.provenance.sources) {
-          sources.add(src.type)
-        }
-      }
-
+    // Process system fragments
+    for (const fragment of enriched.system) {
       prompts.push({
-        classId: section.classId,
-        sectionType: section.type,
-        text: text.substring(0, 200), // Truncate for table display
-        fullText: text,
-        sources: Array.from(sources).join(", "),
-        fragmentCount: section.fragments.length
+        section: "system",
+        fragmentType: fragment.fragmentType,
+        text: fragment.text.substring(0, 200),
+        fullText: fragment.text,
+        sourceIri: Option.getOrElse(fragment.sourceIri, () => "(none)"),
+        tokenCount: fragment.metadata.tokenCount
+      })
+    }
+
+    // Process user fragments
+    for (const fragment of enriched.user) {
+      prompts.push({
+        section: "user",
+        fragmentType: fragment.fragmentType,
+        text: fragment.text.substring(0, 200),
+        fullText: fragment.text,
+        sourceIri: Option.getOrElse(fragment.sourceIri, () => "(none)"),
+        tokenCount: fragment.metadata.tokenCount
+      })
+    }
+
+    // Process example fragments
+    for (const fragment of enriched.examples) {
+      prompts.push({
+        section: "examples",
+        fragmentType: fragment.fragmentType,
+        text: fragment.text.substring(0, 200),
+        fullText: fragment.text,
+        sourceIri: Option.getOrElse(fragment.sourceIri, () => "(none)"),
+        tokenCount: fragment.metadata.tokenCount
       })
     }
 
