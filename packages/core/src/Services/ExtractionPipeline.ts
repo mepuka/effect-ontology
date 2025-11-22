@@ -13,16 +13,17 @@
  */
 
 import type { Graph } from "effect"
-import { Effect, Ref, Stream } from "effect"
+import { Effect, HashMap, Ref, Stream } from "effect"
 import type { NodeId, OntologyContext } from "../Graph/Types.js"
 import { knowledgeIndexAlgebra } from "../Prompt/Algebra.js"
 import * as EC from "../Prompt/EntityCache.js"
 import { renderContext } from "../Prompt/Render.js"
 import { solveToKnowledgeIndex } from "../Prompt/Solver.js"
-import { makeKnowledgeGraphSchema } from "../Schema/Factory.js"
+import type { TripleGraph } from "../Schema/TripleFactory.js"
 import { EntityDiscoveryService } from "./EntityDiscovery.js"
 import { mergeGraphsWithResolution } from "./EntityResolution.js"
-import { extractKnowledgeGraph, extractVocabulary } from "./Llm.js"
+import { FocusingService } from "./Focusing.js"
+import { extractKnowledgeGraphTwoStage, extractVocabulary } from "./Llm.js"
 import { NlpService } from "./Nlp.js"
 import { RdfService } from "./Rdf.js"
 
@@ -48,32 +49,54 @@ export const defaultPipelineConfig: PipelineConfig = {
 }
 
 /**
- * Extract rdfs:label from entity properties
+ * Extract entities from triple graph for entity discovery
  *
- * Looks for rdfs:label property in the entity's properties array.
- * Falls back to the entity's @id if no label is found.
+ * Extracts all unique entities (subjects and object references) from a triple graph
+ * to register them with EntityDiscoveryService for cross-chunk consistency.
  *
- * @param entity - The knowledge graph entity
- * @returns The extracted label or IRI as fallback
+ * @param tripleGraph - Triple graph to extract entities from
+ * @param chunkIndex - Index of the chunk these entities were found in
+ * @returns Array of EntityRef objects for registration
  */
-const extractLabel = (
-  entity: {
-    readonly "@id": string
-    readonly properties: ReadonlyArray<{
-      readonly predicate: string
-      readonly object: string | { readonly "@id": string }
-    }>
+const extractEntitiesFromTriples = (
+  tripleGraph: TripleGraph<string, string>,
+  chunkIndex: number
+): Array<EC.EntityRef> => {
+  const entityMap = new Map<string, EC.EntityRef>()
+
+  for (const triple of tripleGraph.triples) {
+    // Add subject entity
+    if (!entityMap.has(triple.subject)) {
+      entityMap.set(
+        triple.subject,
+        new EC.EntityRef({
+          iri: triple.subject, // Will be converted to IRI by RdfService
+          label: triple.subject, // Human-readable name
+          types: [triple.subject_type],
+          foundInChunk: chunkIndex,
+          confidence: 1.0
+        })
+      )
+    }
+
+    // Add object entity if it's a reference (not a literal)
+    if (typeof triple.object === "object") {
+      if (!entityMap.has(triple.object.value)) {
+        entityMap.set(
+          triple.object.value,
+          new EC.EntityRef({
+            iri: triple.object.value, // Will be converted to IRI by RdfService
+            label: triple.object.value, // Human-readable name
+            types: [triple.object.type],
+            foundInChunk: chunkIndex,
+            confidence: 1.0
+          })
+        )
+      }
+    }
   }
-): string => {
-  const RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
 
-  // Find rdfs:label property
-  const labelProp = entity.properties.find(
-    (p) => p.predicate === RDFS_LABEL && typeof p.object === "string"
-  )
-
-  // Return label if found, otherwise use IRI
-  return labelProp ? (labelProp.object as string) : entity["@id"]
+  return Array.from(entityMap.values())
 }
 
 /**
@@ -106,86 +129,164 @@ export const streamingExtractionPipeline = (
   runId?: string
 ) =>
   Effect.gen(function*() {
-    // 1. Get services
-    const nlp = yield* NlpService
-    const discovery = yield* EntityDiscoveryService
-    const rdf = yield* RdfService
-
     // Use provided runId or generate a unique runId for this pipeline execution
     // If runId is provided, it enables integration with WorkflowManager system
     // If not provided, the pipeline works standalone with an internally generated ID
     const pipelineRunId = runId ?? crypto.randomUUID()
 
+    // Extract vocabulary for logging ontology stats
+    const { classIris, propertyIris } = extractVocabulary(ontology)
+
+    // Log pipeline start
+    yield* Effect.log("Pipeline started", {
+      runId: pipelineRunId,
+      textLength: text.length,
+      concurrency: config.concurrency,
+      windowSize: config.windowSize,
+      overlap: config.overlap,
+      classes: classIris.length,
+      properties: propertyIris.length
+    })
+
+    // 1. Get services
+    const nlp = yield* NlpService
+    const discovery = yield* EntityDiscoveryService
+    const rdf = yield* RdfService
+    const focusing = yield* FocusingService
+
     // 2. Build KnowledgeIndex from ontology graph (static knowledge)
     // Uses catamorphic fold over graph DAG to create queryable index
-    const knowledgeIndex = yield* solveToKnowledgeIndex(graph, ontology, knowledgeIndexAlgebra)
+    const knowledgeIndex = yield* solveToKnowledgeIndex(graph, ontology, knowledgeIndexAlgebra).pipe(
+      Effect.withSpan("extraction.knowledge-index"),
+      Effect.tap(() =>
+        Effect.log("KnowledgeIndex built", {
+          runId: pipelineRunId,
+          classes: classIris.length,
+          properties: propertyIris.length
+        })
+      )
+    )
 
-    // 3. Create schema from ontology vocabulary
-    const { classIris, propertyIris } = extractVocabulary(ontology)
-    const schema = makeKnowledgeGraphSchema(classIris, propertyIris)
+    // 3. Build Search Index for Context Focusing
+    // This creates an in-memory BM25 index of the ontology
+    const searchIndex = yield* focusing.buildIndex(knowledgeIndex)
 
     // 4. Create chunk stream
     const chunks = nlp.streamChunks(text, config.windowSize, config.overlap)
 
     // Track chunk index for provenance
     const chunkIndexRef = yield* Ref.make(0)
+    const chunkCountRef = yield* Ref.make(0)
 
     // 5. Extraction stream (parallel workers)
     const extractionStream = chunks.pipe(
+      Stream.tap(() => Ref.update(chunkCountRef, (n) => n + 1)),
       Stream.mapEffect(
         (chunkText) =>
           Effect.gen(function*() {
             // Get and increment chunk index atomically
             const currentChunkIndex = yield* Ref.getAndUpdate(chunkIndexRef, (n) => n + 1)
 
-            // A. Get current entity state (dynamic knowledge)
-            const registry = yield* discovery.getSnapshot(pipelineRunId)
+            return yield* Effect.gen(function*() {
+              // A. Get current entity state (dynamic knowledge)
+              const entityRegistry = yield* discovery.getSnapshot(pipelineRunId)
 
-            // B. Build prompt context (fuse static ontology + dynamic entities)
-            const promptContext = {
-              index: knowledgeIndex,
-              cache: registry.entities
-            }
+              // B. Focus the KnowledgeIndex on the current chunk
+              // Selects only relevant ontology units based on text content
+              const focusedIndex = yield* focusing.focus(searchIndex, knowledgeIndex, chunkText)
 
-            // C. Render context to StructuredPrompt (P → S)
-            const prompt = renderContext(promptContext)
+              // C. Build prompt context (fuse focused ontology + dynamic entities)
+              const promptContext = {
+                index: focusedIndex,
+                cache: entityRegistry.entities
+              }
 
-            // D. Extract knowledge using LLM
-            const knowledgeGraph = yield* extractKnowledgeGraph(chunkText, ontology, prompt, schema)
+              // D. Render context to StructuredPrompt (P → S)
+              const prompt = renderContext(promptContext)
 
-            // E. Convert to RDF Turtle using RdfService (fixes Issue 1: proper escaping)
-            // Pass ontology for datatype inference (fixes Issue 4: typed literals)
-            const store = yield* rdf.jsonToStore(knowledgeGraph, ontology)
-            const rdfGraph = yield* rdf.storeToTurtle(store)
+              // E. Extract knowledge using two-stage triple extraction (SOTA pattern)
+              const tripleGraph = yield* extractKnowledgeGraphTwoStage(
+                chunkText,
+                ontology,
+                prompt
+              )
 
-            // F. Update entity discovery (for next chunks) with label extraction (fixes Issue 3)
-            const newEntities = knowledgeGraph.entities.map(
-              (entity) =>
-                new EC.EntityRef({
-                  iri: entity["@id"],
-                  label: extractLabel(entity), // Extract rdfs:label from properties
-                  types: [entity["@type"]],
-                  foundInChunk: currentChunkIndex,
-                  confidence: 1.0 // TODO: Add confidence scoring
-                })
+              // F. Convert triples to RDF using RdfService
+              // Pass ontology for datatype inference
+              const store = yield* rdf.triplesToStore(tripleGraph, ontology)
+              const rdfGraph = yield* rdf.storeToTurtle(store)
+
+              // G. Update entity discovery (for next chunks) from triples
+              const newEntities = extractEntitiesFromTriples(
+                tripleGraph,
+                currentChunkIndex
+              )
+              yield* discovery.register(pipelineRunId, newEntities)
+
+              // Log batch processing progress
+              const currentRegistry = yield* discovery.getSnapshot(pipelineRunId)
+              const totalEntities = HashMap.size(currentRegistry.entities)
+              yield* Effect.log("Chunk processed", {
+                runId: pipelineRunId,
+                chunkIndex: currentChunkIndex,
+                entitiesInChunk: newEntities.length,
+                triplesInChunk: tripleGraph.triples.length,
+                totalEntitiesDiscovered: totalEntities
+              })
+
+              return rdfGraph
+            }).pipe(
+              Effect.withSpan(`extraction.batch.${currentChunkIndex}`)
             )
-            yield* discovery.register(pipelineRunId, newEntities)
-
-            return rdfGraph
           }),
-        // 6. Parallel execution with concurrency option
+        // 7. Parallel execution with concurrency option
         { concurrency: config.concurrency }
       )
     )
 
-    // 7. Collect and merge
+    // 6. Collect and merge
     const graphs = yield* Stream.runCollect(extractionStream)
     const graphArray = Array.from(graphs)
+    const totalChunks = yield* Ref.get(chunkCountRef)
+
+    // Log chunking completion
+    yield* Effect.log("Text chunked", {
+      runId: pipelineRunId,
+      totalChunks,
+      windowSize: config.windowSize,
+      overlap: config.overlap
+    })
 
     // Handle empty graphs
     if (graphArray.length === 0) {
+      yield* Effect.log("Pipeline completed (no chunks)", {
+        runId: pipelineRunId,
+        totalChunks: 0
+      })
       return "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n"
     }
 
-    return yield* mergeGraphsWithResolution(graphArray)
-  })
+    // Log merge start
+    yield* Effect.log("Merging graphs", {
+      runId: pipelineRunId,
+      graphCount: graphArray.length
+    })
+
+    const mergedGraph = yield* mergeGraphsWithResolution(graphArray).pipe(
+      Effect.withSpan("extraction.merge")
+    )
+
+    // Count triples in final graph for logging
+    const finalStore = yield* rdf.turtleToStore(mergedGraph)
+    const finalTripleCount = finalStore.size
+
+    yield* Effect.log("Pipeline completed", {
+      runId: pipelineRunId,
+      totalChunks: graphArray.length,
+      finalTriples: finalTripleCount
+    })
+
+    return mergedGraph
+  }).pipe(
+    Effect.withSpan("extraction.pipeline")
+  )

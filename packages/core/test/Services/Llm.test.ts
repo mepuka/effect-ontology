@@ -10,8 +10,7 @@ import { PropertyConstraint } from "../../src/Graph/Constraint.js"
 import { ClassNode } from "../../src/Graph/Types"
 import type { OntologyContext } from "../../src/Graph/Types"
 import { StructuredPrompt } from "../../src/Prompt/Types"
-import { makeKnowledgeGraphSchema } from "../../src/Schema/Factory"
-import { extractKnowledgeGraph, extractVocabulary } from "../../src/Services/Llm"
+import { extractKnowledgeGraphTwoStage, extractVocabulary } from "../../src/Services/Llm"
 
 describe("Services.Llm", () => {
   // Test ontology context
@@ -151,15 +150,14 @@ describe("Services.Llm", () => {
   })
 
   describe("Schema Validation", () => {
-    it.effect("should accept valid schema types", () =>
+    it.effect("should extract vocabulary for triple schema", () =>
       Effect.sync(() => {
-        const schema = makeKnowledgeGraphSchema(
-          ["http://xmlns.com/foaf/0.1/Person", "http://xmlns.com/foaf/0.1/Organization"],
-          ["http://xmlns.com/foaf/0.1/name", "http://xmlns.com/foaf/0.1/member"]
-        )
+        const { classIris, propertyIris } = extractVocabulary(testOntology)
 
-        // Verify schema structure
-        expect(schema.ast).toBeDefined()
+        // Verify vocabulary extraction
+        expect(classIris).toContain("http://xmlns.com/foaf/0.1/Person")
+        expect(propertyIris).toContain("http://xmlns.com/foaf/0.1/name")
+        expect(propertyIris).toContain("http://xmlns.com/foaf/0.1/knows")
       }))
   })
 
@@ -219,21 +217,16 @@ describe("Services.Llm", () => {
       }))
   })
 
-  describe("extractKnowledgeGraph (pure function)", () => {
+  describe("extractKnowledgeGraphTwoStage (pure function)", () => {
     it.effect("should be a callable function", () =>
       Effect.sync(() => {
         // Verify function exists and has correct type
-        expect(extractKnowledgeGraph).toBeDefined()
-        expect(typeof extractKnowledgeGraph).toBe("function")
+        expect(extractKnowledgeGraphTwoStage).toBeDefined()
+        expect(typeof extractKnowledgeGraphTwoStage).toBe("function")
       }))
 
     it.effect("should accept correct parameters", () =>
       Effect.sync(() => {
-        const schema = makeKnowledgeGraphSchema(
-          ["http://xmlns.com/foaf/0.1/Person"],
-          ["http://xmlns.com/foaf/0.1/name"]
-        )
-
         const prompt = StructuredPrompt.make({
           system: ["Extract entities"],
           user: ["From text"],
@@ -242,11 +235,10 @@ describe("Services.Llm", () => {
         })
 
         // This should compile without errors
-        const _effect = extractKnowledgeGraph(
+        const _effect = extractKnowledgeGraphTwoStage(
           "Alice is a person.",
           testOntology,
-          prompt,
-          schema
+          prompt
         )
 
         // Effect should be defined

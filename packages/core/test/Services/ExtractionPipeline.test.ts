@@ -47,30 +47,51 @@ const mockOntology: OntologyContext = {
   propertyParentsMap: HashMap.empty()
 }
 
-// Mock LanguageModel for testing (returns simple mock entities)
+// Mock LanguageModel for testing (handles two-stage extraction)
 const MockLanguageModelLive = Layer.succeed(
   LanguageModel.LanguageModel,
   {
     generate: () => Effect.succeed({ value: "", usage: { inputTokens: 0, outputTokens: 0 } }),
     stream: () => Effect.succeed({ value: "", usage: { inputTokens: 0, outputTokens: 0 } }),
-    generateObject: () =>
-      Effect.succeed({
-        value: {
-          entities: [
-            {
-              "@id": "http://example.org/testEntity",
-              "@type": "http://xmlns.com/foaf/0.1/Person",
-              properties: [
-                {
-                  predicate: "http://xmlns.com/foaf/0.1/name",
-                  object: "Test Person"
-                }
-              ]
-            }
-          ]
-        },
+    generateObject: (options: any) => {
+      // Stage 1: EntityList (extractEntities)
+      if (options.objectName === "EntityList") {
+        return Effect.succeed({
+          value: {
+            entities: [
+              {
+                name: "Test Person",
+                type: "http://xmlns.com/foaf/0.1/Person"
+              }
+            ]
+          },
+          usage: { inputTokens: 0, outputTokens: 0 }
+        } as any)
+      }
+
+      // Stage 2: TripleGraph (extractTriples)
+      if (options.objectName === "TripleGraph") {
+        return Effect.succeed({
+          value: {
+            triples: [
+              {
+                subject: "Test Person",
+                subject_type: "http://xmlns.com/foaf/0.1/Person",
+                predicate: "http://xmlns.com/foaf/0.1/name",
+                object: "Test Person"
+              }
+            ]
+          },
+          usage: { inputTokens: 0, outputTokens: 0 }
+        } as any)
+      }
+
+      // Fallback (shouldn't happen in tests)
+      return Effect.succeed({
+        value: { triples: [] },
         usage: { inputTokens: 0, outputTokens: 0 }
-      } as any) // Type assertion for mock
+      } as any)
+    }
   } as any // Type assertion for test mock
 )
 

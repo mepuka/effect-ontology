@@ -40,6 +40,8 @@ import * as N3 from "n3"
 import { RdfError } from "../Extraction/Events.js"
 import type { OntologyContext } from "../Graph/Types.js"
 import { isClassNode } from "../Graph/Types.js"
+import { generateIri } from "./IriUtils.js"
+import type { TripleGraph } from "../Schema/TripleFactory.js"
 
 /**
  * Re-exported N3 types for type safety
@@ -329,6 +331,164 @@ export class RdfService extends Effect.Service<RdfService>()("RdfService", {
       ),
 
     /**
+     * Convert triple graph to N3.Store
+     *
+     * Creates a fresh N3.Store and populates it with RDF quads from triples.
+     * Each triple becomes:
+     * - Type triple: `<entity> rdf:type <type>`
+     * - Label triple: `<entity> rdfs:label "name"`
+     * - Property triple: `<entity> <predicate> <object>`
+     *
+     * Entity names are sanitized and converted to valid IRIs programmatically,
+     * eliminating IRI generation issues from LLM output.
+     *
+     * Supports datatype inference from ontology property ranges (same as jsonToStore).
+     *
+     * @param tripleGraph - Triple-based knowledge graph
+     * @param ontology - Optional ontology context for datatype inference
+     * @returns Effect yielding N3.Store or RdfError
+     *
+     * @since 1.0.0
+     * @category operations
+     * @example
+     * ```typescript
+     * const tripleGraph = {
+     *   triples: [
+     *     {
+     *       subject: "Alice",
+     *       subject_type: "http://xmlns.com/foaf/0.1/Person",
+     *       predicate: "http://xmlns.com/foaf/0.1/name",
+     *       object: "Alice Smith"
+     *     }
+     *   ]
+     * }
+     *
+     * const store = yield* rdf.triplesToStore(tripleGraph, ontology)
+     * console.log(`Created ${store.size} triples`)
+     * ```
+     */
+    triplesToStore: (tripleGraph: TripleGraph, ontology?: OntologyContext) =>
+      Effect.gen(function*() {
+        yield* Effect.log("Converting triples to RDF store", {
+          tripleCount: tripleGraph.triples.length
+        })
+
+        return yield* Effect.sync(() => {
+          const store = new N3.Store()
+          const { literal, namedNode, quad } = N3.DataFactory
+
+          // Build entity registry: name → IRI
+          const entityRegistry = new Map<string, string>()
+
+          const getOrCreateIri = (name: string): string => {
+            const existing = entityRegistry.get(name)
+            if (existing) return existing
+
+            // Sanitize name to create valid IRI
+            const iri = generateIri(name)
+
+            entityRegistry.set(name, iri)
+            return iri
+          }
+
+          // First pass: extract all unique entities from triples
+          for (const triple of tripleGraph.triples) {
+            getOrCreateIri(triple.subject)
+
+            if (typeof triple.object === "object") {
+              getOrCreateIri(triple.object.value)
+            }
+          }
+
+          // Second pass: convert triples to RDF quads
+          for (const triple of tripleGraph.triples) {
+            const subjectIri = getOrCreateIri(triple.subject)
+            const subject = namedNode(subjectIri)
+
+            // Add type triple for subject
+            store.addQuad(
+              quad(
+                subject,
+                namedNode("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+                namedNode(triple.subject_type)
+              )
+            )
+
+            // Add label triple (for entity resolution)
+            store.addQuad(
+              quad(
+                subject,
+                namedNode("http://www.w3.org/2000/01/rdf-schema#label"),
+                literal(triple.subject)
+              )
+            )
+
+            // Add predicate triple
+            const predicate = namedNode(triple.predicate)
+
+            const object =
+              typeof triple.object === "string"
+                ? (() => {
+                    // Literal value - infer datatype from ontology
+                    const normalizedValue = triple.object.trim()
+                    const datatype = inferDatatype(triple.predicate, ontology)
+                    return datatype
+                      ? literal(normalizedValue, datatype)
+                      : literal(normalizedValue)
+                  })()
+                : (() => {
+                    // Entity reference
+                    const objectIri = getOrCreateIri(triple.object.value)
+
+                    // Add type for object entity
+                    store.addQuad(
+                      quad(
+                        namedNode(objectIri),
+                        namedNode("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+                        namedNode(triple.object.type)
+                      )
+                    )
+
+                    // Add label for object entity
+                    store.addQuad(
+                      quad(
+                        namedNode(objectIri),
+                        namedNode("http://www.w3.org/2000/01/rdf-schema#label"),
+                        literal(triple.object.value)
+                      )
+                    )
+
+                    return namedNode(objectIri)
+                  })()
+
+            store.addQuad(quad(subject, predicate, object))
+          }
+
+          return store
+        }).pipe(
+          Effect.tap((store) =>
+            Effect.log("Triples converted to RDF store", {
+              tripleCount: tripleGraph.triples.length,
+              quadCount: store.size
+            })
+          )
+        )
+      }).pipe(
+        Effect.withSpan("rdf.triples-to-store"),
+        Effect.catchAllDefect((cause) =>
+          Effect.fail(
+            new RdfError({
+              module: "RdfService",
+              method: "triplesToStore",
+              reason: "InvalidTriple",
+              description: "Failed to convert triples to RDF",
+              cause
+            })
+          )
+        )
+      ),
+
+    /**
      * Serialize N3.Store to Turtle format
      *
      * Converts an N3.Store to Turtle RDF syntax for validation or storage.
@@ -349,31 +509,47 @@ export class RdfService extends Effect.Service<RdfService>()("RdfService", {
      * ```
      */
     storeToTurtle: (store: RdfStore) =>
-      Effect.tryPromise({
-        try: () =>
-          new Promise<string>((resolve, reject) => {
-            const writer = new N3.Writer({ format: "Turtle" })
+      Effect.gen(function*() {
+        const quadCount = store.size
+        yield* Effect.log("Serializing RDF store to Turtle", {
+          quadCount
+        })
 
-            // Add all quads from store
-            for (const quad of store) {
-              writer.addQuad(quad)
-            }
+        return yield* Effect.tryPromise({
+          try: () =>
+            new Promise<string>((resolve, reject) => {
+              const writer = new N3.Writer({ format: "Turtle" })
 
-            // Writer.end is callback-based
-            writer.end((error, result) => {
-              if (error) reject(error)
-              else resolve(result)
+              // Add all quads from store
+              for (const quad of store) {
+                writer.addQuad(quad)
+              }
+
+              // Writer.end is callback-based
+              writer.end((error, result) => {
+                if (error) reject(error)
+                else resolve(result)
+              })
+            }),
+          catch: (cause) =>
+            new RdfError({
+              module: "RdfService",
+              method: "storeToTurtle",
+              reason: "ParseError",
+              description: "Failed to serialize store to Turtle",
+              cause
             })
-          }),
-        catch: (cause) =>
-          new RdfError({
-            module: "RdfService",
-            method: "storeToTurtle",
-            reason: "ParseError",
-            description: "Failed to serialize store to Turtle",
-            cause
-          })
-      }),
+        }).pipe(
+          Effect.tap((turtle) =>
+            Effect.log("RDF store serialized to Turtle", {
+              quadCount,
+              turtleLength: turtle.length
+            })
+          )
+        )
+      }).pipe(
+        Effect.withSpan("rdf.store-to-turtle")
+      ),
 
     /**
      * Parse Turtle to N3.Store
@@ -502,6 +678,113 @@ export class RdfService extends Effect.Service<RdfService>()("RdfService", {
               method: "jsonToStore",
               reason: "InvalidQuad",
               description: "Failed to create RDF quads from entities",
+              cause
+            })
+          )
+        )
+      ),
+
+    triplesToStore: (tripleGraph, ontology?) =>
+      Effect.sync(() => {
+        const store = new N3.Store()
+        const { literal, namedNode, quad } = N3.DataFactory
+
+        // Build entity registry: name → IRI
+        const entityRegistry = new Map<string, string>()
+
+        const getOrCreateIri = (name: string): string => {
+          const existing = entityRegistry.get(name)
+          if (existing) return existing
+
+          // Sanitize name to create valid IRI
+          const iri = generateIri(name)
+
+          entityRegistry.set(name, iri)
+          return iri
+        }
+
+        // First pass: extract all unique entities from triples
+        for (const triple of tripleGraph.triples) {
+          getOrCreateIri(triple.subject)
+
+          if (typeof triple.object === "object") {
+            getOrCreateIri(triple.object.value)
+          }
+        }
+
+        // Second pass: convert triples to RDF quads
+        for (const triple of tripleGraph.triples) {
+          const subjectIri = getOrCreateIri(triple.subject)
+          const subject = namedNode(subjectIri)
+
+          // Add type triple for subject
+          store.addQuad(
+            quad(
+              subject,
+              namedNode("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+              namedNode(triple.subject_type)
+            )
+          )
+
+          // Add label triple (for entity resolution)
+          store.addQuad(
+            quad(
+              subject,
+              namedNode("http://www.w3.org/2000/01/rdf-schema#label"),
+              literal(triple.subject)
+            )
+          )
+
+          // Add predicate triple
+          const predicate = namedNode(triple.predicate)
+
+          const object =
+            typeof triple.object === "string"
+              ? (() => {
+                  // Literal value - infer datatype from ontology
+                  const normalizedValue = triple.object.trim()
+                  const datatype = inferDatatype(triple.predicate, ontology)
+                  return datatype
+                    ? literal(normalizedValue, datatype)
+                    : literal(normalizedValue)
+                })()
+              : (() => {
+                  // Entity reference
+                  const objectIri = getOrCreateIri(triple.object.value)
+
+                  // Add type for object entity
+                  store.addQuad(
+                    quad(
+                      namedNode(objectIri),
+                      namedNode("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+                      namedNode(triple.object.type)
+                    )
+                  )
+
+                  // Add label for object entity
+                  store.addQuad(
+                    quad(
+                      namedNode(objectIri),
+                      namedNode("http://www.w3.org/2000/01/rdf-schema#label"),
+                      literal(triple.object.value)
+                    )
+                  )
+
+                  return namedNode(objectIri)
+                })()
+
+          store.addQuad(quad(subject, predicate, object))
+        }
+
+        return store
+      }).pipe(
+        Effect.catchAllDefect((cause) =>
+          Effect.fail(
+            new RdfError({
+              module: "RdfService",
+              method: "triplesToStore",
+              reason: "InvalidTriple",
+              description: "Failed to convert triples to RDF",
               cause
             })
           )

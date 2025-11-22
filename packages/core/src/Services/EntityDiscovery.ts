@@ -83,12 +83,25 @@ const makeEntityDiscoveryService = Effect.gen(function*() {
     register: (runId: string, newEntities: ReadonlyArray<EntityRef>) =>
       Effect.gen(function*() {
         const state = yield* getOrCreateRunState(runId)
+        const before = yield* Ref.get(state)
+        const beforeCount = HashMap.size(before.entities)
+
         yield* Ref.update(state, (current) => ({
           entities: newEntities.reduce(
             (cache, entity) => HashMap.set(cache, EC.normalize(entity.label), entity),
             current.entities
           )
         }))
+
+        const after = yield* Ref.get(state)
+        const afterCount = HashMap.size(after.entities)
+
+        yield* Effect.log("Entity registration", {
+          runId,
+          newEntitiesCount: newEntities.length,
+          totalEntitiesBefore: beforeCount,
+          totalEntitiesAfter: afterCount
+        })
       }),
     toPromptContext: (runId: string) =>
       Effect.gen(function*() {

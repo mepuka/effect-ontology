@@ -14,15 +14,63 @@
 import { parseTurtleToGraph } from "@effect-ontology/core/Graph/Builder"
 import { EntityDiscoveryServiceLive } from "@effect-ontology/core/Services/EntityDiscovery"
 import { defaultPipelineConfig, streamingExtractionPipeline } from "@effect-ontology/core/Services/ExtractionPipeline"
+import { FocusingServiceLive } from "@effect-ontology/core/Services/Focusing"
 import { extractVocabulary } from "@effect-ontology/core/Services/Llm"
-import { makeLlmProviderLayer } from "@effect-ontology/core/Services/LlmProvider"
+import { type LlmProviderParams, makeLlmProviderLayer } from "@effect-ontology/core/Services/LlmProvider"
 import { NlpServiceLive } from "@effect-ontology/core/Services/Nlp"
 import { RdfService } from "@effect-ontology/core/Services/Rdf"
 import { Args, Command, Options } from "@effect/cli"
 import { FileSystem } from "@effect/platform"
-import { Effect, Option } from "effect"
+import { Effect, Layer, Option } from "effect"
 import { loadProviderParams, validateProviderConfig } from "../utils/env.js"
 import * as Output from "../utils/output.js"
+
+/**
+ * Compose application layers for extraction pipeline (without LanguageModel)
+ *
+ * Creates a layer stack with all required services except LanguageModel:
+ * - NlpService (no dependencies)
+ * - EntityDiscoveryService (no dependencies)
+ * - RdfService (no dependencies)
+ * - FocusingService (depends on NlpService)
+ *
+ * LanguageModel is provided at the top level in main.ts, but can be overridden
+ * by providing a custom LanguageModel layer here.
+ *
+ * Uses idiomatic Effect layer composition:
+ * 1. Merge base services (no dependencies)
+ * 2. Use provideMerge to add dependent services (preserves shared dependencies)
+ *
+ * @returns Application layer with all services except LanguageModel
+ */
+const createAppLayer = () => {
+  // Base service layers (no dependencies)
+  const baseServices = Layer.mergeAll(
+    NlpServiceLive,
+    EntityDiscoveryServiceLive,
+    RdfService.Default
+  )
+
+  // Add FocusingService which depends on NlpService
+  // Use provideMerge to preserve shared NlpService instance
+  return Layer.provideMerge(
+    FocusingServiceLive,
+    baseServices
+  )
+}
+
+/**
+ * Create LanguageModel layer from provider params (for CLI override)
+ *
+ * This allows the command to override the default LanguageModel provided in main.ts.
+ * If not provided, the default from main.ts will be used.
+ *
+ * @param providerParams - LLM provider configuration
+ * @returns LanguageModel layer
+ */
+const createLanguageModelLayer = (providerParams: LlmProviderParams) => {
+  return makeLlmProviderLayer(providerParams)
+}
 
 // Arguments
 const textFile = Args.file({ name: "text-file", exists: "yes" }).pipe(
@@ -114,8 +162,12 @@ export const extractCommand = Command.make(
         yield* Output.keyValue("Properties", propertyIris.length)
       }
 
-      // 4. Create provider layer
-      const providerLayer = makeLlmProviderLayer(params)
+      // 4. Create application layers
+      // Service layers (NlpService, EntityDiscoveryService, RdfService, FocusingService)
+      const appLayer = createAppLayer()
+
+      // LanguageModel layer (overrides default from main.ts if CLI args provided)
+      const languageModelLayer = createLanguageModelLayer(params)
 
       // 5. Run extraction
       yield* Output.info(`Extracting with ${params.provider} (concurrency: ${args.concurrency})...`)
@@ -127,11 +179,10 @@ export const extractCommand = Command.make(
         overlap: args.overlap
       }
 
+      // Provide LanguageModel layer LAST to satisfy all dependencies
       const turtle = yield* streamingExtractionPipeline(textContent, graph, ontology, config).pipe(
-        Effect.provide(providerLayer),
-        Effect.provide(NlpServiceLive),
-        Effect.provide(EntityDiscoveryServiceLive),
-        Effect.provide(RdfService.Default)
+        Effect.provide(appLayer),
+        Effect.provide(languageModelLayer)
       )
 
       // 6. Output

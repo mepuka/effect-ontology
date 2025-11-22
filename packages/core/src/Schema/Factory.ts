@@ -261,6 +261,8 @@ const makeStrictPropertySchema = (
  * @returns Effect Schema for knowledge graph validation
  * @throws {EmptyVocabularyError} if either array is empty
  *
+ * @deprecated Use makeTripleSchema from TripleFactory.ts instead. Entity-based extraction is deprecated in favor of two-stage triple extraction for better entity consistency and IRI handling. This function will be removed in v2.0.
+ *
  * @category constructors
  * @since 1.0.0
  */
