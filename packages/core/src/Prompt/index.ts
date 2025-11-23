@@ -56,7 +56,21 @@ export {
   renderExtractionPrompt,
   renderStructuredPrompt
 } from "./PromptDoc.js"
+export * as EmbeddingIndex from "./EmbeddingIndex.js"
+export type { EmbeddedEntry, EmbeddingIndex as EmbeddingIndexType } from "./EmbeddingIndex.js"
+export {
+  ExampleEntity,
+  ExampleTriple,
+  ExtractionExample,
+  filterByPredicate as filterExamplesByPredicate,
+  filterByPredicates as filterExamplesByPredicates,
+  getAllPredicates,
+  getStaticExamples,
+  type ExamplePool
+} from "./ExamplePool.js"
 export * as Render from "./Render.js"
+export * as RenderDynamic from "./RenderDynamic.js"
+export type { DynamicRenderOptions } from "./RenderDynamic.js"
 export * as RenderEnriched from "./RenderEnriched.js"
 export { GraphCycleError, MissingNodeDataError, solveGraph, type SolverError, solveToKnowledgeIndex } from "./Solver.js"
 export { type GraphAlgebra, type PromptAlgebra, StructuredPrompt } from "./Types.js"

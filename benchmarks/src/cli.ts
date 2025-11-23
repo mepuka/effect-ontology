@@ -7,7 +7,6 @@
 import { ExtractionPipeline } from "@effect-ontology/core/Services/Extraction"
 import { type LlmProviderParams, makeLlmProviderLayer } from "@effect-ontology/core/Services/LlmProvider"
 import { NlpServiceLive } from "@effect-ontology/core/Services/Nlp"
-import { PropertyFilteringService } from "@effect-ontology/core/Services/PropertyFiltering"
 import { RdfService } from "@effect-ontology/core/Services/Rdf"
 import { ShaclService } from "@effect-ontology/core/Services/Shacl"
 import { makeTracingLayer, TracingContext } from "@effect-ontology/core/Telemetry"
@@ -128,11 +127,8 @@ const createBenchmarkLayers = () => {
     NlpServiceLive
   )
 
-  // PropertyFilteringService depends on NlpService
-  // Use provideMerge to preserve shared NlpService instance
-  const propertyFilteringLayer = PropertyFilteringService.Default.pipe(
-    Layer.provideMerge(baseLayers)
-  )
+  // NOTE: PropertyFilteringService intentionally NOT used
+  // Full ontology with constraints in prompt text works better for most providers
 
   // WebNlgParser depends on FileSystem
   const parserLayer = WebNlgParserLive.pipe(Layer.provide(baseLayers))
@@ -153,13 +149,14 @@ const createBenchmarkLayers = () => {
   )
 
   // Merge all layers
+  // NOTE: PropertyFilteringService intentionally NOT included
+  // The full ontology works better - constraints are in the prompt text
   const coreLayers = Layer.mergeAll(
     baseLayers,
     parserLayer,
     dataLayers,
     extractionLayer,
-    evaluationLayer,
-    propertyFilteringLayer
+    evaluationLayer
   )
 
   // Add tracing layer if enabled

@@ -315,3 +315,110 @@ export const sourceDoc = (constraint: PropertyConstraint): Doc.Doc<never> => {
 export const formatConstraint = (constraint: PropertyConstraint): string => {
   return Doc.render(constraintDoc(constraint), { style: "pretty" })
 }
+
+/**
+ * Format synonyms as Doc
+ *
+ * Creates natural language synonym list for LLM prompts.
+ *
+ * @param synonyms - Array of synonym strings
+ * @returns Doc representing synonyms, or Doc.empty if none
+ *
+ * @example
+ * ```typescript
+ * Doc.render(synonymsDoc(["foo", "bar"]))
+ * // => "Also known as: foo, bar"
+ * ```
+ */
+export const synonymsDoc = (synonyms: ReadonlyArray<string>): Doc.Doc<never> => {
+  if (synonyms.length === 0) {
+    return Doc.empty
+  }
+
+  const synonymDocs = synonyms.map(Doc.text)
+  const joinedSynonyms = Doc.hsep(Doc.punctuate(synonymDocs, Doc.comma))
+  return Doc.cat(Doc.text("Also known as: "), joinedSynonyms)
+}
+
+/**
+ * Format examples as Doc
+ *
+ * Creates natural language example list for LLM prompts.
+ *
+ * @param examples - Array of example strings
+ * @returns Doc representing examples, or Doc.empty if none
+ *
+ * @example
+ * ```typescript
+ * Doc.render(examplesDoc(["baz", "qux"]))
+ * // => "Examples: baz, qux"
+ * ```
+ */
+export const examplesDoc = (examples: ReadonlyArray<string>): Doc.Doc<never> => {
+  if (examples.length === 0) {
+    return Doc.empty
+  }
+
+  const exampleDocs = examples.map(Doc.text)
+  const joinedExamples = Doc.hsep(Doc.punctuate(exampleDocs, Doc.comma))
+  return Doc.cat(Doc.text("Examples: "), joinedExamples)
+}
+
+/**
+ * Verbalize property with rich description
+ *
+ * Creates a comprehensive natural language description of a property including:
+ * - Label and IRI
+ * - Domain and range constraints
+ * - Property characteristics (symmetric, transitive, etc.)
+ * - Cardinality constraints
+ *
+ * @param constraint - The property constraint
+ * @returns Doc representing verbalized property description
+ *
+ * @example
+ * ```typescript
+ * Doc.render(verbalizeProperty(constraint))
+ * // => "birthPlace (expects: Place) [single value only]"
+ * // => "sibling (expects: Person) [symmetric: if A→B then B→A]"
+ * ```
+ */
+export const verbalizeProperty = (constraint: PropertyConstraint): Doc.Doc<never> => {
+  const label = constraint.label || extractLabel(constraint.propertyIri)
+  const parts: Array<Doc.Doc<never>> = [Doc.text(label)]
+
+  // Add range information
+  if (constraint.ranges.length > 0) {
+    const rangeLabels = constraint.ranges.map(extractLabel)
+    const rangeText = rangeLabels.length === 1
+      ? rangeLabels[0]
+      : rangeLabels.join(" or ")
+    parts.push(Doc.cat(Doc.text(" (expects: "), Doc.cat(Doc.text(rangeText), Doc.text(")"))))
+  }
+
+  // Add characteristics annotations
+  const charAnnotations: Array<string> = []
+
+  if (Option.isSome(constraint.maxCardinality) && constraint.maxCardinality.value === 1) {
+    charAnnotations.push("single value only")
+  }
+
+  if (constraint.isSymmetric) {
+    charAnnotations.push("symmetric: if A→B then B→A")
+  }
+
+  if (constraint.isTransitive) {
+    charAnnotations.push("transitive: if A→B and B→C then A→C")
+  }
+
+  if (constraint.isInverseFunctional) {
+    charAnnotations.push("inverse-functional: unique in reverse direction")
+  }
+
+  if (charAnnotations.length > 0) {
+    const charText = charAnnotations.join(", ")
+    parts.push(Doc.cat(Doc.text(" ["), Doc.cat(Doc.text(charText), Doc.text("]"))))
+  }
+
+  return Doc.hsep(parts)
+}

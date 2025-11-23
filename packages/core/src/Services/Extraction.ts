@@ -28,7 +28,9 @@ import { knowledgeIndexAlgebra } from "../Prompt/Algebra.js"
 import { generateEnrichedIndex } from "../Prompt/Enrichment.js"
 import { type ContextStrategy, selectContext } from "../Prompt/Focus.js"
 import { renderToStructuredPrompt } from "../Prompt/Render.js"
+import { renderToStructuredPromptDynamic } from "../Prompt/RenderDynamic.js"
 import { type SolverError } from "../Prompt/Solver.js"
+import type { DynamicFewShotService } from "./DynamicFewShot.js"
 import { extractKnowledgeGraphTwoStage, extractVocabularyFromFocused } from "./Llm.js"
 import type { NlpError } from "./Nlp.js"
 import { PropertyFilteringService } from "./PropertyFiltering.js"
@@ -60,6 +62,15 @@ export interface ExtractionRequest {
    * If not provided with those strategies, defaults to all root classes
    */
   readonly focusNodes?: ReadonlyArray<string>
+  /**
+   * Use dynamic few-shot examples based on input text (default: false)
+   * When true, selects k examples using Hybrid-MMR semantic similarity
+   */
+  readonly dynamicExamples?: boolean
+  /**
+   * Number of examples to select when using dynamic examples (default: 5)
+   */
+  readonly exampleCount?: number
 }
 
 /**
@@ -195,7 +206,7 @@ export class ExtractionPipeline extends Effect.Service<ExtractionPipeline>()(
         extract: (request: ExtractionRequest): Effect.Effect<
           ExtractionResult,
           ExtractionError | SolverError | InheritanceError | CircularInheritanceError | NlpError,
-          RdfService | ShaclService | LanguageModel.LanguageModel
+          RdfService | ShaclService | LanguageModel.LanguageModel | DynamicFewShotService
         > =>
           Effect.gen(function*() {
             const rdf = yield* RdfService
@@ -237,7 +248,18 @@ export class ExtractionPipeline extends Effect.Service<ExtractionPipeline>()(
             })
 
             // Stage 2c: Render KnowledgeIndex to StructuredPrompt
-            const combinedPrompt = renderToStructuredPrompt(focusedIndex)
+            const combinedPrompt = yield* Effect.gen(function*() {
+              if (request.dynamicExamples) {
+                // Use dynamic few-shot selection
+                const k = request.exampleCount ?? 5
+                return yield* renderToStructuredPromptDynamic(focusedIndex, request.text, {
+                  k
+                })
+              } else {
+                // Use static examples (backward compatible)
+                return renderToStructuredPrompt(focusedIndex)
+              }
+            })
 
             // Stage 3: Extract vocabulary from focused index (not full ontology!)
             // This reduces schema complexity for providers like Gemini with enum limits

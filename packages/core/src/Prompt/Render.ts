@@ -7,13 +7,16 @@
  * Based on: docs/higher_order_monoid_implementation.md
  */
 
+import { Doc } from "@effect/printer"
 import { Effect, HashMap, Option, pipe } from "effect"
 import type { CircularInheritanceError, InheritanceError, InheritanceService } from "../Ontology/Inheritance.js"
 import { KnowledgeUnit } from "./Ast.js"
+import { examplesDoc, synonymsDoc } from "./ConstraintFormatter.js"
 import type { PromptContext } from "./Context.js"
 import * as EC from "./EntityCache.js"
 import * as KnowledgeIndex from "./KnowledgeIndex.js"
 import type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
+import { getFewShotExamples } from "./PromptDoc.js"
 import { StructuredPrompt } from "./Types.js"
 
 /**
@@ -127,6 +130,26 @@ const formatUnit = (unit: KnowledgeUnit, options: RenderOptions): string => {
   // Add the main definition
   parts.push(unit.definition)
 
+  // Add semantic comment if present
+  Option.match(unit.comment, {
+    onNone: () => {},
+    onSome: (comment) => {
+      parts.push(`\nDescription: ${comment}`)
+    }
+  })
+
+  // Add synonyms if present
+  if (unit.synonyms.length > 0) {
+    const synonymsText = Doc.render(synonymsDoc(unit.synonyms), { style: "pretty" })
+    parts.push(`\n${synonymsText}`)
+  }
+
+  // Add examples if present
+  if (unit.examples.length > 0) {
+    const examplesText = Doc.render(examplesDoc(unit.examples), { style: "pretty" })
+    parts.push(`\n${examplesText}`)
+  }
+
   // Add inherited properties if requested
   if (options.includeInheritedProperties && unit.inheritedProperties.length > 0) {
     parts.push("\nInherited Properties:")
@@ -180,7 +203,7 @@ export const renderToStructuredPrompt = (
   return StructuredPrompt.make({
     system,
     user: [],
-    examples: [],
+    examples: getFewShotExamples(),
     context: []
   })
 }

@@ -7,7 +7,7 @@
  * Based on: docs/higher_order_monoid_implementation.md
  */
 
-import { Array as EffectArray, Data, Equivalence, Order, pipe, String as EffectString } from "effect"
+import { Array as EffectArray, Data, Equivalence, Option, Order, pipe, String as EffectString } from "effect"
 import type { PropertyConstraint } from "../Graph/Constraint.js"
 
 /**
@@ -77,6 +77,12 @@ export class KnowledgeUnit extends Data.Class<{
   readonly children: ReadonlyArray<string>
   /** IRIs of direct parents (superclasses) */
   readonly parents: ReadonlyArray<string>
+  /** Semantic comment (rdfs:comment) - Human-readable description */
+  readonly comment: Option.Option<string>
+  /** Synonyms (skos:altLabel) - Alternative labels */
+  readonly synonyms: ReadonlyArray<string>
+  /** Examples (skos:example) - Example instances or usage examples */
+  readonly examples: ReadonlyArray<string>
 }> {
   /**
    * Create a minimal KnowledgeUnit (for testing or incremental construction)
@@ -89,7 +95,10 @@ export class KnowledgeUnit extends Data.Class<{
       properties: [],
       inheritedProperties: [],
       children: [],
-      parents: []
+      parents: [],
+      comment: Option.none(),
+      synonyms: [],
+      examples: []
     })
   }
 
@@ -175,6 +184,39 @@ export class KnowledgeUnit extends Data.Class<{
       Data.array
     )
 
+    // Comment: Longest wins (same logic as definition)
+    const comment = Option.match(a.comment, {
+      onNone: () => b.comment,
+      onSome: (aComment) =>
+        Option.match(b.comment, {
+          onNone: () => a.comment,
+          onSome: (bComment) =>
+            aComment.length > bComment.length
+              ? a.comment
+              : bComment.length > aComment.length
+              ? b.comment
+              : Order.lessThanOrEqualTo(EffectString.Order)(aComment, bComment)
+              ? a.comment
+              : b.comment
+        })
+    })
+
+    // Synonyms: Union + dedupe + sort
+    const synonyms = pipe(
+      [...a.synonyms, ...b.synonyms],
+      EffectArray.dedupe,
+      EffectArray.sort(EffectString.Order),
+      Data.array
+    )
+
+    // Examples: Union + dedupe + sort
+    const examples = pipe(
+      [...a.examples, ...b.examples],
+      EffectArray.dedupe,
+      EffectArray.sort(EffectString.Order),
+      Data.array
+    )
+
     return new KnowledgeUnit({
       iri: a.iri,
       label,
@@ -182,7 +224,10 @@ export class KnowledgeUnit extends Data.Class<{
       properties,
       inheritedProperties,
       children,
-      parents
+      parents,
+      comment,
+      synonyms,
+      examples
     })
   }
 }

@@ -107,7 +107,13 @@ const RDF = {
 
 const RDFS = {
   label: "http://www.w3.org/2000/01/rdf-schema#label",
-  subPropertyOf: "http://www.w3.org/2000/01/rdf-schema#subPropertyOf"
+  subPropertyOf: "http://www.w3.org/2000/01/rdf-schema#subPropertyOf",
+  comment: "http://www.w3.org/2000/01/rdf-schema#comment"
+} as const
+
+const SKOS = {
+  altLabel: "http://www.w3.org/2004/02/skos/core#altLabel",
+  example: "http://www.w3.org/2004/02/skos/core#example"
 } as const
 
 /**
@@ -281,11 +287,23 @@ export const parseTurtleToGraph = (
       // Get label
       const labelQuad = store.getQuads(
         classIri,
-        "http://www.w3.org/2000/01/rdf-schema#label",
+        RDFS.label,
         null,
         null
       )[0]
       const label = labelQuad?.object.value || classIri.split("#")[1] || classIri
+
+      // Extract semantic metadata: comment
+      const commentQuad = store.getQuads(classIri, RDFS.comment, null, null)[0]
+      const comment = commentQuad ? Option.some(commentQuad.object.value) : Option.none()
+
+      // Extract semantic metadata: synonyms (skos:altLabel)
+      const synonymQuads = store.getQuads(classIri, SKOS.altLabel, null, null)
+      const synonyms = synonymQuads.map((q) => q.object.value)
+
+      // Extract semantic metadata: examples (skos:example)
+      const exampleQuads = store.getQuads(classIri, SKOS.example, null, null)
+      const examples = exampleQuads.map((q) => q.object.value)
 
       // Initially empty properties array (will populate next)
       classNodes = HashMap.set(
@@ -294,7 +312,10 @@ export const parseTurtleToGraph = (
         ClassNode.make({
           id: classIri,
           label,
-          properties: []
+          properties: [],
+          comment,
+          synonyms,
+          examples
         })
       )
     }
