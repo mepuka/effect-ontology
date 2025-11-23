@@ -13,9 +13,12 @@
 import { Context, Data, Effect, HashMap, Layer, Stream } from "effect"
 // @ts-expect-error - wink-bm25-text-search has no type definitions
 import winkBM25 from "wink-bm25-text-search"
+import vectors from "wink-embeddings-sg-100d"
 import model from "wink-eng-lite-web-model"
 import winkNLP from "wink-nlp"
 import type { Document } from "wink-nlp"
+// @ts-expect-error - wink-nlp/utilities/similarity has no type definitions
+import similarity from "wink-nlp/utilities/similarity.js"
 
 /**
  * NLP Errors
@@ -213,6 +216,69 @@ export interface NlpService {
    * @returns Effect yielding array of lemmas
    */
   readonly extractLemmas: (text: string) => Effect.Effect<ReadonlyArray<string>, NlpError>
+
+  /**
+   * Get 100-dimensional embedding vector for text.
+   * Aggregates word vectors using mean pooling, excluding stopwords.
+   *
+   * @param text Input text to embed
+   * @returns Effect yielding 100-dimensional embedding vector (or null if no embeddings found)
+   */
+  readonly embedText: (text: string) => Effect.Effect<ReadonlyArray<number> | null, NlpError>
+
+  /**
+   * Compute cosine similarity between two embedding vectors.
+   *
+   * @param a First embedding vector
+   * @param b Second embedding vector
+   * @returns Cosine similarity score in range [-1, 1]
+   */
+  readonly cosineSimilarity: (
+    a: ReadonlyArray<number>,
+    b: ReadonlyArray<number>
+  ) => number
+
+  /**
+   * Select examples using Maximal Marginal Relevance (MMR).
+   * Balances relevance to query with diversity among selected examples.
+   *
+   * @param query Query text to find relevant examples for
+   * @param candidates Pool of candidate examples to select from
+   * @param k Number of examples to select
+   * @param alpha Relevance vs diversity tradeoff (0-1, higher = more relevance)
+   * @returns Effect yielding selected examples ranked by MMR
+   */
+  readonly selectByMMR: <T extends { readonly text: string; readonly id: string }>(
+    query: string,
+    candidates: ReadonlyArray<T>,
+    k: number,
+    alpha?: number
+  ) => Effect.Effect<ReadonlyArray<T & { readonly score: number }>, NlpError>
+
+  /**
+   * Hybrid selection combining BM25 + embedding similarity with MMR reranking.
+   * Stage 1: Score by BM25 (lexical) + embedding similarity (semantic)
+   * Stage 2: Rerank top candidates using MMR for diversity
+   *
+   * @param query Query text
+   * @param candidates Pool of candidates
+   * @param k Number of examples to select
+   * @param options Configuration options
+   * @returns Effect yielding selected examples
+   */
+  readonly selectHybridMMR: <T extends { readonly text: string; readonly id: string }>(
+    query: string,
+    candidates: ReadonlyArray<T>,
+    k: number,
+    options?: {
+      /** BM25 weight in hybrid score (default: 0.4) */
+      readonly bm25Weight?: number
+      /** MMR alpha for relevance vs diversity (default: 0.6) */
+      readonly alpha?: number
+      /** Candidate pool multiplier for MMR (default: 3) */
+      readonly candidateMultiplier?: number
+    }
+  ) => Effect.Effect<ReadonlyArray<T & { readonly score: number }>, NlpError>
 }
 
 /**
@@ -224,8 +290,9 @@ export const NlpService = Context.GenericTag<NlpService>("@effect-ontology/core/
  * Live Implementation
  */
 export const NlpServiceLive = Layer.sync(NlpService, () => {
-  // Initialize WinkNLP
-  const nlp = winkNLP(model)
+  // Initialize WinkNLP with embeddings support
+  // Third parameter enables 100d word embeddings via wink-embeddings-sg-100d
+  const nlp = winkNLP(model, ["sbd", "pos"], vectors)
 
   // Helper: Process document with error handling
   const processDoc = (text: string): Effect.Effect<Document, NlpError> =>
@@ -495,7 +562,7 @@ export const NlpServiceLive = Layer.sync(NlpService, () => {
       Effect.try({
         try: () => {
           const doc = nlp.readDoc(text)
-          const lemmas: string[] = []
+          const lemmas: Array<string> = []
           const contentPOS = new Set(["NOUN", "PROPN", "VERB", "ADJ", "AUX"])
           doc.tokens().each((token: any) => {
             const pos = token.out(nlp.its.pos)
@@ -510,6 +577,276 @@ export const NlpServiceLive = Layer.sync(NlpService, () => {
             message: `Failed to extract lemmas: ${String(error)}`,
             cause: error
           })
+      }),
+
+    embedText: (text) =>
+      Effect.try({
+        try: () => {
+          const doc = nlp.readDoc(text)
+          // Get embeddings for non-stopword words via as.vector
+          const vector = doc
+            .tokens()
+            .filter((t: any) => t.out(nlp.its.type) === "word" && !t.out(nlp.its.stopWordFlag))
+            .out(nlp.its.value, nlp.as.vector) as ReadonlyArray<number> | null
+          return vector
+        },
+        catch: (error) =>
+          new NlpError({
+            message: `Failed to compute embedding: ${String(error)}`,
+            cause: error
+          })
+      }),
+
+    cosineSimilarity: (a, b) => {
+      // Use wink-nlp's built-in similarity utility
+      return similarity.vector.cosine(a, b) as number
+    },
+
+    selectByMMR: (query, candidates, k, alpha = 0.6) =>
+      Effect.gen(function*() {
+        if (candidates.length === 0) return []
+        if (candidates.length <= k) {
+          // Return all candidates with placeholder scores
+          return candidates.map((c) => ({ ...c, score: 1.0 }))
+        }
+
+        // Get query embedding
+        const queryEmbed = yield* Effect.try({
+          try: () => {
+            const doc = nlp.readDoc(query)
+            return doc
+              .tokens()
+              .filter((t: any) => t.out(nlp.its.type) === "word" && !t.out(nlp.its.stopWordFlag))
+              .out(nlp.its.value, nlp.as.vector) as ReadonlyArray<number> | null
+          },
+          catch: (error) =>
+            new NlpError({
+              message: `Failed to embed query: ${String(error)}`,
+              cause: error
+            })
+        })
+
+        if (!queryEmbed) {
+          // Fallback: return first k candidates if no embedding
+          return candidates.slice(0, k).map((c) => ({ ...c, score: 0.0 }))
+        }
+
+        // Get embeddings for all candidates (bounded concurrency for CPU-bound NLP)
+        const candidateEmbeddings = yield* Effect.all(
+          candidates.map((c) =>
+            Effect.try({
+              try: () => {
+                const doc = nlp.readDoc(c.text)
+                const embed = doc
+                  .tokens()
+                  .filter((t: any) => t.out(nlp.its.type) === "word" && !t.out(nlp.its.stopWordFlag))
+                  .out(nlp.its.value, nlp.as.vector) as ReadonlyArray<number> | null
+                return { candidate: c, embedding: embed }
+              },
+              catch: (error) =>
+                new NlpError({
+                  message: `Failed to embed candidate: ${String(error)}`,
+                  cause: error
+                })
+            })
+          ),
+          { concurrency: 10 }
+        )
+
+        // Filter out candidates without embeddings
+        const withEmbeddings = candidateEmbeddings.filter(
+          (ce): ce is typeof ce & { embedding: ReadonlyArray<number> } => ce.embedding !== null
+        )
+
+        if (withEmbeddings.length === 0) {
+          return candidates.slice(0, k).map((c) => ({ ...c, score: 0.0 }))
+        }
+
+        // MMR Selection
+        const selected: Array<(typeof candidates)[number] & { score: number }> = []
+        const remaining = [...withEmbeddings]
+
+        while (selected.length < k && remaining.length > 0) {
+          let bestIdx = -1
+          let bestScore = -Infinity
+
+          for (let i = 0; i < remaining.length; i++) {
+            const candidate = remaining[i]
+
+            // Relevance to query
+            const relevance = similarity.vector.cosine(queryEmbed, candidate.embedding) as number
+
+            // Max similarity to already selected (diversity penalty)
+            let maxSimilarity = 0
+            if (selected.length > 0) {
+              for (const s of selected) {
+                const sEmbed = withEmbeddings.find((we) => we.candidate.id === s.id)?.embedding
+                if (sEmbed) {
+                  const sim = similarity.vector.cosine(candidate.embedding, sEmbed) as number
+                  if (sim > maxSimilarity) maxSimilarity = sim
+                }
+              }
+            }
+
+            // MMR score
+            const mmrScore = alpha * relevance - (1 - alpha) * maxSimilarity
+
+            if (mmrScore > bestScore) {
+              bestScore = mmrScore
+              bestIdx = i
+            }
+          }
+
+          if (bestIdx >= 0) {
+            const best = remaining[bestIdx]
+            selected.push({ ...best.candidate, score: bestScore })
+            remaining.splice(bestIdx, 1)
+          }
+        }
+
+        return selected
+      }),
+
+    selectHybridMMR: (query, candidates, k, options = {}) =>
+      Effect.gen(function*() {
+        const bm25Weight = options.bm25Weight ?? 0.4
+        const alpha = options.alpha ?? 0.6
+        const candidateMultiplier = options.candidateMultiplier ?? 3
+
+        if (candidates.length === 0) return []
+        if (candidates.length <= k) {
+          return candidates.map((c) => ({ ...c, score: 1.0 }))
+        }
+
+        // Stage 1: Create BM25 index for lexical scoring
+        const bm25Index = yield* Effect.try({
+          try: () => {
+            const engine = winkBM25()
+            engine.defineConfig({
+              fldWeights: { text: 1 },
+              bm25Params: { k1: 1.2, b: 0.75, k: 1 }
+            })
+            engine.definePrepTasks([prepareText])
+            for (const doc of candidates) {
+              engine.addDoc({ text: doc.text }, doc.id)
+            }
+            engine.consolidate()
+            return engine
+          },
+          catch: (error) =>
+            new NlpError({
+              message: `Failed to create BM25 index: ${String(error)}`,
+              cause: error
+            })
+        })
+
+        // Get BM25 scores
+        const bm25Results = bm25Index.search(query, candidates.length) as Array<[string, number]>
+        const bm25Scores = new Map(bm25Results)
+
+        // Normalize BM25 scores
+        const maxBM25 = Math.max(...Array.from(bm25Scores.values()), 0.001)
+        const normalizedBM25 = new Map<string, number>()
+        for (const [id, score] of bm25Scores) {
+          normalizedBM25.set(id, score / maxBM25)
+        }
+
+        // Stage 2: Get embeddings for hybrid scoring
+        const queryEmbed = yield* Effect.try({
+          try: () => {
+            const doc = nlp.readDoc(query)
+            return doc
+              .tokens()
+              .filter((t: any) => t.out(nlp.its.type) === "word" && !t.out(nlp.its.stopWordFlag))
+              .out(nlp.its.value, nlp.as.vector) as ReadonlyArray<number> | null
+          },
+          catch: (error) =>
+            new NlpError({
+              message: `Failed to embed query: ${String(error)}`,
+              cause: error
+            })
+        })
+
+        // Get candidate embeddings (bounded concurrency)
+        const candidateEmbeddings = yield* Effect.all(
+          candidates.map((c) =>
+            Effect.try({
+              try: () => {
+                const doc = nlp.readDoc(c.text)
+                const embed = doc
+                  .tokens()
+                  .filter((t: any) => t.out(nlp.its.type) === "word" && !t.out(nlp.its.stopWordFlag))
+                  .out(nlp.its.value, nlp.as.vector) as ReadonlyArray<number> | null
+                return { candidate: c, embedding: embed }
+              },
+              catch: (error) =>
+                new NlpError({
+                  message: `Failed to embed candidate: ${String(error)}`,
+                  cause: error
+                })
+            })
+          ),
+          { concurrency: 10 }
+        )
+
+        // Compute hybrid scores (BM25 + embedding)
+        const hybridScored = candidateEmbeddings.map((ce) => {
+          const bm25Score = normalizedBM25.get(ce.candidate.id) ?? 0
+          let embeddingScore = 0
+          if (queryEmbed && ce.embedding) {
+            embeddingScore = similarity.vector.cosine(queryEmbed, ce.embedding) as number
+          }
+          const hybridScore = bm25Weight * bm25Score + (1 - bm25Weight) * embeddingScore
+          return { ...ce, hybridScore }
+        })
+
+        // Sort by hybrid score and take top candidates for MMR
+        hybridScored.sort((a, b) => b.hybridScore - a.hybridScore)
+        const topCandidates = hybridScored.slice(0, k * candidateMultiplier)
+
+        // Stage 3: MMR reranking for diversity
+        const selected: Array<(typeof candidates)[number] & { score: number }> = []
+        const remaining = [...topCandidates]
+
+        while (selected.length < k && remaining.length > 0) {
+          let bestIdx = -1
+          let bestScore = -Infinity
+
+          for (let i = 0; i < remaining.length; i++) {
+            const candidate = remaining[i]
+
+            // Relevance (use hybrid score)
+            const relevance = candidate.hybridScore
+
+            // Max similarity to already selected
+            let maxSimilarity = 0
+            if (selected.length > 0 && candidate.embedding) {
+              for (const s of selected) {
+                const sEmbed = topCandidates.find((tc) => tc.candidate.id === s.id)?.embedding
+                if (sEmbed) {
+                  const sim = similarity.vector.cosine(candidate.embedding, sEmbed) as number
+                  if (sim > maxSimilarity) maxSimilarity = sim
+                }
+              }
+            }
+
+            // MMR score
+            const mmrScore = alpha * relevance - (1 - alpha) * maxSimilarity
+
+            if (mmrScore > bestScore) {
+              bestScore = mmrScore
+              bestIdx = i
+            }
+          }
+
+          if (bestIdx >= 0) {
+            const best = remaining[bestIdx]
+            selected.push({ ...best.candidate, score: bestScore })
+            remaining.splice(bestIdx, 1)
+          }
+        }
+
+        return selected
       })
   }
 })

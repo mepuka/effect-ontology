@@ -29,6 +29,36 @@ import { annotateLlmCall, LlmAttributes } from "../Telemetry/LlmAttributes.js"
 import { TracingContext } from "../Telemetry/TracingContext.js"
 
 /**
+ * Extract JSON from potentially CoT-prefixed response
+ *
+ * When LLM is prompted with Chain-of-Thought instructions, it may output
+ * reasoning text before the JSON block. This function robustly extracts
+ * the JSON portion even if prefixed with explanatory text.
+ *
+ * @param response - Raw LLM response that may contain reasoning + JSON
+ * @returns Extracted JSON string, or original response if no JSON found
+ *
+ * @example
+ * ```typescript
+ * const response = "Let me think... The entities are... { \"triples\": [] }"
+ * extractJsonFromResponse(response) // => "{ \"triples\": [] }"
+ * ```
+ *
+ * @since 1.0.0
+ * @category helpers
+ */
+export const extractJsonFromResponse = (response: string): string => {
+  // Try to find JSON block (first { to last })
+  // This handles cases where reasoning text appears before the JSON
+  const jsonMatch = response.match(/\{[\s\S]*\}/)
+  if (jsonMatch) {
+    return jsonMatch[0]
+  }
+  // Fallback to full response if no JSON block found
+  return response
+}
+
+/**
  * Extract class and property IRIs from OntologyContext
  *
  * Helper function to get vocabulary arrays for schema generation.

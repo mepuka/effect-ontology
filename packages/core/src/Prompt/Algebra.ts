@@ -218,7 +218,10 @@ export const knowledgeIndexAlgebra: GraphAlgebra<KnowledgeIndexType> = (
       properties: nodeData.properties,
       inheritedProperties: [], // Will be computed by InheritanceService
       children: childIris,
-      parents: parentIris // FIX Issue 5: Now populated using forward adjacency
+      parents: parentIris, // FIX Issue 5: Now populated using forward adjacency
+      comment: nodeData.comment,
+      synonyms: nodeData.synonyms,
+      examples: nodeData.examples
     })
 
     // Create index with this unit
@@ -249,7 +252,10 @@ export const knowledgeIndexAlgebra: GraphAlgebra<KnowledgeIndexType> = (
       properties: [], // Properties don't have properties
       inheritedProperties: [],
       children: [],
-      parents: []
+      parents: [],
+      comment: nodeData.comment,
+      synonyms: nodeData.synonyms,
+      examples: nodeData.examples
     })
 
     // Combine with children (though properties typically don't have subproperties)
@@ -291,7 +297,10 @@ export const processUniversalPropertiesToIndex = (
     properties: universalProperties,
     inheritedProperties: [],
     children: [],
-    parents: []
+    parents: [],
+    comment: Option.none(),
+    synonyms: [],
+    examples: []
   })
 
   return KnowledgeIndex.fromUnit(unit)

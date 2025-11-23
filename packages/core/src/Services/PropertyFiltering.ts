@@ -10,7 +10,7 @@
  */
 
 import { Effect, HashMap, Layer, Option } from "effect"
-import { isClassNode, type OntologyContext } from "../Graph/Types.js"
+import { isClassNode, isPropertyNode, type OntologyContext } from "../Graph/Types.js"
 import { type BM25Index, type NlpError, NlpService, NlpServiceLive } from "./Nlp.js"
 
 /**
@@ -80,11 +80,44 @@ export class PropertyFilteringService extends Effect.Service<PropertyFilteringSe
             const verbLemmas = yield* nlp.extractVerbLemmas(text)
             const verbLemmaSet = new Set(verbLemmas.map((v) => v.toLowerCase()))
 
-            // Build BM25 index from property labels
-            const propertyDocs = ontology.universalProperties.map((p) => ({
-              id: p.propertyIri,
-              text: labelFromIri(p.propertyIri)
-            }))
+            // Build BM25 index from property labels, synonyms, and comments
+            const propertyDocs = ontology.universalProperties.map((p) => {
+              const label = labelFromIri(p.propertyIri)
+
+              // Try to find PropertyNode in ontology for semantic metadata
+              let synonyms: ReadonlyArray<string> = []
+              let comment: Option.Option<string> = Option.none()
+
+              // Look up PropertyNode if it exists in the ontology
+              const propertyNode = HashMap.get(ontology.nodes, p.propertyIri)
+              if (Option.isSome(propertyNode) && isPropertyNode(propertyNode.value)) {
+                synonyms = propertyNode.value.synonyms
+                comment = propertyNode.value.comment
+              }
+
+              // Build text for BM25 indexing: label + synonyms + comment
+              const textParts: Array<string> = [label]
+
+              // Add synonyms
+              if (synonyms.length > 0) {
+                for (const synonym of synonyms) {
+                  textParts.push(synonym)
+                }
+              }
+
+              // Add comment if present
+              Option.match(comment, {
+                onNone: () => {},
+                onSome: (c) => {
+                  textParts.push(c)
+                }
+              })
+
+              return {
+                id: p.propertyIri,
+                text: textParts.join(" ")
+              }
+            })
 
             // Create BM25 index (requires at least 3 documents)
             let bm25Index: Option.Option<BM25Index> = Option.none()
@@ -132,7 +165,7 @@ export class PropertyFilteringService extends Effect.Service<PropertyFilteringSe
                 (partialMatch ? 8.0 : 0.0) +
                 (lemmaMatch ? 6.0 : 0.0) +
                 (verbMatch ? 4.0 : 0.0) +
-                bm25Score * 1.5  // Boost BM25 contribution
+                bm25Score * 1.5 // Boost BM25 contribution
 
               scoredProperties.push({
                 property: { propertyIri: prop.propertyIri },

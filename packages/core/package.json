@@ -49,6 +49,7 @@
     "effect": "^3.19.6",
     "n3": "^1.26.0",
     "wink-bm25-text-search": "^3.1.2",
+    "wink-embeddings-sg-100d": "^1.1.0",
     "wink-eng-lite-web-model": "^1.8.1",
     "wink-nlp": "^2.4.0",
     "wink-nlp-utils": "^2.1.0"

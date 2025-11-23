@@ -8,7 +8,7 @@
  */
 
 import type { Graph } from "effect"
-import { FastCheck, HashMap, Schema } from "effect"
+import { FastCheck, HashMap, Option, Schema } from "effect"
 import { PropertyConstraint } from "./Constraint.js"
 
 /**
@@ -114,6 +114,27 @@ export class ClassNode extends Schema.Class<ClassNode>("ClassNode")({
   classExpressions: Schema.Array(ClassExpressionSchema).pipe(
     Schema.optional,
     Schema.withDefaults({ constructor: () => [], decoding: () => [] })
+  ),
+  /**
+   * Semantic comment (rdfs:comment) - Human-readable description of the class
+   */
+  comment: Schema.Option(Schema.String).pipe(
+    Schema.optional,
+    Schema.withDefaults({ constructor: () => Option.none(), decoding: () => Option.none() })
+  ),
+  /**
+   * Synonyms (skos:altLabel) - Alternative labels for the class
+   */
+  synonyms: Schema.Array(Schema.String).pipe(
+    Schema.optional,
+    Schema.withDefaults({ constructor: () => [], decoding: () => [] })
+  ),
+  /**
+   * Examples (skos:example) - Example instances or usage examples
+   */
+  examples: Schema.Array(Schema.String).pipe(
+    Schema.optional,
+    Schema.withDefaults({ constructor: () => [], decoding: () => [] })
   )
 }) {}
 
@@ -135,7 +156,28 @@ export class PropertyNode extends Schema.Class<PropertyNode>("PropertyNode")({
   label: Schema.String,
   domain: NodeIdSchema, // Class IRI reference
   range: Schema.String, // IRI or datatype
-  functional: Schema.Boolean
+  functional: Schema.Boolean,
+  /**
+   * Semantic comment (rdfs:comment) - Human-readable description of the property
+   */
+  comment: Schema.Option(Schema.String).pipe(
+    Schema.optional,
+    Schema.withDefaults({ constructor: () => Option.none(), decoding: () => Option.none() })
+  ),
+  /**
+   * Synonyms (skos:altLabel) - Alternative labels for the property
+   */
+  synonyms: Schema.Array(Schema.String).pipe(
+    Schema.optional,
+    Schema.withDefaults({ constructor: () => [], decoding: () => [] })
+  ),
+  /**
+   * Examples (skos:example) - Example values or usage examples
+   */
+  examples: Schema.Array(Schema.String).pipe(
+    Schema.optional,
+    Schema.withDefaults({ constructor: () => [], decoding: () => [] })
+  )
 }) {}
 
 /**

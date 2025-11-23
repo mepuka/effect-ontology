@@ -1,12 +1,15 @@
 # Benchmark Analysis Report
 
-**Generated:** 2025-11-22T23:58:38.577Z
+**Generated:** 2025-11-23T00:56:00.150Z
 **Results Analyzed:** 15
 
 ## Overview
 
 | Dataset | Split | Samples | F1 | Precision | Recall | Timestamp |
 |---------|-------|---------|----:|----------:|-------:|-----------|
+| WebNLG | dev | 100 | 0.274 | 0.277 | 0.290 | 2025-11-23 |
+| REBEL | val | 10 | 0.375 | 0.392 | 0.367 | 2025-11-23 |
+| DocRED | dev | 3 | 0.452 | 0.583 | 0.444 | 2025-11-23 |
 | DocRED | dev | 3 | 0.508 | 0.472 | 0.556 | 2025-11-22 |
 | REBEL | val | 10 | 0.355 | 0.375 | 0.342 | 2025-11-22 |
 | DocRED | dev | 3 | 0.675 | 0.806 | 0.667 | 2025-11-22 |
@@ -19,9 +22,6 @@
 | WebNLG | dev | 10 | 0.239 | 0.243 | 0.235 | 2025-11-22 |
 | WebNLG | dev | 10 | 0.250 | 0.250 | 0.250 | 2025-11-22 |
 | WebNLG | dev | 5 | 0.493 | 0.560 | 0.460 | 2025-11-22 |
-| WebNLG | dev | 10 | 0.324 | 0.333 | 0.317 | 2025-11-22 |
-| WebNLG | dev | 10 | 0.312 | 0.325 | 0.303 | 2025-11-22 |
-| WebNLG | dev | 10 | 0.500 | 0.505 | 0.525 | 2025-11-22 |
 
 ## Current Prompt Templates
 
@@ -70,6 +70,1996 @@ USER INPUT:
 ---
 
 # Detailed Analysis by Result
+
+## WebNLG - dev
+
+**Timestamp:** 2025-11-23T00:53:20.708Z
+**Sample Size:** 100
+**Overall F1:** 0.2744
+**Failed Extractions:** 19
+
+### False Positives (Predicted but Wrong)
+
+| Entry | Subject | Predicate | Object | Analysis |
+|-------|---------|-----------|--------|----------|
+| Id2 | http://example.org/texas | isPartOf | http://example.org/united | Subject matches "Abilene,_Texas", but object "http |
+| Id2 | http://example.org/housto | isPartOf | http://example.org/texas | No partial match found in gold set |
+| Id14 | http://example.org/adam_k | commander | http://example.org/polish | Wrong predicate: used "commander" instead of "batt |
+| Id14 | http://example.org/joseph | commander | http://example.org/polish | No partial match found in gold set |
+| Id14 | http://example.org/kashub | spokenIn | http://example.org/poland | No partial match found in gold set |
+| Id8 | http://example.org/alan_f | musicalArtist | http://example.org/rock_m | Wrong predicate: used "musicalArtist" instead of " |
+| Id8 | http://example.org/rock_m | musicFusionGenre | http://example.org/countr | Wrong predicate: used "musicFusionGenre" instead o |
+| Id8 | http://example.org/united | operatingOrganisation | http://example.org/al_asa | Subject matches "United_States_Air_Force", but obj |
+| Id12 | http://example.org/attica | populationTotal | 783.1 | Subject matches "Attica,_Indiana", but object "783 |
+| Id12 | http://example.org/logan_ | isPartOf | http://example.org/founta | No partial match found in gold set |
+| Id12 | http://example.org/founta | isPartOf | http://example.org/indian | No partial match found in gold set |
+| Id25 | http://example.org/summit | isPartOf | http://example.org/ohio | No partial match found in gold set |
+| Id2 | http://example.org/sarana | region | http://example.org/new_yo | No partial match found in gold set |
+| Id2 | http://example.org/lake_p | region | http://example.org/new_yo | No partial match found in gold set |
+| Id9 | http://example.org/107_ca | discovered | http://example.org/f_vila | Wrong predicate: used "discovered" instead of "dis |
+| Id17 | http://example.org/kimber | isPartOf | http://example.org/wiscon | No partial match found in gold set |
+| Id17 | http://example.org/little | isPartOf | http://example.org/kimber | No partial match found in gold set |
+| Id17 | http://example.org/little | isPartOf | http://example.org/wiscon | No partial match found in gold set |
+| Id1 | http://example.org/ajobla | origin | http://example.org/andalu | Subject matches "Ajoblanco", but object "http://ex |
+| Id1 | http://example.org/andalu | region | http://example.org/spain | No partial match found in gold set |
+| ... | ... | ... | ... | (93 more) |
+
+**Most Common Wrong Predicates:**
+
+- `isPartOf`: 17 occurrences
+- `part`: 5 occurrences
+- `state`: 5 occurrences
+- `associatedBand_associatedMusicalArtist`: 5 occurrences
+- `region`: 4 occurrences
+- `hubAirport`: 4 occurrences
+- `leader`: 4 occurrences
+- `place`: 4 occurrences
+- `club`: 4 occurrences
+- `commander`: 3 occurrences
+
+### False Negatives (Gold but Not Predicted)
+
+| Entry | Subject | Predicate | Object |
+|-------|---------|-----------|--------|
+| Id2 | Abilene,_Texas | country | United_States |
+| Id14 | Adam_Koc | battle | Polish–Soviet_War |
+| Id14 | Poland | language | Kashubian_language |
+| Id14 | Polish–Soviet_War | commander | Joseph_Stalin |
+| Id2 | Al_Kharaitiyat_SC | manager | Amar_Osim |
+| Id8 | Alan_Frew | genre | Rock_music |
+| Id8 | Rock_music | stylisticOrigin | Country_music |
+| Id16 | Baked_Alaska | region | "Paris, New York or Hong Kong" |
+| Id8 | Al_Asad_Airbase | operatingOrganisation | United_States_Air_Force |
+| Id20 | Alfred_Garth_Jones | deathPlace | London |
+| Id20 | Alfred_Garth_Jones | birthPlace | Manchester |
+| Id20 | Alfred_Garth_Jones | birthPlace | England |
+| Id5 | A.C._Milan | manager | Siniša_Mihajlović |
+| Id25 | United_States | demonym | Americans |
+| Id9 | 107_Camilla | discoverer | F._Vilas |
+| Id1 | Ajoblanco | country | Spain |
+| Id1 | Ajoblanco | region | Andalusia |
+| Id8 | Ariane_5 | launchSite | ELA-3 |
+| Id8 | Ariane_5 | maidenFlight | 2004-03-02 |
+| Id8 | Ariane_5 | manufacturer | European_Space_Agency |
+| ... | ... | ... | ... (137 more) |
+
+**Most Commonly Missed Predicates:**
+
+- `birthPlace`: 14 occurrences
+- `location`: 12 occurrences
+- `country`: 10 occurrences
+- `manager`: 5 occurrences
+- `deathPlace`: 5 occurrences
+- `associatedBand/associatedMusicalArtist`: 5 occurrences
+- `battle`: 4 occurrences
+- `genre`: 4 occurrences
+- `status`: 4 occurrences
+- `alternativeName`: 4 occurrences
+
+### Per-Example Breakdown
+
+#### Id2
+
+**F1:** 0.182 | **TP:** 1 | **FP:** 5 | **FN:** 4
+
+**Gold Triples:**
+
+- `Abilene,_Texas` → `isPartOf` → `Texas`
+- `Texas` → `largestCity` → `Houston`
+- `Texas` → `capital` → `Austin,_Texas`
+- `Abilene,_Texas` → `country` → `United_States`
+- `Texas` → `language` → `Spanish_language`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/abilene` → `isPartOf` → `http://example.org/texas`
+- ✗ `http://example.org/texas` → `isPartOf` → `http://example.org/united_states`
+- ✓ `http://example.org/texas` → `capital` → `http://example.org/austin`
+- ✓ `http://example.org/texas` → `largestCity` → `http://example.org/houston`
+- ✓ `http://example.org/texas` → `languages` → `http://example.org/spanish`
+- ✗ `http://example.org/houston` → `isPartOf` → `http://example.org/texas`
+
+#### Id33
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 1 | **FN:** 1
+
+**Gold Triples:**
+
+- `Twilight_(band)` → `genre` → `Black_metal`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/twilight` → `genre` → `http://example.org/black_metal`
+
+#### Id14
+
+**F1:** 0.250 | **TP:** 1 | **FP:** 3 | **FN:** 3
+
+**Gold Triples:**
+
+- `Adam_Koc` → `battle` → `Polish–Soviet_War`
+- `Poland` → `language` → `Kashubian_language`
+- `Polish–Soviet_War` → `commander` → `Joseph_Stalin`
+- `Adam_Koc` → `nationality` → `Poland`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/adam_koc` → `nationality` → `http://example.org/poland`
+- ✗ `http://example.org/adam_koc` → `commander` → `http://example.org/polish-soviet_war`
+- ✗ `http://example.org/joseph_stalin` → `commander` → `http://example.org/polish-soviet_war`
+- ✗ `http://example.org/kashubian` → `spokenIn` → `http://example.org/poland`
+
+#### Id2
+
+**F1:** 0.889 | **TP:** 4 | **FP:** 0 | **FN:** 1
+
+**Gold Triples:**
+
+- `Al_Kharaitiyat_SC` → `league` → `Qatar_Stars_League`
+- `Al_Kharaitiyat_SC` → `ground` → `Al_Khor`
+- `Alaa_Abdul-Zahra` → `club` → `Shabab_Al-Ordon_Club`
+- `Alaa_Abdul-Zahra` → `club` → `Al_Kharaitiyat_SC`
+- `Al_Kharaitiyat_SC` → `manager` → `Amar_Osim`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/alaa_abdul-zahra` → `club` → `http://example.org/shabab_al-ordon_club`
+- ✓ `http://example.org/alaa_abdul-zahra` → `club` → `http://example.org/al_kharaitiyat_sc`
+- ✓ `http://example.org/al_kharaitiyat_sc` → `ground` → `http://example.org/al_khor`
+- ✓ `http://example.org/al_kharaitiyat_sc` → `league` → `http://example.org/qatar_stars_league`
+
+#### Id8
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 2 | **FN:** 2
+
+**Gold Triples:**
+
+- `Alan_Frew` → `genre` → `Rock_music`
+- `Rock_music` → `stylisticOrigin` → `Country_music`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/alan_frew` → `musicalArtist` → `http://example.org/rock_music`
+- ✗ `http://example.org/rock_music` → `musicFusionGenre` → `http://example.org/country_music`
+
+#### Id16
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 6 | **FN:** 4
+
+**Gold Triples:**
+
+- `Baked_Alaska` → `mainIngredient` → `"Meringue, ice cream, sponge cake or Christmas pudding"`
+- `Baked_Alaska` → `country` → `"France, United States or China"`
+- `Baked_Alaska` → `region` → `"Paris, New York or Hong Kong"`
+- `Baked_Alaska` → `ingredient` → `Meringue`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/baked_alaska` → `mainIngredient` → `http://example.org/meringue`
+- ✓ `http://example.org/baked_alaska` → `mainIngredient` → `http://example.org/ice_cream`
+- ✓ `http://example.org/baked_alaska` → `mainIngredient` → `http://example.org/sponge_cake`
+- ✓ `http://example.org/baked_alaska` → `countryOrigin` → `http://example.org/france`
+- ✓ `http://example.org/baked_alaska` → `countryOrigin` → `http://example.org/united_states`
+- ✓ `http://example.org/baked_alaska` → `countryOrigin` → `http://example.org/china`
+
+#### Id12
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 2 | **FN:** 2
+
+**Gold Triples:**
+
+- `Adisham_Hall` → `country` → `Sri_Lanka`
+- `Sri_Lanka` → `language` → `Tamil_language`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/adisham_hall` → `locationCountry` → `http://example.org/sri_lanka`
+- ✓ `http://example.org/sri_lanka` → `officialLanguage` → `http://example.org/tamil`
+
+#### Id8
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 3 | **FN:** 3
+
+**Gold Triples:**
+
+- `Al_Asad_Airbase` → `operatingOrganisation` → `United_States_Air_Force`
+- `United_States_Air_Force` → `battle` → `Korean_War`
+- `United_States_Air_Force` → `battle` → `Operation_Enduring_Freedom`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/united_states_air_force` → `operatingOrganisation` → `http://example.org/al_asad_airbase`
+- ✓ `http://example.org/united_states_air_force` → `battles` → `http://example.org/korean_war`
+- ✓ `http://example.org/united_states_air_force` → `battles` → `http://example.org/operation_enduring_freedom`
+
+#### Id20
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 0 | **FN:** 3
+
+**Gold Triples:**
+
+- `Alfred_Garth_Jones` → `deathPlace` → `London`
+- `Alfred_Garth_Jones` → `birthPlace` → `Manchester`
+- `Alfred_Garth_Jones` → `birthPlace` → `England`
+
+**Predicted Triples:**
+
+(none)
+
+#### Id12
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 7 | **FN:** 4
+
+**Gold Triples:**
+
+- `Attica,_Indiana` → `isPartOf` → `United_States`
+- `Attica,_Indiana` → `areaTotal` → `4.14 (square kilometres)`
+- `Attica,_Indiana` → `isPartOf` → `Logan_Township,_Fountain_County,_Indiana`
+- `Attica,_Indiana` → `populationDensity` → `783.1 (inhabitants per square kilometre)`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/attica` → `isPartOf` → `http://example.org/logan_township`
+- ✓ `http://example.org/attica` → `areaTotal` → `4.14 square kilometres`
+- ✗ `http://example.org/attica` → `populationTotal` → `783.1`
+- ✓ `http://example.org/attica` → `populationDensity` → `783.1 inhabitants per square kilometres`
+- ✗ `http://example.org/logan_township` → `isPartOf` → `http://example.org/fountain_county`
+- ✗ `http://example.org/fountain_county` → `isPartOf` → `http://example.org/indiana`
+- ✓ `http://example.org/indiana` → `isPartOf` → `http://example.org/united_states`
+
+#### Id1
+
+**F1:** 1.000 | **TP:** 2 | **FP:** 0 | **FN:** 0
+
+**Gold Triples:**
+
+- `(410777)_2009_FD` → `apoapsis` → `259776702.47055 (kilometres)`
+- `(410777)_2009_FD` → `minimumTemperature` → `211.0 (kelvins)`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/410777_2009_fd` → `apoapsis` → `259776702.47055 kilometres`
+- ✓ `http://example.org/410777_2009_fd` → `minimumTemperature` → `211.0 kelvins`
+
+#### Id9
+
+**F1:** 1.000 | **TP:** 1 | **FP:** 0 | **FN:** 0
+
+**Gold Triples:**
+
+- `Avocado` → `genus` → `Persea`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/avocado` → `genus` → `http://example.org/persea`
+
+#### Id5
+
+**F1:** 0.889 | **TP:** 4 | **FP:** 0 | **FN:** 1
+
+**Gold Triples:**
+
+- `Alessio_Romagnoli` → `club` → `A.C._Milan`
+- `A.C._Milan` → `league` → `Serie_A`
+- `A.C._Milan` → `manager` → `Siniša_Mihajlović`
+- `A.C._Milan` → `chairman` → `Silvio_Berlusconi`
+- `Alessio_Romagnoli` → `club` → `U.C._Sampdoria`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/alessio_romagnoli` → `club` → `http://example.org/ac_milan`
+- ✓ `http://example.org/alessio_romagnoli` → `club` → `http://example.org/uc_sampdoria`
+- ✓ `http://example.org/ac_milan` → `league` → `Serie A`
+- ✓ `http://example.org/ac_milan` → `chairman` → `http://example.org/silvio_berlusconi`
+
+#### Id25
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 7 | **FN:** 4
+
+**Gold Triples:**
+
+- `United_States` → `ethnicGroup` → `Asian_Americans`
+- `United_States` → `demonym` → `Americans`
+- `Akron,_Ohio` → `country` → `United_States`
+- `Akron,_Ohio` → `isPartOf` → `Summit_County,_Ohio`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/akron` → `isPartOf` → `http://example.org/summit_county`
+- ✓ `http://example.org/akron` → `isPartOf` → `http://example.org/ohio`
+- ✓ `http://example.org/akron` → `country` → `http://example.org/united_states`
+- ✗ `http://example.org/summit_county` → `isPartOf` → `http://example.org/ohio`
+- ✓ `http://example.org/ohio` → `country` → `http://example.org/united_states`
+- ✓ `http://example.org/united_states` → `ethnicGroups` → `http://example.org/americans`
+- ✓ `http://example.org/united_states` → `ethnicGroups` → `http://example.org/asian_americans`
+
+#### Id2
+
+**F1:** 0.250 | **TP:** 1 | **FP:** 4 | **FN:** 2
+
+**Gold Triples:**
+
+- `Adirondack_Regional_Airport` → `runwayLength` → `1219.0`
+- `Adirondack_Regional_Airport` → `cityServed` → `Lake_Placid,_New_York`
+- `Adirondack_Regional_Airport` → `cityServed` → `Saranac_Lake,_New_York`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/adirondack_regional_airport` → `runwayLength` → `1219.0`
+- ✓ `http://example.org/adirondack_regional_airport` → `cityServed` → `http://example.org/saranac_lake`
+- ✓ `http://example.org/adirondack_regional_airport` → `cityServed` → `http://example.org/lake_placid`
+- ✗ `http://example.org/saranac_lake` → `region` → `http://example.org/new_york`
+- ✗ `http://example.org/lake_placid` → `region` → `http://example.org/new_york`
+
+#### Id9
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 1 | **FN:** 1
+
+**Gold Triples:**
+
+- `107_Camilla` → `discoverer` → `F._Vilas`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/107_camilla` → `discovered` → `http://example.org/f_vilas`
+
+#### Id17
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 6 | **FN:** 3
+
+**Gold Triples:**
+
+- `Appleton,_Wisconsin` → `isPartOf` → `Kimberly,_Wisconsin`
+- `Appleton,_Wisconsin` → `isPartOf` → `Little_Chute,_Wisconsin`
+- `Appleton_International_Airport` → `cityServed` → `Appleton,_Wisconsin`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/appleton_international_airport` → `cityServed` → `http://example.org/appleton`
+- ✓ `http://example.org/appleton` → `isPartOf` → `http://example.org/kimberly`
+- ✓ `http://example.org/appleton` → `isPartOf` → `http://example.org/wisconsin`
+- ✗ `http://example.org/kimberly` → `isPartOf` → `http://example.org/wisconsin`
+- ✗ `http://example.org/little_chute` → `isPartOf` → `http://example.org/kimberly`
+- ✗ `http://example.org/little_chute` → `isPartOf` → `http://example.org/wisconsin`
+
+#### Id1
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 7 | **FN:** 4
+
+**Gold Triples:**
+
+- `Ajoblanco` → `country` → `Spain`
+- `Ajoblanco` → `mainIngredient` → `"Bread, almonds, garlic, water, olive oil"`
+- `Ajoblanco` → `region` → `Andalusia`
+- `Ajoblanco` → `ingredient` → `Bread`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/ajoblanco` → `mainIngredient` → `http://example.org/bread`
+- ✓ `http://example.org/ajoblanco` → `mainIngredient` → `http://example.org/almonds`
+- ✓ `http://example.org/ajoblanco` → `mainIngredient` → `http://example.org/garlic`
+- ✓ `http://example.org/ajoblanco` → `mainIngredient` → `http://example.org/water`
+- ✓ `http://example.org/ajoblanco` → `mainIngredient` → `http://example.org/olive_oil`
+- ✗ `http://example.org/ajoblanco` → `origin` → `http://example.org/andalusia`
+- ✗ `http://example.org/andalusia` → `region` → `http://example.org/spain`
+
+#### Id8
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 0 | **FN:** 5
+
+**Gold Triples:**
+
+- `Ariane_5` → `launchSite` → `ELA-3`
+- `Ariane_5` → `maidenFlight` → `2004-03-02`
+- `Ariane_5` → `manufacturer` → `European_Space_Agency`
+- `Ariane_5` → `diameter` → `5.4 (metres)`
+- `Ariane_5` → `finalFlight` → `2003-09-27`
+
+**Predicted Triples:**
+
+(none)
+
+#### Id15
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 0 | **FN:** 3
+
+**Gold Triples:**
+
+- `Albennie_Jones` → `genre` → `Jazz`
+- `Albennie_Jones` → `background` → `"solo_singer"`
+- `Albennie_Jones` → `birthPlace` → `Errata,_Mississippi`
+
+**Predicted Triples:**
+
+(none)
+
+#### Id35
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 1 | **FN:** 1
+
+**Gold Triples:**
+
+- `Honda` → `division` → `Acura`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/acura` → `division` → `http://example.org/honda`
+
+#### Id3
+
+**F1:** 0.500 | **TP:** 1 | **FP:** 0 | **FN:** 2
+
+**Gold Triples:**
+
+- `Abdul_Taib_Mahmud` → `residence` → `Sarawak`
+- `Abdul_Taib_Mahmud` → `birthPlace` → `Kingdom_of_Sarawak`
+- `Abdul_Taib_Mahmud` → `party` → `"Barisan Ra'ayat Jati Sarawak"`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/abdul_taib_mahmud` → `party` → `http://example.org/barisan_raayat_jati_sarawak`
+
+#### Id21
+
+**F1:** 1.000 | **TP:** 1 | **FP:** 0 | **FN:** 0
+
+**Gold Triples:**
+
+- `Alberto_Teisaire` → `nationality` → `Argentina`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/alberto_teisaire` → `nationality` → `http://example.org/argentina`
+
+#### Id13
+
+**F1:** 0.333 | **TP:** 1 | **FP:** 2 | **FN:** 2
+
+**Gold Triples:**
+
+- `Bacon_Explosion` → `country` → `United_States`
+- `United_States` → `ethnicGroup` → `Native_Americans_in_the_United_States`
+- `United_States` → `capital` → `Washington,_D.C.`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/united_states` → `ethnicGroups` → `http://example.org/native_americans`
+- ✓ `http://example.org/united_states` → `capital` → `http://example.org/washington_dc`
+- ✓ `http://example.org/bacon_explosion` → `countryOrigin` → `http://example.org/united_states`
+
+#### Id7
+
+**F1:** 0.667 | **TP:** 2 | **FP:** 1 | **FN:** 1
+
+**Gold Triples:**
+
+- `Romania` → `patronSaint` → `Andrew_the_Apostle`
+- `1_Decembrie_1918_University` → `latinName` → `"Universitas Apulensis"`
+- `1_Decembrie_1918_University` → `country` → `Romania`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/1_decembrie_1918_university` → `locationCountry` → `http://example.org/romania`
+- ✓ `http://example.org/1_decembrie_1918_university` → `latinName` → `Universitas Apulensis`
+- ✓ `http://example.org/romania` → `patronSaint` → `http://example.org/andrew_the_apostle`
+
+#### Id6
+
+**F1:** 0.500 | **TP:** 1 | **FP:** 1 | **FN:** 1
+
+**Gold Triples:**
+
+- `1036_Ganymed` → `averageSpeed` → `16.86 (kilometrePerSeconds)`
+- `1036_Ganymed` → `apoapsis` → `611961000.0 (kilometres)`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/1036_ganymed` → `apoapsis` → `611961000.0 kilometres`
+- ✗ `http://example.org/1036_ganymed` → `averageSpeed` → `16.86 kilometres per second`
+
+#### Id16
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 1 | **FN:** 1
+
+**Gold Triples:**
+
+- `Alan_Martin_(footballer)` → `club` → `Accrington_Stanley_F.C.`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/alan_martin` → `club` → `http://example.org/accrington_stanley_fc`
+
+#### Id3
+
+**F1:** 0.200 | **TP:** 1 | **FP:** 4 | **FN:** 4
+
+**Gold Triples:**
+
+- `Adolfo_Suárez_Madrid–Barajas_Airport` → `runwayLength` → `4349.0`
+- `Adolfo_Suárez_Madrid–Barajas_Airport` → `location` → `Madrid`
+- `Adolfo_Suárez_Madrid–Barajas_Airport` → `elevationAboveTheSeaLevel` → `610.0`
+- `Adolfo_Suárez_Madrid–Barajas_Airport` → `operatingOrganisation` → `ENAIRE`
+- `Adolfo_Suárez_Madrid–Barajas_Airport` → `runwayName` → `"14L/32R"`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/adolfo_surez_madrid-barajas_airport` → `elevationAboveTheSeaLevelInMetres` → `610.0`
+- ✓ `http://example.org/adolfo_surez_madrid-barajas_airport` → `1stRunwayLengthMetre` → `4349.0`
+- ✓ `http://example.org/adolfo_surez_madrid-barajas_airport` → `runwayName` → `14L/32R`
+- ✗ `http://example.org/adolfo_surez_madrid-barajas_airport` → `hubAirport` → `http://example.org/enaire`
+- ✗ `http://example.org/adolfo_surez_madrid-barajas_airport` → `identifier` → `http://example.org/madrid`
+
+#### Id24
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 9 | **FN:** 5
+
+**Gold Triples:**
+
+- `Egg_Harbor_Township,_New_Jersey` → `isPartOf` → `New_Jersey`
+- `Atlantic_City_International_Airport` → `elevationAboveTheSeaLevel` → `23.0`
+- `Atlantic_City_International_Airport` → `location` → `Egg_Harbor_Township,_New_Jersey`
+- `Egg_Harbor_Township,_New_Jersey` → `country` → `United_States`
+- `Egg_Harbor_Township,_New_Jersey` → `isPartOf` → `Atlantic_County,_New_Jersey`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/atlantic_city_international_airport` → `elevationAboveTheSeaLevel__in_metres_` → `23`
+- ✓ `http://example.org/atlantic_city_international_airport` → `locationCity` → `http://example.org/egg_harbor_township`
+- ✗ `http://example.org/atlantic_city_international_airport` → `part` → `http://example.org/atlantic_county`
+- ✗ `http://example.org/atlantic_city_international_airport` → `part` → `http://example.org/new_jersey`
+- ✗ `http://example.org/atlantic_city_international_airport` → `part` → `http://example.org/united_states`
+- ✓ `http://example.org/egg_harbor_township` → `part` → `http://example.org/atlantic_county`
+- ✓ `http://example.org/egg_harbor_township` → `part` → `http://example.org/new_jersey`
+- ✗ `http://example.org/atlantic_county` → `part` → `http://example.org/new_jersey`
+- ✗ `http://example.org/new_jersey` → `part` → `http://example.org/united_states`
+
+#### Id13
+
+**F1:** 0.800 | **TP:** 2 | **FP:** 0 | **FN:** 1
+
+**Gold Triples:**
+
+- `Alhambra` → `shipBeam` → `8.3 m`
+- `Alhambra` → `length` → `63800.0 (millimetres)`
+- `Alhambra` → `status` → `"Wrecked"`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/alhambra` → `shipBeam` → `8.3 m`
+- ✓ `http://example.org/alhambra` → `length` → `63800.0 millimetres`
+
+#### Id13
+
+**F1:** 0.500 | **TP:** 1 | **FP:** 1 | **FN:** 1
+
+**Gold Triples:**
+
+- `1099_Figneria` → `periapsis` → `349206000000.0`
+- `1099_Figneria` → `epoch` → `2006-12-31`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/1099_figneria` → `periapsis` → `349206000000.0`
+- ✗ `http://example.org/1099_figneria` → `epoch` → `31 December 2006`
+
+#### Id22
+
+**F1:** 0.286 | **TP:** 1 | **FP:** 3 | **FN:** 2
+
+**Gold Triples:**
+
+- `Atlantic_City_International_Airport` → `runwayName` → `"4/22"`
+- `Atlantic_City_International_Airport` → `location` → `Egg_Harbor_Township,_New_Jersey`
+- `Egg_Harbor_Township,_New_Jersey` → `country` → `United_States`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/atlantic_city_international_airport` → `runwayName` → `4/22`
+- ✓ `http://example.org/atlantic_city_international_airport` → `locationCity` → `http://example.org/egg_harbor_township`
+- ✗ `http://example.org/egg_harbor_township` → `state` → `http://example.org/new_jersey`
+- ✗ `http://example.org/new_jersey` → `state` → `http://example.org/united_states`
+
+#### Id6
+
+**F1:** 0.667 | **TP:** 1 | **FP:** 1 | **FN:** 0
+
+**Gold Triples:**
+
+- `Arròs_negre` → `ingredient` → `Cuttlefish`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/arros_negre` → `ingredient` → `http://example.org/cuttlefish`
+- ✓ `http://example.org/arrs_negre` → `ingredient` → `http://example.org/cuttlefish`
+
+#### Id14
+
+**F1:** 0.667 | **TP:** 2 | **FP:** 1 | **FN:** 1
+
+**Gold Triples:**
+
+- `10_Hygiea` → `surfaceArea` → `837080.744 (squareKilometres)`
+- `10_Hygiea` → `apoapsis` → `523951582.33968 (kilometres)`
+- `10_Hygiea` → `temperature` → `164.0 (kelvins)`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/10_hygiea` → `surfaceArea` → `837080.744 square kilometres`
+- ✓ `http://example.org/10_hygiea` → `apoapsis` → `523951582.33968 kilometres`
+- ✓ `http://example.org/10_hygiea` → `temperature` → `164.0 kelvins`
+
+#### Id10
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 0 | **FN:** 6
+
+**Gold Triples:**
+
+- `Elliot_See` → `almaMater` → `University_of_Texas_at_Austin`
+- `University_of_Texas_at_Austin` → `affiliation` → `University_of_Texas_System`
+- `Elliot_See` → `birthDate` → `"1927-07-23"`
+- `Elliot_See` → `birthPlace` → `Dallas`
+- `Elliot_See` → `deathPlace` → `St._Louis`
+- `Elliot_See` → `status` → `"Deceased"`
+
+**Predicted Triples:**
+
+(none)
+
+#### Id17
+
+**F1:** 1.000 | **TP:** 2 | **FP:** 0 | **FN:** 0
+
+**Gold Triples:**
+
+- `Aleksandre_Guruli` → `club` → `FC_Karpaty_Lviv`
+- `Aleksandre_Guruli` → `club` → `FC_Dinamo_Batumi`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/aleksandre_guruli` → `club` → `http://example.org/fc_karpaty_lviv`
+- ✓ `http://example.org/aleksandre_guruli` → `club` → `http://example.org/fc_dinamo_batumi`
+
+#### Id9
+
+**F1:** 0.400 | **TP:** 1 | **FP:** 2 | **FN:** 1
+
+**Gold Triples:**
+
+- `Akeem_Priestley` → `birthPlace` → `Jamaica`
+- `Jamaica` → `leader` → `Patrick_Allen_(politician)`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/patrick_allen` → `leader` → `http://example.org/jamaica`
+- ✓ `http://example.org/jamaica` → `leader` → `http://example.org/patrick_allen`
+- ✓ `http://example.org/akeem_priestley` → `birthPlace` → `http://example.org/jamaica`
+
+#### Id15
+
+**F1:** 0.800 | **TP:** 2 | **FP:** 0 | **FN:** 1
+
+**Gold Triples:**
+
+- `A_Severed_Wasp` → `oclcNumber` → `8805735`
+- `A_Severed_Wasp` → `libraryofCongressClassification` → `"PS3523.E55 S4 1982"`
+- `A_Severed_Wasp` → `mediaType` → `"Print"`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/a_severed_wasp` → `oclcNumber` → `8805735`
+- ✓ `http://example.org/a_severed_wasp` → `LibraryofCongressClassification` → `PS3523.E55 S4 1982`
+
+#### Id10
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 1 | **FN:** 1
+
+**Gold Triples:**
+
+- `Ayam_penyet` → `servingTemperature` → `"Hot"`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/ayam_penyet` → `served` → `hot`
+
+#### Id6
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 0 | **FN:** 6
+
+**Gold Triples:**
+
+- `Buzz_Aldrin` → `birthPlace` → `Glen_Ridge,_New_Jersey`
+- `Buzz_Aldrin` → `alternativeName` → `"Edwin E. Aldrin, Jr."`
+- `Buzz_Aldrin` → `mission` → `Apollo_11`
+- `Buzz_Aldrin` → `occupation` → `Fighter_pilot`
+- `Buzz_Aldrin` → `almaMater` → `"Massachusetts Institute of Technology, Sc.D. 1963"`
+- `Buzz_Aldrin` → `birthDate` → `"1930-01-20"`
+
+**Predicted Triples:**
+
+(none)
+
+#### Id28
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 0 | **FN:** 3
+
+**Gold Triples:**
+
+- `SAGE_Publications` → `founder` → `Sara_Miller_McCune`
+- `Administrative_Science_Quarterly` → `abbreviation` → `"Admin. Sci. Q."`
+- `Administrative_Science_Quarterly` → `publisher` → `SAGE_Publications`
+
+**Predicted Triples:**
+
+(none)
+
+#### Id9
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 1 | **FN:** 1
+
+**Gold Triples:**
+
+- `Agra_Airport` → `location` → `Agra`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/agra_airport` → `hubAirport` → `http://example.org/agra`
+
+#### Id3
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 4 | **FN:** 4
+
+**Gold Triples:**
+
+- `Albany,_Georgia` → `isPartOf` → `Georgia_(U.S._state)`
+- `United_States` → `ethnicGroup` → `Asian_Americans`
+- `United_States` → `language` → `English_language`
+- `Albany,_Georgia` → `country` → `United_States`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/albany_georgia` → `isPartOf` → `http://example.org/georgia`
+- ✗ `http://example.org/georgia` → `isPartOf` → `http://example.org/united_states`
+- ✓ `http://example.org/united_states` → `language` → `http://example.org/english`
+- ✓ `http://example.org/united_states` → `ethnicGroups` → `http://example.org/asian_americans`
+
+#### Id37
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 0 | **FN:** 1
+
+**Gold Triples:**
+
+- `Meyer_Werft` → `location` → `Germany`
+
+**Predicted Triples:**
+
+(none)
+
+#### Id7
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 6 | **FN:** 6
+
+**Gold Triples:**
+
+- `Buzz_Aldrin` → `birthPlace` → `Glen_Ridge,_New_Jersey`
+- `Buzz_Aldrin` → `selectedByNasa` → `1963`
+- `Buzz_Aldrin` → `mission` → `Apollo_11`
+- `Buzz_Aldrin` → `almaMater` → `"Massachusetts Institute of Technology, Sc.D. 1963"`
+- `Buzz_Aldrin` → `birthDate` → `"1930-01-20"`
+- `Buzz_Aldrin` → `status` → `"Retired"`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/buzz_aldrin` → `birthYear` → `1930`
+- ✗ `http://example.org/buzz_aldrin` → `origin` → `http://example.org/glen_ridge`
+- ✗ `http://example.org/buzz_aldrin` → `activeYearsStartYear` → `1963`
+- ✗ `http://example.org/buzz_aldrin` → `wasselectedbyNASA` → `http://example.org/nasa`
+- ✗ `http://example.org/buzz_aldrin` → `crewMembers` → `http://example.org/apollo_11`
+- ✗ `http://example.org/glen_ridge` → `origin` → `http://example.org/new_jersey`
+
+#### Id7
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 0 | **FN:** 3
+
+**Gold Triples:**
+
+- `Bolt_(comicsCharacter)` → `creator` → `Ernie_Colón`
+- `Bolt_(comicsCharacter)` → `alternativeName` → `"Larry Bolatinsky"`
+- `Bolt_(comicsCharacter)` → `creator` → `Dan_Mishkin`
+
+**Predicted Triples:**
+
+(none)
+
+#### Id7
+
+**F1:** 0.400 | **TP:** 1 | **FP:** 2 | **FN:** 1
+
+**Gold Triples:**
+
+- `Black_Pirate` → `creator` → `Sheldon_Moldoff`
+- `Black_Pirate` → `alternativeName` → `"Jon Valor"`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/black_pirate` → `creator` → `http://example.org/sheldon_moldoff`
+- ✗ `http://example.org/black_pirate` → `altLabel` → `Jon Valor`
+- ✗ `http://example.org/jon_valor` → `creator` → `http://example.org/sheldon_moldoff`
+
+#### Id16
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 0 | **FN:** 4
+
+**Gold Triples:**
+
+- `Aleksandra_Kovač` → `genre` → `Rhythm_and_blues`
+- `Aleksandra_Kovač` → `birthYear` → `1972`
+- `Aleksandra_Kovač` → `birthPlace` → `Belgrade`
+- `Aleksandra_Kovač` → `background` → `"solo_singer"`
+
+**Predicted Triples:**
+
+(none)
+
+#### Id23
+
+**F1:** 0.571 | **TP:** 2 | **FP:** 2 | **FN:** 1
+
+**Gold Triples:**
+
+- `Asilomar_Conference_Grounds` → `location` → `Pacific_Grove,_California`
+- `Asilomar_Conference_Grounds` → `addedToTheNationalRegisterOfHistoricPlaces` → `"1987-02-27"`
+- `Asilomar_Conference_Grounds` → `NationalRegisterOfHistoricPlacesReferenceNumber` → `"87000823"`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/asilomar_conference_grounds` → `place` → `http://example.org/pacific_grove`
+- ✗ `http://example.org/asilomar_conference_grounds` → `place` → `http://example.org/california`
+- ✓ `http://example.org/asilomar_conference_grounds` → `addedToTheNationalRegisterOfHistoricPlaces` → `1987-02-27`
+- ✓ `http://example.org/asilomar_conference_grounds` → `NationalRegisterOfHistoricPlacesReferenceNumber` → `87000823`
+
+#### Id24
+
+**F1:** 0.571 | **TP:** 2 | **FP:** 2 | **FN:** 1
+
+**Gold Triples:**
+
+- `Asser_Levy_Public_Baths` → `location` → `"Asser Levy Place and East 23rd Street"`
+- `Asser_Levy_Public_Baths` → `NationalRegisterOfHistoricPlacesReferenceNumber` → `"80002709"`
+- `Asser_Levy_Public_Baths` → `addedToTheNationalRegisterOfHistoricPlaces` → `"1980-04-23"`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/asser_levy_public_baths` → `place` → `http://example.org/asser_levy_place`
+- ✗ `http://example.org/asser_levy_public_baths` → `place` → `http://example.org/east_23rd_street`
+- ✓ `http://example.org/asser_levy_public_baths` → `addedToTheNationalRegisterOfHistoricPlaces` → `1980-04-23`
+- ✓ `http://example.org/asser_levy_public_baths` → `NationalRegisterOfHistoricPlacesReferenceNumber` → `80002709`
+
+#### Id4
+
+**F1:** 1.000 | **TP:** 1 | **FP:** 0 | **FN:** 0
+
+**Gold Triples:**
+
+- `A.D._Isidro_Metapán` → `fullName` → `"Asociación Deportiva"`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/ad_isidro_metapn` → `fullName` → `Asociación Deportiva`
+
+#### Id11
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 0 | **FN:** 4
+
+**Gold Triples:**
+
+- `AMC_Matador` → `alternativeName` → `"VAM Classic"`
+- `AMC_Matador` → `assembly` → `Thames,_New_Zealand`
+- `AMC_Matador` → `bodyStyle` → `Station_wagon`
+- `AMC_Matador` → `engine` → `AMC_V8_engine`
+
+**Predicted Triples:**
+
+(none)
+
+#### Id14
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 1 | **FN:** 1
+
+**Gold Triples:**
+
+- `AFC_Ajax_(amateurs)` → `nickname` → `"Joden , Godenzonen"`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/afc_ajax` → `nickname` → `Joden, Godenzonen`
+
+#### Id30
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 0 | **FN:** 4
+
+**Gold Triples:**
+
+- `Uruguay` → `leader` → `Tabaré_Vázquez`
+- `Alfredo_Zitarrosa` → `deathPlace` → `Montevideo`
+- `Montevideo` → `country` → `Uruguay`
+- `Uruguay` → `demonym` → `Uruguayans`
+
+**Predicted Triples:**
+
+(none)
+
+#### Id5
+
+**F1:** 0.250 | **TP:** 1 | **FP:** 3 | **FN:** 3
+
+**Gold Triples:**
+
+- `Azerbaijan` → `leader` → `Artur_Rasizade`
+- `Baku_Turkish_Martyrs'_Memorial` → `material` → `"Red granite and white marble"`
+- `Baku_Turkish_Martyrs'_Memorial` → `dedicatedTo` → `"Ottoman Army soldiers killed in the Battle of Baku"`
+- `Baku_Turkish_Martyrs'_Memorial` → `location` → `Azerbaijan`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/baku_turkish_martyrs_memorial` → `dedicatedTo` → `http://example.org/ottoman_army`
+- ✗ `http://example.org/baku_turkish_martyrs_memorial` → `battle` → `http://example.org/battle_of_baku`
+- ✗ `http://example.org/baku` → `leader` → `http://example.org/artur_rasizade`
+- ✓ `http://example.org/azerbaijan` → `leader` → `http://example.org/artur_rasizade`
+
+#### Id18
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 0 | **FN:** 5
+
+**Gold Triples:**
+
+- `Appleton_International_Airport` → `location` → `Greenville,_Wisconsin`
+- `Appleton_International_Airport` → `runwayLength` → `2439.0`
+- `Appleton_International_Airport` → `cityServed` → `Appleton,_Wisconsin`
+- `Appleton_International_Airport` → `elevationAboveTheSeaLevel` → `280`
+- `Appleton_International_Airport` → `runwayName` → `"3/21"`
+
+**Predicted Triples:**
+
+(none)
+
+#### Id24
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 1 | **FN:** 1
+
+**Gold Triples:**
+
+- `Andrew_Rayel` → `associatedBand/associatedMusicalArtist` → `Jwaydan_Moyine`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/andrew_rayel` → `associatedBand_associatedMusicalArtist` → `http://example.org/jwaydan_moyine`
+
+#### Id32
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 0 | **FN:** 1
+
+**Gold Triples:**
+
+- `RCA_Records` → `distributingCompany` → `Legacy_Recordings`
+
+**Predicted Triples:**
+
+(none)
+
+#### Id4
+
+**F1:** 0.500 | **TP:** 2 | **FP:** 2 | **FN:** 2
+
+**Gold Triples:**
+
+- `Acharya_Institute_of_Technology` → `affiliation` → `Visvesvaraya_Technological_University`
+- `Acharya_Institute_of_Technology` → `wasGivenTheTechnicalCampusStatusBy` → `All_India_Council_for_Technical_Education`
+- `All_India_Council_for_Technical_Education` → `location` → `Mumbai`
+- `Visvesvaraya_Technological_University` → `city` → `Belgaum`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/acharya_institute_of_technology` → `affiliation` → `http://example.org/visvesvaraya_technological_university`
+- ✓ `http://example.org/acharya_institute_of_technology` → `wasGivenTheTechnicalCampusStatusBy` → `http://example.org/all_india_council_for_technical_education`
+- ✗ `http://example.org/visvesvaraya_technological_university` → `campus` → `http://example.org/belgaum`
+- ✗ `http://example.org/all_india_council_for_technical_education` → `campus` → `http://example.org/mumbai`
+
+#### Id27
+
+**F1:** 1.000 | **TP:** 1 | **FP:** 0 | **FN:** 0
+
+**Gold Triples:**
+
+- `Asunción` → `isPartOf` → `Gran_Asunción`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/asuncin` → `isPartOf` → `http://example.org/gran_asuncin`
+
+#### Id2
+
+**F1:** 0.133 | **TP:** 1 | **FP:** 7 | **FN:** 6
+
+**Gold Triples:**
+
+- `Azerbaijan` → `capital` → `Baku`
+- `Baku_Turkish_Martyrs'_Memorial` → `material` → `"Red granite and white marble"`
+- `Azerbaijan` → `leaderTitle` → `Prime_Minister_of_Azerbaijan`
+- `Baku_Turkish_Martyrs'_Memorial` → `dedicatedTo` → `"Ottoman Army soldiers killed in the Battle of Baku"`
+- `Baku_Turkish_Martyrs'_Memorial` → `location` → `Azerbaijan`
+- `Baku_Turkish_Martyrs'_Memorial` → `designer` → `"Hüseyin Bütüner and Hilmi Güner"`
+- `Azerbaijan` → `legislature` → `National_Assembly_(Azerbaijan)`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/national_assembly_of_azerbaijan` → `legislature` → `http://example.org/azerbaijan`
+- ✓ `http://example.org/azerbaijan` → `capital` → `http://example.org/baku`
+- ✓ `http://example.org/baku` → `locationCountry` → `http://example.org/azerbaijan`
+- ✗ `http://example.org/turkish_martyrs_memorial` → `location` → `http://example.org/baku`
+- ✓ `http://example.org/turkish_martyrs_memorial` → `dedicatedTo` → `http://example.org/ottoman_army`
+- ✗ `http://example.org/turkish_martyrs_memorial` → `battle` → `http://example.org/battle_of_baku`
+- ✗ `http://example.org/huseyin_butuner` → `designCompany` → `http://example.org/turkish_martyrs_memorial`
+- ✗ `http://example.org/hilmi_guner` → `designCompany` → `http://example.org/turkish_martyrs_memorial`
+
+#### Id15
+
+**F1:** 0.400 | **TP:** 1 | **FP:** 2 | **FN:** 1
+
+**Gold Triples:**
+
+- `1101_Clematis` → `epoch` → `2006-12-31`
+- `1101_Clematis` → `periapsis` → `445895000000.0`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/1101_clematis` → `epoch` → `31st of July 2016`
+- ✗ `http://example.org/1101_clematis` → `epoch` → `December 31st 2006`
+- ✓ `http://example.org/1101_clematis` → `periapsis` → `445895000000.0`
+
+#### Id16
+
+**F1:** 0.400 | **TP:** 1 | **FP:** 1 | **FN:** 2
+
+**Gold Triples:**
+
+- `A_Severed_Wasp` → `numberOfPages` → `"388"`
+- `A_Severed_Wasp` → `mediaType` → `"Print"`
+- `A_Severed_Wasp` → `isbnNumber` → `"0-374-26131-8"`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/a_severed_wasp` → `ISBN_number` → `0-374-26131-8`
+- ✓ `http://example.org/a_severed_wasp` → `numberOfPages` → `388`
+
+#### Id1
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 0 | **FN:** 3
+
+**Gold Triples:**
+
+- `Aaron_S._Daggett` → `award` → `Purple_Heart`
+- `Aaron_S._Daggett` → `birthPlace` → `Maine`
+- `Aaron_S._Daggett` → `battle` → `Battle_of_Fredericksburg`
+
+**Predicted Triples:**
+
+(none)
+
+#### Id6
+
+**F1:** 1.000 | **TP:** 1 | **FP:** 0 | **FN:** 0
+
+**Gold Triples:**
+
+- `Abdul_Taib_Mahmud` → `successor` → `Adenan_Satem`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/abdul_taib_mahmud` → `successor` → `http://example.org/adenan_satem`
+
+#### Id14
+
+**F1:** 0.500 | **TP:** 2 | **FP:** 2 | **FN:** 2
+
+**Gold Triples:**
+
+- `Akron_Summit_Assault` → `fullName` → `"Akron Metro Futbol Club Summit Assault"`
+- `Akron_Summit_Assault` → `numberOfMembers` → `3000`
+- `Akron_Summit_Assault` → `manager` → `Denzil_Antonio`
+- `Akron_Summit_Assault` → `season` → `2011_PDL_season`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/akron_summit_assault` → `fullName` → `Akron Metro Futbol Club Summit Assault`
+- ✓ `http://example.org/akron_summit_assault` → `season` → `2011 PDL season`
+- ✗ `http://example.org/akron_summit_assault` → `club` → `http://example.org/pdl`
+- ✗ `http://example.org/denzil_antonio` → `manager` → `http://example.org/akron_summit_assault`
+
+#### Id17
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 4 | **FN:** 3
+
+**Gold Triples:**
+
+- `Aleksandra_Kovač` → `associatedBand/associatedMusicalArtist` → `Bebi_Dol`
+- `Aleksandra_Kovač` → `associatedBand/associatedMusicalArtist` → `Kornelije_Kovač`
+- `Aleksandra_Kovač` → `genre` → `Pop_music`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/aleksandra_kova` → `genre` → `http://example.org/pop`
+- ✗ `http://example.org/aleksandra_kova` → `musicalBand` → `Kornelije Kovač`
+- ✗ `http://example.org/aleksandra_kova` → `associatedBand_associatedMusicalArtist` → `Kornelije Kovač`
+- ✗ `http://example.org/aleksandra_kova` → `associatedBand_associatedMusicalArtist` → `Bebi Dol`
+
+#### Id33
+
+**F1:** 0.667 | **TP:** 1 | **FP:** 1 | **FN:** 0
+
+**Gold Triples:**
+
+- `Olympique_Lyonnais` → `ground` → `Parc_Olympique_Lyonnais`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/olympique_lyonnais` → `ground` → `http://example.org/parc_olympique_lyonnais`
+- ✗ `http://example.org/olympique_lyonnais` → `stadium` → `http://example.org/parc_olympique_lyonnais`
+
+#### Id3
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 2 | **FN:** 2
+
+**Gold Triples:**
+
+- `Baku_Turkish_Martyrs'_Memorial` → `nativeName` → `"Türk Şehitleri Anıtı"`
+- `Baku_Turkish_Martyrs'_Memorial` → `material` → `"Red granite and white marble"`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/baku_turkish_martyrs_memorial` → `nativeName` → `Turk Sehitleri Aniti`
+- ✗ `http://example.org/baku_turkish_martyrs_memorial` → `alternativeName` → `Turk Sehitleri Aniti`
+
+#### Id29
+
+**F1:** 1.000 | **TP:** 1 | **FP:** 0 | **FN:** 0
+
+**Gold Triples:**
+
+- `Argentina` → `leader` → `Gabriela_Michetti`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/argentina` → `leader` → `http://example.org/gabriela_michetti`
+
+#### Id8
+
+**F1:** 0.333 | **TP:** 1 | **FP:** 2 | **FN:** 2
+
+**Gold Triples:**
+
+- `103_Hera` → `mass` → `7.9 (kilograms)`
+- `103_Hera` → `escapeVelocity` → `0.0482 (kilometrePerSeconds)`
+- `103_Hera` → `apoapsis` → `437170000.0 (kilometres)`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/103_hera` → `mass` → `7.9 kg`
+- ✗ `http://example.org/103_hera` → `escapeVelocity` → `0.0482 km/s`
+- ✓ `http://example.org/103_hera` → `apoapsis` → `437170000.0 kilometres`
+
+#### Id7
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 2 | **FN:** 2
+
+**Gold Triples:**
+
+- `A.F.C._Blackpool` → `manager` → `Stuart_Parker_(footballer)`
+- `Stuart_Parker_(footballer)` → `club` → `Sparta_Rotterdam`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/afc_blackpool` → `manager` → `http://example.org/stuart_parker`
+- ✓ `http://example.org/stuart_parker` → `club` → `http://example.org/sparta_rotterdam`
+
+#### Id21
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 2 | **FN:** 1
+
+**Gold Triples:**
+
+- `Ardmore_Airport_(New_Zealand)` → `location` → `Auckland`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/ardmore_airport` → `hubAirport` → `http://example.org/auckland`
+- ✗ `http://example.org/auckland` → `hubAirport` → `http://example.org/new_zealand`
+
+#### Id16
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 4 | **FN:** 4
+
+**Gold Triples:**
+
+- `Aleksey_Chirikov_(icebreaker)` → `builder` → `Finland`
+- `Aleksey_Chirikov_(icebreaker)` → `shipBeam` → `21.2`
+- `Aleksey_Chirikov_(icebreaker)` → `status` → `"In service"`
+- `Aleksey_Chirikov_(icebreaker)` → `builder` → `Helsinki`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/aleksey_chirikov` → `shipBeam` → `21.2`
+- ✗ `http://example.org/aleksey_chirikov` → `service` → `in service`
+- ✗ `http://example.org/aleksey_chirikov` → `source` → `http://example.org/helsinki`
+- ✗ `http://example.org/aleksey_chirikov` → `source` → `http://example.org/finland`
+
+#### Id12
+
+**F1:** 0.667 | **TP:** 1 | **FP:** 1 | **FN:** 0
+
+**Gold Triples:**
+
+- `Acta_Mathematica_Hungarica` → `abbreviation` → `"Acta Math. Hungar."`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/acta_mathematica_hungarica` → `abbreviation` → `Acta Math. Hungar`
+- ✗ `http://example.org/acta_mathematica_hungarica` → `altLabel` → `Acta Math. Hungar.`
+
+#### Id25
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 0 | **FN:** 4
+
+**Gold Triples:**
+
+- `Alfons_Gorbach` → `deathPlace` → `Styria`
+- `Alfons_Gorbach` → `deathPlace` → `Austria`
+- `Alfons_Gorbach` → `birthPlace` → `Austria-Hungary`
+- `Alfons_Gorbach` → `birthPlace` → `Imst`
+
+**Predicted Triples:**
+
+(none)
+
+#### Id17
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 7 | **FN:** 4
+
+**Gold Triples:**
+
+- `Auburn,_Washington` → `isPartOf` → `Pierce_County,_Washington`
+- `United_States` → `capital` → `Washington,_D.C.`
+- `Pierce_County,_Washington` → `country` → `United_States`
+- `Auburn,_Washington` → `isPartOf` → `King_County,_Washington`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/washington_dc` → `capital` → `http://example.org/united_states`
+- ✓ `http://example.org/auburn` → `isPartOf` → `http://example.org/king_county`
+- ✓ `http://example.org/auburn` → `isPartOf` → `http://example.org/pierce_county`
+- ✓ `http://example.org/auburn` → `isPartOf` → `http://example.org/washington`
+- ✗ `http://example.org/king_county` → `isPartOf` → `http://example.org/washington`
+- ✗ `http://example.org/pierce_county` → `isPartOf` → `http://example.org/washington`
+- ✗ `http://example.org/washington` → `isPartOf` → `http://example.org/united_states`
+
+#### Id18
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 0 | **FN:** 4
+
+**Gold Triples:**
+
+- `Adonis_Georgiadis` → `birthPlace` → `Athens`
+- `Adonis_Georgiadis` → `birthPlace` → `Greece`
+- `Adonis_Georgiadis` → `office` → `Ministry_of_Economy,_Development_and_Tourism_(Greece)`
+- `Adonis_Georgiadis` → `successor` → `Makis_Voridis`
+
+**Predicted Triples:**
+
+(none)
+
+#### Id9
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 2 | **FN:** 1
+
+**Gold Triples:**
+
+- `Amarillo,_Texas` → `isPartOf` → `Potter_County,_Texas`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/amarillo` → `isPartOf` → `http://example.org/potter_county`
+- ✗ `http://example.org/potter_county` → `isPartOf` → `http://example.org/texas`
+
+#### Id2
+
+**F1:** 1.000 | **TP:** 2 | **FP:** 0 | **FN:** 0
+
+**Gold Triples:**
+
+- `A-Rosa_Luna` → `shipClass` → `Cruise_ship`
+- `A-Rosa_Luna` → `length` → `125800.0 (millimetres)`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/a-rosa_luna` → `length` → `125800.0 millimetres`
+- ✓ `http://example.org/a-rosa_luna` → `shipClass` → `http://example.org/cruise_ship`
+
+#### Id6
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 0 | **FN:** 3
+
+**Gold Triples:**
+
+- `Al_Asad_Airbase` → `operatingOrganisation` → `United_States_Air_Force`
+- `United_States_Air_Force` → `battle` → `Invasion_of_Grenada`
+- `United_States_Air_Force` → `battle` → `Korean_War`
+
+**Predicted Triples:**
+
+(none)
+
+#### Id25
+
+**F1:** 0.667 | **TP:** 1 | **FP:** 1 | **FN:** 0
+
+**Gold Triples:**
+
+- `Belgium` → `leader` → `Philippe_of_Belgium`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/belgium` → `leader` → `http://example.org/philippe_of_belgium`
+- ✓ `http://example.org/philippe_of_belgium` → `leaderName` → `Philippe of Belgium`
+
+#### Id14
+
+**F1:** 0.250 | **TP:** 1 | **FP:** 3 | **FN:** 3
+
+**Gold Triples:**
+
+- `Alan_B._Miller_Hall` → `location` → `Virginia`
+- `Alan_B._Miller_Hall` → `architect` → `Robert_A._M._Stern`
+- `Mason_School_of_Business` → `country` → `United_States`
+- `Alan_B._Miller_Hall` → `currentTenants` → `Mason_School_of_Business`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/mason_school_of_business` → `currentTenants` → `http://example.org/alan_b_miller_hall`
+- ✗ `http://example.org/mason_school_of_business` → `state` → `http://example.org/united_states`
+- ✓ `http://example.org/alan_b_miller_hall` → `architect` → `http://example.org/robert_a_m_stern`
+- ✗ `http://example.org/alan_b_miller_hall` → `state` → `http://example.org/virginia`
+
+#### Id18
+
+**F1:** 0.667 | **TP:** 1 | **FP:** 0 | **FN:** 1
+
+**Gold Triples:**
+
+- `Alessio_Romagnoli` → `club` → `A.C._Milan`
+- `Alessio_Romagnoli` → `position` → `Defender_(football)`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/alessio_romagnoli` → `club` → `http://example.org/ac_milan`
+
+#### Id39
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 4 | **FN:** 4
+
+**Gold Triples:**
+
+- `Philippines` → `ethnicGroup` → `Zamboangans`
+- `Philippines` → `language` → `Philippine_Spanish`
+- `Batchoy` → `country` → `Philippines`
+- `Philippines` → `ethnicGroup` → `Chinese_Filipino`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/zamboangans` → `ethnicGroup` → `http://example.org/philippines`
+- ✓ `http://example.org/philippines` → `officialLanguage` → `http://example.org/philippine_spanish`
+- ✗ `http://example.org/chinese_filipino` → `ethnicGroup` → `http://example.org/philippines`
+- ✗ `http://example.org/batchoy` → `source` → `http://example.org/philippines`
+
+#### Id29
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 0 | **FN:** 1
+
+**Gold Triples:**
+
+- `Greece` → `language` → `Greek_language`
+
+**Predicted Triples:**
+
+(none)
+
+#### Id5
+
+**F1:** 0.571 | **TP:** 2 | **FP:** 1 | **FN:** 2
+
+**Gold Triples:**
+
+- `GMA_New_Media` → `product` → `Mobile_Applications`
+- `GMA_New_Media` → `keyPerson` → `Felipe_Gozon`
+- `GMA_New_Media` → `location` → `GMA_Network_Center`
+- `GMA_New_Media` → `location` → `Philippines`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/gma_new_media` → `product` → `mobile applications`
+- ✓ `http://example.org/gma_new_media` → `keyPerson` → `http://example.org/felipe_gozon`
+- ✗ `http://example.org/gma_new_media` → `leader` → `http://example.org/felipe_gozon`
+
+#### Id6
+
+**F1:** 0.400 | **TP:** 2 | **FP:** 3 | **FN:** 3
+
+**Gold Triples:**
+
+- `Alessio_Romagnoli` → `currentclub` → `A.C._Milan`
+- `A.C._Milan` → `manager` → `Siniša_Mihajlović`
+- `A.C._Milan` → `chairman` → `Silvio_Berlusconi`
+- `Alessio_Romagnoli` → `club` → `Italy_national_under-17_football_team`
+- `Alessio_Romagnoli` → `club` → `U.C._Sampdoria`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/alessio_romagnoli` → `club` → `http://example.org/ac_milan`
+- ✓ `http://example.org/alessio_romagnoli` → `club` → `http://example.org/uc_sampdoria`
+- ✗ `http://example.org/alessio_romagnoli` → `club` → `http://example.org/italian_national_under-17_football_team`
+- ✓ `http://example.org/ac_milan` → `chairman` → `http://example.org/silvio_berlusconi`
+- ✗ `http://example.org/ac_milan` → `chairman` → `http://example.org/sinia_mihajlovi`
+
+#### Id8
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 0 | **FN:** 2
+
+**Gold Triples:**
+
+- `Blockbuster_(comicsCharacter)` → `creator` → `Roger_Stern`
+- `Blockbuster_(comicsCharacter)` → `creator` → `Tom_Lyle`
+
+**Predicted Triples:**
+
+(none)
+
+#### Id18
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 1 | **FN:** 1
+
+**Gold Triples:**
+
+- `Alfredo_Zitarrosa` → `genre` → `Milonga_(music)`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/alfredo_zitarrosa` → `genre` → `http://example.org/milonga`
+
+#### Id11
+
+**F1:** 0.667 | **TP:** 1 | **FP:** 1 | **FN:** 0
+
+**Gold Triples:**
+
+- `Swords,_Dublin` → `leaderTitle` → `"County Manager"`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/swords_dublin` → `leaderTitle` → `County Manager`
+- ✓ `http://example.org/swords_dublin` → `leader` → `http://example.org/county_manager`
+
+#### Id1
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 4 | **FN:** 4
+
+**Gold Triples:**
+
+- `Abilene_Regional_Airport` → `cityServed` → `Abilene,_Texas`
+- `Abilene,_Texas` → `isPartOf` → `Texas`
+- `Abilene_Regional_Airport` → `runwayLength` → `1121.0`
+- `Abilene,_Texas` → `country` → `United_States`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/abilene_regional_airport` → `runwayLength` → `1121 metres`
+- ✓ `http://example.org/abilene_regional_airport` → `served` → `http://example.org/abilene`
+- ✗ `http://example.org/abilene` → `state` → `http://example.org/texas`
+- ✗ `http://example.org/texas` → `region` → `http://example.org/united_states`
+
+#### Id19
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 7 | **FN:** 4
+
+**Gold Triples:**
+
+- `Contra_Costa_County,_California` → `isPartOf` → `San_Francisco_Bay_Area`
+- `Antioch,_California` → `isPartOf` → `California`
+- `Antioch,_California` → `isPartOf` → `Contra_Costa_County,_California`
+- `California` → `language` → `Spanish_language`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/antioch` → `isPartOf` → `http://example.org/contra_costa_county`
+- ✗ `http://example.org/antioch` → `isPartOf` → `http://example.org/san_francisco_bay_area`
+- ✓ `http://example.org/antioch` → `isPartOf` → `http://example.org/california`
+- ✓ `http://example.org/contra_costa_county` → `isPartOf` → `http://example.org/san_francisco_bay_area`
+- ✗ `http://example.org/contra_costa_county` → `isPartOf` → `http://example.org/california`
+- ✗ `http://example.org/san_francisco_bay_area` → `isPartOf` → `http://example.org/california`
+- ✗ `http://example.org/spanish` → `spokenIn` → `http://example.org/california`
+
+#### Id36
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 1 | **FN:** 1
+
+**Gold Triples:**
+
+- `Nigerian_Air_Force` → `commander` → `Sadique_Abubakar`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/sadique_abubakar` → `commander` → `http://example.org/nigerian_air_force`
+
+#### Id14
+
+**F1:** 0.800 | **TP:** 2 | **FP:** 1 | **FN:** 0
+
+**Gold Triples:**
+
+- `Bacon_Explosion` → `ingredient` → `Bacon`
+- `Bacon_Explosion` → `course` → `"Main course"`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/bacon_explosion` → `ingredient` → `http://example.org/bacon`
+- ✓ `http://example.org/bacon_explosion` → `mainIngredient` → `http://example.org/bacon`
+- ✓ `http://example.org/bacon_explosion` → `course` → `main course`
+
+#### Id20
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 2 | **FN:** 2
+
+**Gold Triples:**
+
+- `Anders_Osborne` → `associatedBand/associatedMusicalArtist` → `Billy_Iuso`
+- `Anders_Osborne` → `associatedBand/associatedMusicalArtist` → `Theresa_Andersson`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/anders_osborne` → `associatedBand_associatedMusicalArtist` → `http://example.org/billy_iuso`
+- ✗ `http://example.org/anders_osborne` → `associatedBand_associatedMusicalArtist` → `http://example.org/theresa_andersson`
+
+#### Id14
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 3 | **FN:** 4
+
+**Gold Triples:**
+
+- `Aleksandra_Kovač` → `birthYear` → `1972`
+- `Aleksandra_Kovač` → `genre` → `Pop_music`
+- `Aleksandra_Kovač` → `birthPlace` → `Belgrade`
+- `Aleksandra_Kovač` → `background` → `"solo_singer"`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/aleksandra_kova` → `identifier` → `born 1972`
+- ✗ `http://example.org/aleksandra_kova` → `prefLabel` → `Singer and pop musician`
+- ✗ `http://example.org/aleksandra_kova` → `musicComposer` → `http://example.org/pop_music`
+
+#### Id12
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 2 | **FN:** 1
+
+**Gold Triples:**
+
+- `United_States` → `longName` → `United States of America`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/united_states_of_america` → `fullName` → `United States of America`
+- ✓ `http://example.org/united_states_of_america` → `longName` → `United States of America`
+
+#### Id1
+
+**F1:** 0.250 | **TP:** 1 | **FP:** 3 | **FN:** 3
+
+**Gold Triples:**
+
+- `Abel_Hernández` → `club` → `Peñarol`
+- `Abel_Hernández` → `youthclub` → `Central_Español`
+- `Hull_City_A.F.C.` → `manager` → `Steve_Bruce`
+- `Abel_Hernández` → `club` → `Hull_City_A.F.C.`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/abel_hernandez` → `club` → `http://example.org/penarol`
+- ✗ `http://example.org/abel_hernandez` → `club` → `http://example.org/hull_city_afc`
+- ✗ `http://example.org/abel_hernandez` → `universityTeam` → `http://example.org/central_espaol`
+- ✓ `http://example.org/hull_city_afc` → `manager` → `http://example.org/steve_bruce`
+
+#### Id1
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 5 | **FN:** 5
+
+**Gold Triples:**
+
+- `A.F.C._Blackpool` → `manager` → `Stuart_Parker_(footballer)`
+- `Stuart_Parker_(footballer)` → `club` → `KV_Mechelen`
+- `Stuart_Parker_(footballer)` → `club` → `Chesterfield_F.C.`
+- `Blackpool` → `leader` → `Gordon_Marsden`
+- `A.F.C._Blackpool` → `ground` → `Blackpool`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/gordon_marsden` → `leader` → `http://example.org/blackpool`
+- ✗ `http://example.org/afc_blackpool` → `isPartOf` → `http://example.org/blackpool`
+- ✗ `http://example.org/stuart_parker` → `manager` → `http://example.org/afc_blackpool`
+- ✗ `http://example.org/stuart_parker` → `bandMember` → `http://example.org/chesterfield_fc`
+- ✓ `http://example.org/stuart_parker` → `club` → `http://example.org/kv_mechelen`
+
+---
+
+## REBEL - val
+
+**Timestamp:** 2025-11-23T00:44:43.948Z
+**Sample Size:** 10
+**Overall F1:** 0.3750
+**Failed Extractions:** 0
+
+### False Positives (Predicted but Wrong)
+
+| Entry | Subject | Predicate | Object | Analysis |
+|-------|---------|-----------|--------|----------|
+| rebel_sample_1 | http://example.org/aleksa | date_of_birth | http://example.org/23_aug | No partial match found in gold set |
+| rebel_sample_1 | http://example.org/aleksa | date_of_death | http://example.org/8_july | No partial match found in gold set |
+| rebel_sample_1 | http://example.org/aleksa | country_of_citizenship | http://example.org/russia | No partial match found in gold set |
+| rebel_sample_1 | http://example.org/aleksa | occupation | novelist | No partial match found in gold set |
+| rebel_sample_2 | http://example.org/eiffel | founded_by | http://example.org/gustav | Subject matches "Eiffel Tower", but object "http:/ |
+| rebel_sample_2 | http://example.org/eiffel | capital_of | http://example.org/champ_ | Subject matches "Eiffel Tower", but object "http:/ |
+| rebel_sample_2 | http://example.org/champ_ | capital_of | http://example.org/paris | No partial match found in gold set |
+| rebel_sample_2 | http://example.org/paris | capital_of | http://example.org/france | No partial match found in gold set |
+| rebel_sample_2 | http://example.org/eiffel | founded_by | http://example.org/gustav | No partial match found in gold set |
+| rebel_sample_4 | http://example.org/mount_ | capital_of | http://example.org/earth | Subject matches "Mount Everest", but object "http: |
+| rebel_sample_4 | http://example.org/mount_ | capital_of | http://example.org/mahala | Subject matches "Mount Everest", but object "http: |
+| rebel_sample_4 | http://example.org/mahala | capital_of | http://example.org/himala | No partial match found in gold set |
+| rebel_sample_4 | http://example.org/china | capital_of | http://example.org/mount_ | No partial match found in gold set |
+| rebel_sample_4 | http://example.org/nepal | capital_of | http://example.org/mount_ | No partial match found in gold set |
+| rebel_sample_8 | http://example.org/great_ | headquarters_location | http://example.org/china | Wrong predicate: used "headquarters_location" inst |
+| rebel_sample_9 | http://example.org/jeff_b | country_of_citizenship | http://example.org/united | No partial match found in gold set |
+| rebel_sample_10 | http://example.org/amazon | prefLabel | second longest river in t | Subject matches "Amazon River", but object "second |
+
+**Most Common Wrong Predicates:**
+
+- `capital_of`: 8 occurrences
+- `country_of_citizenship`: 2 occurrences
+- `founded_by`: 2 occurrences
+- `date_of_birth`: 1 occurrences
+- `date_of_death`: 1 occurrences
+- `occupation`: 1 occurrences
+- `headquarters_location`: 1 occurrences
+- `prefLabel`: 1 occurrences
+
+### False Negatives (Gold but Not Predicted)
+
+| Entry | Subject | Predicate | Object |
+|-------|---------|-----------|--------|
+| rebel_sample_1 | Aleksandr Grin | date of birth | 23 August 1880 |
+| rebel_sample_1 | Aleksandr Grin | date of death | 8 July 1932 |
+| rebel_sample_1 | Aleksandr Grin | country of citizenship | Russia |
+| rebel_sample_1 | Aleksandr Grin | occupation | novelist |
+| rebel_sample_2 | Eiffel Tower | located in | Paris |
+| rebel_sample_2 | Eiffel Tower | country | France |
+| rebel_sample_2 | Eiffel Tower | named after | Gustave Eiffel |
+| rebel_sample_4 | Mount Everest | located in | Himalayas |
+| rebel_sample_4 | Mount Everest | located in administrative entity | China |
+| rebel_sample_4 | Mount Everest | located in administrative entity | Nepal |
+| rebel_sample_6 | London | located on | River Thames |
+| rebel_sample_8 | Great Wall of China | located in | China |
+| rebel_sample_8 | Great Wall of China | made from material | stone |
+| rebel_sample_8 | Great Wall of China | made from material | brick |
+| rebel_sample_9 | Amazon.com | country | United States |
+| rebel_sample_10 | Amazon River | located in | South America |
+| rebel_sample_10 | Amazon River | country | Brazil |
+| rebel_sample_10 | Amazon River | country | Peru |
+| rebel_sample_10 | Amazon River | country | Colombia |
+
+**Most Commonly Missed Predicates:**
+
+- `country`: 5 occurrences
+- `located in`: 4 occurrences
+- `located in administrative entity`: 2 occurrences
+- `made from material`: 2 occurrences
+- `date of birth`: 1 occurrences
+- `date of death`: 1 occurrences
+- `country of citizenship`: 1 occurrences
+- `occupation`: 1 occurrences
+- `named after`: 1 occurrences
+- `located on`: 1 occurrences
+
+### Per-Example Breakdown
+
+#### rebel_sample_1
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 4 | **FN:** 4
+
+**Gold Triples:**
+
+- `Aleksandr Grin` → `date of birth` → `23 August 1880`
+- `Aleksandr Grin` → `date of death` → `8 July 1932`
+- `Aleksandr Grin` → `country of citizenship` → `Russia`
+- `Aleksandr Grin` → `occupation` → `novelist`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/aleksandr_stepanovich_grin` → `date_of_birth` → `http://example.org/23_august_1880`
+- ✗ `http://example.org/aleksandr_stepanovich_grin` → `date_of_death` → `http://example.org/8_july_1932`
+- ✗ `http://example.org/aleksandr_stepanovich_grin` → `country_of_citizenship` → `http://example.org/russia`
+- ✗ `http://example.org/aleksandr_stepanovich_grin` → `occupation` → `novelist`
+
+#### rebel_sample_2
+
+**F1:** 0.200 | **TP:** 1 | **FP:** 5 | **FN:** 3
+
+**Gold Triples:**
+
+- `Eiffel Tower` → `located in` → `Paris`
+- `Eiffel Tower` → `country` → `France`
+- `Eiffel Tower` → `named after` → `Gustave Eiffel`
+- `Gustave Eiffel` → `occupation` → `engineer`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/eiffel_tower` → `founded_by` → `http://example.org/gustave_eiffel`
+- ✗ `http://example.org/eiffel_tower` → `capital_of` → `http://example.org/champ_de_mars`
+- ✓ `http://example.org/gustave_eiffel` → `occupation` → `engineer`
+- ✗ `http://example.org/champ_de_mars` → `capital_of` → `http://example.org/paris`
+- ✗ `http://example.org/paris` → `capital_of` → `http://example.org/france`
+- ✗ `http://example.org/eiffels_company` → `founded_by` → `http://example.org/gustave_eiffel`
+
+#### rebel_sample_3
+
+**F1:** 0.750 | **TP:** 3 | **FP:** 1 | **FN:** 1
+
+**Gold Triples:**
+
+- `Albert Einstein` → `date of birth` → `14 March 1879`
+- `Albert Einstein` → `date of death` → `18 April 1955`
+- `Albert Einstein` → `country of citizenship` → `Germany`
+- `Albert Einstein` → `occupation` → `physicist`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/albert_einstein` → `date_of_birth` → `14 March 1879`
+- ✓ `http://example.org/albert_einstein` → `date_of_death` → `18 April 1955`
+- ✓ `http://example.org/albert_einstein` → `country_of_citizenship` → `http://example.org/germany`
+- ✓ `http://example.org/albert_einstein` → `occupation` → `theoretical physicist`
+
+#### rebel_sample_4
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 5 | **FN:** 3
+
+**Gold Triples:**
+
+- `Mount Everest` → `located in` → `Himalayas`
+- `Mount Everest` → `located in administrative entity` → `China`
+- `Mount Everest` → `located in administrative entity` → `Nepal`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/mount_everest` → `capital_of` → `http://example.org/earth`
+- ✗ `http://example.org/mount_everest` → `capital_of` → `http://example.org/mahalangur_himal`
+- ✗ `http://example.org/mahalangur_himal` → `capital_of` → `http://example.org/himalayas`
+- ✗ `http://example.org/china` → `capital_of` → `http://example.org/mount_everest`
+- ✗ `http://example.org/nepal` → `capital_of` → `http://example.org/mount_everest`
+
+#### rebel_sample_5
+
+**F1:** 1.000 | **TP:** 6 | **FP:** 0 | **FN:** 0
+
+**Gold Triples:**
+
+- `Marie Curie` → `date of birth` → `7 November 1867`
+- `Marie Curie` → `date of death` → `4 July 1934`
+- `Marie Curie` → `country of citizenship` → `Poland`
+- `Marie Curie` → `country of citizenship` → `France`
+- `Marie Curie` → `occupation` → `physicist`
+- `Marie Curie` → `occupation` → `chemist`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/marie_curie` → `date_of_birth` → `7 November 1867`
+- ✓ `http://example.org/marie_curie` → `date_of_death` → `4 July 1934`
+- ✓ `http://example.org/marie_curie` → `country_of_citizenship` → `http://example.org/poland`
+- ✓ `http://example.org/marie_curie` → `country_of_citizenship` → `http://example.org/france`
+- ✓ `http://example.org/marie_curie` → `occupation` → `physicist`
+- ✓ `http://example.org/marie_curie` → `occupation` → `chemist`
+
+#### rebel_sample_6
+
+**F1:** 0.800 | **TP:** 2 | **FP:** 0 | **FN:** 1
+
+**Gold Triples:**
+
+- `London` → `capital of` → `England`
+- `London` → `capital of` → `United Kingdom`
+- `London` → `located on` → `River Thames`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/london` → `capital_of` → `http://example.org/england`
+- ✓ `http://example.org/london` → `capital_of` → `http://example.org/united_kingdom`
+
+#### rebel_sample_7
+
+**F1:** 1.000 | **TP:** 6 | **FP:** 0 | **FN:** 0
+
+**Gold Triples:**
+
+- `William Shakespeare` → `date of birth` → `26 April 1564`
+- `William Shakespeare` → `date of death` → `23 April 1616`
+- `William Shakespeare` → `country of citizenship` → `England`
+- `William Shakespeare` → `occupation` → `playwright`
+- `William Shakespeare` → `occupation` → `poet`
+- `William Shakespeare` → `occupation` → `actor`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/william_shakespeare` → `date_of_birth` → `http://example.org/26_april_1564`
+- ✓ `http://example.org/william_shakespeare` → `date_of_death` → `http://example.org/23_april_1616`
+- ✓ `http://example.org/william_shakespeare` → `country_of_citizenship` → `http://example.org/england`
+- ✓ `http://example.org/william_shakespeare` → `occupation` → `playwright`
+- ✓ `http://example.org/william_shakespeare` → `occupation` → `poet`
+- ✓ `http://example.org/william_shakespeare` → `occupation` → `actor`
+
+#### rebel_sample_8
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 1 | **FN:** 3
+
+**Gold Triples:**
+
+- `Great Wall of China` → `located in` → `China`
+- `Great Wall of China` → `made from material` → `stone`
+- `Great Wall of China` → `made from material` → `brick`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/great_wall_of_china` → `headquarters_location` → `http://example.org/china`
+
+#### rebel_sample_9
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 4 | **FN:** 4
+
+**Gold Triples:**
+
+- `Amazon.com` → `country` → `United States`
+- `Amazon.com` → `headquarters location` → `Seattle`
+- `Amazon.com` → `founded by` → `Jeff Bezos`
+- `Amazon.com` → `inception` → `1994`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/amazoncom_inc` → `headquarters_location` → `http://example.org/seattle_washington`
+- ✓ `http://example.org/amazoncom_inc` → `founded_by` → `http://example.org/jeff_bezos`
+- ✓ `http://example.org/amazoncom_inc` → `inception` → `http://example.org/1994`
+- ✗ `http://example.org/jeff_bezos` → `country_of_citizenship` → `http://example.org/united_states_of_america`
+
+#### rebel_sample_10
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 1 | **FN:** 4
+
+**Gold Triples:**
+
+- `Amazon River` → `located in` → `South America`
+- `Amazon River` → `country` → `Brazil`
+- `Amazon River` → `country` → `Peru`
+- `Amazon River` → `country` → `Colombia`
+
+**Predicted Triples:**
+
+- ✗ `http://example.org/amazon_river` → `prefLabel` → `second longest river in the world`
+
+---
+
+## DocRED - dev
+
+**Timestamp:** 2025-11-23T00:44:11.052Z
+**Sample Size:** 3
+**Overall F1:** 0.4524
+**Failed Extractions:** 1
+
+### False Positives (Predicted but Wrong)
+
+| Entry | Subject | Predicate | Object | Analysis |
+|-------|---------|-----------|--------|----------|
+| Marie_Curie | http://example.org/marie_ | occupation | physicist | Subject matches "Marie Curie", but object "physici |
+
+**Most Common Wrong Predicates:**
+
+- `occupation`: 1 occurrences
+
+### False Negatives (Gold but Not Predicted)
+
+| Entry | Subject | Predicate | Object |
+|-------|---------|-----------|--------|
+| Albert_Einstein | Albert Einstein | country of citizenship | Germany |
+| Albert_Einstein | Albert Einstein | occupation | physicist |
+| Albert_Einstein | Albert Einstein | place of birth | Ulm |
+| London | London | country | England |
+| London | London | located in or next to body of water | River Thames |
+
+**Most Commonly Missed Predicates:**
+
+- `country of citizenship`: 1 occurrences
+- `occupation`: 1 occurrences
+- `place of birth`: 1 occurrences
+- `country`: 1 occurrences
+- `located in or next to body of water`: 1 occurrences
+
+### Per-Example Breakdown
+
+#### Albert_Einstein
+
+**F1:** 0.000 | **TP:** 0 | **FP:** 0 | **FN:** 3
+
+**Gold Triples:**
+
+- `Albert Einstein` → `country of citizenship` → `Germany`
+- `Albert Einstein` → `occupation` → `physicist`
+- `Albert Einstein` → `place of birth` → `Ulm`
+
+**Predicted Triples:**
+
+(none)
+
+#### London
+
+**F1:** 0.500 | **TP:** 1 | **FP:** 0 | **FN:** 2
+
+**Gold Triples:**
+
+- `England` → `capital` → `London`
+- `London` → `country` → `England`
+- `London` → `located in or next to body of water` → `River Thames`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/england` → `capital` → `London`
+
+#### Marie_Curie
+
+**F1:** 0.857 | **TP:** 3 | **FP:** 1 | **FN:** 0
+
+**Gold Triples:**
+
+- `Marie Curie` → `country of citizenship` → `Poland`
+- `Marie Curie` → `place of birth` → `Warsaw`
+- `Marie Curie` → `award received` → `Nobel Prize in Physics`
+
+**Predicted Triples:**
+
+- ✓ `http://example.org/marie_curie` → `country_of_citizenship` → `http://example.org/poland`
+- ✗ `http://example.org/marie_curie` → `occupation` → `physicist`
+- ✓ `http://example.org/marie_curie` → `award_received` → `Nobel Prize in Physics`
+- ✓ `http://example.org/marie_curie` → `place_of_birth` → `http://example.org/warsaw`
+
+---
 
 ## DocRED - dev
 
@@ -1766,705 +3756,6 @@ USER INPUT:
 - ✓ `http://example.org/malaysia` → `leader` → `http://example.org/arifin_zakaria`
 - ✓ `http://example.org/asam_pedas` → `country` → `http://example.org/malaysia`
 - ✓ `http://example.org/asam_pedas` → `region` → `http://example.org/malay_peninsula_region`
-
----
-
-## WebNLG - dev
-
-**Timestamp:** 2025-11-22T23:33:27.000Z
-**Sample Size:** 10
-**Overall F1:** 0.3238
-**Failed Extractions:** 0
-
-### False Positives (Predicted but Wrong)
-
-| Entry | Subject | Predicate | Object | Analysis |
-|-------|---------|-----------|--------|----------|
-| Id8 | http://example.org/arros_ | region | http://example.org/valenc | No partial match found in gold set |
-| Id8 | http://example.org/arros_ | region | http://example.org/spain | No partial match found in gold set |
-| Id8 | http://example.org/arros_ | mainIngredient | http://example.org/white_ | No partial match found in gold set |
-| Id8 | http://example.org/arros_ | mainIngredient | http://example.org/cuttle | No partial match found in gold set |
-| Id8 | http://example.org/arros_ | mainIngredient | http://example.org/squid | No partial match found in gold set |
-| Id8 | http://example.org/arros_ | mainIngredient | http://example.org/cephal | No partial match found in gold set |
-| Id8 | http://example.org/arros_ | mainIngredient | http://example.org/cubane | No partial match found in gold set |
-| Id6 | http://example.org/300_no | state | http://example.org/chicag | Wrong predicate: used "state" instead of "location |
-| Id6 | http://example.org/chicag | state | http://example.org/united | Subject matches "Chicago", but object "http://exam |
-| Id16 | http://example.org/agnes_ | leader | http://example.org/social | Subject matches "Agnes_Kant", but object "http://e |
-| Id24 | http://example.org/beef_k | countryOrigin | http://example.org/singap | Wrong predicate: used "countryOrigin" instead of " |
-| Id24 | http://example.org/standa | spokenIn | http://example.org/singap | No partial match found in gold set |
-| Id5 | http://example.org/101_he | averageSpeed | 18.44 kilometres per seco | Subject matches "101_Helena", but object "18.44 ki |
-| Id5 | http://example.org/gma_ne | leader | http://example.org/felipe | Subject matches "GMA_New_Media", but object "http: |
-| Id3 | http://example.org/66391_ | apoapsis | 162164091.8388 km | Subject matches "(66391)_1999_KW4", but object "16 |
-| Id3 | http://example.org/66391_ | averageSpeed | 37.16 kilometres per seco | Subject matches "(66391)_1999_KW4", but object "37 |
-| Id3 | http://example.org/66391_ | density | 2.0 grams per cubic centi | Subject matches "(66391)_1999_KW4", but object "2. |
-
-**Most Common Wrong Predicates:**
-
-- `mainIngredient`: 5 occurrences
-- `region`: 2 occurrences
-- `state`: 2 occurrences
-- `leader`: 2 occurrences
-- `averageSpeed`: 2 occurrences
-- `countryOrigin`: 1 occurrences
-- `spokenIn`: 1 occurrences
-- `apoapsis`: 1 occurrences
-- `density`: 1 occurrences
-
-### False Negatives (Gold but Not Predicted)
-
-| Entry | Subject | Predicate | Object |
-|-------|---------|-----------|--------|
-| Id8 | Arròs_negre | region | Valencian_Community |
-| Id8 | Arròs_negre | country | Spain |
-| Id8 | Arròs_negre | mainIngredient | "White rice, cuttlefish or squ |
-| Id8 | Arròs_negre | ingredient | Cubanelle |
-| Id6 | 300_North_LaSalle | location | Chicago |
-| Id6 | Chicago | country | United_States |
-| Id14 | Alan_Martin_(footballer) | club | Hamilton_Academical_F.C. |
-| Id14 | Alan_Martin_(footballer) | birthDate | 1989-01-01 |
-| Id14 | Alan_Martin_(footballer) | club | Crewe_Alexandra_F.C. |
-| Id16 | Agnes_Kant | birthPlace | West_Germany |
-| Id24 | Beef_kway_teow | region | Singapore |
-| Id24 | Singapore | language | Standard_Chinese |
-| Id5 | 101_Helena | averageSpeed | 18.44 (kilometrePerSeconds) |
-| Id5 | GMA_New_Media | location | GMA_Network_Center |
-| Id5 | GMA_New_Media | location | Philippines |
-| Id3 | (66391)_1999_KW4 | averageSpeed | 37.16 (kilometrePerSeconds) |
-| Id3 | (66391)_1999_KW4 | density | 2.0 (gramPerCubicCentimetres) |
-| Id3 | (66391)_1999_KW4 | apoapsis | 162164091.8388 (kilometres) |
-
-**Most Commonly Missed Predicates:**
-
-- `location`: 3 occurrences
-- `region`: 2 occurrences
-- `country`: 2 occurrences
-- `club`: 2 occurrences
-- `averageSpeed`: 2 occurrences
-- `mainIngredient`: 1 occurrences
-- `ingredient`: 1 occurrences
-- `birthDate`: 1 occurrences
-- `birthPlace`: 1 occurrences
-- `language`: 1 occurrences
-
-### Per-Example Breakdown
-
-#### Id8
-
-**F1:** 0.000 | **TP:** 0 | **FP:** 7 | **FN:** 4
-
-**Gold Triples:**
-
-- `Arròs_negre` → `region` → `Valencian_Community`
-- `Arròs_negre` → `country` → `Spain`
-- `Arròs_negre` → `mainIngredient` → `"White rice, cuttlefish or squid, cephalopod ink, cubanelle peppers"`
-- `Arròs_negre` → `ingredient` → `Cubanelle`
-
-**Predicted Triples:**
-
-- ✗ `http://example.org/arros_negre` → `region` → `http://example.org/valencian_community`
-- ✗ `http://example.org/arros_negre` → `region` → `http://example.org/spain`
-- ✗ `http://example.org/arros_negre` → `mainIngredient` → `http://example.org/white_rice`
-- ✗ `http://example.org/arros_negre` → `mainIngredient` → `http://example.org/cuttlefish`
-- ✗ `http://example.org/arros_negre` → `mainIngredient` → `http://example.org/squid`
-- ✗ `http://example.org/arros_negre` → `mainIngredient` → `http://example.org/cephalopod_ink`
-- ✗ `http://example.org/arros_negre` → `mainIngredient` → `http://example.org/cubanelle_peppers`
-
-#### Id6
-
-**F1:** 0.333 | **TP:** 1 | **FP:** 2 | **FN:** 2
-
-**Gold Triples:**
-
-- `300_North_LaSalle` → `location` → `Chicago`
-- `Chicago` → `leader` → `Rahm_Emanuel`
-- `Chicago` → `country` → `United_States`
-
-**Predicted Triples:**
-
-- ✗ `http://example.org/300_north_lasalle` → `state` → `http://example.org/chicago`
-- ✗ `http://example.org/chicago` → `state` → `http://example.org/united_states`
-- ✓ `http://example.org/chicago` → `leader` → `http://example.org/rahm_emanuel`
-
-#### Id33
-
-**F1:** 1.000 | **TP:** 1 | **FP:** 0 | **FN:** 0
-
-**Gold Triples:**
-
-- `Germany` → `leader` → `Stanislaw_Tillich`
-
-**Predicted Triples:**
-
-- ✓ `http://example.org/germany` → `leader` → `http://example.org/stanislaw_tillich`
-
-#### Id14
-
-**F1:** 0.000 | **TP:** 0 | **FP:** 0 | **FN:** 3
-
-**Gold Triples:**
-
-- `Alan_Martin_(footballer)` → `club` → `Hamilton_Academical_F.C.`
-- `Alan_Martin_(footballer)` → `birthDate` → `1989-01-01`
-- `Alan_Martin_(footballer)` → `club` → `Crewe_Alexandra_F.C.`
-
-**Predicted Triples:**
-
-(none)
-
-#### Id16
-
-**F1:** 0.333 | **TP:** 1 | **FP:** 2 | **FN:** 2
-
-**Gold Triples:**
-
-- `Agnes_Kant` → `almaMater` → `Radboud_University_Nijmegen`
-- `Agnes_Kant` → `birthPlace` → `West_Germany`
-- `Agnes_Kant` → `office` → `Socialist_Party_(Netherlands)`
-
-**Predicted Triples:**
-
-- ✓ `http://example.org/agnes_kant` → `office_workedAt_workedAs_` → `http://example.org/socialist_party`
-- ✓ `http://example.org/agnes_kant` → `almaMater` → `http://example.org/radboud_university_nijmegen`
-- ✗ `http://example.org/agnes_kant` → `leader` → `http://example.org/socialist_party`
-
-#### Id24
-
-**F1:** 0.000 | **TP:** 0 | **FP:** 2 | **FN:** 2
-
-**Gold Triples:**
-
-- `Beef_kway_teow` → `region` → `Singapore`
-- `Singapore` → `language` → `Standard_Chinese`
-
-**Predicted Triples:**
-
-- ✗ `http://example.org/beef_kway_teow` → `countryOrigin` → `http://example.org/singapore`
-- ✗ `http://example.org/standard_chinese` → `spokenIn` → `http://example.org/singapore`
-
-#### Id29
-
-**F1:** 0.500 | **TP:** 2 | **FP:** 2 | **FN:** 2
-
-**Gold Triples:**
-
-- `Bhajji` → `country` → `India`
-- `India` → `leader` → `Sumitra_Mahajan`
-- `Bhajji` → `region` → `Karnataka`
-- `Karnataka` → `leader` → `Vajubhai_Vala`
-
-**Predicted Triples:**
-
-- ✓ `http://example.org/bhajji` → `country` → `http://example.org/india`
-- ✓ `http://example.org/bhajji` → `region` → `http://example.org/karnataka_region`
-- ✓ `http://example.org/india` → `leader` → `http://example.org/sumitra_mahajan`
-- ✓ `http://example.org/karnataka_region` → `leader` → `http://example.org/vajubhai_vala`
-
-#### Id5
-
-**F1:** 0.500 | **TP:** 1 | **FP:** 1 | **FN:** 1
-
-**Gold Triples:**
-
-- `101_Helena` → `averageSpeed` → `18.44 (kilometrePerSeconds)`
-- `101_Helena` → `apoapsis` → `441092000.0 (kilometres)`
-
-**Predicted Triples:**
-
-- ✗ `http://example.org/101_helena` → `averageSpeed` → `18.44 kilometres per second`
-- ✓ `http://example.org/101_helena` → `apoapsis` → `441092000.0 kilometres`
-
-#### Id5
-
-**F1:** 0.571 | **TP:** 2 | **FP:** 1 | **FN:** 2
-
-**Gold Triples:**
-
-- `GMA_New_Media` → `product` → `Mobile_Applications`
-- `GMA_New_Media` → `keyPerson` → `Felipe_Gozon`
-- `GMA_New_Media` → `location` → `GMA_Network_Center`
-- `GMA_New_Media` → `location` → `Philippines`
-
-**Predicted Triples:**
-
-- ✓ `http://example.org/gma_new_media` → `product` → `mobile applications`
-- ✓ `http://example.org/gma_new_media` → `keyPerson` → `http://example.org/felipe_gozon`
-- ✗ `http://example.org/gma_new_media` → `leader` → `http://example.org/felipe_gozon`
-
-#### Id3
-
-**F1:** 0.000 | **TP:** 0 | **FP:** 3 | **FN:** 3
-
-**Gold Triples:**
-
-- `(66391)_1999_KW4` → `averageSpeed` → `37.16 (kilometrePerSeconds)`
-- `(66391)_1999_KW4` → `density` → `2.0 (gramPerCubicCentimetres)`
-- `(66391)_1999_KW4` → `apoapsis` → `162164091.8388 (kilometres)`
-
-**Predicted Triples:**
-
-- ✗ `http://example.org/66391_1999_kw4` → `apoapsis` → `162164091.8388 km`
-- ✗ `http://example.org/66391_1999_kw4` → `averageSpeed` → `37.16 kilometres per second`
-- ✗ `http://example.org/66391_1999_kw4` → `density` → `2.0 grams per cubic centimetre`
-
----
-
-## WebNLG - dev
-
-**Timestamp:** 2025-11-22T23:31:18.673Z
-**Sample Size:** 10
-**Overall F1:** 0.3122
-**Failed Extractions:** 0
-
-### False Positives (Predicted but Wrong)
-
-| Entry | Subject | Predicate | Object | Analysis |
-|-------|---------|-----------|--------|----------|
-| Id18 | http://example.org/vila_n | champions | http://example.org/campeo | No partial match found in gold set |
-| Id6 | http://example.org/1_dece | locationCountry | http://example.org/romani | Subject matches "1_Decembrie_1918_University", but |
-| Id6 | http://example.org/romani | inOfficeWhilePrimeMinister | http://example.org/klaus_ | Subject matches "Romania", but object "http://exam |
-| Id8 | http://example.org/potter | isPartOf | http://example.org/texas | Subject matches "Potter_County,_Texas", but object |
-| Id8 | http://example.org/randal | isPartOf | http://example.org/texas | No partial match found in gold set |
-| Id8 | http://example.org/texas | isPartOf | http://example.org/united | Subject matches "Amarillo,_Texas", but object "htt |
-| Id2 | http://example.org/ajobla | origin | http://example.org/andalu | Subject matches "Ajoblanco", but object "http://ex |
-| Id2 | http://example.org/ajobla | origin | http://example.org/spain | Wrong predicate: used "origin" instead of "country |
-| Id24 | http://example.org/cake | dishVariation | http://example.org/desser | No partial match found in gold set |
-| Id15 | http://example.org/auburn | administrativeCounty | http://example.org/pierce | Wrong predicate: used "administrativeCounty" inste |
-| Id15 | http://example.org/auburn | state | http://example.org/washin | Wrong predicate: used "state" instead of "isPartOf |
-| Id15 | http://example.org/auburn | isPartOf | http://example.org/united | Subject matches "Auburn,_Washington", but object " |
-| Id15 | http://example.org/pierce | state | http://example.org/washin | No partial match found in gold set |
-| Id15 | http://example.org/washin | isPartOf | http://example.org/united | Subject matches "Auburn,_Washington", but object " |
-| Id11 | http://example.org/apollo | crewMembers | http://example.org/willia | No partial match found in gold set |
-
-**Most Common Wrong Predicates:**
-
-- `isPartOf`: 5 occurrences
-- `origin`: 2 occurrences
-- `state`: 2 occurrences
-- `champions`: 1 occurrences
-- `locationCountry`: 1 occurrences
-- `inOfficeWhilePrimeMinister`: 1 occurrences
-- `dishVariation`: 1 occurrences
-- `administrativeCounty`: 1 occurrences
-- `crewMembers`: 1 occurrences
-
-### False Negatives (Gold but Not Predicted)
-
-| Entry | Subject | Predicate | Object |
-|-------|---------|-----------|--------|
-| Id18 | Campeonato_Brasileiro_Série_C | country | Brazil |
-| Id18 | Campeonato_Brasileiro_Série_C | champions | Vila_Nova_Futebol_Clube |
-| Id6 | Romania | leaderTitle | Prime_Minister_of_Romania |
-| Id6 | Alba_Iulia | country | Romania |
-| Id6 | Romania | leader | Klaus_Iohannis |
-| Id8 | Potter_County,_Texas | country | United_States |
-| Id2 | Ajoblanco | country | Spain |
-| Id2 | Ajoblanco | region | Andalusia |
-| Id24 | Dessert | dishVariation | Cake |
-| Id15 | Auburn,_Washington | isPartOf | Pierce_County,_Washington |
-| Id15 | Auburn,_Washington | country | United_States |
-| Id15 | Auburn,_Washington | isPartOf | Washington_(state) |
-| Id11 | William_Anders | dateOfRetirement | "1969-09-01" |
-| Id11 | William_Anders | birthDate | "1933-10-17" |
-| Id11 | William_Anders | occupation | Fighter_pilot |
-| Id11 | William_Anders | birthPlace | British_Hong_Kong |
-| Id11 | William_Anders | mission | Apollo_8 |
-| Id11 | William_Anders | almaMater | "AFIT, M.S. 1962" |
-
-**Most Commonly Missed Predicates:**
-
-- `country`: 5 occurrences
-- `isPartOf`: 2 occurrences
-- `champions`: 1 occurrences
-- `leaderTitle`: 1 occurrences
-- `leader`: 1 occurrences
-- `region`: 1 occurrences
-- `dishVariation`: 1 occurrences
-- `dateOfRetirement`: 1 occurrences
-- `birthDate`: 1 occurrences
-- `occupation`: 1 occurrences
-
-### Per-Example Breakdown
-
-#### Id19
-
-**F1:** 0.000 | **TP:** 0 | **FP:** 1 | **FN:** 1
-
-**Gold Triples:**
-
-- `Arlington,_Texas` → `elevationAboveTheSeaLevel` → `184.0`
-
-**Predicted Triples:**
-
-- ✓ `http://example.org/arlington_texas` → `elevationAboveTheSeaLevel` → `184`
-
-#### Id18
-
-**F1:** 0.400 | **TP:** 1 | **FP:** 1 | **FN:** 2
-
-**Gold Triples:**
-
-- `Agremiação_Sportiva_Arapiraquense` → `league` → `Campeonato_Brasileiro_Série_C`
-- `Campeonato_Brasileiro_Série_C` → `country` → `Brazil`
-- `Campeonato_Brasileiro_Série_C` → `champions` → `Vila_Nova_Futebol_Clube`
-
-**Predicted Triples:**
-
-- ✓ `http://example.org/agremiao_sportiva_arapiraquense` → `league` → `http://example.org/campeonato_brasileiro_srie_c`
-- ✗ `http://example.org/vila_nova_futebol_clube` → `champions` → `http://example.org/campeonato_brasileiro_srie_c`
-
-#### Id23
-
-**F1:** 1.000 | **TP:** 1 | **FP:** 0 | **FN:** 0
-
-**Gold Triples:**
-
-- `Cornell_University` → `nickname` → `Cornell_Big_Red`
-
-**Predicted Triples:**
-
-- ✓ `http://example.org/cornell_university` → `nickname` → `http://example.org/cornell_big_red`
-
-#### Id6
-
-**F1:** 0.222 | **TP:** 1 | **FP:** 3 | **FN:** 4
-
-**Gold Triples:**
-
-- `Romania` → `leaderTitle` → `Prime_Minister_of_Romania`
-- `Alba_Iulia` → `country` → `Romania`
-- `Romania` → `leader` → `Klaus_Iohannis`
-- `Romania` → `capital` → `Bucharest`
-- `1_Decembrie_1918_University` → `city` → `Alba_Iulia`
-
-**Predicted Triples:**
-
-- ✓ `http://example.org/1_decembrie_1918_university` → `locationCity` → `http://example.org/alba_iulia`
-- ✗ `http://example.org/1_decembrie_1918_university` → `locationCountry` → `http://example.org/romania`
-- ✓ `http://example.org/romania` → `capital` → `http://example.org/bucharest`
-- ✗ `http://example.org/romania` → `inOfficeWhilePrimeMinister` → `http://example.org/klaus_iohannis`
-
-#### Id8
-
-**F1:** 0.000 | **TP:** 0 | **FP:** 6 | **FN:** 3
-
-**Gold Triples:**
-
-- `Amarillo,_Texas` → `isPartOf` → `Potter_County,_Texas`
-- `Amarillo,_Texas` → `isPartOf` → `Randall_County,_Texas`
-- `Potter_County,_Texas` → `country` → `United_States`
-
-**Predicted Triples:**
-
-- ✓ `http://example.org/amarillo` → `isPartOf` → `http://example.org/potter_county`
-- ✓ `http://example.org/amarillo` → `isPartOf` → `http://example.org/randall_county`
-- ✓ `http://example.org/amarillo` → `isPartOf` → `http://example.org/texas`
-- ✗ `http://example.org/potter_county` → `isPartOf` → `http://example.org/texas`
-- ✗ `http://example.org/randall_county` → `isPartOf` → `http://example.org/texas`
-- ✗ `http://example.org/texas` → `isPartOf` → `http://example.org/united_states`
-
-#### Id2
-
-**F1:** 0.500 | **TP:** 2 | **FP:** 2 | **FN:** 2
-
-**Gold Triples:**
-
-- `Ajoblanco` → `country` → `Spain`
-- `Ajoblanco` → `region` → `Andalusia`
-- `Ajoblanco` → `alternativeName` → `"Ajo blanco"`
-- `Ajoblanco` → `ingredient` → `Water`
-
-**Predicted Triples:**
-
-- ✓ `http://example.org/ajoblanco` → `ingredient` → `http://example.org/water`
-- ✓ `http://example.org/ajoblanco` → `alternativeName` → `Ajo blanco`
-- ✗ `http://example.org/ajoblanco` → `origin` → `http://example.org/andalusia`
-- ✗ `http://example.org/ajoblanco` → `origin` → `http://example.org/spain`
-
-#### Id18
-
-**F1:** 1.000 | **TP:** 1 | **FP:** 0 | **FN:** 0
-
-**Gold Triples:**
-
-- `Barny_Cakes` → `protein` → `1.8 g`
-
-**Predicted Triples:**
-
-- ✓ `http://example.org/barny_cakes` → `protein` → `1.8 g`
-
-#### Id24
-
-**F1:** 0.000 | **TP:** 0 | **FP:** 1 | **FN:** 1
-
-**Gold Triples:**
-
-- `Dessert` → `dishVariation` → `Cake`
-
-**Predicted Triples:**
-
-- ✗ `http://example.org/cake` → `dishVariation` → `http://example.org/dessert`
-
-#### Id15
-
-**F1:** 0.000 | **TP:** 0 | **FP:** 6 | **FN:** 4
-
-**Gold Triples:**
-
-- `Auburn,_Washington` → `isPartOf` → `Pierce_County,_Washington`
-- `Auburn,_Washington` → `country` → `United_States`
-- `Auburn,_Washington` → `isPartOf` → `Washington_(state)`
-- `Auburn,_Washington` → `areaTotal` → `77.41 (square kilometres)`
-
-**Predicted Triples:**
-
-- ✗ `http://example.org/auburn` → `administrativeCounty` → `http://example.org/pierce_county`
-- ✗ `http://example.org/auburn` → `state` → `http://example.org/washington`
-- ✗ `http://example.org/auburn` → `isPartOf` → `http://example.org/united_states`
-- ✓ `http://example.org/auburn` → `areaTotal` → `77.41 square kilometres`
-- ✗ `http://example.org/pierce_county` → `state` → `http://example.org/washington`
-- ✗ `http://example.org/washington` → `isPartOf` → `http://example.org/united_states`
-
-#### Id11
-
-**F1:** 0.000 | **TP:** 0 | **FP:** 1 | **FN:** 6
-
-**Gold Triples:**
-
-- `William_Anders` → `dateOfRetirement` → `"1969-09-01"`
-- `William_Anders` → `birthDate` → `"1933-10-17"`
-- `William_Anders` → `occupation` → `Fighter_pilot`
-- `William_Anders` → `birthPlace` → `British_Hong_Kong`
-- `William_Anders` → `mission` → `Apollo_8`
-- `William_Anders` → `almaMater` → `"AFIT, M.S. 1962"`
-
-**Predicted Triples:**
-
-- ✗ `http://example.org/apollo_8` → `crewMembers` → `http://example.org/william_anders`
-
----
-
-## WebNLG - dev
-
-**Timestamp:** 2025-11-22T23:29:15.387Z
-**Sample Size:** 10
-**Overall F1:** 0.5002
-**Failed Extractions:** 0
-
-### False Positives (Predicted but Wrong)
-
-| Entry | Subject | Predicate | Object | Analysis |
-|-------|---------|-----------|--------|----------|
-| Id18 | http://example.org/the_al | maidenVoyage | July 7, 1855 | Subject matches "Alhambra", but object "July 7, 18 |
-| Id6 | http://example.org/al_asa | operator | http://example.org/united | Wrong predicate: used "operator" instead of "opera |
-| Id6 | http://example.org/united | operator | http://example.org/boeing | Subject matches "United_States_Air_Force", but obj |
-| Id6 | http://example.org/united | operator | http://example.org/genera | Subject matches "United_States_Air_Force", but obj |
-| Id6 | http://example.org/united | operator | http://example.org/lockhe | Wrong predicate: used "operator" instead of "attac |
-| Id6 | http://example.org/boeing | transportAircraft | http://example.org/boeing | No partial match found in gold set |
-| Id6 | http://example.org/genera | aircraftFighter | http://example.org/genera | No partial match found in gold set |
-| Id6 | http://example.org/lockhe | attackAircraft | http://example.org/lockhe | No partial match found in gold set |
-| Id4 | http://example.org/101_he | discovered | http://example.org/james_ | Wrong predicate: used "discovered" instead of "dis |
-| Id19 | http://example.org/adonis | party | http://example.org/greek_ | Subject matches "Adonis_Georgiadis", but object "h |
-| Id19 | http://example.org/greek_ | colour | blue | No partial match found in gold set |
-| Id19 | http://example.org/konsta | successor | http://example.org/antoni | No partial match found in gold set |
-| Id7 | http://example.org/aarhus | locationCountry | http://example.org/denmar | No partial match found in gold set |
-| Id5 | http://example.org/101_he | mass | 3.0 kgs | Subject matches "101_Helena", but object "3.0 kgs" |
-
-**Most Common Wrong Predicates:**
-
-- `operator`: 4 occurrences
-- `maidenVoyage`: 1 occurrences
-- `transportAircraft`: 1 occurrences
-- `aircraftFighter`: 1 occurrences
-- `attackAircraft`: 1 occurrences
-- `discovered`: 1 occurrences
-- `party`: 1 occurrences
-- `colour`: 1 occurrences
-- `successor`: 1 occurrences
-- `locationCountry`: 1 occurrences
-
-### False Negatives (Gold but Not Predicted)
-
-| Entry | Subject | Predicate | Object |
-|-------|---------|-----------|--------|
-| Id18 | Alhambra | maidenVoyage | 1855-07-07 |
-| Id6 | Al_Asad_Airbase | operatingOrganisation | United_States_Air_Force |
-| Id6 | United_States_Air_Force | attackAircraft | Lockheed_AC-130 |
-| Id6 | United_States_Air_Force | transportAircraft | Boeing_C-17_Globemaster_III |
-| Id6 | United_States_Air_Force | aircraftFighter | General_Dynamics_F-16_Fighting |
-| Id4 | 101_Helena | discoverer | James_Craig_Watson |
-| Id4 | James_Craig_Watson | nationality | Canada |
-| Id4 | James_Craig_Watson | deathPlace | Madison,_Wisconsin |
-| Id4 | James_Craig_Watson | deathCause | Peritonitis |
-| Id19 | Antonis_Samaras | successor | Konstantinos_Mitsotakis |
-| Id19 | New_Democracy_(Greece) | colour | Blue |
-| Id19 | Adonis_Georgiadis | party | New_Democracy_(Greece) |
-| Id7 | School of Business and Social  | country | Denmark |
-
-**Most Commonly Missed Predicates:**
-
-- `maidenVoyage`: 1 occurrences
-- `operatingOrganisation`: 1 occurrences
-- `attackAircraft`: 1 occurrences
-- `transportAircraft`: 1 occurrences
-- `aircraftFighter`: 1 occurrences
-- `discoverer`: 1 occurrences
-- `nationality`: 1 occurrences
-- `deathPlace`: 1 occurrences
-- `deathCause`: 1 occurrences
-- `successor`: 1 occurrences
-
-### Per-Example Breakdown
-
-#### Id18
-
-**F1:** 0.000 | **TP:** 0 | **FP:** 1 | **FN:** 1
-
-**Gold Triples:**
-
-- `Alhambra` → `maidenVoyage` → `1855-07-07`
-
-**Predicted Triples:**
-
-- ✗ `http://example.org/the_alhambra` → `maidenVoyage` → `July 7, 1855`
-
-#### Id6
-
-**F1:** 0.000 | **TP:** 0 | **FP:** 8 | **FN:** 5
-
-**Gold Triples:**
-
-- `Al_Asad_Airbase` → `operatingOrganisation` → `United_States_Air_Force`
-- `United_States_Air_Force` → `attackAircraft` → `Lockheed_AC-130`
-- `United_States_Air_Force` → `transportAircraft` → `Boeing_C-17_Globemaster_III`
-- `United_States_Air_Force` → `aircraftFighter` → `General_Dynamics_F-16_Fighting_Falcon`
-- `United_States_Air_Force` → `battle` → `United_States_invasion_of_Panama`
-
-**Predicted Triples:**
-
-- ✗ `http://example.org/al_asad_airbase` → `operator` → `http://example.org/united_states_air_force`
-- ✗ `http://example.org/united_states_air_force` → `operator` → `http://example.org/boeing_c-17_globemaster_iii`
-- ✗ `http://example.org/united_states_air_force` → `operator` → `http://example.org/general_dynamics_f-16_fighting_falcon`
-- ✗ `http://example.org/united_states_air_force` → `operator` → `http://example.org/lockheed_ac-130`
-- ✓ `http://example.org/united_states_air_force` → `battle` → `http://example.org/invasion_of_panama`
-- ✗ `http://example.org/boeing_c-17_globemaster_iii` → `transportAircraft` → `http://example.org/boeing_c-17_globemaster_iii`
-- ✗ `http://example.org/general_dynamics_f-16_fighting_falcon` → `aircraftFighter` → `http://example.org/general_dynamics_f-16_fighting_falcon`
-- ✗ `http://example.org/lockheed_ac-130` → `attackAircraft` → `http://example.org/lockheed_ac-130`
-
-#### Id17
-
-**F1:** 0.800 | **TP:** 4 | **FP:** 1 | **FN:** 1
-
-**Gold Triples:**
-
-- `Birmingham` → `postalCode` → `B_postcode_area`
-- `103_Colmore_Row` → `architect` → `John_Madin`
-- `John_Madin` → `birthPlace` → `Birmingham`
-- `Birmingham` → `governingBody` → `Birmingham_City_Council`
-- `Birmingham` → `leader` → `Andrew_Mitchell`
-
-**Predicted Triples:**
-
-- ✓ `http://example.org/103_colmore_row` → `architect` → `http://example.org/john_madin`
-- ✓ `http://example.org/john_madin` → `birthPlace` → `http://example.org/birmingham`
-- ✓ `http://example.org/birmingham` → `postalCode` → `B`
-- ✓ `http://example.org/birmingham` → `leader` → `http://example.org/andrew_mitchell`
-- ✓ `http://example.org/birmingham` → `governingBody` → `http://example.org/birmingham_city_council`
-
-#### Id4
-
-**F1:** 0.286 | **TP:** 1 | **FP:** 1 | **FN:** 4
-
-**Gold Triples:**
-
-- `101_Helena` → `discoverer` → `James_Craig_Watson`
-- `James_Craig_Watson` → `almaMater` → `University_of_Michigan`
-- `James_Craig_Watson` → `nationality` → `Canada`
-- `James_Craig_Watson` → `deathPlace` → `Madison,_Wisconsin`
-- `James_Craig_Watson` → `deathCause` → `Peritonitis`
-
-**Predicted Triples:**
-
-- ✗ `http://example.org/101_helena` → `discovered` → `http://example.org/james_craig_watson`
-- ✓ `http://example.org/james_craig_watson` → `almaMater` → `http://example.org/university_of_michigan`
-
-#### Id4
-
-**F1:** 1.000 | **TP:** 1 | **FP:** 0 | **FN:** 0
-
-**Gold Triples:**
-
-- `Bananaman` → `broadcastedBy` → `"STV"`
-
-**Predicted Triples:**
-
-- ✓ `http://example.org/bananaman` → `broadcastedBy` → `http://example.org/stv`
-
-#### Id7
-
-**F1:** 1.000 | **TP:** 1 | **FP:** 0 | **FN:** 0
-
-**Gold Triples:**
-
-- `Elliot_See` → `occupation` → `Test_pilot`
-
-**Predicted Triples:**
-
-- ✓ `http://example.org/elliot_see` → `occupation` → `test pilot`
-
-#### Id19
-
-**F1:** 0.250 | **TP:** 1 | **FP:** 3 | **FN:** 3
-
-**Gold Triples:**
-
-- `Adonis_Georgiadis` → `inOfficeWhilePrimeMinister` → `Antonis_Samaras`
-- `Antonis_Samaras` → `successor` → `Konstantinos_Mitsotakis`
-- `New_Democracy_(Greece)` → `colour` → `Blue`
-- `Adonis_Georgiadis` → `party` → `New_Democracy_(Greece)`
-
-**Predicted Triples:**
-
-- ✗ `http://example.org/adonis_georgiadis` → `party` → `http://example.org/greek_new_democracy_party`
-- ✓ `http://example.org/adonis_georgiadis` → `inOfficeWhilePrimeMinister` → `http://example.org/antonis_samaras`
-- ✗ `http://example.org/greek_new_democracy_party` → `colour` → `blue`
-- ✗ `http://example.org/konstantinos_mitsotakis` → `successor` → `http://example.org/antonis_samaras`
-
-#### Id1
-
-**F1:** 1.000 | **TP:** 1 | **FP:** 0 | **FN:** 0
-
-**Gold Triples:**
-
-- `1634:_The_Bavarian_Crisis` → `author` → `Eric_Flint`
-
-**Predicted Triples:**
-
-- ✓ `http://example.org/1634_the_bavarian_crisis` → `author` → `http://example.org/eric_flint`
-
-#### Id7
-
-**F1:** 0.000 | **TP:** 0 | **FP:** 1 | **FN:** 1
-
-**Gold Triples:**
-
-- `School of Business and Social Sciences at the Aarhus University` → `country` → `Denmark`
-
-**Predicted Triples:**
-
-- ✗ `http://example.org/aarhus_university_school_of_business_and_social_sciences` → `locationCountry` → `http://example.org/denmark`
-
-#### Id5
-
-**F1:** 0.667 | **TP:** 1 | **FP:** 1 | **FN:** 0
-
-**Gold Triples:**
-
-- `101_Helena` → `mass` → `3.0 (kilograms)`
-
-**Predicted Triples:**
-
-- ✗ `http://example.org/101_helena` → `mass` → `3.0 kgs`
-- ✓ `http://example.org/101_helena` → `mass` → `3.0 kilograms`
 
 ---
 
