@@ -13,9 +13,9 @@ import type { Graph } from "effect"
 import type { GraphAlgebra, NodeId, OntologyContext } from "../Graph/Types.js"
 import * as Inheritance from "../Ontology/Inheritance.js"
 import type { CircularInheritanceError, InheritanceError } from "../Ontology/Inheritance.js"
-import { KnowledgeUnit, PropertyDataOrder } from "./Ast.js"
+import { type SolverError, solveToKnowledgeIndex } from "./Builder.js"
 import type { KnowledgeIndex } from "./KnowledgeIndex.js"
-import { type SolverError, solveToKnowledgeIndex } from "./Solver.js"
+import { KnowledgeUnit, PropertyDataOrder } from "./Model.js"
 
 /**
  * Enrich a KnowledgeIndex with inherited properties
@@ -64,7 +64,7 @@ export const enrichKnowledgeIndex = (
 
           // Separate own vs inherited
           // A property is "inherited" if it's in effectiveProps but not in unit.properties
-          const ownPropertyIris = new Set(unit.properties.map((p) => p.propertyIri))
+          const ownPropertyIris = new Set(unit.properties.map((p: { propertyIri: string }) => p.propertyIri))
           const inheritedProps = effectiveProps.filter((p) => !ownPropertyIris.has(p.propertyIri))
 
           // Create enriched unit with inherited properties

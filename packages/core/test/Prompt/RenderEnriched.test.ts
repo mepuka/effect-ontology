@@ -7,9 +7,8 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Data, Effect, HashMap, Option } from "effect"
 import { PropertyConstraint } from "../../src/Graph/Constraint"
-import { KnowledgeUnit } from "../../src/Prompt/Ast"
-import { EnrichedStructuredPrompt } from "../../src/Prompt/Fragment"
-import { renderEnrichedStats, renderToEnrichedPrompt } from "../../src/Prompt/RenderEnriched"
+import { KnowledgeUnit, EnrichedStructuredPrompt } from "../../src/Prompt/Model"
+import { renderEnrichedStats, renderToEnrichedPrompt } from "../../src/Prompt/Renderer"
 
 describe("Prompt.RenderEnriched", () => {
   // Create test KnowledgeIndex

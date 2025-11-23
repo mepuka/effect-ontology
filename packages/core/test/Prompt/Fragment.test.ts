@@ -11,7 +11,7 @@ import {
   estimateTokenCount,
   FragmentMetadata,
   PromptFragment
-} from "../../src/Prompt/Fragment"
+} from "../../src/Prompt/Model"
 
 describe("Prompt.Fragment", () => {
   describe("PromptFragment", () => {

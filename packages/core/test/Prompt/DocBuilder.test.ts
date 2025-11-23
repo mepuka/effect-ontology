@@ -7,7 +7,7 @@
 import { Doc } from "@effect/printer"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
-import { bulletList, header, numberedList, renderDoc, section } from "../../src/Prompt/DocBuilder.js"
+import { bulletList, header, numberedList, renderDoc, section } from "../../src/Prompt/DocRenderer.js"
 
 describe("DocBuilder", () => {
   describe("header", () => {

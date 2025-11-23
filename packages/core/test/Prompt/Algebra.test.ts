@@ -13,8 +13,8 @@ import { Data, Graph, HashMap, Option } from "effect"
 import { PropertyConstraint } from "../../src/Graph/Constraint.js"
 import type { NodeId } from "../../src/Graph/Types.js"
 import { ClassNode, PropertyNode } from "../../src/Graph/Types.js"
-import { combineWithUniversal, defaultPromptAlgebra, processUniversalProperties } from "../../src/Prompt/Algebra.js"
-import { StructuredPrompt } from "../../src/Prompt/Types.js"
+import { combineWithUniversal, defaultPromptAlgebra, processUniversalProperties } from "../../src/Prompt/Builder.js"
+import { StructuredPrompt } from "../../src/Prompt/Model.js"
 
 // Mock graph and predecessors for tests
 const mockGraph = Graph.directed<NodeId, unknown>()

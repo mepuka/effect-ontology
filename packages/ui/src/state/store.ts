@@ -9,7 +9,7 @@ import {
   solveGraph,
   solveToKnowledgeIndex
 } from "@effect-ontology/core/Prompt"
-import { renderToEnrichedPrompt } from "@effect-ontology/core/Prompt/RenderEnriched"
+import { renderToEnrichedPrompt } from "@effect-ontology/core/Prompt/Renderer"
 import {
   dereferenceJSONSchema,
   formatJSONSchema,

@@ -18,20 +18,18 @@
  */
 
 import type { Graph, HashMap } from "effect"
-import { Effect } from "effect"
+import { Effect, Option } from "effect"
 import type { NodeId } from "../Graph/Types.js"
 import type { EntityRef } from "../Prompt/EntityCache.js"
 import { deserializeEntityCache, serializeEntityCache } from "../Prompt/EntityCache.js"
-import * as EC from "../Prompt/EntityCache.js"
-import { renderToStructuredPrompt } from "../Prompt/Render.js"
-import type { TripleGraph } from "../Schema/TripleFactory.js"
 import { ArtifactStore } from "../Services/ArtifactStore.js"
 import { Database } from "../Services/Database.js"
 import { EntityDiscoveryService } from "../Services/EntityDiscovery.js"
 import { mergeGraphsWithResolution } from "../Services/EntityResolution.js"
-import { extractKnowledgeGraphTwoStage, extractVocabulary } from "../Services/Llm.js"
-import { OntologyCache } from "../Services/OntologyCache.js"
-import { RdfService } from "../Services/Rdf.js"
+import type { Chunk } from "../Services/ExtractionCore.js"
+import { getKnowledgeIndex, processChunk } from "../Services/ExtractionCore.js"
+import { FocusingService } from "../Services/Focusing.js"
+import type { IndexedDocument } from "../Services/Nlp.js"
 import { RunService } from "../Services/RunService.js"
 
 // ============================================================================
@@ -78,52 +76,6 @@ export interface SaveFinalArtifactInput {
   readonly mergedTurtle: string
 }
 
-/**
- * Extract entities from triple graph for entity discovery
- *
- * @internal
- */
-const extractEntitiesFromTriples = (
-  tripleGraph: TripleGraph<string, string>,
-  chunkIndex: number
-): Array<EC.EntityRef> => {
-  const entityMap = new Map<string, EC.EntityRef>()
-
-  for (const triple of tripleGraph.triples) {
-    // Add subject entity
-    if (!entityMap.has(triple.subject)) {
-      entityMap.set(
-        triple.subject,
-        new EC.EntityRef({
-          iri: triple.subject, // Will be converted to IRI by RdfService
-          label: triple.subject, // Human-readable name
-          types: [triple.subject_type],
-          foundInChunk: chunkIndex,
-          confidence: 1.0
-        })
-      )
-    }
-
-    // Add object entity if it's a reference (not a literal)
-    if (typeof triple.object === "object") {
-      if (!entityMap.has(triple.object.value)) {
-        entityMap.set(
-          triple.object.value,
-          new EC.EntityRef({
-            iri: triple.object.value, // Will be converted to IRI by RdfService
-            label: triple.object.value, // Human-readable name
-            types: [triple.object.type],
-            foundInChunk: chunkIndex,
-            confidence: 1.0
-          })
-        )
-      }
-    }
-  }
-
-  return Array.from(entityMap.values())
-}
-
 // ============================================================================
 // Activity 1: Load Input Text
 // ============================================================================
@@ -164,18 +116,14 @@ export const loadInputTextActivity = (input: LoadInputTextInput) =>
 /**
  * Process batch of chunks and generate RDF output
  *
- * Performs full entity extraction with LLM integration:
- * 1. Restore or reset entity state from checkpoint
- * 2. Get cached KnowledgeIndex (for prompt generation)
- * 3. Extract entities from each chunk using LLM
- * 4. Accumulate entities in EntityDiscoveryService
- * 5. Convert accumulated entities to RDF
+ * Now delegates to ExtractionCore.processChunk for extraction logic
+ * while maintaining workflow-specific checkpoint and entity state management.
  *
  * Steps:
- * 1. Restore or reset entity state
- * 2. Get cached KnowledgeIndex from OntologyCache
- * 3. Process each chunk with extractKnowledgeGraph (sequential for entity accumulation)
- * 4. Get final entity snapshot and convert to RDF
+ * 1. Restore or reset entity state from checkpoint
+ * 2. Convert string chunks to Chunk objects with metadata
+ * 3. Process each chunk using ExtractionCore.processChunk
+ * 4. Merge RDF outputs
  * 5. Return entities and RDF output
  *
  * NOTE: The preExtractedRdf parameter allows tests to skip LLM calls
@@ -183,72 +131,85 @@ export const loadInputTextActivity = (input: LoadInputTextInput) =>
 export const processBatchActivity = (input: ProcessBatchInput) =>
   Effect.gen(function*() {
     const discovery = yield* EntityDiscoveryService
-    const cache = yield* OntologyCache
-    const rdf = yield* RdfService
 
-    // Restore or reset entity state for this run
-    if (input.initialEntitySnapshot) {
-      yield* discovery.restore(input.runId, input.initialEntitySnapshot)
-    } else {
-      yield* discovery.reset(input.runId)
-    }
-
-    // If pre-extracted RDF provided (testing), skip LLM extraction
-    if (input.preExtractedRdf) {
-      const snapshot = yield* discovery.getSnapshot(input.runId)
-      return {
-        entities: snapshot.entities,
-        rdf: input.preExtractedRdf
-      }
-    }
-
-    // Get cached KnowledgeIndex for prompt generation
-    const knowledgeIndex = yield* cache.getKnowledgeIndex(
-      input.ontologyHash,
+    // 1. Get or build KnowledgeIndex (ONCE for the batch)
+    const knowledgeIndex = yield* getKnowledgeIndex(
+      input.ontologyGraph,
       input.ontology,
-      input.ontologyGraph
+      { source: "cache", cacheKey: String(input.ontologyHash) }
     )
 
-    // Generate prompt (no schema needed for two-stage extraction)
-    const prompt = renderToStructuredPrompt(knowledgeIndex)
-
-    // Process each chunk sequentially (entity accumulation requires order)
-    // Using two-stage triple extraction for better entity consistency
-    const allTripleGraphs = yield* Effect.forEach(
-      input.chunks,
-      (chunkText) => extractKnowledgeGraphTwoStage(chunkText, input.ontology, prompt),
-      { concurrency: 1 } // Sequential to maintain entity order
-    )
-
-    // Extract entities from triples and register with discovery service
-    let chunkIndex = 0
-    for (const tripleGraph of allTripleGraphs) {
-      const entities = extractEntitiesFromTriples(tripleGraph, chunkIndex)
-      yield* discovery.register(input.runId, entities)
-      chunkIndex++
+    // 2. Build search index (ONCE, if enabled)
+    let searchIndex: Option.Option<ReadonlyArray<IndexedDocument>> = Option.none()
+    const focusing = yield* Effect.serviceOption(FocusingService)
+    if (focusing._tag === "Some") {
+      const index = yield* focusing.value.buildIndex(knowledgeIndex).pipe(
+        Effect.catchAll(() => Effect.succeed([]))
+      )
+      searchIndex = Option.some(index)
     }
 
-    // Convert all triple graphs to RDF and merge
-    const allTurtles = yield* Effect.forEach(
-      allTripleGraphs,
-      (tripleGraph) =>
-        Effect.gen(function*() {
-          const store = yield* rdf.triplesToStore(tripleGraph, input.ontology)
-          return yield* rdf.storeToTurtle(store)
-        }),
-      { concurrency: 10 } // Bounded parallel RDF conversion
+    // Use runScoped for guaranteed cleanup, passing initial snapshot if available
+    return yield* discovery.runScoped(
+      input.runId,
+      Effect.gen(function*() {
+        // If pre-extracted RDF provided (testing), skip LLM extraction
+        if (input.preExtractedRdf) {
+          const snapshot = yield* discovery.getSnapshot(input.runId)
+          return {
+            entities: snapshot.entities,
+            rdf: input.preExtractedRdf
+          }
+        }
+
+        // Convert string chunks to Chunk objects with metadata
+        const chunks: ReadonlyArray<Chunk> = input.chunks.map((text, index) => ({
+          index: input.batchIndex * input.chunks.length + index,
+          text,
+          startOffset: 0, // TODO: track offsets in workflow
+          endOffset: text.length,
+          sentenceOffsets: [],
+          tokenCount: text.split(/\s+/).length
+        }))
+
+        // Process each chunk using ExtractionCore
+        // Sequential processing to maintain entity accumulation order
+        const chunkResults = yield* Effect.all(
+          chunks.map((chunk) =>
+            processChunk(
+              chunk,
+              knowledgeIndex,
+              searchIndex,
+              input.ontology,
+              {
+                chunking: { strategy: "semantic" },
+                focusing: { enabled: true, limit: 10 },
+                vocabulary: { source: "cache", cacheKey: String(input.ontologyHash) },
+                validation: { enabled: false },
+                concurrency: 1
+              },
+              input.runId
+            )
+          ),
+          { concurrency: 1 } // Sequential for deterministic entity accumulation
+        )
+
+        // Merge RDF outputs
+        const rdfGraphs = chunkResults.map((r) => r.rdf).filter((rdf) => rdf !== "")
+        const mergedRdf = rdfGraphs.length > 0
+          ? yield* mergeGraphsWithResolution(rdfGraphs)
+          : "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n"
+
+        // Get final entity snapshot for this run
+        const snapshot = yield* discovery.getSnapshot(input.runId)
+
+        return {
+          entities: snapshot.entities,
+          rdf: mergedRdf
+        }
+      }),
+      input.initialEntitySnapshot && { entities: input.initialEntitySnapshot }
     )
-
-    // Merge all RDF outputs
-    const mergedRdf = yield* mergeGraphsWithResolution(allTurtles)
-
-    // Get final entity snapshot for this run
-    const snapshot = yield* discovery.getSnapshot(input.runId)
-
-    return {
-      entities: snapshot.entities,
-      rdf: mergedRdf
-    }
   })
 
 // ============================================================================

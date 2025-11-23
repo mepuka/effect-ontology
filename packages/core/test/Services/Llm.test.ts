@@ -9,7 +9,7 @@ import { Data, Effect, HashMap, Option } from "effect"
 import { PropertyConstraint } from "../../src/Graph/Constraint.js"
 import { ClassNode } from "../../src/Graph/Types"
 import type { OntologyContext } from "../../src/Graph/Types"
-import { StructuredPrompt } from "../../src/Prompt/Types"
+import { StructuredPrompt } from "../../src/Prompt/Model"
 import { extractKnowledgeGraphTwoStage, extractVocabulary } from "../../src/Services/Llm"
 
 describe("Services.Llm", () => {

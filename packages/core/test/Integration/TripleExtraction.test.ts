@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { Effect } from "effect"
 import { RdfService } from "../../src/Services/Rdf.js"
 import { extractTriples } from "../../src/Services/Llm.js"
-import type { StructuredPrompt } from "../../src/Prompt/Types.js"
+import type { StructuredPrompt } from "../../src/Prompt/Model.js"
 import type { TripleGraph } from "../../src/Schema/TripleFactory.js"
 
 describe("Triple Extraction Integration", () => {

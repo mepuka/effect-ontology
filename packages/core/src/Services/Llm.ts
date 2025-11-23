@@ -18,15 +18,24 @@ import { LanguageModel } from "@effect/ai"
 import { Array as A, Duration, Effect, HashMap, JSONSchema, Option, Schedule, Schema as S } from "effect"
 import { LLMError } from "../Extraction/Events.js"
 import { isClassNode, type OntologyContext } from "../Graph/Types.js"
+import { renderExtractionPrompt } from "../Prompt/DocRenderer.js"
 import type { KnowledgeIndex } from "../Prompt/KnowledgeIndex.js"
 import * as KI from "../Prompt/KnowledgeIndex.js"
-import { renderExtractionPrompt } from "../Prompt/PromptDoc.js"
-import { StructuredPrompt } from "../Prompt/Types.js"
-import type { KnowledgeGraphSchema } from "../Schema/Factory.js"
+import { StructuredPrompt } from "../Prompt/Model.js"
 import { EmptyVocabularyError } from "../Schema/Factory.js"
 import { makeTripleSchema, type TripleGraph } from "../Schema/TripleFactory.js"
 import { annotateLlmCall, LlmAttributes } from "../Telemetry/LlmAttributes.js"
 import { TracingContext } from "../Telemetry/TracingContext.js"
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+const LLM_TIMEOUT = Duration.seconds(60)
+const LLM_RETRY_POLICY = Schedule.exponential(Duration.seconds(2)).pipe(
+  Schedule.intersect(Schedule.recurs(2)),
+  Schedule.jittered
+)
 
 /**
  * Extract JSON from potentially CoT-prefixed response
@@ -195,126 +204,6 @@ export const extractVocabularyFromFocused = (
  */
 
 /**
- * Extract knowledge graph from text using LLM
- *
- * Pure function that uses @effect/ai's generateObject to get structured output
- * matching the provided schema. Takes plain data as input and depends only on
- * LanguageModel service - no Effect Config.
- *
- * **Flow:**
- * 1. Build prompt from StructuredPrompt + text
- * 2. Call LanguageModel.generateObject with schema
- * 3. Extract and return validated value
- * 4. Map errors to LLMError
- *
- * @param text - Input text to extract knowledge from
- * @param ontology - Ontology context (unused directly, but available for future extensions)
- * @param prompt - Structured prompt from Prompt service
- * @param schema - Dynamic schema for validation
- * @returns Effect yielding validated knowledge graph or error, requires LanguageModel
- *
- * @deprecated Use extractKnowledgeGraphTwoStage() instead. Entity-based extraction is deprecated in favor of two-stage triple extraction for better entity consistency and IRI handling. This function will be removed in v2.0.
- *
- * @since 1.0.0
- * @category extraction
- *
- * @example
- * ```typescript
- * import { extractKnowledgeGraph } from "@effect-ontology/core/Services/Llm"
- * import { makeKnowledgeGraphSchema } from "@effect-ontology/core/Schema/Factory"
- * import { makeLlmProviderLayer } from "@effect-ontology/core/Services/LlmProvider"
- * import { Effect } from "effect"
- *
- * const program = Effect.gen(function* () {
- *   const schema = makeKnowledgeGraphSchema(
- *     ["http://xmlns.com/foaf/0.1/Person"],
- *     ["http://xmlns.com/foaf/0.1/name"]
- *   )
- *
- *   const result = yield* extractKnowledgeGraph(
- *     "Alice is a person.",
- *     ontology,
- *     prompt,
- *     schema
- *   )
- *
- *   console.log(result.entities)
- * })
- *
- * // Provide LanguageModel layer inline
- * const params = { provider: "anthropic", anthropic: { ... } }
- * const providerLayer = makeLlmProviderLayer(params)
- * Effect.runPromise(program.pipe(Effect.provide(providerLayer)))
- * ```
- */
-export const extractKnowledgeGraph = <ClassIRI extends string, PropertyIRI extends string>(
-  text: string,
-  _ontology: OntologyContext,
-  prompt: StructuredPrompt,
-  schema: KnowledgeGraphSchema<ClassIRI, PropertyIRI>
-): Effect.Effect<
-  KnowledgeGraphSchema<ClassIRI, PropertyIRI>["Type"],
-  LLMError,
-  LanguageModel.LanguageModel
-> =>
-  Effect.gen(function*() {
-    // Build the complete prompt using @effect/printer
-    const promptText = renderExtractionPrompt(prompt, text)
-
-    // Call LLM with structured output, retry, and timeout
-    const response = yield* LanguageModel.generateObject({
-      prompt: promptText,
-      schema,
-      objectName: "KnowledgeGraph"
-    }).pipe(
-      // Add timeout (30 seconds)
-      Effect.timeout(Duration.seconds(30)),
-      // Retry with exponential backoff (max 3 retries)
-      Effect.retry(
-        Schedule.exponential(Duration.seconds(1)).pipe(
-          Schedule.union(Schedule.recurs(3)),
-          Schedule.jittered
-        )
-      ),
-      // Handle timeout gracefully
-      Effect.catchTag("TimeoutException", () =>
-        Effect.fail(
-          new LLMError({
-            module: "extractKnowledgeGraph",
-            method: "generateObject",
-            reason: "ApiTimeout",
-            description: "LLM request timed out after 30 seconds"
-          })
-        ))
-    )
-
-    // Return the validated value
-    return response.value
-  }).pipe(
-    // Map all other errors to LLMError
-    Effect.catchAll((error) => {
-      // If it's already an LLMError, pass it through
-      if (error instanceof LLMError) {
-        return Effect.fail(error)
-      }
-
-      return Effect.fail(
-        new LLMError({
-          module: "extractKnowledgeGraph",
-          method: "generateObject",
-          reason: "ApiError",
-          description: `LLM extraction failed: ${
-            error && typeof error === "object" && "message" in error
-              ? error.message
-              : String(error)
-          }`,
-          cause: error
-        })
-      )
-    })
-  )
-
-/**
  * Helper: Creates a Union schema from a non-empty array of string literals
  *
  * @internal
@@ -444,14 +333,9 @@ export const extractEntities = <ClassIRI extends string>(
         })
       ),
       // Timeout AFTER tap so we see the response log
-      Effect.timeout(Duration.seconds(60)),
-      // Retry with logging on each attempt (max 2 retries = 3 total attempts)
-      Effect.retry(
-        Schedule.exponential(Duration.seconds(2)).pipe(
-          Schedule.intersect(Schedule.recurs(2)),
-          Schedule.jittered
-        )
-      ),
+      Effect.timeout(LLM_TIMEOUT),
+      // Retry with logging on each attempt
+      Effect.retry(LLM_RETRY_POLICY),
       Effect.tapError((err) =>
         Effect.log("LLM call failed, may retry", {
           elapsed: Date.now() - callStartTime,
@@ -463,14 +347,14 @@ export const extractEntities = <ClassIRI extends string>(
         Effect.gen(function*() {
           yield* Effect.logError("LLM entity extraction timed out", {
             elapsed: Date.now() - callStartTime,
-            timeout: 60
+            timeout: LLM_TIMEOUT.pipe(Duration.toSeconds)
           })
           return yield* Effect.fail(
             new LLMError({
               module: "extractEntities",
               method: "generateObject",
               reason: "ApiTimeout",
-              description: "LLM request timed out after 60 seconds"
+              description: "LLM request timed out"
             })
           )
         })),
@@ -661,13 +545,6 @@ CRITICAL: Only extract relationships between the entities listed above. Use thei
     })
 
     // Call LLM with structured output, retry, and timeout
-    yield* Effect.log("LLM triple extraction call started", {
-      promptLength: promptText.length,
-      entityCount: entities.length,
-      propertyCount: propertyIris.length,
-      timestamp: new Date().toISOString()
-    })
-
     yield* Effect.log("About to call LanguageModel.generateObject for triples", {
       elapsed: Date.now() - tripleCallStartTime
     })
@@ -683,14 +560,9 @@ CRITICAL: Only extract relationships between the entities listed above. Use thei
         })
       ),
       // Timeout AFTER tap so we see the response log
-      Effect.timeout(Duration.seconds(60)),
-      // Retry with logging on each attempt (max 2 retries = 3 total attempts)
-      Effect.retry(
-        Schedule.exponential(Duration.seconds(2)).pipe(
-          Schedule.intersect(Schedule.recurs(2)),
-          Schedule.jittered
-        )
-      ),
+      Effect.timeout(LLM_TIMEOUT),
+      // Retry with logging on each attempt
+      Effect.retry(LLM_RETRY_POLICY),
       Effect.tapError((err) =>
         Effect.log("LLM triple call failed, may retry", {
           elapsed: Date.now() - tripleCallStartTime,
@@ -702,14 +574,14 @@ CRITICAL: Only extract relationships between the entities listed above. Use thei
         Effect.gen(function*() {
           yield* Effect.logError("LLM triple extraction timed out", {
             elapsed: Date.now() - tripleCallStartTime,
-            timeout: 60
+            timeout: LLM_TIMEOUT.pipe(Duration.toSeconds)
           })
           return yield* Effect.fail(
             new LLMError({
               module: "extractTriples",
               method: "generateObject",
               reason: "ApiTimeout",
-              description: "LLM request timed out after 60 seconds"
+              description: "LLM request timed out"
             })
           )
         })),
@@ -917,51 +789,4 @@ export const extractKnowledgeGraphTwoStage = <
     )
 
     return triples
-  })
-
-/**
- * Extract knowledge graph as triples (single-stage)
- *
- * @deprecated Use extractKnowledgeGraphTwoStage() for better entity consistency.
- * This function is kept for backwards compatibility but will be removed in v2.0.
- *
- * Wrapper around extractTriples() for consistency with existing extractKnowledgeGraph API.
- * Uses triple-based schema instead of entity-based schema.
- *
- * @param text - Input text to extract knowledge from
- * @param ontology - Ontology context (unused directly, but available for future extensions)
- * @param prompt - Structured prompt from Prompt service
- * @param _schema - Schema parameter (unused, triple schema is created internally)
- * @returns Effect yielding triple graph or error, requires LanguageModel
- *
- * @since 1.0.0
- * @category extraction
- */
-export const extractKnowledgeGraphTriple = <
-  ClassIRI extends string,
-  PropertyIRI extends string
->(
-  text: string,
-  ontology: OntologyContext,
-  prompt: StructuredPrompt,
-  _schema: unknown // Unused, kept for API compatibility
-): Effect.Effect<
-  TripleGraph<ClassIRI, PropertyIRI>,
-  LLMError,
-  LanguageModel.LanguageModel
-> =>
-  Effect.gen(function*() {
-    // Extract vocabulary from ontology
-    const { classIris, propertyIris } = extractVocabulary(ontology)
-
-    // Use extractTriples with extracted vocabulary
-    // Type assertions needed because extractVocabulary returns string[] but we need ClassIRI[]/PropertyIRI[]
-    // For single-stage, we pass empty entities array (no entity consistency enforcement)
-    return yield* extractTriples(
-      text,
-      classIris as unknown as ReadonlyArray<ClassIRI>,
-      [], // Empty entities for single-stage
-      propertyIris as unknown as ReadonlyArray<PropertyIRI>,
-      prompt
-    )
   })

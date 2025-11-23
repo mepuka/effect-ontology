@@ -7,9 +7,8 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, HashMap } from "effect"
 import { parseTurtleToGraph } from "../../src/Graph/Builder.js"
-import { knowledgeIndexAlgebra } from "../../src/Prompt/Algebra.js"
+import { knowledgeIndexAlgebra, solveToKnowledgeIndex } from "../../src/Prompt/Builder.js"
 import { buildKnowledgeMetadata } from "../../src/Prompt/Metadata.js"
-import { solveToKnowledgeIndex } from "../../src/Prompt/Solver.js"
 
 const TEST_ONTOLOGY = `@prefix : <http://example.org/test#> .
 @prefix owl: <http://www.w3.org/2002/07/owl#> .

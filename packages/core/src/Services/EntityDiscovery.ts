@@ -38,6 +38,16 @@ export interface EntityDiscoveryService {
    * Clean up state for a completed run
    */
   readonly cleanup: (runId: string) => Effect.Effect<void>
+
+  /**
+   * Run an effect with a managed entity discovery scope for a runId.
+   * Automatically resets state (or restores from snapshot) at start and cleans up at end.
+   */
+  readonly runScoped: <A, E, R>(
+    runId: string,
+    effect: Effect.Effect<A, E, R>,
+    initialState?: EntityRegistry
+  ) => Effect.Effect<A, E, R>
 }
 
 /**
@@ -122,8 +132,29 @@ const makeEntityDiscoveryService = Effect.gen(function*() {
     /**
      * Clean up state for a completed run
      */
-    cleanup: (runId: string) =>
-      Ref.update(stateByRun, HashMap.remove(runId))
+    cleanup: (runId: string) => Ref.update(stateByRun, HashMap.remove(runId)),
+
+    /**
+     * Run an effect with a managed entity discovery scope for a runId.
+     * Automatically resets state at start and cleans up at end.
+     */
+    runScoped: <A, E, R>(
+      runId: string,
+      effect: Effect.Effect<A, E, R>,
+      initialState?: EntityRegistry
+    ) =>
+      Effect.acquireUseRelease(
+        Effect.gen(function*() {
+          const state = yield* getOrCreateRunState(runId)
+          if (initialState) {
+            yield* Ref.set(state, initialState)
+          } else {
+            yield* Ref.set(state, { entities: EC.empty })
+          }
+        }),
+        () => effect,
+        () => Ref.update(stateByRun, HashMap.remove(runId))
+      )
   }
 })
 

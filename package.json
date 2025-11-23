@@ -35,6 +35,7 @@
     "benchmark:smoke": "bun --env-file=.env run benchmarks/src/cli.ts --samples 10",
     "benchmark:quick": "bun --env-file=.env run benchmarks/src/cli.ts --samples 100",
     "benchmark:full": "bun --env-file=.env run benchmarks/src/cli.ts --samples all",
+    "benchmark:all-providers": "bash benchmarks/scripts/run-all-providers.sh",
     "benchmark:download": "bash benchmarks/scripts/download-datasets.sh"
   },
   "dependencies": {

@@ -10,10 +10,9 @@ import { Effect, HashMap } from "effect"
 import { readFileSync } from "fs"
 import { join } from "path"
 import { parseTurtleToGraph } from "../../src/Graph/Builder.js"
-import { knowledgeIndexAlgebra } from "../../src/Prompt/Algebra.js"
+import { knowledgeIndexAlgebra, solveToKnowledgeIndex } from "../../src/Prompt/Builder.js"
 import * as KnowledgeIndex from "../../src/Prompt/KnowledgeIndex.js"
 import { buildKnowledgeMetadata } from "../../src/Prompt/Metadata.js"
-import { solveToKnowledgeIndex } from "../../src/Prompt/Solver.js"
 
 /**
  * Load ontology from fixtures

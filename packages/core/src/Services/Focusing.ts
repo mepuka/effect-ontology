@@ -7,11 +7,19 @@
  * Uses BM25 (via NlpService) to rank ontology units against the text chunk.
  */
 
-import { Context, Effect, Layer, Option } from "effect"
+import { Context, Data, Effect, Layer, Option } from "effect"
 import * as KnowledgeIndex from "../Prompt/KnowledgeIndex.js"
 import type { KnowledgeIndex as KnowledgeIndexType } from "../Prompt/KnowledgeIndex.js"
 import { NlpService } from "./Nlp.js"
 import type { IndexedDocument } from "./Nlp.js"
+
+/**
+ * Focusing Error
+ */
+export class FocusingError extends Data.TaggedError("FocusingError")<{
+  readonly message: string
+  readonly cause?: unknown
+}> {}
 
 /**
  * Focusing Service Interface
@@ -24,7 +32,7 @@ export interface FocusingService {
    */
   readonly buildIndex: (
     index: KnowledgeIndexType
-  ) => Effect.Effect<ReadonlyArray<IndexedDocument>, unknown>
+  ) => Effect.Effect<ReadonlyArray<IndexedDocument>, FocusingError>
 
   /**
    * Focus the KnowledgeIndex on the given text
@@ -42,7 +50,7 @@ export interface FocusingService {
     knowledgeIndex: KnowledgeIndexType,
     text: string,
     limit?: number
-  ) => Effect.Effect<KnowledgeIndexType, unknown>
+  ) => Effect.Effect<KnowledgeIndexType, FocusingError>
 }
 
 /**
@@ -82,7 +90,15 @@ export const FocusingServiceLive = Layer.effect(
         Effect.gen(function*() {
           // 1. Search for relevant units using keyword overlap
           // Fallback to simple similarity since BM25 has environment issues
-          const results = yield* nlp.findSimilarDocuments(text, searchIndex, limit)
+          const results = yield* nlp.findSimilarDocuments(text, searchIndex, limit).pipe(
+            Effect.mapError(
+              (cause) =>
+                new FocusingError({
+                  message: "Failed to find similar documents",
+                  cause
+                })
+            )
+          )
 
           // 2. Collect selected IRIs
           const selectedIris = new Set<string>()

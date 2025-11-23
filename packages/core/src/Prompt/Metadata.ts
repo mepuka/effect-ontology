@@ -15,8 +15,9 @@
  */
 
 import { Data, Effect, Graph, HashMap, Option, Schema } from "effect"
+import type { PropertyConstraint } from "../Graph/Constraint.js"
 import type { NodeId, OntologyContext } from "../Graph/Types.js"
-import { KnowledgeUnit } from "./Ast.js"
+import { KnowledgeUnit } from "./Model.js"
 import * as KnowledgeIndex from "./KnowledgeIndex.js"
 import type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
 
@@ -334,7 +335,7 @@ export const buildClassSummary = (unit: KnowledgeUnit, depth: number): ClassSumm
   // Estimate tokens: definition + property descriptions
   const definitionTokens = estimateTokens(unit.definition)
   const propertyTokens = unit.properties.reduce(
-    (sum, prop) => sum + estimateTokens(`${prop.label}: ${prop.ranges[0]}`),
+    (sum: number, prop: PropertyConstraint) => sum + estimateTokens(`${prop.label}: ${prop.ranges[0]}`),
     0
   )
   const estimatedTokensValue = definitionTokens + propertyTokens
@@ -518,7 +519,7 @@ export const buildTokenStats = (index: KnowledgeIndexType): TokenStats => {
 
   for (const unit of KnowledgeIndex.values(index)) {
     const tokens = estimateTokens(unit.definition) +
-      unit.properties.reduce((sum, p) => sum + estimateTokens(`${p.label}: ${p.ranges[0]}`), 0)
+      unit.properties.reduce((sum: number, p: PropertyConstraint) => sum + estimateTokens(`${p.label}: ${p.ranges[0]}`), 0)
 
     totalTokens += tokens
     byClass = HashMap.set(byClass, unit.iri, tokens)

@@ -7,29 +7,93 @@
  * @module Prompt
  */
 
+// Model exports (consolidated from Ast.ts, Types.ts, Fragment.ts, Context.ts)
+export {
+  KnowledgeUnit,
+  type PromptAST,
+  PropertyDataOrder,
+  PropertyDataEqual,
+  KnowledgeUnitOrder,
+  EmptyNode,
+  DefinitionNode,
+  CompositeNode,
+  isEmptyNode,
+  isDefinitionNode,
+  isCompositeNode,
+  StructuredPrompt,
+  type GraphAlgebra,
+  type PromptAlgebra,
+  PromptFragment,
+  EnrichedStructuredPrompt,
+  FragmentMetadata,
+  FragmentType,
+  estimateTokenCount,
+  type PromptContext,
+  empty,
+  combine,
+  make
+} from "./Model.js"
+export * as Context from "./Model.js"
+
+// Builder exports (consolidated from Algebra.ts, Solver.ts)
 export {
   combineWithUniversal,
   combineWithUniversalIndex,
   defaultPromptAlgebra,
   knowledgeIndexAlgebra,
   processUniversalProperties,
-  processUniversalPropertiesToIndex
-} from "./Algebra.js"
-export { KnowledgeUnit, type PromptAST } from "./Ast.js"
-export * as Context from "./Context.js"
-export type { PromptContext } from "./Context.js"
-export { bulletList, header, numberedList, renderDoc, renderDocWithWidth, section } from "./DocBuilder.js"
+  processUniversalPropertiesToIndex,
+  GraphCycleError,
+  MissingNodeDataError,
+  solveGraph,
+  type SolverError,
+  solveToKnowledgeIndex
+} from "./Builder.js"
+
+// DocRenderer exports (consolidated from PromptDoc.ts, DocBuilder.ts)
+export {
+  bulletList,
+  header,
+  numberedList,
+  renderDoc,
+  renderDocWithWidth,
+  section,
+  buildExtractionPromptDoc,
+  buildPromptDoc,
+  renderExtractionPrompt,
+  renderStructuredPrompt,
+  getFewShotExamples
+} from "./DocRenderer.js"
+
+// Renderer exports (consolidated from Render.ts, RenderDynamic.ts, RenderEnriched.ts)
+export {
+  renderToStructuredPrompt,
+  renderWithInheritance,
+  renderContext,
+  renderToText,
+  renderStats,
+  renderDiff,
+  type RenderOptions,
+  defaultRenderOptions,
+  renderToStructuredPromptDynamic,
+  renderWithOntologyAwareExamples,
+  type DynamicRenderOptions,
+  renderToEnrichedPrompt,
+  renderWithInheritanceEnriched,
+  renderEnrichedToText,
+  renderEnrichedStats,
+  type RenderEnrichedOptions,
+  defaultRenderEnrichedOptions
+} from "./Renderer.js"
+export * as Render from "./Renderer.js"
+export * as RenderDynamic from "./Renderer.js"
+export * as RenderEnriched from "./Renderer.js"
+
+// Other exports (unchanged)
 export { enrichKnowledgeIndex, generateEnrichedIndex } from "./Enrichment.js"
 export * as EntityCache from "./EntityCache.js"
 export type { EntityCache as EntityCacheType, EntityRef } from "./EntityCache.js"
 export * as Focus from "./Focus.js"
-export {
-  EnrichedStructuredPrompt,
-  estimateTokenCount,
-  FragmentMetadata,
-  type FragmentType,
-  PromptFragment
-} from "./Fragment.js"
 export * as KnowledgeIndex from "./KnowledgeIndex.js"
 export type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
 export {
@@ -50,12 +114,6 @@ export {
   TokenStats,
   TreeNode
 } from "./Metadata.js"
-export {
-  buildExtractionPromptDoc,
-  buildPromptDoc,
-  renderExtractionPrompt,
-  renderStructuredPrompt
-} from "./PromptDoc.js"
 export * as EmbeddingIndex from "./EmbeddingIndex.js"
 export type { EmbeddedEntry, EmbeddingIndex as EmbeddingIndexType } from "./EmbeddingIndex.js"
 export {
@@ -68,12 +126,6 @@ export {
   getStaticExamples,
   type ExamplePool
 } from "./ExamplePool.js"
-export * as Render from "./Render.js"
-export * as RenderDynamic from "./RenderDynamic.js"
-export type { DynamicRenderOptions } from "./RenderDynamic.js"
-export * as RenderEnriched from "./RenderEnriched.js"
-export { GraphCycleError, MissingNodeDataError, solveGraph, type SolverError, solveToKnowledgeIndex } from "./Solver.js"
-export { type GraphAlgebra, type PromptAlgebra, StructuredPrompt } from "./Types.js"
 export {
   classSummaryToMarkdown,
   createSummaryReport,

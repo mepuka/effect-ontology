@@ -13,7 +13,7 @@
  */
 
 import { Effect, Stream } from "effect"
-import type { NlpService, NlpError } from "./Nlp.js"
+import type { NlpError, NlpService } from "./Nlp.js"
 
 // ============================================================================
 // Types
@@ -68,17 +68,24 @@ export type ChunkingConfig = SemanticChunkingConfig | CharacterChunkingConfig
 
 /**
  * Chunk metadata for tracking provenance
+ *
+ * This type is compatible with ExtractionCore.Chunk and provides
+ * all necessary metadata for extraction processing.
  */
 export interface ChunkInfo {
   /** Zero-based chunk index */
   readonly index: number
   /** Chunk text content */
   readonly text: string
-  /** Start position in original text (for character strategy) */
-  readonly startPos?: number
-  /** End position in original text (for character strategy) */
-  readonly endPos?: number
-  /** Sentence indices (for semantic strategy) */
+  /** Start position in original text (character offset) */
+  readonly startOffset: number
+  /** End position in original text (character offset) */
+  readonly endOffset: number
+  /** Sentence offsets within the chunk (for semantic strategy) */
+  readonly sentenceOffsets: ReadonlyArray<{ start: number; end: number }>
+  /** Estimated token count */
+  readonly tokenCount: number
+  /** Sentence indices in original text (for semantic strategy) */
   readonly sentenceRange?: { start: number; end: number }
 }
 
@@ -171,17 +178,21 @@ export const chunkTextByCharacters = (
 ): ReadonlyArray<ChunkInfo> => {
   if (text.length === 0) return []
 
-  const { windowSize, overlap } = config
+  const { overlap, windowSize } = config
   const step = windowSize - overlap
-  const chunks: ChunkInfo[] = []
+  const chunks: Array<ChunkInfo> = []
 
   for (let i = 0, index = 0; i < text.length; i += step, index++) {
     const end = Math.min(i + windowSize, text.length)
+    const chunkText = text.slice(i, end)
+
     chunks.push({
       index,
-      text: text.slice(i, end),
-      startPos: i,
-      endPos: end
+      text: chunkText,
+      startOffset: i,
+      endOffset: end,
+      sentenceOffsets: [], // No sentence info for character chunking
+      tokenCount: chunkText.split(/\s+/).length // Rough estimate
     })
 
     if (end === text.length) break
@@ -206,19 +217,40 @@ export const chunkTextBySentences = (
 
     if (sentences.length === 0) return []
 
-    const { windowSize, overlap } = config
+    const { overlap, windowSize } = config
     const step = Math.max(1, windowSize - overlap)
-    const chunks: ChunkInfo[] = []
+    const chunks: Array<ChunkInfo> = []
+
+    let currentOffset = 0
 
     for (let i = 0, index = 0; i < sentences.length; i += step, index++) {
       const end = Math.min(i + windowSize, sentences.length)
       const chunkSentences = sentences.slice(i, end)
+      const chunkText = chunkSentences.join(" ")
+
+      // Calculate sentence offsets within the chunk
+      const sentenceOffsets: Array<{ start: number; end: number }> = []
+      let sentenceOffset = 0
+
+      for (const sentence of chunkSentences) {
+        sentenceOffsets.push({
+          start: sentenceOffset,
+          end: sentenceOffset + sentence.length
+        })
+        sentenceOffset += sentence.length + 1 // +1 for space
+      }
 
       chunks.push({
         index,
-        text: chunkSentences.join(" "),
+        text: chunkText,
+        startOffset: currentOffset,
+        endOffset: currentOffset + chunkText.length,
+        sentenceOffsets,
+        tokenCount: chunkText.split(/\s+/).length,
         sentenceRange: { start: i, end: end - 1 }
       })
+
+      currentOffset += chunkText.length + 1 // +1 for space between chunks
 
       if (end === sentences.length) break
     }
@@ -284,19 +316,40 @@ export const previewChunks = (text: string, config: ChunkingConfig): ReadonlyArr
     // Fall back to simple sentence split for preview
     // This is a rough approximation without NLP
     const sentences = text.split(/(?<=[.!?])\s+/)
-    const { windowSize, overlap } = config
+    const { overlap, windowSize } = config
     const step = Math.max(1, windowSize - overlap)
-    const chunks: ChunkInfo[] = []
+    const chunks: Array<ChunkInfo> = []
+
+    let currentOffset = 0
 
     for (let i = 0, index = 0; i < sentences.length; i += step, index++) {
       const end = Math.min(i + windowSize, sentences.length)
       const chunkSentences = sentences.slice(i, end)
+      const chunkText = chunkSentences.join(" ")
+
+      // Calculate sentence offsets
+      const sentenceOffsets: Array<{ start: number; end: number }> = []
+      let sentenceOffset = 0
+
+      for (const sentence of chunkSentences) {
+        sentenceOffsets.push({
+          start: sentenceOffset,
+          end: sentenceOffset + sentence.length
+        })
+        sentenceOffset += sentence.length + 1
+      }
 
       chunks.push({
         index,
-        text: chunkSentences.join(" "),
+        text: chunkText,
+        startOffset: currentOffset,
+        endOffset: currentOffset + chunkText.length,
+        sentenceOffsets,
+        tokenCount: chunkText.split(/\s+/).length,
         sentenceRange: { start: i, end: end - 1 }
       })
+
+      currentOffset += chunkText.length + 1
 
       if (end === sentences.length) break
     }
@@ -319,7 +372,7 @@ export const previewChunks = (text: string, config: ChunkingConfig): ReadonlyArr
 export const estimateChunkCount = (textLength: number, config: ChunkingConfig): number => {
   if (textLength === 0) return 0
 
-  const { windowSize, overlap } = config
+  const { overlap, windowSize } = config
   const step = windowSize - overlap
 
   // For character strategy, we know exact count
