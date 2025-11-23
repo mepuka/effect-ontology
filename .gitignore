@@ -21,7 +21,9 @@ test-results/
 extraction_data/
 outputs/
 packages/core/test-output/
-benchmarks/results/
-benchmarks/reports/
+
+# Benchmark artifacts (keep reports, ignore raw data)
+benchmarks/results/*.json
+!benchmarks/results/*-report.md
 benchmarks/datasets/
 benchmarks/ontologies/
