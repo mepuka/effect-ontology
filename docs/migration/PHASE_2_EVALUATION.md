@@ -12,23 +12,27 @@ Phase 2 successfully deprecated entity mode and made two-stage triple extraction
 ## ✅ Completed Work
 
 ### 1. Two-Stage Extraction Implementation
+
 - ✅ `extractEntities()` - Stage 1 entity extraction
 - ✅ `extractTriples()` - Stage 2 relation extraction with entity consistency
 - ✅ `extractKnowledgeGraphTwoStage()` - Orchestrates both stages
 - ✅ Entity consistency enforcement via prompt enhancement
 
 ### 2. Core Services Updated
+
 - ✅ `ExtractionPipeline.ts` - Uses `extractKnowledgeGraphTwoStage()` and `triplesToStore()`
 - ✅ `Workflow/Activities.ts` - Updated `processBatchActivity()` to use triple mode
 - ✅ `Services/Extraction.ts` - Updated extraction service to use triple mode
 - ✅ CLI - Already using triple mode via `streamingExtractionPipeline()`
 
 ### 3. Entity Mode Deprecated
+
 - ✅ Added `@deprecated` to `makeKnowledgeGraphSchema()` in `Schema/Factory.ts`
 - ✅ Added `@deprecated` to `extractKnowledgeGraph()` in `Services/Llm.ts`
 - ✅ Both note removal in v2.0
 
 ### 4. Tests Updated
+
 - ✅ `Services/Llm.test.ts` - Updated to test `extractKnowledgeGraphTwoStage()`
 - ✅ `Services/Rdf.test.ts` - Added tests for `triplesToStore()`
 - ✅ `Services/LlmTriple.test.ts` - Fixed function signature
@@ -45,16 +49,19 @@ Phase 2 successfully deprecated entity mode and made two-stage triple extraction
 #### Files Still Referencing Deprecated Functions
 
 **Low Priority (Documentation/Examples Only):**
+
 - `packages/core/src/Schema/Export.ts` - Example code uses `makeKnowledgeGraphSchema` (line 29)
 - `packages/core/src/Schema/README.md` - Documentation examples
 - `packages/core/src/Schema/IMPLEMENTATION_NOTES.md` - Implementation notes
 
 **Medium Priority (Public API):**
+
 - `packages/core/src/Services/index.ts` - Still exports `extractKnowledgeGraph` (line 35)
   - **Action**: Add deprecation notice or remove from public exports
   - **Recommendation**: Keep for backward compatibility but add deprecation notice
 
 **Low Priority (Internal Usage - OK to keep):**
+
 - `packages/core/src/Services/Rdf.ts` - `jsonToStore()` still exists (for backward compatibility)
 - `packages/core/src/Services/Shacl.ts` - No changes needed (works with RDF)
 
@@ -63,6 +70,7 @@ Phase 2 successfully deprecated entity mode and made two-stage triple extraction
 #### Tests Still Using Entity Mode
 
 **High Priority:**
+
 - `test/Services/Rdf.datatype.test.ts` - Uses `jsonToStore()` (18 instances)
   - **Action**: Add parallel tests using `triplesToStore()` OR keep as backward compatibility tests
   - **Recommendation**: Keep existing tests, add new triple-based tests
@@ -72,11 +80,13 @@ Phase 2 successfully deprecated entity mode and made two-stage triple extraction
   - **Recommendation**: Keep as legacy test, add new triple test
 
 **Medium Priority:**
+
 - `test/Issues/CodeReview2025.test.ts` - Uses `jsonToStore()` (3 instances)
   - **Action**: Update to use `triplesToStore()` OR mark as legacy
   - **Recommendation**: Update to triple mode
 
 **Low Priority (Schema Tests - OK to keep):**
+
 - `test/Schema/Factory.test.ts` - Tests deprecated `makeKnowledgeGraphSchema()` (expected)
 - `test/Schema/JsonSchemaExport.test.ts` - Tests schema export (still valid)
 - `test/Schema/JsonSchemaMetrics.test.ts` - Tests schema metrics (still valid)
@@ -85,16 +95,19 @@ Phase 2 successfully deprecated entity mode and made two-stage triple extraction
 ### 3. Documentation Updates
 
 **High Priority:**
+
 - [ ] Update main README.md to reflect triple mode as default
 - [ ] Update API documentation for new functions
 - [ ] Create migration guide for users upgrading from entity mode
 
 **Medium Priority:**
+
 - [ ] Update `Schema/README.md` examples to use `makeTripleSchema()`
 - [ ] Update `Schema/Export.ts` examples to show triple schema
 - [ ] Add examples of two-stage extraction
 
 **Low Priority:**
+
 - [ ] Update inline code comments
 - [ ] Update JSDoc examples
 
@@ -103,15 +116,18 @@ Phase 2 successfully deprecated entity mode and made two-stage triple extraction
 **Status**: Partially Implemented
 
 **Completed:**
+
 - ✅ Entity consistency enforced via prompt enhancement in `extractTriples()`
 - ✅ Schema annotations include entity naming rules
 
 **Missing:**
+
 - [ ] `Prompt/EntityConsistency.ts` module (mentioned in spec but not created)
 - [ ] Few-shot examples for entity consistency
 - [ ] Dedicated entity consistency prompt section
 
 **Recommendation**: This is a nice-to-have enhancement. The current implementation works via:
+
 1. Two-stage extraction (entities extracted first, then relations)
 2. Prompt enhancement with known entities list
 3. Schema annotations with naming rules
@@ -121,6 +137,7 @@ Phase 2 successfully deprecated entity mode and made two-stage triple extraction
 **Status**: Not Started
 
 **Tasks:**
+
 - [ ] Run batch test suite with triple mode
 - [ ] Compare pass rates: entity mode vs triple mode
 - [ ] Performance benchmarks (latency, memory)
@@ -133,6 +150,7 @@ Phase 2 successfully deprecated entity mode and made two-stage triple extraction
 **Status**: Not Implemented
 
 **From Spec:**
+
 ```typescript
 // packages/core/src/Schema/Adapters.ts
 export const entitiesToTriples = ...
@@ -145,21 +163,21 @@ export const triplesToEntities = ...
 
 ## 📊 Migration Status by Component
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| **Core Extraction** | ✅ Complete | Two-stage extraction working |
-| **Pipeline Integration** | ✅ Complete | All pipelines use triple mode |
-| **RDF Conversion** | ✅ Complete | `triplesToStore()` implemented |
-| **Entity Discovery** | ✅ Complete | Updated to work with triples |
-| **CLI** | ✅ Complete | Uses triple mode by default |
-| **Workflow** | ✅ Complete | Activities updated |
-| **Tests - Core** | ✅ Complete | Main tests updated |
-| **Tests - Integration** | 🔄 Partial | Some still use entity mode (OK for backward compat) |
-| **Tests - Schema** | ✅ Complete | Schema tests updated |
-| **Documentation** | ❌ Not Started | README, examples need updates |
-| **Entity Consistency Module** | 🔄 Partial | Works but dedicated module not created |
-| **Performance Validation** | ❌ Not Started | Batch tests not run yet |
-| **Backward Compat Adapters** | ❌ Not Started | Low priority |
+| Component                     | Status         | Notes                                               |
+| ----------------------------- | -------------- | --------------------------------------------------- |
+| **Core Extraction**           | ✅ Complete    | Two-stage extraction working                        |
+| **Pipeline Integration**      | ✅ Complete    | All pipelines use triple mode                       |
+| **RDF Conversion**            | ✅ Complete    | `triplesToStore()` implemented                      |
+| **Entity Discovery**          | ✅ Complete    | Updated to work with triples                        |
+| **CLI**                       | ✅ Complete    | Uses triple mode by default                         |
+| **Workflow**                  | ✅ Complete    | Activities updated                                  |
+| **Tests - Core**              | ✅ Complete    | Main tests updated                                  |
+| **Tests - Integration**       | 🔄 Partial     | Some still use entity mode (OK for backward compat) |
+| **Tests - Schema**            | ✅ Complete    | Schema tests updated                                |
+| **Documentation**             | ❌ Not Started | README, examples need updates                       |
+| **Entity Consistency Module** | 🔄 Partial     | Works but dedicated module not created              |
+| **Performance Validation**    | ❌ Not Started | Batch tests not run yet                             |
+| **Backward Compat Adapters**  | ❌ Not Started | Low priority                                        |
 
 ---
 
@@ -215,6 +233,7 @@ export const triplesToEntities = ...
 ## 🔍 Code Quality Assessment
 
 ### Strengths
+
 - ✅ Clean separation of concerns
 - ✅ Type-safe implementation
 - ✅ Backward compatible (deprecated functions still work)
@@ -222,6 +241,7 @@ export const triplesToEntities = ...
 - ✅ Follows Effect-TS patterns
 
 ### Areas for Improvement
+
 - ⚠️ Some tests still use deprecated functions (acceptable for backward compat)
 - ⚠️ Documentation needs updates
 - ⚠️ Entity consistency rules could be more explicit
@@ -232,6 +252,7 @@ export const triplesToEntities = ...
 ## 📈 Success Metrics
 
 ### MVP Complete ✅
+
 - [x] Triple schema creates valid Effect schemas
 - [x] Triple → RDF conversion produces valid Turtle
 - [x] CLI uses triple mode by default
@@ -239,6 +260,7 @@ export const triplesToEntities = ...
 - [x] No N3 parser errors in triple mode
 
 ### Production Ready (In Progress)
+
 - [ ] 95%+ batch test pass rate ⏳
 - [ ] Performance within 2x of entity mode ⏳
 - [ ] Documentation complete ❌
@@ -250,16 +272,19 @@ export const triplesToEntities = ...
 ## 🚦 Risk Assessment
 
 ### Low Risk
+
 - Core implementation is complete and tested
 - Backward compatibility maintained
 - Deprecated functions still work
 
 ### Medium Risk
+
 - Performance not yet validated (expected +10-20% latency)
 - Batch test suite not yet run
 - Some edge cases may need testing
 
 ### Mitigation
+
 - Run batch tests before production release
 - Monitor performance in staging
 - Keep deprecated functions until v2.0
@@ -279,10 +304,10 @@ export const triplesToEntities = ...
 ## Conclusion
 
 **Phase 2 is functionally complete.** The core architecture is solid, and the system successfully uses two-stage triple extraction by default. The remaining work is primarily:
+
 - Documentation updates
 - Performance validation
 - Test suite validation
 - Optional enhancements (entity consistency module)
 
 The system is ready for production use after batch test validation and documentation updates.
-

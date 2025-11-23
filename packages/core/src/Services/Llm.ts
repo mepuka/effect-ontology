@@ -15,16 +15,18 @@
  */
 
 import { LanguageModel } from "@effect/ai"
-import { Array as A, Duration, Effect, HashMap, Option, Schedule, Schema as S } from "effect"
-import { annotateLlmCall, LlmAttributes } from "../Telemetry/LlmAttributes.js"
-import { TracingContext } from "../Telemetry/TracingContext.js"
+import { Array as A, Duration, Effect, HashMap, JSONSchema, Option, Schedule, Schema as S } from "effect"
 import { LLMError } from "../Extraction/Events.js"
 import { isClassNode, type OntologyContext } from "../Graph/Types.js"
+import type { KnowledgeIndex } from "../Prompt/KnowledgeIndex.js"
+import * as KI from "../Prompt/KnowledgeIndex.js"
 import { renderExtractionPrompt } from "../Prompt/PromptDoc.js"
 import { StructuredPrompt } from "../Prompt/Types.js"
 import type { KnowledgeGraphSchema } from "../Schema/Factory.js"
 import { EmptyVocabularyError } from "../Schema/Factory.js"
 import { makeTripleSchema, type TripleGraph } from "../Schema/TripleFactory.js"
+import { annotateLlmCall, LlmAttributes } from "../Telemetry/LlmAttributes.js"
+import { TracingContext } from "../Telemetry/TracingContext.js"
 
 /**
  * Extract class and property IRIs from OntologyContext
@@ -63,6 +65,93 @@ export const extractVocabulary = (ontology: OntologyContext) => {
   }
 
   return { classIris, propertyIris }
+}
+
+/**
+ * Vocabulary extracted from ontology or focused index
+ *
+ * @since 1.0.0
+ * @category types
+ */
+export interface ExtractionVocabulary {
+  readonly classIris: ReadonlyArray<string>
+  readonly propertyIris: ReadonlyArray<string>
+}
+
+/**
+ * Extract vocabulary from a focused KnowledgeIndex
+ *
+ * Instead of extracting from the full OntologyContext, this function extracts
+ * vocabulary from a focused KnowledgeIndex (subset of ontology units selected
+ * by BM25 relevance to input text).
+ *
+ * This solves the "schema complexity" problem for providers like Gemini that
+ * have limits on enum branching in JSON schemas. By extracting only the
+ * classes and properties present in the focused index, we reduce schema
+ * complexity by 80%+ for large ontologies (e.g., WebNLG with 467 properties).
+ *
+ * **Benefits:**
+ * - Schema vocabulary matches prompt context (internal consistency)
+ * - Reduced schema complexity enables Gemini support
+ * - Less hallucination from irrelevant properties
+ *
+ * **Note on Universal Properties:**
+ * Universal properties (domain-less like Dublin Core metadata) are only used as
+ * a fallback when the focused index has no properties AND the universal set is
+ * reasonably sized (< 100). If an ontology has ALL properties as universal
+ * (no rdfs:domain declarations), the focused approach cannot reduce schema
+ * complexity and should fall back to full ontology extraction.
+ *
+ * @param focusedIndex - KnowledgeIndex subset from FocusingService or selectContext
+ * @param ontology - Optional OntologyContext for fallback to universal properties
+ * @returns Object with classIris and propertyIris arrays, or null if focused extraction isn't feasible
+ *
+ * @since 1.0.0
+ * @category helpers
+ */
+export const extractVocabularyFromFocused = (
+  focusedIndex: KnowledgeIndex,
+  ontology?: OntologyContext
+): ExtractionVocabulary | null => {
+  const classIris: Array<string> = []
+  const propertyIris: Array<string> = []
+
+  // Extract from focused units only
+  for (const unit of KI.values(focusedIndex)) {
+    classIris.push(unit.iri)
+
+    // Include direct properties
+    for (const prop of unit.properties) {
+      if (!propertyIris.includes(prop.propertyIri)) {
+        propertyIris.push(prop.propertyIri)
+      }
+    }
+
+    // Include inherited properties
+    for (const prop of unit.inheritedProperties) {
+      if (!propertyIris.includes(prop.propertyIri)) {
+        propertyIris.push(prop.propertyIri)
+      }
+    }
+  }
+
+  // If we found properties from the focused units, use them
+  if (propertyIris.length > 0) {
+    return { classIris, propertyIris }
+  }
+
+  // Fallback: Use universal properties if they're reasonably sized
+  // If universal properties are too large (e.g., ontology has no domain info),
+  // return null to signal that focused extraction isn't feasible
+  if (ontology && ontology.universalProperties.length > 0 && ontology.universalProperties.length < 100) {
+    for (const prop of ontology.universalProperties) {
+      propertyIris.push(prop.propertyIri)
+    }
+    return { classIris, propertyIris }
+  }
+
+  // Focused extraction not feasible - return null to fall back to full ontology
+  return null
 }
 
 /**
@@ -301,32 +390,68 @@ export const extractEntities = <ClassIRI extends string>(
     const promptText = renderExtractionPrompt(prompt, text)
 
     // Log LLM call start
+    const callStartTime = Date.now()
     yield* Effect.log("LLM entity extraction call started", {
       promptLength: promptText.length,
-      classCount: classIris.length
+      classCount: classIris.length,
+      timestamp: new Date().toISOString()
     })
 
+    yield* Effect.log("About to call LanguageModel.generateObject for entities", {
+      elapsed: Date.now() - callStartTime,
+      promptPreview: promptText.substring(0, 100) + "..."
+    })
+
+    // Call LLM with timeout and retry
     const response = yield* LanguageModel.generateObject({
       prompt: promptText,
       schema,
       objectName: "EntityList"
     }).pipe(
-      Effect.timeout(Duration.seconds(30)),
+      Effect.tap(() =>
+        Effect.log("LanguageModel.generateObject returned for entities", {
+          elapsed: Date.now() - callStartTime
+        })
+      ),
+      // Timeout AFTER tap so we see the response log
+      Effect.timeout(Duration.seconds(60)),
+      // Retry with logging on each attempt (max 2 retries = 3 total attempts)
       Effect.retry(
-        Schedule.exponential(Duration.seconds(1)).pipe(
-          Schedule.union(Schedule.recurs(3)),
+        Schedule.exponential(Duration.seconds(2)).pipe(
+          Schedule.intersect(Schedule.recurs(2)),
           Schedule.jittered
         )
       ),
+      Effect.tapError((err) =>
+        Effect.log("LLM call failed, may retry", {
+          elapsed: Date.now() - callStartTime,
+          error: String(err)
+        })
+      ),
+      // Catch timeout and convert to LLMError
       Effect.catchTag("TimeoutException", () =>
-        Effect.fail(
-          new LLMError({
-            module: "extractEntities",
-            method: "generateObject",
-            reason: "ApiTimeout",
-            description: "LLM request timed out after 30 seconds"
+        Effect.gen(function*() {
+          yield* Effect.logError("LLM entity extraction timed out", {
+            elapsed: Date.now() - callStartTime,
+            timeout: 60
           })
-        ))
+          return yield* Effect.fail(
+            new LLMError({
+              module: "extractEntities",
+              method: "generateObject",
+              reason: "ApiTimeout",
+              description: "LLM request timed out after 60 seconds"
+            })
+          )
+        })),
+      // Catch all other errors and log them
+      Effect.tapError((error) =>
+        Effect.log("LLM generateObject error", {
+          elapsed: Date.now() - callStartTime,
+          errorType: error?.constructor?.name || "unknown",
+          errorMessage: String(error)
+        })
+      )
     )
 
     const entities = Array.from(response.value.entities)
@@ -342,20 +467,28 @@ export const extractEntities = <ClassIRI extends string>(
       onSome: (ctx) => ctx.provider
     })
 
+    // Generate JSON Schema from Effect Schema
+    const schemaJson = JSON.stringify(JSONSchema.make(schema), null, 2)
+
     yield* annotateLlmCall({
       model,
       provider,
       promptLength: promptText.length,
       promptText,
+      responseText: JSON.stringify(response.value, null, 2),
       inputTokens: response.usage?.inputTokens,
-      outputTokens: response.usage?.outputTokens
+      outputTokens: response.usage?.outputTokens,
+      schemaJson
     })
     yield* Effect.annotateCurrentSpan(LlmAttributes.ENTITY_COUNT, entities.length)
 
     // Log LLM call completion
     yield* Effect.log("LLM entity extraction call completed", {
       entityCount: entities.length,
-      entities: entities.map((e) => ({ name: e.name, type: e.type }))
+      entities: entities.map((e) => ({ name: e.name, type: e.type })),
+      totalElapsed: Date.now() - callStartTime,
+      inputTokens: response.usage?.inputTokens,
+      outputTokens: response.usage?.outputTokens
     })
 
     return entities
@@ -489,37 +622,75 @@ CRITICAL: Only extract relationships between the entities listed above. Use thei
     const promptText = renderExtractionPrompt(enhancedPrompt, text)
 
     // Log LLM call start
+    const tripleCallStartTime = Date.now()
     yield* Effect.log("LLM triple extraction call started", {
       promptLength: promptText.length,
       entityCount: entities.length,
-      propertyCount: propertyIris.length
+      propertyCount: propertyIris.length,
+      timestamp: new Date().toISOString()
     })
 
     // Call LLM with structured output, retry, and timeout
+    yield* Effect.log("LLM triple extraction call started", {
+      promptLength: promptText.length,
+      entityCount: entities.length,
+      propertyCount: propertyIris.length,
+      timestamp: new Date().toISOString()
+    })
+
+    yield* Effect.log("About to call LanguageModel.generateObject for triples", {
+      elapsed: Date.now() - tripleCallStartTime
+    })
+
     const response = yield* LanguageModel.generateObject({
       prompt: promptText,
       schema,
       objectName: "TripleGraph"
     }).pipe(
-      // Add timeout (30 seconds)
-      Effect.timeout(Duration.seconds(30)),
-      // Retry with exponential backoff (max 3 retries)
+      Effect.tap(() =>
+        Effect.log("LanguageModel.generateObject returned for triples", {
+          elapsed: Date.now() - tripleCallStartTime
+        })
+      ),
+      // Timeout AFTER tap so we see the response log
+      Effect.timeout(Duration.seconds(60)),
+      // Retry with logging on each attempt (max 2 retries = 3 total attempts)
       Effect.retry(
-        Schedule.exponential(Duration.seconds(1)).pipe(
-          Schedule.union(Schedule.recurs(3)),
+        Schedule.exponential(Duration.seconds(2)).pipe(
+          Schedule.intersect(Schedule.recurs(2)),
           Schedule.jittered
         )
       ),
-      // Handle timeout gracefully
+      Effect.tapError((err) =>
+        Effect.log("LLM triple call failed, may retry", {
+          elapsed: Date.now() - tripleCallStartTime,
+          error: String(err)
+        })
+      ),
+      // Catch timeout and convert to LLMError
       Effect.catchTag("TimeoutException", () =>
-        Effect.fail(
-          new LLMError({
-            module: "extractTriples",
-            method: "generateObject",
-            reason: "ApiTimeout",
-            description: "LLM request timed out after 30 seconds"
+        Effect.gen(function*() {
+          yield* Effect.logError("LLM triple extraction timed out", {
+            elapsed: Date.now() - tripleCallStartTime,
+            timeout: 60
           })
-        ))
+          return yield* Effect.fail(
+            new LLMError({
+              module: "extractTriples",
+              method: "generateObject",
+              reason: "ApiTimeout",
+              description: "LLM request timed out after 60 seconds"
+            })
+          )
+        })),
+      // Catch all other errors and log them
+      Effect.tapError((error) =>
+        Effect.log("LLM triple generateObject error", {
+          elapsed: Date.now() - tripleCallStartTime,
+          errorType: error?.constructor?.name || "unknown",
+          errorMessage: String(error)
+        })
+      )
     )
 
     // Return the validated value (cast to TripleGraph type)
@@ -538,13 +709,18 @@ CRITICAL: Only extract relationships between the entities listed above. Use thei
       onSome: (ctx) => ctx.provider
     })
 
+    // Generate JSON Schema from Effect Schema
+    const schemaJson = JSON.stringify(JSONSchema.make(schema), null, 2)
+
     yield* annotateLlmCall({
       model,
       provider,
       promptLength: promptText.length,
       promptText,
+      responseText: JSON.stringify(tripleGraph, null, 2),
       inputTokens: response.usage?.inputTokens,
-      outputTokens: response.usage?.outputTokens
+      outputTokens: response.usage?.outputTokens,
+      schemaJson
     })
     yield* Effect.annotateCurrentSpan(LlmAttributes.TRIPLE_COUNT, tripleGraph.triples.length)
 
@@ -555,7 +731,10 @@ CRITICAL: Only extract relationships between the entities listed above. Use thei
         subject: t.subject,
         predicate: t.predicate,
         object: typeof t.object === "string" ? t.object : t.object.value
-      }))
+      })),
+      totalElapsed: Date.now() - tripleCallStartTime,
+      inputTokens: response.usage?.inputTokens,
+      outputTokens: response.usage?.outputTokens
     })
 
     return tripleGraph
@@ -642,15 +821,21 @@ export const extractKnowledgeGraphTwoStage = <
 >(
   text: string,
   ontology: OntologyContext,
-  prompt: StructuredPrompt
+  prompt: StructuredPrompt,
+  /**
+   * Optional vocabulary override. If provided, uses this vocabulary instead of
+   * extracting from full ontology. Use `extractVocabularyFromFocused()` to get
+   * vocabulary from a focused KnowledgeIndex for reduced schema complexity.
+   */
+  vocabulary?: ExtractionVocabulary
 ): Effect.Effect<
   TripleGraph<ClassIRI, PropertyIRI>,
   LLMError,
   LanguageModel.LanguageModel
 > =>
   Effect.gen(function*() {
-    // Extract vocabulary from ontology
-    const { classIris, propertyIris } = extractVocabulary(ontology)
+    // Use provided vocabulary or extract from full ontology
+    const { classIris, propertyIris } = vocabulary ?? extractVocabulary(ontology)
 
     // Log stage 1 start
     yield* Effect.log("Stage 1: Entity extraction started", {

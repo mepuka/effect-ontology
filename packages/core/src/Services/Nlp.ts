@@ -186,6 +186,33 @@ export interface NlpService {
     documents: ReadonlyArray<IndexedDocument>,
     limit?: number
   ) => Effect.Effect<ReadonlyArray<SearchResult>, NlpError>
+
+  /**
+   * Extract verbs from text using POS tagging.
+   * Returns array of verb tokens in original form.
+   *
+   * @param text Input text to analyze
+   * @returns Effect yielding array of verb tokens
+   */
+  readonly extractVerbs: (text: string) => Effect.Effect<ReadonlyArray<string>, NlpError>
+
+  /**
+   * Extract verb lemmas from text.
+   * Returns array of lemmatized verbs (base form).
+   *
+   * @param text Input text to analyze
+   * @returns Effect yielding array of verb lemmas
+   */
+  readonly extractVerbLemmas: (text: string) => Effect.Effect<ReadonlyArray<string>, NlpError>
+
+  /**
+   * Extract lemmas from text for all content words.
+   * Includes: NOUN, PROPN, VERB, ADJ, AUX
+   *
+   * @param text Input text to analyze
+   * @returns Effect yielding array of lemmas
+   */
+  readonly extractLemmas: (text: string) => Effect.Effect<ReadonlyArray<string>, NlpError>
 }
 
 /**
@@ -422,6 +449,67 @@ export const NlpServiceLive = Layer.sync(NlpService, () => {
           .slice(0, limit)
 
         return results
+      }),
+
+    extractVerbs: (text) =>
+      Effect.try({
+        try: () => {
+          const doc = nlp.readDoc(text)
+          const verbs: string[] = []
+          doc.tokens().each((token: any) => {
+            const pos = token.out(nlp.its.pos)
+            if (pos === "VERB" || pos === "AUX") {
+              verbs.push(token.out(nlp.its.value))
+            }
+          })
+          return verbs
+        },
+        catch: (error) =>
+          new NlpError({
+            message: `Failed to extract verbs: ${String(error)}`,
+            cause: error
+          })
+      }),
+
+    extractVerbLemmas: (text) =>
+      Effect.try({
+        try: () => {
+          const doc = nlp.readDoc(text)
+          const lemmas: string[] = []
+          doc.tokens().each((token: any) => {
+            const pos = token.out(nlp.its.pos)
+            if (pos === "VERB" || pos === "AUX") {
+              lemmas.push(token.out(nlp.its.lemma))
+            }
+          })
+          return lemmas
+        },
+        catch: (error) =>
+          new NlpError({
+            message: `Failed to extract verb lemmas: ${String(error)}`,
+            cause: error
+          })
+      }),
+
+    extractLemmas: (text) =>
+      Effect.try({
+        try: () => {
+          const doc = nlp.readDoc(text)
+          const lemmas: string[] = []
+          const contentPOS = new Set(["NOUN", "PROPN", "VERB", "ADJ", "AUX"])
+          doc.tokens().each((token: any) => {
+            const pos = token.out(nlp.its.pos)
+            if (contentPOS.has(pos)) {
+              lemmas.push(token.out(nlp.its.lemma))
+            }
+          })
+          return lemmas
+        },
+        catch: (error) =>
+          new NlpError({
+            message: `Failed to extract lemmas: ${String(error)}`,
+            cause: error
+          })
       })
   }
 })

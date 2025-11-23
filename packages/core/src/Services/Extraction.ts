@@ -19,8 +19,8 @@
 
 import type { LanguageModel } from "@effect/ai"
 import type { Graph } from "effect"
-import { Effect, PubSub } from "effect"
-import { type ExtractionError, ExtractionEvent, LLMError, type ValidationReport } from "../Extraction/Events.js"
+import { Effect, Option, PubSub } from "effect"
+import { type ExtractionError, ExtractionEvent, type ValidationReport } from "../Extraction/Events.js"
 import type { NodeId, OntologyContext } from "../Graph/Types.js"
 import * as Inheritance from "../Ontology/Inheritance.js"
 import type { CircularInheritanceError, InheritanceError } from "../Ontology/Inheritance.js"
@@ -29,8 +29,9 @@ import { generateEnrichedIndex } from "../Prompt/Enrichment.js"
 import { type ContextStrategy, selectContext } from "../Prompt/Focus.js"
 import { renderToStructuredPrompt } from "../Prompt/Render.js"
 import { type SolverError } from "../Prompt/Solver.js"
-import type { TripleGraph } from "../Schema/TripleFactory.js"
-import { extractKnowledgeGraphTwoStage, extractVocabulary } from "./Llm.js"
+import { extractKnowledgeGraphTwoStage, extractVocabularyFromFocused } from "./Llm.js"
+import type { NlpError } from "./Nlp.js"
+import { PropertyFilteringService } from "./PropertyFiltering.js"
 import { RdfService } from "./Rdf.js"
 import { ShaclService } from "./Shacl.js"
 
@@ -193,7 +194,7 @@ export class ExtractionPipeline extends Effect.Service<ExtractionPipeline>()(
          */
         extract: (request: ExtractionRequest): Effect.Effect<
           ExtractionResult,
-          ExtractionError | SolverError | InheritanceError | CircularInheritanceError,
+          ExtractionError | SolverError | InheritanceError | CircularInheritanceError | NlpError,
           RdfService | ShaclService | LanguageModel.LanguageModel
         > =>
           Effect.gen(function*() {
@@ -238,14 +239,55 @@ export class ExtractionPipeline extends Effect.Service<ExtractionPipeline>()(
             // Stage 2c: Render KnowledgeIndex to StructuredPrompt
             const combinedPrompt = renderToStructuredPrompt(focusedIndex)
 
-            // Stage 3: Extract vocabulary (for two-stage extraction)
-            // No schema generation needed - two-stage extraction handles it internally
+            // Stage 3: Extract vocabulary from focused index (not full ontology!)
+            // This reduces schema complexity for providers like Gemini with enum limits
+            // Returns null if focused extraction isn't feasible (e.g., ontology lacks domain info)
+            const focusedVocabulary = extractVocabularyFromFocused(focusedIndex, request.ontology)
+
+            // Stage 3b: If focused vocabulary fails, use NLP-based property filtering
+            const effectiveVocabulary = yield* Effect.gen(function*() {
+              if (focusedVocabulary) {
+                yield* Effect.log("Using focused vocabulary for extraction", {
+                  classCount: focusedVocabulary.classIris.length,
+                  propertyCount: focusedVocabulary.propertyIris.length
+                })
+                return focusedVocabulary
+              }
+
+              // Check if PropertyFilteringService is available
+              const filteringService = yield* Effect.serviceOption(PropertyFilteringService)
+
+              if (Option.isSome(filteringService)) {
+                yield* Effect.log("Using NLP-based property filtering (fallback)")
+                const filtered = yield* filteringService.value.filterProperties(
+                  request.text,
+                  request.ontology,
+                  100 // Gemini limit
+                )
+                yield* Effect.log("Filtered properties", {
+                  classCount: filtered.classIris.length,
+                  propertyCount: filtered.propertyIris.length,
+                  topScore: filtered.scoredProperties[0]?.score ?? 0
+                })
+                return {
+                  classIris: filtered.classIris,
+                  propertyIris: filtered.propertyIris
+                }
+              }
+
+              yield* Effect.log("Focused vocabulary not feasible - using full ontology", {
+                reason: "Ontology lacks domain declarations and PropertyFilteringService not provided"
+              })
+              return null
+            })
 
             // Stage 4: Call LLM with two-stage triple extraction
+            // Pass effective vocabulary if available, otherwise falls back to full ontology
             const tripleGraph = yield* extractKnowledgeGraphTwoStage(
               request.text,
               request.ontology,
-              combinedPrompt
+              combinedPrompt,
+              effectiveVocabulary ?? undefined // Pass undefined to fall back to full ontology
             )
 
             // Stage 5: Emit JSONParsed event (using triple count)

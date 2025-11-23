@@ -21,9 +21,11 @@
     "./Services/Nlp": "./src/Services/Nlp.ts",
     "./Services/EntityDiscovery": "./src/Services/EntityDiscovery.ts",
     "./Services/EntityResolution": "./src/Services/EntityResolution.ts",
+    "./Services/Extraction": "./src/Services/Extraction.ts",
     "./Services/ExtractionPipeline": "./src/Services/ExtractionPipeline.ts",
     "./Services/Focusing": "./src/Services/Focusing.ts",
     "./Services/ChunkingStrategy": "./src/Services/ChunkingStrategy.ts",
+    "./Services/PropertyFiltering": "./src/Services/PropertyFiltering.ts",
     "./Telemetry": "./src/Telemetry/index.ts"
   },
   "scripts": {
@@ -38,7 +40,7 @@
     "@effect/printer": "^0.47.0",
     "@effect/typeclass": "^0.38.0",
     "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/exporter-jaeger": "^2.2.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.208.0",
     "@opentelemetry/sdk-logs": "^0.208.0",
     "@opentelemetry/sdk-metrics": "^2.2.0",
     "@opentelemetry/sdk-trace-base": "^2.2.0",

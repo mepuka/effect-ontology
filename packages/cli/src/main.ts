@@ -13,12 +13,14 @@
  *
  * Environment Variables:
  *   TRACING_ENABLED - Enable/disable OpenTelemetry tracing (default: true)
- *   JAEGER_ENDPOINT - Jaeger endpoint URL (default: http://localhost:14268/api/traces)
+ *   OTLP_ENDPOINT - OTLP HTTP endpoint (default: http://localhost:4318/v1/traces)
+ *   JAEGER_ENDPOINT - Legacy Jaeger endpoint (deprecated, use OTLP_ENDPOINT)
  */
 
 import { makeLlmProviderLayer } from "@effect-ontology/core/Services/LlmProvider"
 import { makeTracingLayer, TracingContext } from "@effect-ontology/core/Telemetry"
 import { Command } from "@effect/cli"
+import { FetchHttpClient } from "@effect/platform"
 import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { Effect, Layer } from "effect"
 import { cli } from "./cli.js"
@@ -42,14 +44,15 @@ const main = Command.run(cli, {
  *
  * Configuration:
  * - TRACING_ENABLED: "true" or "false" (default: true)
- * - JAEGER_ENDPOINT: Jaeger HTTP endpoint (default: http://localhost:14268/api/traces)
+ * - OTLP_ENDPOINT: OTLP HTTP endpoint (default: http://localhost:4318/v1/traces)
+ * - JAEGER_ENDPOINT: Legacy Jaeger endpoint (deprecated, use OTLP_ENDPOINT)
  *
  * @returns Tracing layer configured from environment
  */
 const createTracingLayer = () => {
   return makeTracingLayer({
     serviceName: "effect-ontology-cli",
-    jaegerEndpoint: process.env.JAEGER_ENDPOINT,
+    otlpEndpoint: process.env.OTLP_ENDPOINT || process.env.JAEGER_ENDPOINT,
     enabled: process.env.TRACING_ENABLED !== "false"
   })
 }
@@ -101,7 +104,8 @@ const createAppLayers = () => {
 // Execute with Bun context and application layers
 // Application layers provide: Tracing, TracingContext, LanguageModel
 main(process.argv).pipe(
-  Effect.provide(BunContext.layer),
   Effect.provide(createAppLayers()),
+  Effect.provide(FetchHttpClient.layer),
+  Effect.provide(BunContext.layer),
   BunRuntime.runMain
 )
