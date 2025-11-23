@@ -12,7 +12,7 @@ import { describe, test } from "@effect/vitest"
 import { Data, Equal, Option } from "effect"
 import fc from "fast-check"
 import { PropertyConstraint } from "../../src/Graph/Constraint.js"
-import { KnowledgeUnit } from "../../src/Prompt/Ast.js"
+import { KnowledgeUnit } from "../../src/Prompt/Model.js"
 
 // ============================================================================
 // Arbitraries (Random Value Generators)

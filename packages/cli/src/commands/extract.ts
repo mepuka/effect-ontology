@@ -12,6 +12,7 @@
  */
 
 import { parseTurtleToGraph } from "@effect-ontology/core/Graph/Builder"
+import { DynamicFewShotService } from "@effect-ontology/core/Services/DynamicFewShot"
 import { EntityDiscoveryServiceLive } from "@effect-ontology/core/Services/EntityDiscovery"
 import { defaultPipelineConfig, streamingExtractionPipeline } from "@effect-ontology/core/Services/ExtractionPipeline"
 import { FocusingServiceLive } from "@effect-ontology/core/Services/Focusing"
@@ -32,6 +33,7 @@ import * as Output from "../utils/output.js"
  * - NlpService (no dependencies)
  * - EntityDiscoveryService (no dependencies)
  * - RdfService (no dependencies)
+ * - DynamicFewShotService (depends on NlpService)
  * - FocusingService (depends on NlpService)
  *
  * LanguageModel is provided at the top level in main.ts, but can be overridden
@@ -48,7 +50,8 @@ const createAppLayer = () => {
   const baseServices = Layer.mergeAll(
     NlpServiceLive,
     EntityDiscoveryServiceLive,
-    RdfService.Default
+    RdfService.Default,
+    DynamicFewShotService.Live
   )
 
   // Add FocusingService which depends on NlpService

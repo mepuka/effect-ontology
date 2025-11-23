@@ -13,7 +13,7 @@
 
 import * as Tooltip from "@radix-ui/react-tooltip"
 import { Info, Hash, Layers, ArrowRightCircle } from "lucide-react"
-import type { PromptFragment } from "@effect-ontology/core/Prompt/Fragment"
+import type { PromptFragment } from "@effect-ontology/core/Prompt/Model"
 import { Option } from "effect"
 import { getDepthColor, getDepthBgColor, getDepthBorderColor, getDepthLabel } from "../utils/depth-colors"
 

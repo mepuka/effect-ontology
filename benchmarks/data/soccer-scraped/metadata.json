@@ -1,0 +1,84 @@
+{
+  "scrapedAt": "2025-11-23T10:11:20.592Z",
+  "source": "Wikipedia API",
+  "totalArticles": 15,
+  "successful": 15,
+  "failed": 0,
+  "results": [
+    {
+      "article": "Lionel_Messi",
+      "success": true,
+      "contentLength": 305661
+    },
+    {
+      "article": "Cristiano_Ronaldo",
+      "success": true,
+      "contentLength": 283696
+    },
+    {
+      "article": "Manchester_United_F.C.",
+      "success": true,
+      "contentLength": 182655
+    },
+    {
+      "article": "FC_Barcelona",
+      "success": true,
+      "contentLength": 229841
+    },
+    {
+      "article": "2022_FIFA_World_Cup",
+      "success": true,
+      "contentLength": 305758
+    },
+    {
+      "article": "UEFA_Champions_League",
+      "success": true,
+      "contentLength": 107606
+    },
+    {
+      "article": "Premier_League",
+      "success": true,
+      "contentLength": 215748
+    },
+    {
+      "article": "La_Liga",
+      "success": true,
+      "contentLength": 86652
+    },
+    {
+      "article": "FIFA_World_Cup",
+      "success": true,
+      "contentLength": 137634
+    },
+    {
+      "article": "Copa_América",
+      "success": true,
+      "contentLength": 69245
+    },
+    {
+      "article": "Real_Madrid_CF",
+      "success": true,
+      "contentLength": 259759
+    },
+    {
+      "article": "Paris_Saint-Germain_FC",
+      "success": true,
+      "contentLength": 109683
+    },
+    {
+      "article": "FC_Bayern_München",
+      "success": true,
+      "contentLength": 193175
+    },
+    {
+      "article": "Liverpool_F.C.",
+      "success": true,
+      "contentLength": 132010
+    },
+    {
+      "article": "Chelsea_F.C.",
+      "success": true,
+      "contentLength": 174252
+    }
+  ]
+}

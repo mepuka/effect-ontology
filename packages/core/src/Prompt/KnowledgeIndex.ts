@@ -8,7 +8,7 @@
  */
 
 import { HashMap, Option } from "effect"
-import { KnowledgeUnit } from "./Ast.js"
+import { KnowledgeUnit } from "./Model.js"
 
 /**
  * KnowledgeIndex - The new Monoid for ontology folding

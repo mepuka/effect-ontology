@@ -12,9 +12,9 @@ import { mkdirSync, readFileSync, writeFileSync } from "fs"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { parseTurtleToGraph } from "../src/Graph/Builder.js"
-import { knowledgeIndexAlgebra } from "../src/Prompt/Algebra.js"
+import { knowledgeIndexAlgebra } from "../src/Prompt/Builder.js"
 import { generateEnrichedIndex } from "../src/Prompt/Enrichment.js"
-import { renderEnrichedStats, renderToEnrichedPrompt } from "../src/Prompt/RenderEnriched.js"
+import { renderEnrichedStats, renderToEnrichedPrompt } from "../src/Prompt/Renderer.js"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)

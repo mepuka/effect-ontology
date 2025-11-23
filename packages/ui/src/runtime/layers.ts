@@ -8,6 +8,7 @@
  * @since 1.0.0
  */
 
+import { DynamicFewShotService } from "@effect-ontology/core/Services/DynamicFewShot"
 import { EntityDiscoveryServiceLive } from "@effect-ontology/core/Services/EntityDiscovery"
 import { NlpServiceLive } from "@effect-ontology/core/Services/Nlp"
 import { RdfService } from "@effect-ontology/core/Services/Rdf"
@@ -27,6 +28,7 @@ import { Layer } from "effect"
  * - ShaclService: SHACL validation operations
  * - NlpService: NLP operations (chunking, tokenization, etc.)
  * - EntityDiscoveryService: Entity accumulation for extraction
+ * - DynamicFewShotService: Dynamic few-shot example selection
  * - KeyValueStore: Browser localStorage
  *
  * **NOT Provided (by design):**
@@ -63,6 +65,7 @@ export const FrontendRuntimeLayer = Layer.mergeAll(
   ShaclService.Default,
   NlpServiceLive,
   EntityDiscoveryServiceLive,
+  DynamicFewShotService.Live,
   BrowserKeyValueStore.layerLocalStorage
 )
 

@@ -16,9 +16,8 @@
 import { Context, Effect, HashMap, Layer } from "effect"
 import type { Graph } from "effect"
 import type { OntologyContext } from "../Graph/Types.js"
-import { knowledgeIndexAlgebra } from "../Prompt/Algebra.js"
+import { knowledgeIndexAlgebra, type SolverError, solveToKnowledgeIndex } from "../Prompt/Builder.js"
 import type { KnowledgeIndex } from "../Prompt/KnowledgeIndex.js"
-import { type SolverError, solveToKnowledgeIndex } from "../Prompt/Solver.js"
 
 /**
  * OntologyCache Service Interface

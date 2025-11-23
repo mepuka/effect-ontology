@@ -34,18 +34,7 @@ export {
 
 export { defaultPipelineConfig, type PipelineConfig, streamingExtractionPipeline } from "./ExtractionPipeline.js"
 
-/**
- * @deprecated Use extractKnowledgeGraphTwoStage() instead. This function will be removed in v2.0.
- */
-export { extractKnowledgeGraph } from "./Llm.js"
-
-export {
-  extractEntities,
-  extractKnowledgeGraphTriple,
-  extractKnowledgeGraphTwoStage,
-  extractTriples,
-  extractVocabulary
-} from "./Llm.js"
+export { extractEntities, extractKnowledgeGraphTwoStage, extractTriples, extractVocabulary } from "./Llm.js"
 
 export {
   type AnthropicConfig,
@@ -57,6 +46,8 @@ export {
 } from "./LlmProvider.js"
 
 export { NlpError, NlpService, type NlpService as NlpServiceType, NlpServiceLive } from "./Nlp.js"
+
+export { OntologyCache, OntologyCacheLive } from "./OntologyCache.js"
 
 export { RdfEnvironment, type RdfEnvironment as RdfEnvironmentType } from "./RdfEnvironment.js"
 

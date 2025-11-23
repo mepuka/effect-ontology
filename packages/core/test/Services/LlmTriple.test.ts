@@ -1,6 +1,6 @@
 import { Effect } from "effect"
 import { describe, expect, it } from "vitest"
-import type { StructuredPrompt } from "../../src/Prompt/Types.js"
+import type { StructuredPrompt } from "../../src/Prompt/Model.js"
 import { extractTriples } from "../../src/Services/Llm.js"
 
 describe("LlmTriple", () => {

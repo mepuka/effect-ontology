@@ -17,12 +17,11 @@ import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import { parseTurtleToGraph } from "../../src/Graph/Builder.js"
 import * as Inheritance from "../../src/Ontology/Inheritance.js"
-import { knowledgeIndexAlgebra } from "../../src/Prompt/Algebra.js"
+import { knowledgeIndexAlgebra, solveToKnowledgeIndex } from "../../src/Prompt/Builder.js"
 import { enrichKnowledgeIndex, generateEnrichedIndex } from "../../src/Prompt/Enrichment.js"
 import * as Focus from "../../src/Prompt/Focus.js"
 import * as KnowledgeIndex from "../../src/Prompt/KnowledgeIndex.js"
-import * as Render from "../../src/Prompt/Render.js"
-import { solveToKnowledgeIndex } from "../../src/Prompt/Solver.js"
+import * as Render from "../../src/Prompt/Renderer.js"
 
 describe("KnowledgeIndex Integration", () => {
   const ontology = `
@@ -111,7 +110,7 @@ ex:hasBreed a owl:DatatypeProperty ;
         const employee = KnowledgeIndex.get(fullIndex, "http://example.org/Employee")
         expect(employee._tag).toBe("Some")
         if (employee._tag === "Some") {
-          const propIris = employee.value.properties.map((p) => p.propertyIri)
+          const propIris = employee.value.properties.map((p: { propertyIri: string }) => p.propertyIri)
           expect(propIris).toContain("http://example.org/hasSalary")
         }
 
@@ -119,7 +118,7 @@ ex:hasBreed a owl:DatatypeProperty ;
         const manager = KnowledgeIndex.get(fullIndex, "http://example.org/Manager")
         expect(manager._tag).toBe("Some")
         if (manager._tag === "Some") {
-          const propIris = manager.value.properties.map((p) => p.propertyIri)
+          const propIris = manager.value.properties.map((p: { propertyIri: string }) => p.propertyIri)
           expect(propIris).toContain("http://example.org/hasTeamSize")
         }
       }).pipe(Effect.runPromise))
@@ -192,7 +191,7 @@ ex:hasBreed a owl:DatatypeProperty ;
           "http://example.org/Manager"
         )
 
-        const propIris = effectiveProperties.map((p) => p.propertyIri)
+        const propIris = effectiveProperties.map((p: { propertyIri: string }) => p.propertyIri)
 
         // Own property
         expect(propIris).toContain("http://example.org/hasTeamSize")
@@ -300,7 +299,7 @@ ex:hasBreed a owl:DatatypeProperty ;
         expect(rawManager._tag).toBe("Some")
         if (rawManager._tag === "Some") {
           // Should have own property (hasTeamSize)
-          const ownPropIris = rawManager.value.properties.map((p) => p.propertyIri)
+          const ownPropIris = rawManager.value.properties.map((p: { propertyIri: string }) => p.propertyIri)
           expect(ownPropIris).toContain("http://example.org/hasTeamSize")
 
           // Algebra creates empty inheritedProperties
@@ -314,7 +313,7 @@ ex:hasBreed a owl:DatatypeProperty ;
         const enrichedManager = KnowledgeIndex.get(enrichedIndex, "http://example.org/Manager")
         expect(enrichedManager._tag).toBe("Some")
         if (enrichedManager._tag === "Some") {
-          const inheritedIris = enrichedManager.value.inheritedProperties.map((p) => p.propertyIri)
+          const inheritedIris = enrichedManager.value.inheritedProperties.map((p: { propertyIri: string }) => p.propertyIri)
 
           // From Employee
           expect(inheritedIris).toContain("http://example.org/hasSalary")
@@ -368,7 +367,7 @@ ex:hasBreed a owl:DatatypeProperty ;
         const employee = KnowledgeIndex.get(enrichedIndex, "http://example.org/Employee")
         expect(employee._tag).toBe("Some")
         if (employee._tag === "Some") {
-          const inheritedIris = employee.value.inheritedProperties.map((p) => p.propertyIri)
+          const inheritedIris = employee.value.inheritedProperties.map((p: { propertyIri: string }) => p.propertyIri)
 
           // From Person
           expect(inheritedIris).toContain("http://example.org/hasName")

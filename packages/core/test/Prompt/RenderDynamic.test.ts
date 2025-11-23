@@ -6,9 +6,9 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, HashMap, Layer, Option } from "effect"
-import { KnowledgeUnit } from "../../src/Prompt/Ast.js"
+import { KnowledgeUnit } from "../../src/Prompt/Model.js"
 import * as KnowledgeIndex from "../../src/Prompt/KnowledgeIndex.js"
-import { renderToStructuredPromptDynamic } from "../../src/Prompt/RenderDynamic.js"
+import { renderToStructuredPromptDynamic } from "../../src/Prompt/Renderer.js"
 import { DynamicFewShotService } from "../../src/Services/DynamicFewShot.js"
 import { NlpServiceLive } from "../../src/Services/Nlp.js"
 

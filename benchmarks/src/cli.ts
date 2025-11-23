@@ -4,6 +4,7 @@
  * @module benchmarks/cli
  */
 
+import { DynamicFewShotService } from "@effect-ontology/core/Services/DynamicFewShot"
 import { ExtractionPipeline } from "@effect-ontology/core/Services/Extraction"
 import { type LlmProviderParams, makeLlmProviderLayer } from "@effect-ontology/core/Services/LlmProvider"
 import { NlpServiceLive } from "@effect-ontology/core/Services/Nlp"
@@ -124,7 +125,8 @@ const createBenchmarkLayers = () => {
     RdfService.Default,
     ShaclService.Default,
     ConstraintValidatorLive,
-    NlpServiceLive
+    NlpServiceLive,
+    DynamicFewShotService.Live
   )
 
   // NOTE: PropertyFilteringService intentionally NOT used

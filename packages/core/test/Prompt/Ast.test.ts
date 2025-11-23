@@ -9,7 +9,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Data, Option } from "effect"
 import { PropertyConstraint } from "../../src/Graph/Constraint.js"
-import * as Ast from "../../src/Prompt/Ast.js"
+import * as Ast from "../../src/Prompt/Model.js"
 
 describe("Ast Typeclass Instances", () => {
   it("PropertyDataOrder sorts by IRI alphabetically", () => {

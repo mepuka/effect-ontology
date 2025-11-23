@@ -1,14 +1,35 @@
 /**
- * Prompt AST Types
+ * Prompt Model Types
  *
- * Defines the Abstract Syntax Tree for prompt generation.
- * Replaces string-based StructuredPrompt with queryable structure.
+ * Consolidated model definitions for prompt generation including:
+ * - AST types (KnowledgeUnit, PromptAST)
+ * - Core types (StructuredPrompt, GraphAlgebra, PromptAlgebra)
+ * - Fragment types (PromptFragment, EnrichedStructuredPrompt)
+ * - Context types (PromptContext)
  *
- * Based on: docs/higher_order_monoid_implementation.md
+ * @module Prompt/Model
  */
 
-import { Array as EffectArray, Data, Equivalence, Option, Order, pipe, String as EffectString } from "effect"
+import {
+  Array as EffectArray,
+  Data,
+  Equivalence,
+  HashMap,
+  Option,
+  Order,
+  pipe,
+  Schema,
+  String as EffectString
+} from "effect"
 import type { PropertyConstraint } from "../Graph/Constraint.js"
+import type { GraphAlgebra } from "../Graph/Types.js"
+import type { EntityCache } from "./EntityCache.js"
+import * as EC from "./EntityCache.js"
+import type { KnowledgeIndex } from "./KnowledgeIndex.js"
+
+// ============================================================================
+// AST Types (from Ast.ts)
+// ============================================================================
 
 /**
  * Order instance for PropertyConstraint - sorts by propertyIri
@@ -303,3 +324,292 @@ export class CompositeNode extends Data.TaggedClass("Composite")<{
 export const isEmptyNode = (ast: PromptAST): ast is EmptyNode => ast instanceof EmptyNode
 export const isDefinitionNode = (ast: PromptAST): ast is DefinitionNode => ast instanceof DefinitionNode
 export const isCompositeNode = (ast: PromptAST): ast is CompositeNode => ast instanceof CompositeNode
+
+// ============================================================================
+// Core Types (from Types.ts)
+// ============================================================================
+
+/**
+ * StructuredPrompt - The result type for the catamorphism
+ *
+ * Represents a prompt with system instructions, user context, examples,
+ * and dynamic entity context from streaming extraction.
+ * Forms a Monoid with component-wise concatenation as the combine operation.
+ */
+export class StructuredPrompt extends Schema.Class<StructuredPrompt>("StructuredPrompt")({
+  system: Schema.Array(Schema.String),
+  user: Schema.Array(Schema.String),
+  examples: Schema.Array(Schema.String),
+  context: Schema.Array(Schema.String)
+}) {
+  /**
+   * Monoid combine operation: component-wise concatenation
+   */
+  static combine(a: StructuredPrompt, b: StructuredPrompt): StructuredPrompt {
+    return StructuredPrompt.make({
+      system: [...a.system, ...b.system],
+      user: [...a.user, ...b.user],
+      examples: [...a.examples, ...b.examples],
+      context: [...a.context, ...b.context]
+    })
+  }
+
+  /**
+   * Monoid identity: empty prompt
+   */
+  static empty(): StructuredPrompt {
+    return StructuredPrompt.make({
+      system: [],
+      user: [],
+      examples: [],
+      context: []
+    })
+  }
+
+  /**
+   * Fold multiple prompts using the Monoid combine operation
+   */
+  static combineAll(prompts: ReadonlyArray<StructuredPrompt>): StructuredPrompt {
+    return prompts.reduce(StructuredPrompt.combine, StructuredPrompt.empty())
+  }
+}
+
+// Re-export GraphAlgebra from Graph/Types.ts (now with graph and nodeIndex parameters)
+export type { GraphAlgebra }
+
+/**
+ * PromptAlgebra - Specialized algebra for generating prompts
+ *
+ * This is the concrete algebra implementation that generates StructuredPrompt
+ * from OntologyNode data and child prompts.
+ */
+export type PromptAlgebra = GraphAlgebra<StructuredPrompt>
+
+// ============================================================================
+// Fragment Types (from Fragment.ts)
+// ============================================================================
+
+/**
+ * Fragment Type
+ *
+ * Categorizes the origin and purpose of a prompt fragment:
+ * - `class_definition`: Main class description with properties
+ * - `property`: Individual property description
+ * - `example`: Usage example or pattern
+ * - `universal`: Universal property (no domain)
+ * - `metadata`: Stats, guidance, or other context
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export const FragmentType = Schema.Literal(
+  "class_definition",
+  "property",
+  "example",
+  "universal",
+  "metadata"
+)
+
+export type FragmentType = typeof FragmentType.Type
+
+/**
+ * Fragment Metadata
+ *
+ * Provenance and display information for hover tooltips.
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export class FragmentMetadata extends Schema.Class<FragmentMetadata>("FragmentMetadata")({
+  /** Human-readable class label (if from a class) */
+  classLabel: Schema.OptionFromSelf(Schema.String),
+
+  /** Depth in class hierarchy (0 = root) */
+  classDepth: Schema.OptionFromSelf(Schema.Number),
+
+  /** Human-readable property label (if from a property) */
+  propertyLabel: Schema.OptionFromSelf(Schema.String),
+
+  /** Property range type (e.g., "xsd:string", "foaf:Person") */
+  propertyRange: Schema.OptionFromSelf(Schema.String),
+
+  /** True if property was inherited from parent class */
+  isInherited: Schema.Boolean,
+
+  /** Approximate token count for this fragment */
+  tokenCount: Schema.Number
+}) {}
+
+/**
+ * Prompt Fragment
+ *
+ * A single piece of prompt text with full provenance tracking.
+ *
+ * @since 1.0.0
+ * @category models
+ *
+ * @example
+ * ```typescript
+ * const fragment = PromptFragment.make({
+ *   text: "Person: A human being.",
+ *   sourceIri: Some("http://xmlns.com/foaf/0.1/Person"),
+ *   propertyIri: None(),
+ *   fragmentType: "class_definition",
+ *   metadata: FragmentMetadata.make({
+ *     classLabel: Some("Person"),
+ *     classDepth: Some(0),
+ *     propertyLabel: None(),
+ *     propertyRange: None(),
+ *     isInherited: false,
+ *     tokenCount: 8
+ *   })
+ * })
+ * ```
+ */
+export class PromptFragment extends Schema.Class<PromptFragment>("PromptFragment")({
+  /** The text content of this fragment */
+  text: Schema.String,
+
+  /** Source class IRI (if from a class) */
+  sourceIri: Schema.OptionFromSelf(Schema.String),
+
+  /** Source property IRI (if from a property) */
+  propertyIri: Schema.OptionFromSelf(Schema.String),
+
+  /** Fragment type for categorization */
+  fragmentType: FragmentType,
+
+  /** Metadata for hover display */
+  metadata: FragmentMetadata
+}) {}
+
+/**
+ * Enriched Structured Prompt
+ *
+ * Like StructuredPrompt but with PromptFragment[] instead of string[].
+ * Enables interactive provenance visualization while maintaining
+ * compatibility with existing Monoid operations.
+ *
+ * @since 1.0.0
+ * @category models
+ */
+export class EnrichedStructuredPrompt extends Schema.Class<EnrichedStructuredPrompt>(
+  "EnrichedStructuredPrompt"
+)({
+  system: Schema.Array(PromptFragment),
+  user: Schema.Array(PromptFragment),
+  examples: Schema.Array(PromptFragment)
+}) {
+  /**
+   * Monoid combine operation: component-wise concatenation
+   */
+  static combine(
+    a: EnrichedStructuredPrompt,
+    b: EnrichedStructuredPrompt
+  ): EnrichedStructuredPrompt {
+    return EnrichedStructuredPrompt.make({
+      system: [...a.system, ...b.system],
+      user: [...a.user, ...b.user],
+      examples: [...a.examples, ...b.examples]
+    })
+  }
+
+  /**
+   * Monoid identity: empty prompt
+   */
+  static empty(): EnrichedStructuredPrompt {
+    return EnrichedStructuredPrompt.make({
+      system: [],
+      user: [],
+      examples: []
+    })
+  }
+
+  /**
+   * Fold multiple prompts using the Monoid combine operation
+   */
+  static combineAll(
+    prompts: ReadonlyArray<EnrichedStructuredPrompt>
+  ): EnrichedStructuredPrompt {
+    return prompts.reduce(EnrichedStructuredPrompt.combine, EnrichedStructuredPrompt.empty())
+  }
+
+  /**
+   * Convert to plain StructuredPrompt (extract text only)
+   *
+   * Useful for LLM consumption where provenance isn't needed.
+   *
+   * @returns StructuredPrompt with text extracted from fragments
+   */
+  toPlainPrompt(): { system: Array<string>; user: Array<string>; examples: Array<string> } {
+    return {
+      system: this.system.map((f) => f.text),
+      user: this.user.map((f) => f.text),
+      examples: this.examples.map((f) => f.text)
+    }
+  }
+}
+
+/**
+ * Estimate token count for text
+ *
+ * Quick heuristic: ~1 token per 4 characters (GPT-style tokenization).
+ * Not exact, but sufficient for optimization hints.
+ *
+ * @param text - Text to estimate
+ * @returns Approximate token count
+ *
+ * @since 1.0.0
+ * @category utilities
+ */
+export const estimateTokenCount = (text: string): number => {
+  // Simple heuristic: 1 token ≈ 4 characters
+  // Add 1 token per whitespace (word boundaries)
+  const charCount = text.length
+  const wordCount = text.split(/\s+/).filter((w) => w.length > 0).length
+  return Math.ceil(charCount / 4) + wordCount
+}
+
+// ============================================================================
+// Context Types (from Context.ts)
+// ============================================================================
+
+/**
+ * PromptContext - Product Monoid of KnowledgeIndex and EntityCache
+ *
+ * P = K × C
+ *
+ * Represents the total available context for prompt generation:
+ * - K: Static ontology knowledge (from catamorphism)
+ * - C: Dynamic entity discoveries (from stream accumulation)
+ */
+export interface PromptContext {
+  readonly index: KnowledgeIndex
+  readonly cache: EntityCache
+}
+
+/**
+ * Empty PromptContext (monoid identity)
+ */
+export const empty: PromptContext = {
+  index: HashMap.empty(),
+  cache: EC.empty
+}
+
+/**
+ * Combine two PromptContexts (monoid operation)
+ *
+ * (k1, c1) ⊕ (k2, c2) = (k1 ⊕_K k2, c1 ⊕_C c2)
+ */
+export const combine = (p1: PromptContext, p2: PromptContext): PromptContext => ({
+  index: HashMap.union(p1.index, p2.index),
+  cache: EC.union(p1.cache, p2.cache)
+})
+
+/**
+ * Create PromptContext from KnowledgeIndex and EntityCache
+ */
+export const make = (index: KnowledgeIndex, cache: EntityCache): PromptContext => ({
+  index,
+  cache
+})

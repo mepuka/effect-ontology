@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@effect/vitest"
 import { HashMap } from "effect"
 import * as fc from "fast-check"
-import type { PromptContext } from "../../src/Prompt/Context.js"
-import { combine, empty, make } from "../../src/Prompt/Context.js"
+import type { PromptContext } from "../../src/Prompt/Model.js"
+import { combine, empty, make } from "../../src/Prompt/Model.js"
 import * as EntityCache from "../../src/Prompt/EntityCache.js"
 
 describe("PromptContext", () => {

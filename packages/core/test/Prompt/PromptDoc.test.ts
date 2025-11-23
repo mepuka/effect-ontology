@@ -8,8 +8,8 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
-import { renderExtractionPrompt, renderStructuredPrompt } from "../../src/Prompt/PromptDoc.js"
-import { StructuredPrompt } from "../../src/Prompt/Types.js"
+import { renderExtractionPrompt, renderStructuredPrompt } from "../../src/Prompt/DocRenderer.js"
+import { StructuredPrompt } from "../../src/Prompt/Model.js"
 
 /**
  * Reference implementation of buildPromptText for comparison
