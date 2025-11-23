@@ -22,20 +22,17 @@ import { Effect } from "effect"
 import type { NodeId } from "../Graph/Types.js"
 import type { EntityRef } from "../Prompt/EntityCache.js"
 import { deserializeEntityCache, serializeEntityCache } from "../Prompt/EntityCache.js"
+import * as EC from "../Prompt/EntityCache.js"
 import { renderToStructuredPrompt } from "../Prompt/Render.js"
+import type { TripleGraph } from "../Schema/TripleFactory.js"
 import { ArtifactStore } from "../Services/ArtifactStore.js"
 import { Database } from "../Services/Database.js"
 import { EntityDiscoveryService } from "../Services/EntityDiscovery.js"
 import { mergeGraphsWithResolution } from "../Services/EntityResolution.js"
-import {
-  extractKnowledgeGraphTwoStage,
-  extractVocabulary
-} from "../Services/Llm.js"
+import { extractKnowledgeGraphTwoStage, extractVocabulary } from "../Services/Llm.js"
 import { OntologyCache } from "../Services/OntologyCache.js"
 import { RdfService } from "../Services/Rdf.js"
 import { RunService } from "../Services/RunService.js"
-import type { TripleGraph } from "../Schema/TripleFactory.js"
-import * as EC from "../Prompt/EntityCache.js"
 
 // ============================================================================
 // Activity Input Types
@@ -219,8 +216,7 @@ export const processBatchActivity = (input: ProcessBatchInput) =>
     // Using two-stage triple extraction for better entity consistency
     const allTripleGraphs = yield* Effect.forEach(
       input.chunks,
-      (chunkText) =>
-        extractKnowledgeGraphTwoStage(chunkText, input.ontology, prompt),
+      (chunkText) => extractKnowledgeGraphTwoStage(chunkText, input.ontology, prompt),
       { concurrency: 1 } // Sequential to maintain entity order
     )
 

@@ -34,6 +34,9 @@ export const LlmAttributes = {
   PROMPT_TEXT: "gen_ai.prompt.text",
   RESPONSE_TEXT: "gen_ai.response.text",
 
+  // Schema (custom - JSON Schema for structured output)
+  REQUEST_SCHEMA: "gen_ai.request.schema",
+
   // Extraction-specific (custom)
   ENTITY_COUNT: "extraction.entity_count",
   TRIPLE_COUNT: "extraction.triple_count",
@@ -57,6 +60,7 @@ export const annotateLlmCall = (attrs: {
   outputTokens?: number
   promptText?: string
   responseText?: string
+  schemaJson?: string
 }): Effect.Effect<void> =>
   Effect.gen(function*() {
     yield* Effect.annotateCurrentSpan(LlmAttributes.MODEL, attrs.model)
@@ -82,5 +86,8 @@ export const annotateLlmCall = (attrs: {
     }
     if (attrs.responseText !== undefined) {
       yield* Effect.annotateCurrentSpan(LlmAttributes.RESPONSE_TEXT, attrs.responseText)
+    }
+    if (attrs.schemaJson !== undefined) {
+      yield* Effect.annotateCurrentSpan(LlmAttributes.REQUEST_SCHEMA, attrs.schemaJson)
     }
   })
