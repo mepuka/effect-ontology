@@ -9,7 +9,7 @@
  */
 
 import { LanguageModel } from "@effect/ai"
-import { Chunk, Duration, Effect, JSONSchema, Layer, Schedule } from "effect"
+import { Chunk, Duration, Effect, JSONSchema, Layer, Schedule, Stream } from "effect"
 import { EntityExtractionFailed, RelationExtractionFailed } from "../Domain/Error/Extraction.js"
 import { Entity, Relation } from "../Domain/Model/Entity.js"
 import type { ClassDefinition, PropertyDefinition } from "../Domain/Model/Ontology.js"
@@ -174,31 +174,20 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
             )
           )
 
-          // Validate and convert to Entity domain models
-          const entities = yield* Effect.forEach(
-            response.value.entities,
-            (entityData) =>
-              Effect.gen(function*() {
-                // Validate types are in candidate classes
-                const candidateIris = new Set(candidates.map((c) => c.id))
-                const validTypes = entityData.types.filter((type) => candidateIris.has(type))
-
-                if (validTypes.length === 0) {
-                  return yield* Effect.fail(
-                    new EntityExtractionFailed({
-                      message: `Entity "${entityData.mention}" has no valid types in candidate classes`,
-                      text
-                    })
-                  )
-                }
-
-                // Generate deterministic ID if not provided or invalid
+          // Convert to Entity domain models
+          // Schema validation already enforced all constraints (types in candidate classes, ID format)
+          // If generateObject succeeded, all entities are valid
+          // Only perform business logic transformations (ID generation, attribute filtering)
+          const entities = yield* Stream.fromIterable(response.value.entities)
+            .pipe(
+              Stream.map((entityData) => {
+                // Generate deterministic ID if not provided or invalid (business logic, not validation)
                 let entityId = entityData.id
                 if (!entityId || !/^[a-z][a-z0-9_]*$/.test(entityId)) {
                   entityId = generateEntityId(entityData.mention)
                 }
 
-                // Convert attributes to proper format
+                // Convert attributes to proper format (transformation, not validation)
                 const attributes: Record<string, string | number | boolean> = {}
                 if (entityData.attributes) {
                   for (const [key, value] of Object.entries(entityData.attributes)) {
@@ -208,23 +197,24 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
                   }
                 }
 
-                // Create Entity domain model
+                // Create Entity domain model - types are already validated by schema
                 return new Entity({
                   id: entityId,
                   mention: entityData.mention,
-                  types: validTypes,
+                  types: entityData.types, // Schema ensures these are in candidate classes
                   attributes
                 })
               }),
-            { concurrency: "unbounded" }
-          )
+              Stream.runCollect
+            )
 
           // Log extracted entities summary
+          const entityArray = Chunk.toReadonlyArray(entities)
           yield* Effect.logInfo("Entity extraction complete", {
             stage: "entity-extraction",
-            extractedCount: entities.length,
-            entityIds: entities.map((e) => e.id).slice(0, 10),
-            entityMentions: entities.map((e) => e.mention).slice(0, 5)
+            extractedCount: entityArray.length,
+            entityIds: entityArray.map((e) => e.id).slice(0, 10),
+            entityMentions: entityArray.map((e) => e.mention).slice(0, 5)
           })
 
           return Chunk.fromIterable(entities)
@@ -427,66 +417,30 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
             )
           )
 
-          // Validate and convert to Relation domain models
-          const relations = yield* Effect.forEach(
-            response.value.relations,
-            (relationData) =>
-              Effect.gen(function*() {
-                // Validate subjectId exists in entities
-                const entityIds = new Set(validEntityIds)
-                if (!entityIds.has(relationData.subjectId)) {
-                  return yield* Effect.fail(
-                    new RelationExtractionFailed({
-                      message: `Relation subject "${relationData.subjectId}" not found in entity set`,
-                      text
-                    })
-                  )
-                }
-
-                // Validate predicate is in allowed properties
-                const propertyIris = new Set(properties.map((p) => p.id))
-                if (!propertyIris.has(relationData.predicate)) {
-                  return yield* Effect.fail(
-                    new RelationExtractionFailed({
-                      message: `Relation predicate "${relationData.predicate}" not in allowed properties`,
-                      text
-                    })
-                  )
-                }
-
-                // Validate object: if it's a string that looks like an entity ID, verify it exists
-                if (
-                  typeof relationData.object === "string" &&
-                  /^[a-z][a-z0-9_]*$/.test(relationData.object) &&
-                  !entityIds.has(relationData.object)
-                ) {
-                  return yield* Effect.fail(
-                    new RelationExtractionFailed({
-                      message:
-                        `Relation object "${relationData.object}" looks like entity ID but not found in entity set`,
-                      text
-                    })
-                  )
-                }
-
-                // Create Relation domain model
-                return new Relation({
+          // Convert to Relation domain models
+          // Schema validation already enforced all constraints (subjectId, predicate, rangeType)
+          // If generateObject succeeded, all relations are valid
+          const relations = yield* Stream.fromIterable(response.value.relations)
+            .pipe(
+              Stream.map((relationData) =>
+                new Relation({
                   subjectId: relationData.subjectId,
                   predicate: relationData.predicate,
                   object: relationData.object
                 })
-              }),
-            { concurrency: "unbounded" }
-          )
+              ),
+              Stream.runCollect
+            )
 
           // Log extracted relations summary
+          const relationArray = Chunk.toReadonlyArray(relations)
           yield* Effect.logInfo("Relation extraction complete", {
             stage: "relation-extraction",
-            extractedCount: relations.length,
-            relations: relations
+            extractedCount: relationArray.length,
+            relations: relationArray
               .slice(0, 10)
               .map(
-                (r) =>
+                (r: Relation) =>
                   `${r.subjectId} --[${r.predicate}]--> ${typeof r.object === "string" ? r.object : String(r.object)}`
               )
           })

@@ -13,6 +13,8 @@ import vectors from "wink-embeddings-sg-100d"
 import model from "wink-eng-lite-web-model"
 import winkNLP from "wink-nlp"
 import BM25Vectorizer from "wink-nlp/utilities/bm25-vectorizer"
+// @ts-expect-error - wink-nlp/utilities/similarity has no type definitions
+import similarity from "wink-nlp/utilities/similarity.js"
 // @ts-expect-error - wink-bm25-text-search has no type definitions
 import winkBM25 from "wink-bm25-text-search"
 import type { ClassDefinition, OntologyContext, PropertyDefinition } from "../Domain/Model/Ontology.js"
@@ -233,7 +235,7 @@ export class NlpService extends Effect.Service<NlpService>()(
       }
 
       /**
-       * Compute cosine similarity between two vectors
+       * Compute cosine similarity between two vectors using wink-nlp's built-in utility
        */
       const cosineSimilarity = (
         a: ReadonlyArray<number>,
@@ -242,19 +244,8 @@ export class NlpService extends Effect.Service<NlpService>()(
         if (a.length !== b.length) {
           return 0
         }
-
-        let dotProduct = 0
-        let aMag = 0
-        let bMag = 0
-
-        for (let i = 0; i < a.length; i++) {
-          dotProduct += a[i] * b[i]
-          aMag += a[i] * a[i]
-          bMag += b[i] * b[i]
-        }
-
-        const magnitude = Math.sqrt(aMag) * Math.sqrt(bMag)
-        return magnitude > 0 ? dotProduct / magnitude : 0
+        // Use wink-nlp's built-in similarity utility
+        return similarity.vector.cosine(a, b) as number
       }
 
       return {
@@ -306,25 +297,14 @@ export class NlpService extends Effect.Service<NlpService>()(
             const queryTokens = nlp.readDoc(query).tokens().out(its.normal)
             const queryVector = bm25.vectorOf(queryTokens)
 
-            // Compute similarities for all documents
+            // Compute similarities for all documents using wink-nlp's built-in similarity
             const results = docs
               .map((doc, index) => {
                 const docTokens = nlp.readDoc(doc).tokens().out(its.normal)
                 const docVector = bm25.vectorOf(docTokens)
 
-                // Cosine similarity between vectors
-                const dotProduct = queryVector.reduce(
-                  (sum: number, val: number, i: number) => sum + val * docVector[i],
-                  0
-                )
-                const queryMag = Math.sqrt(
-                  queryVector.reduce((sum: number, val: number) => sum + val * val, 0)
-                )
-                const docMag = Math.sqrt(
-                  docVector.reduce((sum: number, val: number) => sum + val * val, 0)
-                )
-
-                const score = queryMag && docMag ? dotProduct / (queryMag * docMag) : 0
+                // Use wink-nlp's built-in cosine similarity
+                const score = similarity.vector.cosine(queryVector, docVector) as number
 
                 return { doc, index, score }
               })
@@ -356,25 +336,22 @@ export class NlpService extends Effect.Service<NlpService>()(
             const queryDoc = nlp.readDoc(query)
             const queryVector = queryDoc.tokens().out(its.value, as.vector) as Array<number>
 
-            // Compute cosine similarity for each document
+            if (!queryVector || queryVector.length === 0) {
+              return []
+            }
+
+            // Compute cosine similarity for each document using wink-nlp's built-in utility
             const results = docs
               .map((doc, index) => {
                 const docObj = nlp.readDoc(doc)
                 const docVector = docObj.tokens().out(its.value, as.vector) as Array<number>
 
-                // Cosine similarity
-                const dotProduct = queryVector.reduce(
-                  (sum, val, i) => sum + val * (docVector[i] || 0),
-                  0
-                )
-                const queryMag = Math.sqrt(
-                  queryVector.reduce((sum, val) => sum + val * val, 0)
-                )
-                const docMag = Math.sqrt(
-                  docVector.reduce((sum, val) => sum + val * val, 0)
-                )
+                if (!docVector || docVector.length === 0) {
+                  return { doc, index, score: 0 }
+                }
 
-                const score = queryMag && docMag ? dotProduct / (queryMag * docMag) : 0
+                // Use wink-nlp's built-in cosine similarity
+                const score = similarity.vector.cosine(queryVector, docVector) as number
 
                 return { doc, index, score }
               })
@@ -457,34 +434,31 @@ export class NlpService extends Effect.Service<NlpService>()(
             }
 
             // Sentence-aware chunking with overlap support
+            // Calculate sentence positions manually since wink-nlp doesn't provide span() method
+            const sentenceCollection = doc.sentences()
+            const sentenceIndex: Array<{ text: string; startOffset: number; endOffset: number }> = []
+
+            // Build sentence index by finding each sentence in the original text sequentially
+            let searchOffset = 0
+            sentenceCollection.each((sentence: any) => {
+              const sentenceText = sentence.out()
+              // Find sentence position in original text starting from last position
+              // This ensures we get the correct position even if sentence text appears multiple times
+              const startOffset = text.indexOf(sentenceText, searchOffset)
+              const endOffset = startOffset + sentenceText.length
+
+              sentenceIndex.push({
+                text: sentenceText,
+                startOffset: startOffset >= 0 ? startOffset : searchOffset,
+                endOffset: startOffset >= 0 ? endOffset : searchOffset + sentenceText.length
+              })
+
+              // Update search offset to continue from end of this sentence
+              searchOffset = startOffset >= 0 ? endOffset : searchOffset + sentenceText.length
+            })
+
             const chunks: Array<TextChunk> = []
             const overlap = Math.max(0, overlapSentences)
-
-            // Build sentence index with character offsets for accurate tracking
-            // This handles cases where sentences might appear multiple times in text
-            const sentenceIndex: Array<{ text: string; startOffset: number; endOffset: number }> = []
-            let searchOffset = 0
-
-            for (const sentence of sentences) {
-              const start = text.indexOf(sentence, searchOffset)
-              if (start >= 0) {
-                sentenceIndex.push({
-                  text: sentence,
-                  startOffset: start,
-                  endOffset: start + sentence.length
-                })
-                searchOffset = start + sentence.length
-              } else {
-                // Fallback: estimate offset if sentence not found (shouldn't happen with wink-nlp)
-                const estimatedStart = searchOffset
-                sentenceIndex.push({
-                  text: sentence,
-                  startOffset: estimatedStart,
-                  endOffset: estimatedStart + sentence.length
-                })
-                searchOffset = estimatedStart + sentence.length + 1 // +1 for space
-              }
-            }
 
             // Sliding window approach with overlap
             // Step size = window size - overlap (ensures overlap sentences are included in next chunk)

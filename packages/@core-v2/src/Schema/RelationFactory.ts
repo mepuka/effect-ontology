@@ -86,46 +86,84 @@ export const makeRelationSchema = (
     })
   }
 
-  // Extract property IRIs from PropertyDefinition objects
-  const propertyIris = properties.map((p) => p.id)
-
   // Create entity ID union - constrains subjectId and object (when entity reference)
   const EntityIdUnion = unionFromStringArray(validEntityIds, "classes")
 
-  // Create property union
-  const PropertyUnion = unionFromStringArray(propertyIris, "properties")
+  // Group properties by rangeType for predicate-discriminated schemas
+  const objectProperties = properties.filter((p) => p.rangeType === "object")
+  const datatypeProperties = properties.filter((p) => p.rangeType === "datatype")
 
-  // Object can be entity ID (from Stage 1) or literal (string, number, boolean)
-  const ObjectSchema = S.Union(
-    EntityIdUnion.annotations({
-      description: "Entity ID from Stage 1 - must be one of the identified entities"
-    }),
-    S.String.annotations({
-      description: "Literal string value (for datatype properties)"
-    }),
-    S.Number.annotations({
-      description: "Literal number value (for numeric datatype properties)"
-    }),
-    S.Boolean.annotations({
-      description: "Literal boolean value (for boolean datatype properties)"
-    })
-  )
+  // Create property unions for each type
+  const ObjectPropertyUnion = objectProperties.length > 0
+    ? unionFromStringArray(objectProperties.map((p) => p.id), "properties")
+    : null
+  const DatatypePropertyUnion = datatypeProperties.length > 0
+    ? unionFromStringArray(datatypeProperties.map((p) => p.id), "properties")
+    : null
 
-  // Single relation schema matching Relation domain model
-  const RelationSchema = S.Struct({
-    subjectId: EntityIdUnion.annotations({
-      description: "Subject entity ID - MUST be one of the entity IDs identified in Stage 1"
-    }),
-    predicate: PropertyUnion.annotations({
-      description: "Relationship or property IRI from the allowed properties"
-    }),
-    object: ObjectSchema.annotations({
-      description:
-        "Object - either an entity ID from Stage 1 (for object properties) or a literal value (string/number/boolean for datatype properties)"
-    })
-  }).annotations({
-    description: "A single subject-predicate-object relation"
-  })
+  // Create relation schemas discriminated by rangeType
+  const relationSchemas: Array<S.Schema<any>> = []
+
+  // Object property relation schema: object must be entity ID only
+  if (ObjectPropertyUnion) {
+    relationSchemas.push(
+      S.Struct({
+        subjectId: EntityIdUnion.annotations({
+          description: "Subject entity ID - MUST be one of the entity IDs identified in Stage 1"
+        }),
+        predicate: ObjectPropertyUnion.annotations({
+          description: "Object property IRI - links entities (object must be entity ID)"
+        }),
+        object: EntityIdUnion.annotations({
+          description: "Object entity ID from Stage 1 - MUST be one of the identified entities"
+        })
+      }).annotations({
+        description: "Object property relation - links two entities"
+      })
+    )
+  }
+
+  // Datatype property relation schema: object must be literal only (NOT entity ID)
+  if (DatatypePropertyUnion) {
+    relationSchemas.push(
+      S.Struct({
+        subjectId: EntityIdUnion.annotations({
+          description: "Subject entity ID - MUST be one of the entity IDs identified in Stage 1"
+        }),
+        predicate: DatatypePropertyUnion.annotations({
+          description: "Datatype property IRI - has literal value (object must be string/number/boolean, NOT entity ID)"
+        }),
+        object: S.Union(
+          S.String.annotations({
+            description: "Literal string value (for datatype properties)"
+          }),
+          S.Number.annotations({
+            description: "Literal number value (for numeric datatype properties)"
+          }),
+          S.Boolean.annotations({
+            description: "Literal boolean value (for boolean datatype properties)"
+          })
+        ).annotations({
+          description: "Literal value - string, number, or boolean (NOT entity ID)"
+        })
+      }).annotations({
+        description: "Datatype property relation - has literal value"
+      })
+    )
+  }
+
+  // Create union of relation schemas (discriminated by predicate rangeType)
+  // If only one type exists, use that schema directly
+  const RelationSchema = relationSchemas.length === 1
+    ? relationSchemas[0]!
+    : relationSchemas.length === 2
+    ? S.Union(relationSchemas[0]!, relationSchemas[1]!)
+    : (() => {
+      throw new EmptyVocabularyError({
+        message: "Cannot create relation schema with zero properties",
+        type: "properties"
+      })
+    })()
 
   // Full relation graph schema
   return S.Struct({
