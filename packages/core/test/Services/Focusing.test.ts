@@ -1,7 +1,7 @@
 import { Effect, Layer } from "effect"
 import { describe, expect, it } from "vitest"
-import { KnowledgeUnit } from "../../src/Prompt/Model.js"
 import * as KnowledgeIndex from "../../src/Prompt/KnowledgeIndex.js"
+import { KnowledgeUnit } from "../../src/Prompt/Model.js"
 import { FocusingService, FocusingServiceLive } from "../../src/Services/Focusing.js"
 import { NlpServiceLive } from "../../src/Services/Nlp.js"
 

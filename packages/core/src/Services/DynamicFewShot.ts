@@ -9,11 +9,7 @@
 
 import { Effect, Layer } from "effect"
 import * as EmbeddingIndex from "../Prompt/EmbeddingIndex.js"
-import {
-  type ExamplePool,
-  type ExtractionExample,
-  getStaticExamples
-} from "../Prompt/ExamplePool.js"
+import { type ExamplePool, type ExtractionExample, getStaticExamples } from "../Prompt/ExamplePool.js"
 import { type NlpError, NlpService, NlpServiceLive } from "./Nlp.js"
 
 /**
@@ -90,7 +86,7 @@ export class DynamicFewShotService extends Effect.Service<DynamicFewShotService>
           options: SelectionOptions = {}
         ): Effect.Effect<ReadonlyArray<SelectedExample>, NlpError> =>
           Effect.gen(function*() {
-            const { predicates, alpha = 0.7, bm25Weight = 0.3 } = options
+            const { alpha = 0.7, bm25Weight = 0.3, predicates } = options
 
             // Filter by predicates if specified
             let filteredIndex = embeddingIndex
@@ -164,9 +160,7 @@ export class DynamicFewShotService extends Effect.Service<DynamicFewShotService>
             score: 1.0 - i * 0.1
           }))
         ),
-      renderSelectedExamples: (selected) =>
-        selected.map((s, i) => `Example ${i + 1}:\n${s.example.render()}`)
+      renderSelectedExamples: (selected) => selected.map((s, i) => `Example ${i + 1}:\n${s.example.render()}`)
     })
   )
 }
-

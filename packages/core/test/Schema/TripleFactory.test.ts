@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest"
 import { Schema as S } from "effect"
-import { makeTripleSchema, EmptyVocabularyError } from "../../src/Schema/TripleFactory.js"
+import { describe, expect, it } from "vitest"
+import { EmptyVocabularyError, makeTripleSchema } from "../../src/Schema/TripleFactory.js"
 
 describe("TripleFactory", () => {
   describe("makeTripleSchema", () => {
@@ -168,4 +168,3 @@ describe("TripleFactory", () => {
     })
   })
 })
-

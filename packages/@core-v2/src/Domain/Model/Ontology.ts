@@ -8,7 +8,12 @@
  */
 
 import { Schema } from "effect"
-import { enhanceTextForSearch, splitCamelCase, transformIriArrayToLocalNames } from "../../Utils/Rdf.js"
+import {
+  enhanceTextForSearch,
+  extractLocalName,
+  splitCamelCase,
+  transformIriArrayToLocalNames
+} from "../../Utils/Rdf.js"
 
 /**
  * ClassDefinition - OWL/RDFS Class metadata
@@ -774,9 +779,14 @@ export class OntologyContext extends Schema.Class<OntologyContext>("OntologyCont
 
   /**
    * Get all properties for a class
+   *
+   * Accepts either full IRI or local name. Extracts local name for comparison
+   * since property domains are stored as local names.
    */
   getPropertiesForClass(classIri: string): Array<PropertyDefinition> {
-    return this.properties.filter((p) => p.domain.includes(classIri))
+    // Extract local name for comparison since domains are stored as local names
+    const localName = extractLocalName(classIri)
+    return this.properties.filter((p) => p.domain.includes(localName))
   }
 
   /**

@@ -18,7 +18,10 @@ import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai"
 import { FetchHttpClient } from "@effect/platform"
 import { Config, Effect, Layer, Redacted } from "effect"
 import { ConfigService } from "../Service/Config.js"
-import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
+import { EntityExtractor, MentionExtractor, RelationExtractor } from "../Service/Extraction.js"
+import { Grounder } from "../Service/Grounder.js"
+import { makeTracingLayer } from "../Telemetry/Tracing.js"
+import { RateLimitedLanguageModelLayer } from "./RateLimitedLanguageModel.js"
 
 /**
  * Create LanguageModel layer with ConfigService
@@ -126,7 +129,72 @@ export const makeLanguageModelLayer = Layer.unwrapEffect(
   })
 )
 
+/**
+ * Rate-limited LanguageModel layer
+ *
+ * Composes the base LanguageModel with rate limiting.
+ * All LLM calls go through the rate limiter automatically.
+ *
+ * @since 2.0.0
+ */
+export const RateLimitedLlmLayer = RateLimitedLanguageModelLayer.pipe(
+  Layer.provide(makeLanguageModelLayer)
+)
+
+/**
+ * Production extraction layers with rate-limited LLM
+ *
+ * Provides all extraction services:
+ * - EntityExtractor
+ * - MentionExtractor
+ * - RelationExtractor
+ * - Grounder
+ *
+ * All services use the rate-limited LanguageModel automatically.
+ *
+ * @since 2.0.0
+ */
 export const ExtractionLayersLive = Layer.mergeAll(
   EntityExtractor.Default,
-  RelationExtractor.Default
-).pipe(Layer.provide(makeLanguageModelLayer))
+  MentionExtractor.Default,
+  RelationExtractor.Default,
+  Grounder.Default
+).pipe(Layer.provide(RateLimitedLlmLayer))
+
+/**
+ * OpenTelemetry tracing layer for Jaeger export
+ *
+ * Exports spans to Jaeger via OTLP HTTP protocol.
+ * Run Jaeger locally with: docker run -d -p 16686:16686 -p 4318:4318 jaegertracing/all-in-one:latest
+ * View traces at: http://localhost:16686
+ *
+ * @example
+ * ```typescript
+ * // Use in production
+ * const layers = ExtractionLayersLive.pipe(
+ *   Layer.provide(TracingLive)
+ * )
+ * ```
+ *
+ * @since 2.0.0
+ */
+export const TracingLive = makeTracingLayer({
+  serviceName: "effect-ontology-extraction",
+  otlpEndpoint: "http://localhost:4318/v1/traces",
+  enabled: true
+}).pipe(Layer.provide(FetchHttpClient.layer))
+
+/**
+ * Production layers with tracing
+ *
+ * Full production layer composition including:
+ * - All extraction services
+ * - Rate-limited LLM
+ * - OpenTelemetry tracing to Jaeger
+ *
+ * @since 2.0.0
+ */
+export const ProductionLayersWithTracing = Layer.mergeAll(
+  ExtractionLayersLive,
+  TracingLive
+)

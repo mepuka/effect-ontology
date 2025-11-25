@@ -10,9 +10,9 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Layer, Option } from "effect"
-import { LlmAttributes, annotateLlmCall } from "../../src/Telemetry/LlmAttributes.js"
-import { TracingContext } from "../../src/Telemetry/TracingContext.js"
 import { calculateCost } from "../../src/Telemetry/CostCalculator.js"
+import { annotateLlmCall, LlmAttributes } from "../../src/Telemetry/LlmAttributes.js"
+import { TracingContext } from "../../src/Telemetry/TracingContext.js"
 
 describe("Telemetry Integration", () => {
   describe("annotateLlmCall with TracingContext", () => {
@@ -35,8 +35,7 @@ describe("Telemetry Integration", () => {
         expect(ctx.provider).toBe("anthropic")
       }).pipe(
         Effect.provide(TracingContext.make("claude-3-5-sonnet-20241022", "anthropic"))
-      )
-    )
+      ))
 
     it.effect("handles optional TracingContext via serviceOption", () =>
       Effect.gen(function*() {
@@ -62,8 +61,7 @@ describe("Telemetry Integration", () => {
         // Without TracingContext provided, should use fallback
         expect(model).toBe("fallback-model")
         expect(provider).toBe("fallback-provider")
-      })
-    )
+      }))
 
     it.effect("uses TracingContext values when provided", () =>
       Effect.gen(function*() {
@@ -91,8 +89,7 @@ describe("Telemetry Integration", () => {
         expect(provider).toBe("openai")
       }).pipe(
         Effect.provide(TracingContext.make("gpt-4o", "openai"))
-      )
-    )
+      ))
   })
 
   describe("cost calculation integration", () => {
@@ -165,8 +162,7 @@ describe("Telemetry Integration", () => {
 
         // If we get here without error, the integration works
         expect(true).toBe(true)
-      })
-    )
+      }))
 
     it.effect("nested spans work correctly", () =>
       Effect.gen(function*() {
@@ -199,7 +195,6 @@ describe("Telemetry Integration", () => {
 
         // If we get here without error, nested spans work
         expect(true).toBe(true)
-      })
-    )
+      }))
   })
 })

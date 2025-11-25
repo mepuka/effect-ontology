@@ -313,7 +313,9 @@ ex:hasBreed a owl:DatatypeProperty ;
         const enrichedManager = KnowledgeIndex.get(enrichedIndex, "http://example.org/Manager")
         expect(enrichedManager._tag).toBe("Some")
         if (enrichedManager._tag === "Some") {
-          const inheritedIris = enrichedManager.value.inheritedProperties.map((p: { propertyIri: string }) => p.propertyIri)
+          const inheritedIris = enrichedManager.value.inheritedProperties.map((p: { propertyIri: string }) =>
+            p.propertyIri
+          )
 
           // From Employee
           expect(inheritedIris).toContain("http://example.org/hasSalary")

@@ -6,8 +6,8 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, HashMap, Layer, Option } from "effect"
-import { KnowledgeUnit } from "../../src/Prompt/Model.js"
 import * as KnowledgeIndex from "../../src/Prompt/KnowledgeIndex.js"
+import { KnowledgeUnit } from "../../src/Prompt/Model.js"
 import { renderToStructuredPromptDynamic } from "../../src/Prompt/Renderer.js"
 import { DynamicFewShotService } from "../../src/Services/DynamicFewShot.js"
 import { NlpServiceLive } from "../../src/Services/Nlp.js"
@@ -42,7 +42,5 @@ describe("RenderDynamic", () => {
       expect(prompt.examples.length).toBe(3)
       // Examples should be relevant to input
       expect(prompt.examples.some((e) => e.includes("Marie Curie") || e.includes("born"))).toBe(true)
-    }).pipe(Effect.provide(testLayer))
-  )
+    }).pipe(Effect.provide(testLayer)))
 })
-

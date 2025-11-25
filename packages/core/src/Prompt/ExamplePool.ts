@@ -60,7 +60,11 @@ export class ExtractionExample extends Schema.Class<ExtractionExample>("Extracti
       : "Entities: []"
 
     const tripleList = this.triples.length > 0
-      ? `Triples: [\n${this.triples.map((t) => `  { "subject": "${t.subject}", "predicate": "${t.predicate}", "object": "${t.object}" }`).join(",\n")}\n]`
+      ? `Triples: [\n${
+        this.triples.map((t) =>
+          `  { "subject": "${t.subject}", "predicate": "${t.predicate}", "object": "${t.object}" }`
+        ).join(",\n")
+      }\n]`
       : "Triples: []"
 
     const parts = [
@@ -129,7 +133,8 @@ export const getStaticExamples = (): ExamplePool => [
   // Direction example
   ExtractionExample.make({
     id: "direction-1",
-    text: "Walter Baade supervised Halton Arp during his doctoral studies. James Watson discovered the asteroid 101 Helena.",
+    text:
+      "Walter Baade supervised Halton Arp during his doctoral studies. James Watson discovered the asteroid 101 Helena.",
     entities: [
       ExampleEntity.make({ name: "Walter Baade", type: "Person" }),
       ExampleEntity.make({ name: "Halton Arp", type: "Person" }),
@@ -140,7 +145,8 @@ export const getStaticExamples = (): ExamplePool => [
       ExampleTriple.make({ subject: "Walter Baade", predicate: "doctoralAdvisor", object: "Halton Arp" }),
       ExampleTriple.make({ subject: "James Watson", predicate: "discoverer", object: "101 Helena" })
     ],
-    note: "The subject performs the action. \"Walter Baade supervised\" means Walter Baade -> doctoralAdvisor -> Halton Arp, NOT the reverse."
+    note:
+      "The subject performs the action. \"Walter Baade supervised\" means Walter Baade -> doctoralAdvisor -> Halton Arp, NOT the reverse."
   }),
 
   // Negative example
@@ -206,8 +212,7 @@ export const getAllPredicates = (pool: ExamplePool): ReadonlyArray<string> => {
 export const filterByPredicate = (
   pool: ExamplePool,
   predicate: string
-): ExamplePool =>
-  pool.filter((ex) => ex.predicates.includes(predicate))
+): ExamplePool => pool.filter((ex) => ex.predicates.includes(predicate))
 
 /**
  * Filter examples by any matching predicate
@@ -217,8 +222,5 @@ export const filterByPredicates = (
   predicates: ReadonlyArray<string>
 ): ExamplePool => {
   const predicateSet = new Set(predicates)
-  return pool.filter((ex) =>
-    ex.predicates.some((p) => predicateSet.has(p))
-  )
+  return pool.filter((ex) => ex.predicates.some((p) => predicateSet.has(p)))
 }
-

@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest"
 import { Effect } from "effect"
-import { RdfService } from "../../src/Services/Rdf.js"
-import { extractTriples } from "../../src/Services/Llm.js"
+import { describe, expect, it } from "vitest"
 import type { StructuredPrompt } from "../../src/Prompt/Model.js"
 import type { TripleGraph } from "../../src/Schema/TripleFactory.js"
+import { extractTriples } from "../../src/Services/Llm.js"
+import { RdfService } from "../../src/Services/Rdf.js"
 
 describe("Triple Extraction Integration", () => {
   it("should convert triple graph to RDF without IRI errors", async () => {
@@ -38,7 +38,7 @@ describe("Triple Extraction Integration", () => {
       ]
     }
 
-    const program = Effect.gen(function* () {
+    const program = Effect.gen(function*() {
       const rdf = yield* RdfService
 
       // Convert to RDF
@@ -72,8 +72,8 @@ describe("Triple Extraction Integration", () => {
     expect(result.turtle).toContain("alice")
 
     // Verify entity names are preserved in labels
-    expect(result.turtle).toContain('"Alice"')
-    expect(result.turtle).toContain('"Stanford University"')
+    expect(result.turtle).toContain("\"Alice\"")
+    expect(result.turtle).toContain("\"Stanford University\"")
   })
 
   it("should handle entity names with special characters", async () => {
@@ -88,7 +88,7 @@ describe("Triple Extraction Integration", () => {
       ]
     }
 
-    const program = Effect.gen(function* () {
+    const program = Effect.gen(function*() {
       const rdf = yield* RdfService
       const store = yield* rdf.triplesToStore(mockTripleGraph)
       const turtle = yield* rdf.storeToTurtle(store)
@@ -129,7 +129,7 @@ describe("Triple Extraction Integration", () => {
       ]
     }
 
-    const program = Effect.gen(function* () {
+    const program = Effect.gen(function*() {
       const rdf = yield* RdfService
       const store = yield* rdf.triplesToStore(mockTripleGraph)
       const turtle = yield* rdf.storeToTurtle(store)
@@ -166,7 +166,7 @@ describe("Triple Extraction Integration", () => {
       ]
     }
 
-    const program = Effect.gen(function* () {
+    const program = Effect.gen(function*() {
       const rdf = yield* RdfService
       const store = yield* rdf.triplesToStore(mockTripleGraph)
       const turtle = yield* rdf.storeToTurtle(store)
@@ -193,4 +193,3 @@ describe("Triple Extraction Integration", () => {
     expect(result.turtle).not.toContain("<Stanford")
   })
 })
-

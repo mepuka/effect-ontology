@@ -1,0 +1,189 @@
+/**
+ * Service: Generate Object with Feedback
+ *
+ * Provides retry with feedback for LLM structured output generation.
+ * When schema validation fails (MalformedOutput), includes the error
+ * in the retry prompt so the LLM can self-correct.
+ *
+ * @since 2.0.0
+ * @module Service/GenerateWithFeedback
+ */
+
+import type { AiError, LanguageModel } from "@effect/ai"
+import { Prompt } from "@effect/ai"
+import type { Schema } from "effect"
+import { Duration, Effect, Either } from "effect"
+import type { TimeoutException } from "effect/Cause"
+
+/**
+ * Options for generateObjectWithFeedback
+ *
+ * @since 2.0.0
+ */
+export interface GenerateWithFeedbackOptions<A, I extends Record<string, unknown>, R> {
+  /**
+   * The initial prompt text
+   */
+  readonly prompt: string
+  /**
+   * The schema for structured output
+   */
+  readonly schema: Schema.Schema<A, I, R>
+  /**
+   * Name for the structured output object
+   */
+  readonly objectName: string
+  /**
+   * Maximum number of retry attempts
+   */
+  readonly maxAttempts: number
+  /**
+   * Service name for logging
+   */
+  readonly serviceName: string
+  /**
+   * Timeout per attempt in milliseconds
+   */
+  readonly timeoutMs?: number
+}
+
+/**
+ * Generate object with schema validation feedback on retry.
+ *
+ * When MalformedOutput occurs (schema validation failure), includes the error
+ * description in the retry prompt so the LLM can understand what went wrong
+ * and self-correct.
+ *
+ * For other errors (network, rate limiting), retries without feedback.
+ *
+ * @example
+ * ```typescript
+ * const response = yield* generateObjectWithFeedback(llm, {
+ *   prompt: entityExtractionPrompt,
+ *   schema: EntityGraphSchema,
+ *   objectName: "EntityGraph",
+ *   maxAttempts: 5,
+ *   serviceName: "EntityExtractor"
+ * })
+ * ```
+ *
+ * @since 2.0.0
+ */
+export const generateObjectWithFeedback = <A, I extends Record<string, unknown>, R>(
+  llm: LanguageModel.Service,
+  opts: GenerateWithFeedbackOptions<A, I, R>
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
+): Effect.Effect<LanguageModel.GenerateObjectResponse<{}, A>, AiError.AiError | TimeoutException, R> =>
+  Effect.gen(function*() {
+    // Build initial prompt from string
+    let currentPrompt: Prompt.Prompt = Prompt.make(opts.prompt)
+    let lastError: AiError.AiError | TimeoutException | null = null
+    let attempts = 0
+
+    while (attempts < opts.maxAttempts) {
+      attempts++
+
+      // Attempt to generate object
+      const generateEffect = llm.generateObject({
+        prompt: currentPrompt,
+        schema: opts.schema,
+        objectName: opts.objectName
+      })
+
+      // Apply timeout if specified
+      const timedEffect = opts.timeoutMs
+        ? generateEffect.pipe(Effect.timeout(Duration.millis(opts.timeoutMs)))
+        : generateEffect
+
+      const result = yield* timedEffect.pipe(Effect.either)
+
+      // Success - return the response
+      if (Either.isRight(result)) {
+        // Log if we succeeded after retries with feedback
+        if (attempts > 1) {
+          yield* Effect.logInfo("Schema validation succeeded after feedback retry", {
+            service: opts.serviceName,
+            attempt: attempts,
+            maxAttempts: opts.maxAttempts
+          })
+        }
+        return result.right
+      }
+
+      // Failure - check error type
+      const error = result.left
+      lastError = error
+
+      // Only add feedback for MalformedOutput (schema validation errors)
+      if (error._tag === "MalformedOutput") {
+        yield* Effect.logWarning("Schema validation failed, retrying with feedback", {
+          service: opts.serviceName,
+          attempt: attempts,
+          maxAttempts: opts.maxAttempts,
+          errorDescription: error.description?.slice(0, 500)
+        })
+
+        // Build feedback prompt with error details
+        // This creates a multi-turn conversation where the LLM sees its mistake
+        const feedbackMessage = buildFeedbackMessage(error)
+        currentPrompt = Prompt.merge(currentPrompt, feedbackMessage)
+      } else {
+        // For other errors (network, timeout, etc), retry without feedback
+        yield* Effect.logWarning("LLM call failed, retrying without feedback", {
+          service: opts.serviceName,
+          attempt: attempts,
+          maxAttempts: opts.maxAttempts,
+          errorTag: error._tag
+        })
+        // Keep the same prompt for non-schema errors
+      }
+    }
+
+    // All attempts exhausted - fail with last error
+    yield* Effect.logError("All retry attempts exhausted", {
+      service: opts.serviceName,
+      attempts: opts.maxAttempts,
+      lastErrorTag: lastError?._tag
+    })
+
+    return yield* Effect.fail(lastError!)
+  })
+
+/**
+ * Build a feedback message to help the LLM understand the schema validation error.
+ *
+ * @internal
+ */
+const buildFeedbackMessage = (error: AiError.MalformedOutput): ReadonlyArray<Prompt.MessageEncoded> => {
+  // Extract useful information from the error description
+  const errorDescription = error.description || "Schema validation failed"
+
+  return [
+    {
+      role: "assistant" as const,
+      content: "I attempted to generate the output but it failed schema validation."
+    },
+    {
+      role: "user" as const,
+      content: `Your response failed schema validation with this error:
+
+${errorDescription}
+
+Please try again. Common issues:
+1. Entity types must be from the ALLOWED CLASSES list (use full IRIs)
+2. Attribute keys should be from ALLOWED DATATYPE PROPERTIES when possible
+3. Entity IDs must be snake_case (lowercase with underscores)
+4. Each entity must have at least one type
+
+Generate a corrected response following the schema exactly.`
+    }
+  ]
+}
+
+/**
+ * Type helper for the generateObjectWithFeedback result
+ *
+ * @since 2.0.0
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export type GenerateWithFeedbackResult<A> = LanguageModel.GenerateObjectResponse<{}, A>

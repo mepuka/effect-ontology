@@ -538,4 +538,3 @@ describe("mergeGraphsWithConflicts", () => {
     expect(merged.relations.length).toBe(1)
   })
 })
-

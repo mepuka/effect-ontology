@@ -22,3 +22,13 @@ export { streamingExtraction } from "./Workflow/StreamingExtraction.js"
 export { extractToTurtle } from "./Workflow/TwoStageExtraction.js"
 
 // Runtime (pre-composed layers)
+export {
+  ExtractionLayersLive,
+  makeLanguageModelLayer,
+  ProductionLayersWithTracing,
+  RateLimitedLlmLayer,
+  TracingLive
+} from "./Runtime/ProductionRuntime.js"
+
+// Telemetry (OpenTelemetry integration)
+export * as Telemetry from "./Telemetry/index.js"

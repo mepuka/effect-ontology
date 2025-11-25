@@ -4,8 +4,8 @@
  * @module test/Schema/EntityFactory
  */
 
-import { describe, expect, it } from "vitest"
 import { JSONSchema, Schema } from "effect"
+import { describe, expect, it } from "vitest"
 import { ClassDefinition } from "../../src/Domain/Model/Ontology.js"
 import { EmptyVocabularyError, makeEntitySchema } from "../../src/Schema/EntityFactory.js"
 
@@ -227,4 +227,3 @@ describe("makeEntitySchema", () => {
     expect(result2.entities[0].attributes!["http://schema.org/age"]).toBe(39)
   })
 })
-

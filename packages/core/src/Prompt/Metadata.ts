@@ -17,9 +17,9 @@
 import { Data, Effect, Graph, HashMap, Option, Schema } from "effect"
 import type { PropertyConstraint } from "../Graph/Constraint.js"
 import type { NodeId, OntologyContext } from "../Graph/Types.js"
-import { KnowledgeUnit } from "./Model.js"
 import * as KnowledgeIndex from "./KnowledgeIndex.js"
 import type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
+import { KnowledgeUnit } from "./Model.js"
 
 /**
  * Metadata errors
@@ -519,7 +519,10 @@ export const buildTokenStats = (index: KnowledgeIndexType): TokenStats => {
 
   for (const unit of KnowledgeIndex.values(index)) {
     const tokens = estimateTokens(unit.definition) +
-      unit.properties.reduce((sum: number, p: PropertyConstraint) => sum + estimateTokens(`${p.label}: ${p.ranges[0]}`), 0)
+      unit.properties.reduce(
+        (sum: number, p: PropertyConstraint) => sum + estimateTokens(`${p.label}: ${p.ranges[0]}`),
+        0
+      )
 
     totalTokens += tokens
     byClass = HashMap.set(byClass, unit.iri, tokens)

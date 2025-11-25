@@ -33,6 +33,21 @@ export class ExtractionError extends Schema.TaggedError<ExtractionError>()(
 ) {}
 
 /**
+ * MentionExtractionFailed - Mention extraction failure
+ *
+ * @since 2.0.0
+ * @category Error
+ */
+export class MentionExtractionFailed extends Schema.TaggedError<MentionExtractionFailed>()(
+  "MentionExtractionFailed",
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Unknown),
+    text: Schema.optional(Schema.String)
+  }
+) {}
+
+/**
  * EntityExtractionFailed - Entity extraction failure
  *
  * @since 2.0.0

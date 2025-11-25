@@ -12,10 +12,10 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Graph, HashMap } from "effect"
 import { ClassNode, type GraphAlgebra, type OntologyContext } from "../../src/Graph/Types.js"
-import * as PromptContext from "../../src/Prompt/Model.js"
-import * as EC from "../../src/Prompt/EntityCache.js"
-import { renderContext } from "../../src/Prompt/Renderer.js"
 import { GraphCycleError, MissingNodeDataError, solveGraph } from "../../src/Prompt/Builder.js"
+import * as EC from "../../src/Prompt/EntityCache.js"
+import * as PromptContext from "../../src/Prompt/Model.js"
+import { renderContext } from "../../src/Prompt/Renderer.js"
 
 /**
  * Test algebra that tracks execution order

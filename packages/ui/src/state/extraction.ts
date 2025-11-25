@@ -7,15 +7,12 @@
  */
 
 import { Atom, Result } from "@effect-atom/atom"
-import {
-  streamingExtractionPipeline,
-  type PipelineConfig
-} from "@effect-ontology/core/Services/ExtractionPipeline"
+import { type PipelineConfig, streamingExtractionPipeline } from "@effect-ontology/core/Services/ExtractionPipeline"
 import { makeLlmProviderLayer } from "@effect-ontology/core/Services/LlmProvider"
 import { Effect } from "effect"
 import { runtime } from "../runtime/atoms"
-import { browserConfigAtom } from "./config"
 import { chunkingConfigAtom } from "./chunking"
+import { browserConfigAtom } from "./config"
 import { ontologyGraphAtom } from "./store"
 
 /**
@@ -91,12 +88,14 @@ export const runExtractionAtom = runtime.atom((get) =>
       return null
     }
 
-    const { graph, context } = graphData
+    const { context, graph } = graphData
 
     // Get LLM config
     const config = get(browserConfigAtom)
-    if (!config.anthropic?.apiKey && !config.openai?.apiKey &&
-        !config.gemini?.apiKey && !config.openrouter?.apiKey) {
+    if (
+      !config.anthropic?.apiKey && !config.openai?.apiKey &&
+      !config.gemini?.apiKey && !config.openrouter?.apiKey
+    ) {
       yield* Atom.set(extractionStatusAtom, {
         _tag: "error",
         message: "No API key configured. Check settings."

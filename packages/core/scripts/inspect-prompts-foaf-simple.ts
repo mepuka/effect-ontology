@@ -70,7 +70,7 @@ const program = Effect.gen(function*() {
   yield* Effect.log("\n" + "=".repeat(80))
   yield* Effect.log("SIMULATED STAGE 1 RESULTS")
   yield* Effect.log("=".repeat(80))
-  
+
   const foundEntities = [
     { id: "alice", type: "http://xmlns.com/foaf/0.1/Person" },
     { id: "bob", type: "http://xmlns.com/foaf/0.1/Person" },
@@ -88,9 +88,9 @@ const program = Effect.gen(function*() {
   yield* Effect.log("\n" + "=".repeat(80))
   yield* Effect.log("STAGE 2: LOCALIZED CONTEXT ANALYSIS")
   yield* Effect.log("=".repeat(80))
-  
+
   const activeClasses = Array.from(new Set(foundEntities.map((e) => e.type)))
-  
+
   yield* Effect.log(`\n📋 Stage 2 Active Classes (from found entities):`)
   for (const classIri of activeClasses) {
     yield* Effect.log(`   - ${classIri}`)
@@ -129,6 +129,3 @@ Effect.runPromise(
     )
   )
 )
-
-
-

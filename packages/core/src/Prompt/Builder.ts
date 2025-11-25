@@ -9,15 +9,14 @@
 
 import { Doc } from "@effect/printer"
 import { Data, Effect, Graph, HashMap, Option } from "effect"
-import type { NodeId, OntologyContext } from "../Graph/Types.js"
 import type { PropertyConstraint } from "../Graph/Constraint.js"
+import type { NodeId, OntologyContext } from "../Graph/Types.js"
 import { isClassNode, isPropertyNode } from "../Graph/Types.js"
 import { propertyLineDoc } from "./ConstraintFormatter.js"
 import * as KnowledgeIndex from "./KnowledgeIndex.js"
 import type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
 import type { GraphAlgebra, PromptAlgebra } from "./Model.js"
-import { StructuredPrompt } from "./Model.js"
-import { KnowledgeUnit } from "./Model.js"
+import { KnowledgeUnit, StructuredPrompt } from "./Model.js"
 
 // ============================================================================
 // Solver Errors (from Solver.ts)
@@ -643,18 +642,18 @@ export const buildStage2Prompt = (
 ): StructuredPrompt => {
   // 1. Identify active classes from found entities
   const activeClasses = Array.from(new Set(foundEntities.map((e) => e.type)))
-  
+
   // 2. Query KnowledgeIndex for ONLY relevant properties
   const relevantProperties = KnowledgeIndex.getPropertiesForClasses(knowledgeIndex, activeClasses)
-  
+
   // 3. Get KnowledgeUnits for active classes
   const relevantUnits = KnowledgeIndex.getUnitsForClasses(knowledgeIndex, activeClasses)
-  
+
   // 4. Build localized system prompt (only relevant class definitions)
   const system = relevantUnits.map((unit) => {
     const parts: Array<string> = []
     parts.push(unit.definition)
-    
+
     if (unit.properties.length > 0) {
       const propLines = unit.properties.map((prop) => {
         const rangeLabel = prop.ranges[0]?.split("#")[1] || prop.ranges[0]?.split("/").pop() || prop.ranges[0] || "Any"
@@ -662,20 +661,20 @@ export const buildStage2Prompt = (
       })
       parts.push(`Properties:\n${propLines.join("\n")}`)
     }
-    
+
     return parts.join("\n")
   })
-  
+
   // 5. Build user prompt with entity context
   const entityList = foundEntities.map((e) => `- ${e.id} (${e.type})`).join("\n")
   const propertyList = relevantProperties.map((p) => `- ${p.label} (${p.propertyIri})`).join("\n")
-  
+
   const user = [
     `You have identified the following entities:\n${entityList}\n`,
     `Now identify relationships between them using these properties:\n${propertyList}\n`,
     `CRITICAL: Subject and object (when referencing an entity) MUST be one of the entity IDs listed above.`
   ]
-  
+
   return StructuredPrompt.make({
     system,
     user,
@@ -683,4 +682,3 @@ export const buildStage2Prompt = (
     context: []
   })
 }
-

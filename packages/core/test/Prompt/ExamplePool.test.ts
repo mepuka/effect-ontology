@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
-import { ExamplePool, getStaticExamples, type ExtractionExample } from "../../src/Prompt/ExamplePool.js"
+import { ExamplePool, type ExtractionExample, getStaticExamples } from "../../src/Prompt/ExamplePool.js"
 
 describe("ExamplePool", () => {
   it.effect("getStaticExamples returns curated examples", () =>
@@ -21,8 +21,7 @@ describe("ExamplePool", () => {
         expect(ex.entities.length).toBeGreaterThanOrEqual(0)
         expect(ex.triples).toBeDefined()
       }
-    })
-  )
+    }))
 
   it.effect("examples cover diverse predicates", () =>
     Effect.gen(function*() {
@@ -37,7 +36,5 @@ describe("ExamplePool", () => {
 
       // Should have diverse predicates
       expect(allPredicates.size).toBeGreaterThanOrEqual(5)
-    })
-  )
+    }))
 })
-

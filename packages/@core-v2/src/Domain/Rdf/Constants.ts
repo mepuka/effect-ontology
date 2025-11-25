@@ -9,7 +9,7 @@
  */
 
 import { Schema } from "effect"
-import { IriSchema, type IRI } from "./Types.js"
+import { type IRI, IriSchema } from "./Types.js"
 
 /**
  * Create an IRI from a string
@@ -52,6 +52,3 @@ export const SKOS_NARROWER: IRI = iri("http://www.w3.org/2004/02/skos/core#narro
 export const SKOS_RELATED: IRI = iri("http://www.w3.org/2004/02/skos/core#related")
 export const SKOS_EXACTMATCH: IRI = iri("http://www.w3.org/2004/02/skos/core#exactMatch")
 export const SKOS_CLOSEMATCH: IRI = iri("http://www.w3.org/2004/02/skos/core#closeMatch")
-
-
-

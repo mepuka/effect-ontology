@@ -21,8 +21,7 @@ describe("EmbeddingIndex", () => {
         const result = EmbeddingIndex.combine(EmbeddingIndex.empty(), a)
         expect(EmbeddingIndex.size(result)).toBe(1)
         expect(Option.isSome(EmbeddingIndex.get(result, "ex1"))).toBe(true)
-      })
-    )
+      }))
 
     it.effect("associativity: combine(combine(a, b), c) = combine(a, combine(b, c))", () =>
       Effect.gen(function*() {
@@ -34,8 +33,7 @@ describe("EmbeddingIndex", () => {
         const right = EmbeddingIndex.combine(a, EmbeddingIndex.combine(b, c))
 
         expect(EmbeddingIndex.size(left)).toBe(EmbeddingIndex.size(right))
-      })
-    )
+      }))
   })
 
   describe("queries", () => {
@@ -49,8 +47,6 @@ describe("EmbeddingIndex", () => {
 
         const filtered = EmbeddingIndex.filterByPredicate(index, "birthPlace")
         expect(EmbeddingIndex.size(filtered)).toBe(2)
-      })
-    )
+      }))
   })
 })
-

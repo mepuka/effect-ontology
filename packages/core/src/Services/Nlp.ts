@@ -522,7 +522,7 @@ export const NlpServiceLive = Layer.sync(NlpService, () => {
       Effect.try({
         try: () => {
           const doc = nlp.readDoc(text)
-          const verbs: string[] = []
+          const verbs: Array<string> = []
           doc.tokens().each((token: any) => {
             const pos = token.out(nlp.its.pos)
             if (pos === "VERB" || pos === "AUX") {
@@ -542,7 +542,7 @@ export const NlpServiceLive = Layer.sync(NlpService, () => {
       Effect.try({
         try: () => {
           const doc = nlp.readDoc(text)
-          const lemmas: string[] = []
+          const lemmas: Array<string> = []
           doc.tokens().each((token: any) => {
             const pos = token.out(nlp.its.pos)
             if (pos === "VERB" || pos === "AUX") {

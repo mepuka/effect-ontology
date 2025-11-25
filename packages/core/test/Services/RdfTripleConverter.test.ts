@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest"
 import { Effect } from "effect"
-import { RdfService } from "../../src/Services/Rdf.js"
+import { describe, expect, it } from "vitest"
 import type { TripleGraph } from "../../src/Schema/TripleFactory.js"
+import { RdfService } from "../../src/Services/Rdf.js"
 
 describe("RdfService - Triple Conversion", () => {
   it("should convert simple literal triple to RDF", async () => {
@@ -16,7 +16,7 @@ describe("RdfService - Triple Conversion", () => {
       ]
     }
 
-    const program = Effect.gen(function* () {
+    const program = Effect.gen(function*() {
       const rdf = yield* RdfService
       const store = yield* rdf.triplesToStore(tripleGraph)
       const turtle = yield* rdf.storeToTurtle(store)
@@ -29,7 +29,7 @@ describe("RdfService - Triple Conversion", () => {
     expect(turtle).toContain("alice")
     expect(turtle).toContain("http://xmlns.com/foaf/0.1/Person")
     expect(turtle).toContain("http://xmlns.com/foaf/0.1/name")
-    expect(turtle).toContain('"Alice Smith"')
+    expect(turtle).toContain("\"Alice Smith\"")
   })
 
   it("should handle entity references", async () => {
@@ -47,7 +47,7 @@ describe("RdfService - Triple Conversion", () => {
       ]
     }
 
-    const program = Effect.gen(function* () {
+    const program = Effect.gen(function*() {
       const rdf = yield* RdfService
       const store = yield* rdf.triplesToStore(tripleGraph)
 
@@ -77,7 +77,7 @@ describe("RdfService - Triple Conversion", () => {
       ]
     }
 
-    const program = Effect.gen(function* () {
+    const program = Effect.gen(function*() {
       const rdf = yield* RdfService
       const store = yield* rdf.triplesToStore(tripleGraph)
       const turtle = yield* rdf.storeToTurtle(store)
@@ -113,7 +113,7 @@ describe("RdfService - Triple Conversion", () => {
       ]
     }
 
-    const program = Effect.gen(function* () {
+    const program = Effect.gen(function*() {
       const rdf = yield* RdfService
       const store = yield* rdf.triplesToStore(tripleGraph)
 
@@ -145,7 +145,7 @@ describe("RdfService - Triple Conversion", () => {
       ]
     }
 
-    const program = Effect.gen(function* () {
+    const program = Effect.gen(function*() {
       const rdf = yield* RdfService
       const store = yield* rdf.triplesToStore(tripleGraph)
       const turtle = yield* rdf.storeToTurtle(store)
@@ -161,8 +161,8 @@ describe("RdfService - Triple Conversion", () => {
 
     // Should have label triples
     expect(turtle).toContain("http://www.w3.org/2000/01/rdf-schema#label")
-    expect(turtle).toContain('"Alice"')
-    expect(turtle).toContain('"Bob"')
+    expect(turtle).toContain("\"Alice\"")
+    expect(turtle).toContain("\"Bob\"")
   })
 
   it("should roundtrip: triple → RDF → Turtle → parse", async () => {
@@ -177,7 +177,7 @@ describe("RdfService - Triple Conversion", () => {
       ]
     }
 
-    const program = Effect.gen(function* () {
+    const program = Effect.gen(function*() {
       const rdf = yield* RdfService
 
       // Convert to RDF
@@ -206,4 +206,3 @@ describe("RdfService - Triple Conversion", () => {
     expect(result.turtle).not.toContain("University>")
   })
 })
-

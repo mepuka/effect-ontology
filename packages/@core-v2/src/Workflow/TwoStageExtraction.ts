@@ -10,7 +10,8 @@
 
 import { Effect } from "effect"
 import { ExtractionError } from "../Domain/Error/Extraction.js"
-import type { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
+import type { EntityExtractor, MentionExtractor, RelationExtractor } from "../Service/Extraction.js"
+import type { Grounder } from "../Service/Grounder.js"
 import type { NlpService } from "../Service/Nlp.js"
 import type { OntologyService } from "../Service/Ontology.js"
 import { RdfBuilder } from "../Service/Rdf.js"
@@ -42,7 +43,7 @@ export const extractToTurtle = (
 ): Effect.Effect<
   string,
   ExtractionError,
-  EntityExtractor | RelationExtractor | OntologyService | NlpService | RdfBuilder
+  EntityExtractor | MentionExtractor | RelationExtractor | Grounder | OntologyService | NlpService | RdfBuilder
 > =>
   Effect.gen(function*() {
     yield* Effect.logInfo("Starting two-stage extraction", {

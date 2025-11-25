@@ -1,9 +1,9 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Data, Effect, HashMap, Layer } from "effect"
-import { PropertyFilteringService } from "../../src/Services/PropertyFiltering.js"
-import { NlpServiceLive } from "../../src/Services/Nlp.js"
-import type { OntologyContext } from "../../src/Graph/Types.js"
 import { PropertyConstraint } from "../../src/Graph/Constraint.js"
+import type { OntologyContext } from "../../src/Graph/Types.js"
+import { NlpServiceLive } from "../../src/Services/Nlp.js"
+import { PropertyFilteringService } from "../../src/Services/PropertyFiltering.js"
 
 const testLayer = PropertyFilteringService.Default.pipe(
   Layer.provide(NlpServiceLive)
@@ -11,9 +11,7 @@ const testLayer = PropertyFilteringService.Default.pipe(
 
 const makeTestOntology = (properties: Array<{ propertyIri: string; label?: string }>): OntologyContext => ({
   nodes: HashMap.empty(),
-  universalProperties: properties.map((p) =>
-    PropertyConstraint.top(p.propertyIri, p.label || p.propertyIri)
-  ),
+  universalProperties: properties.map((p) => PropertyConstraint.top(p.propertyIri, p.label || p.propertyIri)),
   nodeIndexMap: HashMap.empty(),
   disjointWithMap: HashMap.empty(),
   propertyParentsMap: HashMap.empty(),
@@ -101,4 +99,3 @@ describe("PropertyFilteringService", () => {
       }).pipe(Effect.provide(testLayer))
   )
 })
-

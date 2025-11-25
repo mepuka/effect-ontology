@@ -1,0 +1,452 @@
+/**
+ * Service: Grounder
+ *
+ * Verifies extracted triples against source context using a second LLM pass.
+ * Inspired by ODKE+ Grounder component.
+ *
+ * Supports both single and batched verification for efficiency.
+ *
+ * @since 2.0.0
+ * @module Service/Grounder
+ */
+
+import { LanguageModel } from "@effect/ai"
+import { Cause, Chunk, Duration, Effect, Layer, Ref, Schedule, Schema, Stream } from "effect"
+import type { Relation } from "../Domain/Model/Entity.js"
+import type { PropertyDefinition } from "../Domain/Model/Ontology.js"
+import { annotateError, annotateLlmCall, annotateRetry, LlmAttributes } from "../Telemetry/LlmAttributes.js"
+import { ConfigService } from "./Config.js"
+import { makeRetryPolicy } from "./Retry.js"
+
+/**
+ * Verification result schema returned by LLM (single relation)
+ */
+const VerificationSchema = Schema.Struct({
+  grounded: Schema.Boolean,
+  confidence: Schema.Number.pipe(
+    Schema.greaterThanOrEqualTo(0),
+    Schema.lessThanOrEqualTo(1)
+  )
+}).annotations({
+  identifier: "GroundingDecision",
+  description: "Indicates whether a triple is grounded in the provided context"
+})
+
+/**
+ * Batch verification result schema
+ */
+const BatchVerificationSchema = Schema.Struct({
+  results: Schema.Array(
+    Schema.Struct({
+      index: Schema.Number.annotations({
+        description: "Index of the triple in the input list (0-based)"
+      }),
+      grounded: Schema.Boolean.annotations({
+        description: "Whether this triple is supported by the context"
+      }),
+      confidence: Schema.Number.pipe(
+        Schema.greaterThanOrEqualTo(0),
+        Schema.lessThanOrEqualTo(1)
+      ).annotations({
+        description: "Confidence score from 0 to 1"
+      })
+    })
+  )
+}).annotations({
+  identifier: "BatchGroundingDecision",
+  description: "Verification results for multiple triples"
+})
+
+/**
+ * Input required to verify a relation triple
+ */
+export interface RelationVerificationInput {
+  readonly context: string
+  readonly object?: {
+    readonly entityId?: string
+    readonly literal?: string | number | boolean
+    readonly mention?: string
+    readonly types?: ReadonlyArray<string>
+  }
+  readonly predicate?: PropertyDefinition
+  readonly relation: Relation
+  readonly subject?: {
+    readonly entityId: string
+    readonly mention: string
+    readonly types: ReadonlyArray<string>
+  }
+}
+
+/**
+ * Build prompt for single relation verification
+ *
+ * @internal
+ */
+const buildGrounderPrompt = ({
+  context,
+  object,
+  predicate,
+  relation,
+  subject
+}: RelationVerificationInput): string => {
+  const predicateLabel = predicate?.label ?? relation.predicate
+  const subjectLabel = subject
+    ? `${subject.mention} (${subject.entityId})`
+    : relation.subjectId
+
+  const objectLabel = typeof relation.object === "string"
+    ? object?.mention
+      ? `${object.mention} (${relation.object})`
+      : relation.object
+    : String(relation.object)
+
+  const objectDetail = typeof relation.object === "string" && object?.types
+    ? `\nObject types: ${object.types.join(", ")}`
+    : ""
+
+  return `You are a verifier that determines whether a triple is grounded in the provided context.
+
+Context:
+${context}
+
+Triple:
+<${subjectLabel}, ${predicateLabel}, ${objectLabel}>${objectDetail}
+
+Instructions:
+- Answer using JSON matching the schema { "grounded": boolean, "confidence": number between 0 and 1 }
+- "grounded" is true if and only if the triple is explicitly supported by the context.
+- Confidence should reflect how certain you are about the grounding decision.
+- Do not use external knowledge beyond the provided context.`
+}
+
+/**
+ * Format a single relation for batch verification prompt
+ *
+ * @internal
+ */
+const formatRelationForBatch = (
+  input: RelationVerificationInput,
+  index: number
+): string => {
+  const { object, predicate, relation, subject } = input
+  const predicateLabel = predicate?.label ?? relation.predicate
+  const subjectLabel = subject
+    ? `${subject.mention} (${subject.entityId})`
+    : relation.subjectId
+
+  const objectLabel = typeof relation.object === "string"
+    ? object?.mention
+      ? `${object.mention} (${relation.object})`
+      : relation.object
+    : String(relation.object)
+
+  return `${index}. <${subjectLabel}, ${predicateLabel}, ${objectLabel}>`
+}
+
+/**
+ * Build prompt for batch relation verification
+ *
+ * @internal
+ */
+const buildBatchGrounderPrompt = (
+  context: string,
+  inputs: ReadonlyArray<RelationVerificationInput>
+): string => {
+  const triplesFormatted = inputs
+    .map((input, index) => formatRelationForBatch(input, index))
+    .join("\n")
+
+  return `You are a verifier that determines whether triples are grounded in the provided context.
+
+Context:
+${context}
+
+Triples to verify:
+${triplesFormatted}
+
+Instructions:
+- For each triple, determine if it is explicitly supported by the context.
+- Return a JSON object with a "results" array.
+- Each result should have: { "index": <triple number>, "grounded": boolean, "confidence": number between 0 and 1 }
+- "grounded" is true if and only if the triple is explicitly stated or clearly implied by the context.
+- Do not use external knowledge beyond the provided context.
+- Return results for ALL triples in the same order as provided.`
+}
+
+/**
+ * Grounder verification result
+ */
+export interface GrounderResult {
+  readonly grounded: boolean
+  readonly confidence: number
+  readonly relation: Relation
+}
+
+/**
+ * Default batch size for grouped verification
+ */
+const DEFAULT_BATCH_SIZE = 5
+
+/**
+ * Grounder Service
+ *
+ * Provides relation verification via secondary LLM pass.
+ * Supports both single relation and batched verification.
+ *
+ * @since 2.0.0
+ */
+export class Grounder extends Effect.Service<Grounder>()("Grounder", {
+  effect: Effect.gen(function*() {
+    const config = yield* ConfigService
+    const llm = yield* LanguageModel.LanguageModel
+
+    // Retry policy with exponential backoff, max delay cap, and logging
+    const retryPolicy = makeRetryPolicy({
+      initialDelayMs: config.runtime.retryInitialDelayMs,
+      maxDelayMs: config.runtime.retryMaxDelayMs,
+      maxAttempts: config.runtime.retryMaxAttempts,
+      serviceName: "Grounder"
+    })
+
+    return {
+      /**
+       * Verify whether a single relation triple is grounded in the context
+       *
+       * @param input - Verification input
+       * @returns Verification decision with confidence score
+       */
+      verifyRelation: (input: RelationVerificationInput) =>
+        Effect.gen(function*() {
+          const prompt = buildGrounderPrompt(input)
+          const retryCount = yield* Ref.make(0)
+
+          const result = yield* llm.generateObject({
+            prompt,
+            schema: VerificationSchema,
+            objectName: "GroundingDecision"
+          }).pipe(
+            Effect.retry(
+              retryPolicy.pipe(
+                Schedule.tapInput(() => Ref.update(retryCount, (n) => n + 1))
+              )
+            ),
+            Effect.tapErrorCause((cause) =>
+              Effect.all([
+                Effect.logError("Grounder verification failed, will retry", {
+                  stage: "grounder",
+                  promptLength: prompt.length,
+                  cause: Cause.pretty(cause)
+                }),
+                annotateError({
+                  errorType: Cause.isFailType(cause)
+                    ? (cause.error as Error).constructor?.name ?? "UnknownError"
+                    : "UnknownCause",
+                  errorMessage: Cause.pretty(cause).slice(0, 500)
+                })
+              ])
+            ),
+            Effect.tap((response) =>
+              Effect.gen(function*() {
+                const retries = yield* Ref.get(retryCount)
+                yield* Effect.all([
+                  Effect.logDebug("Grounder verification result", {
+                    stage: "grounder",
+                    grounded: response.value.grounded,
+                    confidence: response.value.confidence,
+                    retryCount: retries
+                  }),
+                  annotateLlmCall({
+                    model: config.llm.model,
+                    provider: config.llm.provider,
+                    promptLength: prompt.length,
+                    inputTokens: response.usage.inputTokens,
+                    outputTokens: response.usage.outputTokens,
+                    promptText: prompt.slice(0, 2000)
+                  }),
+                  annotateRetry({
+                    retryCount: retries,
+                    maxAttempts: config.runtime.retryMaxAttempts
+                  })
+                ])
+              })
+            ),
+            Effect.withSpan("grounder-single-verification", {
+              attributes: {
+                [LlmAttributes.PROMPT_LENGTH]: prompt.length,
+                [LlmAttributes.PROMPT_TEXT]: prompt.slice(0, 2000)
+              }
+            }),
+            Effect.timeout(Duration.millis(config.llm.timeoutMs * 2))
+          )
+
+          return {
+            grounded: result.value.grounded,
+            confidence: result.value.confidence,
+            relation: input.relation
+          }
+        }),
+
+      /**
+       * Verify a batch of relations in a single LLM call
+       *
+       * More efficient than verifying one at a time.
+       *
+       * @param context - Shared context for all relations
+       * @param inputs - Array of verification inputs (all should share same context)
+       * @returns Array of verification results
+       */
+      verifyRelationBatch: (
+        context: string,
+        inputs: ReadonlyArray<RelationVerificationInput>
+      ) =>
+        Effect.gen(function*() {
+          if (inputs.length === 0) {
+            return []
+          }
+
+          // If only one input, use single verification for efficiency
+          if (inputs.length === 1) {
+            const result = yield* llm.generateObject({
+              prompt: buildGrounderPrompt(inputs[0]),
+              schema: VerificationSchema,
+              objectName: "GroundingDecision"
+            }).pipe(
+              Effect.retry(retryPolicy),
+              Effect.timeout(Duration.millis(config.llm.timeoutMs * 2))
+            )
+            return [{
+              grounded: result.value.grounded,
+              confidence: result.value.confidence,
+              relation: inputs[0].relation
+            }]
+          }
+
+          // Batch verification
+          const prompt = buildBatchGrounderPrompt(context, inputs)
+
+          const response = yield* llm.generateObject({
+            prompt,
+            schema: BatchVerificationSchema,
+            objectName: "BatchGroundingDecision"
+          }).pipe(
+            Effect.retry(retryPolicy),
+            Effect.timeout(Duration.millis(config.llm.timeoutMs * 3)) // Extra time for batch
+          )
+
+          // Map results back to inputs
+          const resultsMap = new Map(
+            response.value.results.map((r) => [r.index, r])
+          )
+
+          return inputs.map((input, index) => {
+            const result = resultsMap.get(index)
+            return {
+              grounded: result?.grounded ?? false,
+              confidence: result?.confidence ?? 0,
+              relation: input.relation
+            }
+          })
+        }).pipe(
+          Effect.tap((results) =>
+            Effect.all([
+              Effect.logDebug("Grounder batch verification complete", {
+                stage: "grounder",
+                batchSize: inputs.length,
+                groundedCount: results.filter((r) => r.grounded).length
+              }),
+              Effect.annotateCurrentSpan(LlmAttributes.RELATION_COUNT, inputs.length),
+              Effect.annotateCurrentSpan("grounder.grounded_count", results.filter((r) => r.grounded).length)
+            ])
+          ),
+          Effect.withSpan("grounder-batch-verification", {
+            attributes: {
+              [LlmAttributes.RELATION_COUNT]: inputs.length
+            }
+          })
+        ),
+
+      /**
+       * Verify relations using batched streaming
+       *
+       * Groups relations into batches and processes each batch in one LLM call.
+       * More efficient for large numbers of relations.
+       *
+       * @param context - Shared context
+       * @param relations - Stream of verification inputs
+       * @param batchSize - Number of relations per batch (default: 5)
+       * @returns Stream of verification results
+       */
+      verifyRelationStream: (
+        context: string,
+        relations: Stream.Stream<RelationVerificationInput>,
+        batchSize: number = DEFAULT_BATCH_SIZE
+      ) =>
+        relations.pipe(
+          // Group into batches
+          Stream.grouped(batchSize),
+          // Process each batch with single LLM call
+          Stream.mapEffect((batch) => {
+            const batchArray = Chunk.toReadonlyArray(batch)
+            return llm.generateObject({
+              prompt: buildBatchGrounderPrompt(context, batchArray),
+              schema: BatchVerificationSchema,
+              objectName: "BatchGroundingDecision"
+            }).pipe(
+              Effect.retry(retryPolicy),
+              Effect.timeout(Duration.millis(config.llm.timeoutMs * 3)),
+              Effect.map((response) => {
+                const resultsMap = new Map(
+                  response.value.results.map((r) => [r.index, r])
+                )
+                return batchArray.map((input, index) => {
+                  const result = resultsMap.get(index)
+                  return {
+                    grounded: result?.grounded ?? false,
+                    confidence: result?.confidence ?? 0,
+                    relation: input.relation
+                  }
+                })
+              })
+            )
+          }),
+          // Flatten batch results
+          Stream.mapConcat((results) => results)
+        )
+    }
+  }),
+  dependencies: [ConfigService.Default],
+  accessors: true
+}) {
+  /**
+   * Test layer with deterministic responses (all relations pass verification)
+   *
+   * @since 2.0.0
+   */
+  static Test = Layer.succeed(
+    Grounder,
+    {
+      verifyRelation: (input: RelationVerificationInput) =>
+        Effect.succeed({
+          grounded: true,
+          confidence: 1,
+          relation: input.relation
+        }),
+      verifyRelationBatch: (_context: string, inputs: ReadonlyArray<RelationVerificationInput>) =>
+        Effect.succeed(
+          inputs.map((input) => ({
+            grounded: true,
+            confidence: 1,
+            relation: input.relation
+          }))
+        ),
+      verifyRelationStream: (_context: string, relations: Stream.Stream<RelationVerificationInput>) =>
+        relations.pipe(
+          Stream.map((input) => ({
+            grounded: true,
+            confidence: 1,
+            relation: input.relation
+          }))
+        )
+    } as unknown as Grounder
+  )
+}

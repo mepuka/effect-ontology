@@ -9,29 +9,29 @@
 
 // Model exports (consolidated from Ast.ts, Types.ts, Fragment.ts, Context.ts)
 export {
-  KnowledgeUnit,
-  type PromptAST,
-  PropertyDataOrder,
-  PropertyDataEqual,
-  KnowledgeUnitOrder,
-  EmptyNode,
-  DefinitionNode,
+  combine,
   CompositeNode,
-  isEmptyNode,
-  isDefinitionNode,
-  isCompositeNode,
-  StructuredPrompt,
-  type GraphAlgebra,
-  type PromptAlgebra,
-  PromptFragment,
+  DefinitionNode,
+  empty,
+  EmptyNode,
   EnrichedStructuredPrompt,
+  estimateTokenCount,
   FragmentMetadata,
   FragmentType,
-  estimateTokenCount,
+  type GraphAlgebra,
+  isCompositeNode,
+  isDefinitionNode,
+  isEmptyNode,
+  KnowledgeUnit,
+  KnowledgeUnitOrder,
+  make,
+  type PromptAlgebra,
+  type PromptAST,
   type PromptContext,
-  empty,
-  combine,
-  make
+  PromptFragment,
+  PropertyDataEqual,
+  PropertyDataOrder,
+  StructuredPrompt
 } from "./Model.js"
 export * as Context from "./Model.js"
 
@@ -40,11 +40,11 @@ export {
   combineWithUniversal,
   combineWithUniversalIndex,
   defaultPromptAlgebra,
+  GraphCycleError,
   knowledgeIndexAlgebra,
+  MissingNodeDataError,
   processUniversalProperties,
   processUniversalPropertiesToIndex,
-  GraphCycleError,
-  MissingNodeDataError,
   solveGraph,
   type SolverError,
   solveToKnowledgeIndex
@@ -52,47 +52,59 @@ export {
 
 // DocRenderer exports (consolidated from PromptDoc.ts, DocBuilder.ts)
 export {
+  buildExtractionPromptDoc,
+  buildPromptDoc,
   bulletList,
+  getFewShotExamples,
   header,
   numberedList,
   renderDoc,
   renderDocWithWidth,
-  section,
-  buildExtractionPromptDoc,
-  buildPromptDoc,
   renderExtractionPrompt,
   renderStructuredPrompt,
-  getFewShotExamples
+  section
 } from "./DocRenderer.js"
 
 // Renderer exports (consolidated from Render.ts, RenderDynamic.ts, RenderEnriched.ts)
 export {
-  renderToStructuredPrompt,
-  renderWithInheritance,
-  renderContext,
-  renderToText,
-  renderStats,
-  renderDiff,
-  type RenderOptions,
+  defaultRenderEnrichedOptions,
   defaultRenderOptions,
-  renderToStructuredPromptDynamic,
-  renderWithOntologyAwareExamples,
   type DynamicRenderOptions,
-  renderToEnrichedPrompt,
-  renderWithInheritanceEnriched,
-  renderEnrichedToText,
-  renderEnrichedStats,
+  renderContext,
+  renderDiff,
   type RenderEnrichedOptions,
-  defaultRenderEnrichedOptions
+  renderEnrichedStats,
+  renderEnrichedToText,
+  type RenderOptions,
+  renderStats,
+  renderToEnrichedPrompt,
+  renderToStructuredPrompt,
+  renderToStructuredPromptDynamic,
+  renderToText,
+  renderWithInheritance,
+  renderWithInheritanceEnriched,
+  renderWithOntologyAwareExamples
 } from "./Renderer.js"
 export * as Render from "./Renderer.js"
 export * as RenderDynamic from "./Renderer.js"
 export * as RenderEnriched from "./Renderer.js"
 
 // Other exports (unchanged)
+export * as EmbeddingIndex from "./EmbeddingIndex.js"
+export type { EmbeddedEntry, EmbeddingIndex as EmbeddingIndexType } from "./EmbeddingIndex.js"
 export { enrichKnowledgeIndex, generateEnrichedIndex } from "./Enrichment.js"
 export * as EntityCache from "./EntityCache.js"
 export type { EntityCache as EntityCacheType, EntityRef } from "./EntityCache.js"
+export {
+  ExampleEntity,
+  type ExamplePool,
+  ExampleTriple,
+  ExtractionExample,
+  filterByPredicate as filterExamplesByPredicate,
+  filterByPredicates as filterExamplesByPredicates,
+  getAllPredicates,
+  getStaticExamples
+} from "./ExamplePool.js"
 export * as Focus from "./Focus.js"
 export * as KnowledgeIndex from "./KnowledgeIndex.js"
 export type { KnowledgeIndex as KnowledgeIndexType } from "./KnowledgeIndex.js"
@@ -114,18 +126,6 @@ export {
   TokenStats,
   TreeNode
 } from "./Metadata.js"
-export * as EmbeddingIndex from "./EmbeddingIndex.js"
-export type { EmbeddedEntry, EmbeddingIndex as EmbeddingIndexType } from "./EmbeddingIndex.js"
-export {
-  ExampleEntity,
-  ExampleTriple,
-  ExtractionExample,
-  filterByPredicate as filterExamplesByPredicate,
-  filterByPredicates as filterExamplesByPredicates,
-  getAllPredicates,
-  getStaticExamples,
-  type ExamplePool
-} from "./ExamplePool.js"
 export {
   classSummaryToMarkdown,
   createSummaryReport,

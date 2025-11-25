@@ -174,5 +174,3 @@ export type RelationGraphSchema<PropertyIRI extends string = string> = ReturnTyp
 export type RelationGraphType<PropertyIRI extends string = string> = S.Schema.Type<
   RelationGraphSchema<PropertyIRI>
 >
-
-
