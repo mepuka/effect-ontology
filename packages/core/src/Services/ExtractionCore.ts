@@ -19,7 +19,7 @@ import type { Graph } from "effect"
 import { Data, Effect, Option } from "effect"
 import type { ValidationReport } from "../Extraction/Events.js"
 import type { NodeId, OntologyContext } from "../Graph/Types.js"
-import { knowledgeIndexAlgebra, solveToKnowledgeIndex } from "../Prompt/Builder.js"
+import { buildStage2Prompt, knowledgeIndexAlgebra, solveToKnowledgeIndex } from "../Prompt/Builder.js"
 import * as EC from "../Prompt/EntityCache.js"
 import type { KnowledgeIndex } from "../Prompt/KnowledgeIndex.js"
 import { renderToStructuredPrompt } from "../Prompt/Renderer.js"
@@ -28,7 +28,7 @@ import type { ChunkInfo } from "./ChunkingStrategy.js"
 import { EntityDiscoveryService } from "./EntityDiscovery.js"
 import { mergeGraphsWithResolution } from "./EntityResolution.js"
 import { FocusingService } from "./Focusing.js"
-import { extractKnowledgeGraphTwoStage, extractVocabularyFromFocused } from "./Llm.js"
+import { extractEntities, extractTriples, extractVocabularyFromFocused } from "./Llm.js"
 import type { IndexedDocument, NlpService } from "./Nlp.js"
 import { OntologyCache } from "./OntologyCache.js"
 import { RdfService } from "./Rdf.js"
@@ -322,19 +322,46 @@ export const processChunk = (
       }
     }
 
-    // 3. Build prompt with focused index
-    const prompt = renderToStructuredPrompt(focusedIndex)
+    // 3. Build Stage 1 prompt with focused index
+    const stage1Prompt = renderToStructuredPrompt(focusedIndex)
 
     // 4. LLM Stage 1: Extract entities
-    const tripleGraph = yield* extractKnowledgeGraphTwoStage(
+    const entityGraph = yield* extractEntities(
       chunk.text,
-      ontologyContext,
-      prompt,
-      vocabulary
+      vocabulary.classIris,
+      stage1Prompt
     ).pipe(
       Effect.mapError((cause) =>
         new ExtractionError({
-          message: `LLM extraction failed for chunk ${chunk.index}`,
+          message: `LLM entity extraction failed for chunk ${chunk.index}`,
+          cause
+        })
+      )
+    )
+
+    // 5. Build entity map and extract IDs
+    const entityMap = new Map(
+      entityGraph.entities.map((e) => [e.id, e])
+    )
+    const validEntityIds = entityGraph.entities.map((e) => e.id)
+
+    // 6. Build Stage 2 prompt with localized context
+    const stage2Prompt = buildStage2Prompt(
+      entityGraph.entities.map((e) => ({ id: e.id, type: e.type })),
+      focusedIndex
+    )
+
+    // 7. LLM Stage 2: Extract relations with entity ID constraints
+    const tripleGraph = yield* extractTriples(
+      chunk.text,
+      validEntityIds,
+      entityMap,
+      vocabulary.propertyIris,
+      stage2Prompt
+    ).pipe(
+      Effect.mapError((cause) =>
+        new ExtractionError({
+          message: `LLM relation extraction failed for chunk ${chunk.index}`,
           cause
         })
       )

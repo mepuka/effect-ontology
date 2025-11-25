@@ -619,3 +619,68 @@ export const combineWithUniversalIndex = (
   return KnowledgeIndex.combine(universalIndex, graphIndex)
 }
 
+// ============================================================================
+// Localized Prompt Building (ODKE Pattern)
+// ============================================================================
+
+/**
+ * Build Stage 2 prompt from localized context
+ *
+ * This function implements the "querying ontology, not solving it" pattern.
+ * Instead of using the entire KnowledgeIndex, it builds a prompt using only
+ * the classes and properties relevant to the entities found in Stage 1.
+ *
+ * @param foundEntities - Entities from Stage 1 (with id and type)
+ * @param knowledgeIndex - Full KnowledgeIndex (built once per ontology)
+ * @returns StructuredPrompt with localized context for Stage 2
+ *
+ * @since 2.0.0
+ * @category prompt building
+ */
+export const buildStage2Prompt = (
+  foundEntities: ReadonlyArray<{ id: string; type: string }>,
+  knowledgeIndex: KnowledgeIndexType
+): StructuredPrompt => {
+  // 1. Identify active classes from found entities
+  const activeClasses = Array.from(new Set(foundEntities.map((e) => e.type)))
+  
+  // 2. Query KnowledgeIndex for ONLY relevant properties
+  const relevantProperties = KnowledgeIndex.getPropertiesForClasses(knowledgeIndex, activeClasses)
+  
+  // 3. Get KnowledgeUnits for active classes
+  const relevantUnits = KnowledgeIndex.getUnitsForClasses(knowledgeIndex, activeClasses)
+  
+  // 4. Build localized system prompt (only relevant class definitions)
+  const system = relevantUnits.map((unit) => {
+    const parts: Array<string> = []
+    parts.push(unit.definition)
+    
+    if (unit.properties.length > 0) {
+      const propLines = unit.properties.map((prop) => {
+        const rangeLabel = prop.ranges[0]?.split("#")[1] || prop.ranges[0]?.split("/").pop() || prop.ranges[0] || "Any"
+        return `  - ${prop.label} → ${rangeLabel}`
+      })
+      parts.push(`Properties:\n${propLines.join("\n")}`)
+    }
+    
+    return parts.join("\n")
+  })
+  
+  // 5. Build user prompt with entity context
+  const entityList = foundEntities.map((e) => `- ${e.id} (${e.type})`).join("\n")
+  const propertyList = relevantProperties.map((p) => `- ${p.label} (${p.propertyIri})`).join("\n")
+  
+  const user = [
+    `You have identified the following entities:\n${entityList}\n`,
+    `Now identify relationships between them using these properties:\n${propertyList}\n`,
+    `CRITICAL: Subject and object (when referencing an entity) MUST be one of the entity IDs listed above.`
+  ]
+  
+  return StructuredPrompt.make({
+    system,
+    user,
+    examples: [],
+    context: []
+  })
+}
+

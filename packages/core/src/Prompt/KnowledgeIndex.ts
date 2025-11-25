@@ -8,6 +8,7 @@
  */
 
 import { HashMap, Option } from "effect"
+import type { PropertyConstraint } from "../Graph/Constraint.js"
 import { KnowledgeUnit } from "./Model.js"
 
 /**
@@ -236,4 +237,71 @@ export const stats = (index: KnowledgeIndex): IndexStats => {
     averagePropertiesPerUnit,
     maxDepth
   }
+}
+
+/**
+ * Get properties for specific classes
+ *
+ * Queries the KnowledgeIndex to find all properties (direct and inherited)
+ * that are applicable to the given class IRIs.
+ *
+ * @param index - The knowledge index to query
+ * @param classIris - Array of class IRIs to get properties for
+ * @returns Array of PropertyConstraints applicable to the given classes
+ *
+ * @since 2.0.0
+ * @category queries
+ */
+export const getPropertiesForClasses = (
+  index: KnowledgeIndex,
+  classIris: ReadonlyArray<string>
+): ReadonlyArray<PropertyConstraint> => {
+  const properties = new Map<string, PropertyConstraint>()
+
+  for (const classIri of classIris) {
+    const unit = get(index, classIri)
+    if (Option.isSome(unit)) {
+      // Add direct properties
+      for (const prop of unit.value.properties) {
+        if (!properties.has(prop.propertyIri)) {
+          properties.set(prop.propertyIri, prop)
+        }
+      }
+
+      // Add inherited properties
+      for (const prop of unit.value.inheritedProperties) {
+        if (!properties.has(prop.propertyIri)) {
+          properties.set(prop.propertyIri, prop)
+        }
+      }
+    }
+  }
+
+  return Array.from(properties.values())
+}
+
+/**
+ * Get KnowledgeUnits for specific class IRIs
+ *
+ * @param index - The knowledge index to query
+ * @param classIris - Array of class IRIs to retrieve
+ * @returns Array of KnowledgeUnits for the given classes
+ *
+ * @since 2.0.0
+ * @category queries
+ */
+export const getUnitsForClasses = (
+  index: KnowledgeIndex,
+  classIris: ReadonlyArray<string>
+): ReadonlyArray<KnowledgeUnit> => {
+  const units: Array<KnowledgeUnit> = []
+
+  for (const classIri of classIris) {
+    const unit = get(index, classIri)
+    if (Option.isSome(unit)) {
+      units.push(unit.value)
+    }
+  }
+
+  return units
 }

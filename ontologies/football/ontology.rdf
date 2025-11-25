@@ -1,0 +1,1088 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="http://visualdataweb.org/newOntology/"
+     xml:base="http://visualdataweb.org/newOntology/"
+     xmlns:dc="http://purl.org/dc/elements/1.1/#"
+     xmlns:vs="http://www.w3.org/2003/06/sw-vocab-status/ns#"
+     xmlns:owl="http://www.w3.org/2002/07/owl#"
+     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+     xmlns:wot="http://xmlns.com/wot/0.1/"
+     xmlns:xml="http://www.w3.org/XML/1998/namespace"
+     xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+     xmlns:foaf="http://xmlns.com/foaf/0.1/"
+     xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#">
+    <owl:Ontology rdf:about="http://visualdataweb.org/newOntology/">
+        <dc:description xml:lang="en">An ontology about the football domain</dc:description>
+        <dc:license>https://creativecommons.org/licenses/by/4.0/</dc:license>
+        <dc:title xml:lang="en">Footology</dc:title>
+    </owl:Ontology>
+    
+
+
+    <!-- 
+    ///////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Annotation properties
+    //
+    ///////////////////////////////////////////////////////////////////////////////////////
+     -->
+
+    
+
+
+    <!-- http://purl.org/dc/elements/1.1/#description -->
+
+    <owl:AnnotationProperty rdf:about="http://purl.org/dc/elements/1.1/#description"/>
+    
+
+
+    <!-- http://purl.org/dc/elements/1.1/#license -->
+
+    <owl:AnnotationProperty rdf:about="http://purl.org/dc/elements/1.1/#license"/>
+    
+
+
+    <!-- http://purl.org/dc/elements/1.1/#title -->
+
+    <owl:AnnotationProperty rdf:about="http://purl.org/dc/elements/1.1/#title"/>
+    
+
+
+    <!-- 
+    ///////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Object Properties
+    //
+    ///////////////////////////////////////////////////////////////////////////////////////
+     -->
+
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/competesIn -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/competesIn">
+        <owl:inverseOf rdf:resource="http://visualdataweb.org/newOntology/includes"/>
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Team"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Match"/>
+        <rdfs:comment>This represents a relationship between a team and a match</rdfs:comment>
+        <rdfs:label xml:lang="en">competesIn</rdfs:label>
+        <rdfs:label xml:lang="iri-based">competesIn</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/hasPerformanceStats -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/hasPerformanceStats">
+        <owl:inverseOf rdf:resource="http://visualdataweb.org/newOntology/occuredInMatch"/>
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Match"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/PerformanceStats"/>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/hasPlayer -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/hasPlayer">
+        <owl:inverseOf rdf:resource="http://visualdataweb.org/newOntology/participatesIn"/>
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Match"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Player"/>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/hasPosition -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/hasPosition">
+        <owl:inverseOf rdf:resource="http://visualdataweb.org/newOntology/isPositionOf"/>
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Player"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Position"/>
+        <rdfs:comment>This shows the position of a specific player</rdfs:comment>
+        <rdfs:label xml:lang="en">hasPosition</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/hasStats -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/hasStats">
+        <owl:inverseOf rdf:resource="http://visualdataweb.org/newOntology/statsOf"/>
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Player"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/PerformanceStats"/>
+        <rdfs:comment>The performance stats of a specific player, like goals, assists, and so on</rdfs:comment>
+        <rdfs:label xml:lang="en">hasStats</rdfs:label>
+        <rdfs:label xml:lang="iri-based">hasStats</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/hasTeam -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/hasTeam">
+        <owl:inverseOf rdf:resource="http://visualdataweb.org/newOntology/partOf"/>
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#FunctionalProperty"/>
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#AsymmetricProperty"/>
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Tournament"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Team"/>
+        <rdfs:comment>A team included in a tournament</rdfs:comment>
+        <rdfs:label>hasTeam</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/hostedBy -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/hostedBy">
+        <owl:inverseOf rdf:resource="http://visualdataweb.org/newOntology/hosts"/>
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#FunctionalProperty"/>
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Match"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Stadium"/>
+        <rdfs:comment>The stadium of a specific team of a match</rdfs:comment>
+        <rdfs:label xml:lang="en">hostedBy</rdfs:label>
+        <rdfs:label xml:lang="iri-based">hostedBy</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/hosts -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/hosts">
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#FunctionalProperty"/>
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#AsymmetricProperty"/>
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Stadium"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Match"/>
+        <rdfs:comment>The stadium in which a match takes place</rdfs:comment>
+        <rdfs:label>hosts</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/includes -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/includes">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Match"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Team"/>
+        <rdfs:comment>A match won by a team</rdfs:comment>
+        <rdfs:label>isWonBy</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/includesPlayer -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/includesPlayer">
+        <owl:inverseOf rdf:resource="http://visualdataweb.org/newOntology/playsFor"/>
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#FunctionalProperty"/>
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Team"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Player"/>
+        <rdfs:comment>A player included in a team</rdfs:comment>
+        <rdfs:label>includesPlayer</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/isHomeOf -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/isHomeOf">
+        <owl:inverseOf rdf:resource="http://visualdataweb.org/newOntology/playsIn"/>
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Stadium"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Team"/>
+        <rdfs:comment>A stadium a team is home of</rdfs:comment>
+        <rdfs:label>isHomeOf</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/isPositionOf -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/isPositionOf">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Position"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Player"/>
+        <rdfs:comment>A position held by a player</rdfs:comment>
+        <rdfs:label>isPositionOf</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/isWonBy -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/isWonBy">
+        <owl:inverseOf rdf:resource="http://visualdataweb.org/newOntology/wins"/>
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Trophy"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Team"/>
+        <rdfs:comment>A trophy won by a team</rdfs:comment>
+        <rdfs:label>isWonBy</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/managedBy -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/managedBy">
+        <owl:inverseOf rdf:resource="http://visualdataweb.org/newOntology/manages"/>
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#FunctionalProperty"/>
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#AsymmetricProperty"/>
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Team"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Coach"/>
+        <rdfs:comment>A team managed by a coach</rdfs:comment>
+        <rdfs:label>managedBy</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/manages -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/manages">
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#FunctionalProperty"/>
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#AsymmetricProperty"/>
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Coach"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Team"/>
+        <rdfs:comment>The coach that manages a team</rdfs:comment>
+        <rdfs:label xml:lang="en">manages</rdfs:label>
+        <rdfs:label xml:lang="iri-based">manages</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/occuredInMatch -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/occuredInMatch">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/PerformanceStats"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Match"/>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/officiatedBy -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/officiatedBy">
+        <owl:inverseOf rdf:resource="http://visualdataweb.org/newOntology/officiates"/>
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Match"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Referee"/>
+        <rdfs:comment>A match officiated by a referee</rdfs:comment>
+        <rdfs:label>officiatedBy</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/officiates -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/officiates">
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#FunctionalProperty"/>
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#AsymmetricProperty"/>
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Referee"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Match"/>
+        <rdfs:comment>The referee that officiates a specific match</rdfs:comment>
+        <rdfs:label xml:lang="en">officiates</rdfs:label>
+        <rdfs:label xml:lang="iri-based">officiates</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/partOf -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/partOf">
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#FunctionalProperty"/>
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#AsymmetricProperty"/>
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Team"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Tournament"/>
+        <rdfs:comment>The tournament a specific team is part of</rdfs:comment>
+        <rdfs:label xml:lang="en">partOf</rdfs:label>
+        <rdfs:label xml:lang="iri-based">partOf</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/participatesIn -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/participatesIn">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Player"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Match"/>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/playsFor -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/playsFor">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Player"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Team"/>
+        <rdfs:comment>The team a specific player is playing for</rdfs:comment>
+        <rdfs:label xml:lang="en">playsFor</rdfs:label>
+        <rdfs:label xml:lang="iri-based">playsFor</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/playsIn -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/playsIn">
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#FunctionalProperty"/>
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#AsymmetricProperty"/>
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Team"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Stadium"/>
+        <rdfs:comment>The home stadium of a team</rdfs:comment>
+        <rdfs:label xml:lang="en">playsIn</rdfs:label>
+        <rdfs:label xml:lang="iri-based">playsIn</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/receivedBy -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/receivedBy">
+        <owl:inverseOf rdf:resource="http://visualdataweb.org/newOntology/receives"/>
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#FunctionalProperty"/>
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#AsymmetricProperty"/>
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Award"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Player"/>
+        <rdfs:comment>An individual award received by a player</rdfs:comment>
+        <rdfs:label>receivedBy</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/receives -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/receives">
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#FunctionalProperty"/>
+        <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#AsymmetricProperty"/>
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Player"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Award"/>
+        <rdfs:comment>An indivual award won by a player</rdfs:comment>
+        <rdfs:label xml:lang="en">receives</rdfs:label>
+        <rdfs:label xml:lang="iri-based">receives</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/statsOf -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/statsOf">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/PerformanceStats"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Player"/>
+        <rdfs:comment>The performance stats of a player</rdfs:comment>
+        <rdfs:label>statsOf</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/wins -->
+
+    <owl:ObjectProperty rdf:about="http://visualdataweb.org/newOntology/wins">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Team"/>
+        <rdfs:range rdf:resource="http://visualdataweb.org/newOntology/Trophy"/>
+        <rdfs:comment>A team that wins a trophy</rdfs:comment>
+        <rdfs:label xml:lang="en">wins</rdfs:label>
+        <rdfs:label xml:lang="iri-based">wins</rdfs:label>
+    </owl:ObjectProperty>
+    
+
+
+    <!-- 
+    ///////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Data properties
+    //
+    ///////////////////////////////////////////////////////////////////////////////////////
+     -->
+
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/Assists -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/Assists">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/PerformanceStats"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
+        <rdfs:comment>The assists of a specific player within a season</rdfs:comment>
+        <rdfs:label xml:lang="en">assists</rdfs:label>
+        <rdfs:label>assists</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/AwardName -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/AwardName">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Award"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The indivual award name</rdfs:comment>
+        <rdfs:label xml:lang="en">awardName</rdfs:label>
+        <rdfs:label>awardName</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/AwardSeason -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/AwardSeason">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Award"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The season of an award</rdfs:comment>
+        <rdfs:label xml:lang="en">awardSeason</rdfs:label>
+        <rdfs:label>awardSeason</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/CPreferredFormation -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/CPreferredFormation">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Coach"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2000/01/rdf-schema#Literal"/>
+        <rdfs:comment>The preferred formation of a coach</rdfs:comment>
+        <rdfs:label xml:lang="en">cPreferredFormation</rdfs:label>
+        <rdfs:label>cPreferredFormation</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/CPreviousTeams -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/CPreviousTeams">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Coach"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The previous teams a coach has managed so far</rdfs:comment>
+        <rdfs:label xml:lang="en">cPreviousTeams</rdfs:label>
+        <rdfs:label>cPreviousTeams</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/Capacity -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/Capacity">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Stadium"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
+        <rdfs:comment>The capacity of a stadium</rdfs:comment>
+        <rdfs:label xml:lang="en">capacity</rdfs:label>
+        <rdfs:label>capacity</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/Champion -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/Champion">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/League"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The current champion of a League</rdfs:comment>
+        <rdfs:label xml:lang="en">champion</rdfs:label>
+        <rdfs:label>champion</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/CoachName -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/CoachName">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Coach"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The name of a team coach</rdfs:comment>
+        <rdfs:label xml:lang="en">coachName</rdfs:label>
+        <rdfs:label>coachName</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/CoachNationality -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/CoachNationality">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Coach"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The nationality of a coach</rdfs:comment>
+        <rdfs:label xml:lang="en">coachNationality</rdfs:label>
+        <rdfs:label>coachNationality</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/Date -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/Date">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Match"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The date when a match took place</rdfs:comment>
+        <rdfs:label xml:lang="en">date</rdfs:label>
+        <rdfs:label>date</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/Fouls -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/Fouls">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/PerformanceStats"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
+        <rdfs:comment>The fouls commited by a player</rdfs:comment>
+        <rdfs:label xml:lang="en">fouls</rdfs:label>
+        <rdfs:label>fouls</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/GoalsScored -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/GoalsScored">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/PerformanceStats"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
+        <rdfs:comment>The goals scored by a player</rdfs:comment>
+        <rdfs:label xml:lang="en">goalsScored</rdfs:label>
+        <rdfs:label>goalsScored</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/HomeTeam -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/HomeTeam">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Stadium"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The home team of a stadium</rdfs:comment>
+        <rdfs:label xml:lang="en">homeTeam</rdfs:label>
+        <rdfs:label>homeTeam</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/LeagueName -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/LeagueName">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/League"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The name of a league</rdfs:comment>
+        <rdfs:label xml:lang="en">leagueName</rdfs:label>
+        <rdfs:label>leagueName</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/MatchAwayTeam -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/MatchAwayTeam">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Match"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The away team of a specific match</rdfs:comment>
+        <rdfs:label xml:lang="en">matchAwayTeam</rdfs:label>
+        <rdfs:label>matchAwayTeam</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/MatchHomeTeam -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/MatchHomeTeam">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Match"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The home team of a specific match</rdfs:comment>
+        <rdfs:label xml:lang="en">matchHomeTeam</rdfs:label>
+        <rdfs:label>matchHomeTeam</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/MatchWinner -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/MatchWinner">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Match"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The winner of a specific match</rdfs:comment>
+        <rdfs:label xml:lang="en">matchWinner</rdfs:label>
+        <rdfs:label>matchWinner</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/NumberOfTeams -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/NumberOfTeams">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/League"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
+        <rdfs:comment>The number of teams competing in a specific league</rdfs:comment>
+        <rdfs:label xml:lang="en">numberOfTeams</rdfs:label>
+        <rdfs:label>numberOfTeams</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/OpeningYear -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/OpeningYear">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Stadium"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
+        <rdfs:comment>The opening year of a stadium</rdfs:comment>
+        <rdfs:label xml:lang="en">openingYear</rdfs:label>
+        <rdfs:label>openingYear</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/PassAccuracy -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/PassAccuracy">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/PerformanceStats"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
+        <rdfs:comment>The pass accuracy of a player in a season</rdfs:comment>
+        <rdfs:label xml:lang="en">passAccuracy</rdfs:label>
+        <rdfs:label>passAccuracy</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/PlayerBirthdate -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/PlayerBirthdate">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Player"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The birthday of a player</rdfs:comment>
+        <rdfs:label xml:lang="en">playerBirthdate</rdfs:label>
+        <rdfs:label>playerBirthdate</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/PlayerName -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/PlayerName">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Player"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The name of a player</rdfs:comment>
+        <rdfs:label xml:lang="en">playerName</rdfs:label>
+        <rdfs:label>playerName</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/PlayerPosition -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/PlayerPosition">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Position"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The position of a player</rdfs:comment>
+        <rdfs:label xml:lang="en">playerPosition</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/RBirthdate -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/RBirthdate">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Referee"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The birthday of a referee</rdfs:comment>
+        <rdfs:label xml:lang="en">rBirthdate</rdfs:label>
+        <rdfs:label>rBirthdate</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/RedCards -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/RedCards">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/PerformanceStats"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The red cards a player has gotten in a season</rdfs:comment>
+        <rdfs:label xml:lang="en">redCards</rdfs:label>
+        <rdfs:label>redCards</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/RefereeName -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/RefereeName">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Referee"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The name of the referee</rdfs:comment>
+        <rdfs:label xml:lang="en">refereeName</rdfs:label>
+        <rdfs:label>refereeName</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/RefereeNationality -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/RefereeNationality">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Referee"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The nationality of a referee</rdfs:comment>
+        <rdfs:label xml:lang="en">refereeNationality</rdfs:label>
+        <rdfs:label>refereeNationality</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/Region -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/Region">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/League"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The region or country a league is playing in</rdfs:comment>
+        <rdfs:label xml:lang="en">region</rdfs:label>
+        <rdfs:label>region</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/Score -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/Score">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Match"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
+        <rdfs:comment>The final score of a match</rdfs:comment>
+        <rdfs:label xml:lang="en">score</rdfs:label>
+        <rdfs:label>score</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/Season -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/Season">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/PerformanceStats"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The season of the performances of a player</rdfs:comment>
+        <rdfs:label xml:lang="en">season</rdfs:label>
+        <rdfs:label>season</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/SeasonYear -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/SeasonYear">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/League"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The season of a League</rdfs:comment>
+        <rdfs:label xml:lang="en">seasonYear</rdfs:label>
+        <rdfs:label>seasonYear</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/StadiumName -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/StadiumName">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Stadium"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The name of a stadium</rdfs:comment>
+        <rdfs:label xml:lang="en">stadiumName</rdfs:label>
+        <rdfs:label>stadiumName</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/StadiumRegion -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/StadiumRegion">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Stadium"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The region or country a stadium is located in</rdfs:comment>
+        <rdfs:label xml:lang="en">stadiumRegion</rdfs:label>
+        <rdfs:label>stadiumRegion</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/TeamFormation -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/TeamFormation">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Team"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The formation of a team</rdfs:comment>
+        <rdfs:label xml:lang="en">teamFormation</rdfs:label>
+        <rdfs:label>teamFormation</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/TeamLeague -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/TeamLeague">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Team"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The league a team is playing in</rdfs:comment>
+        <rdfs:label xml:lang="en">teamLeague</rdfs:label>
+        <rdfs:label>teamLeague</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/TeamName -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/TeamName">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Team"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The name of a team</rdfs:comment>
+        <rdfs:label xml:lang="en">teamName</rdfs:label>
+        <rdfs:label>teamName</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/TeamRanking -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/TeamRanking">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Team"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
+        <rdfs:comment>The league ranking of a team</rdfs:comment>
+        <rdfs:label xml:lang="en">teamRanking</rdfs:label>
+        <rdfs:label>teamRanking</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/TeamSeason -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/TeamSeason">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Team"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The season of a team</rdfs:comment>
+        <rdfs:label xml:lang="en">teamSeason</rdfs:label>
+        <rdfs:label>teamSeason</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/TournamentChampion -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/TournamentChampion">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Tournament"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The champion of a specific tournament</rdfs:comment>
+        <rdfs:label xml:lang="en">tournamentChampion</rdfs:label>
+        <rdfs:label>tournamentChampion</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/TournamentName -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/TournamentName">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Tournament"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The name of the tournament</rdfs:comment>
+        <rdfs:label xml:lang="en">tournamentName</rdfs:label>
+        <rdfs:label>tournamentName</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/TournamentNumOfTeams -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/TournamentNumOfTeams">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Tournament"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
+        <rdfs:comment>The number of teams in a tournament</rdfs:comment>
+        <rdfs:label xml:lang="en">tournamentNumOfTeams</rdfs:label>
+        <rdfs:label>tournamentNumOfTeams</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/TrophyAssociatedLeague -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/TrophyAssociatedLeague">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Trophy"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>What kind of team trophy, like DFB Pokal or other trophies from other countries</rdfs:comment>
+        <rdfs:label xml:lang="en">trophyAssociatedLeague</rdfs:label>
+        <rdfs:label>trophyAssociatedLeague</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/TrophyName -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/TrophyName">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Trophy"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The name of a trophy</rdfs:comment>
+        <rdfs:label xml:lang="en">trophyName</rdfs:label>
+        <rdfs:label>trophyName</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/TrophyWinner -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/TrophyWinner">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Trophy"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
+        <rdfs:comment>The winner of a trophy</rdfs:comment>
+        <rdfs:label xml:lang="en">trophyWinner</rdfs:label>
+        <rdfs:label>trophyWinner</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/YellowCards -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/YellowCards">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/PerformanceStats"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
+        <rdfs:comment>The yellow cards a player has got in a specific season</rdfs:comment>
+        <rdfs:label xml:lang="en">yellowCards</rdfs:label>
+        <rdfs:label>yellowCards</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/height -->
+
+    <owl:DatatypeProperty rdf:about="http://visualdataweb.org/newOntology/height">
+        <rdfs:domain rdf:resource="http://visualdataweb.org/newOntology/Player"/>
+        <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#integer"/>
+        <rdfs:comment>The height of a player</rdfs:comment>
+        <rdfs:label xml:lang="en">height</rdfs:label>
+        <rdfs:label xml:lang="iri-based">height</rdfs:label>
+    </owl:DatatypeProperty>
+    
+
+
+    <!-- 
+    ///////////////////////////////////////////////////////////////////////////////////////
+    //
+    // Classes
+    //
+    ///////////////////////////////////////////////////////////////////////////////////////
+     -->
+
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/Award -->
+
+    <owl:Class rdf:about="http://visualdataweb.org/newOntology/Award">
+        <rdfs:comment>An indivual award won by a player</rdfs:comment>
+        <rdfs:label xml:lang="en">award</rdfs:label>
+        <rdfs:label>award</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/Coach -->
+
+    <owl:Class rdf:about="http://visualdataweb.org/newOntology/Coach">
+        <rdfs:comment>The coach managing a team</rdfs:comment>
+        <rdfs:label xml:lang="en">coach</rdfs:label>
+        <rdfs:label>coach</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/KnockOutTournament -->
+
+    <owl:Class rdf:about="http://visualdataweb.org/newOntology/KnockOutTournament">
+        <rdfs:subClassOf rdf:resource="http://visualdataweb.org/newOntology/Tournament"/>
+        <owl:disjointWith rdf:resource="http://visualdataweb.org/newOntology/League"/>
+        <rdfs:comment>A knock-out pyramid style of a tournament, where a team has to compete in a KO-Stage like quarter final, semi final and final</rdfs:comment>
+        <rdfs:label>knockOutTournament</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/League -->
+
+    <owl:Class rdf:about="http://visualdataweb.org/newOntology/League">
+        <rdfs:subClassOf rdf:resource="http://visualdataweb.org/newOntology/Tournament"/>
+        <rdfs:comment>A league type of tournament, where a team competes with many other teams of a specific league, winning 3, 1, or 0 points each game. At the end of the season, the team that has the most points wins the league</rdfs:comment>
+        <rdfs:label xml:lang="en">league</rdfs:label>
+        <rdfs:label>league</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/Match -->
+
+    <owl:Class rdf:about="http://visualdataweb.org/newOntology/Match">
+        <rdfs:comment>A competetive football event held between two teams</rdfs:comment>
+        <rdfs:label xml:lang="en">match</rdfs:label>
+        <rdfs:label>match</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/PerformanceStats -->
+
+    <owl:Class rdf:about="http://visualdataweb.org/newOntology/PerformanceStats">
+        <rdfs:comment>The perfomance statistics of a player like goal scored, assists and so on.</rdfs:comment>
+        <rdfs:label xml:lang="en">performanceStats</rdfs:label>
+        <rdfs:label>performanceStats</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/Player -->
+
+    <owl:Class rdf:about="http://visualdataweb.org/newOntology/Player">
+        <rdfs:comment>A professional football player</rdfs:comment>
+        <rdfs:label xml:lang="en">player</rdfs:label>
+        <rdfs:label>player</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/Position -->
+
+    <owl:Class rdf:about="http://visualdataweb.org/newOntology/Position">
+        <rdfs:comment>This class shows the parent class &quot;Position&quot; which includes subclasses of positions of a player</rdfs:comment>
+        <rdfs:label xml:lang="en">position</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/Referee -->
+
+    <owl:Class rdf:about="http://visualdataweb.org/newOntology/Referee">
+        <rdfs:comment>The referee officiating a football match</rdfs:comment>
+        <rdfs:label xml:lang="en">referee</rdfs:label>
+        <rdfs:label>referee</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/Stadium -->
+
+    <owl:Class rdf:about="http://visualdataweb.org/newOntology/Stadium">
+        <rdfs:comment>The stadium of a football team</rdfs:comment>
+        <rdfs:label xml:lang="en">stadium</rdfs:label>
+        <rdfs:label>stadium</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/Team -->
+
+    <owl:Class rdf:about="http://visualdataweb.org/newOntology/Team">
+        <rdfs:comment>A professional football team</rdfs:comment>
+        <rdfs:label xml:lang="en">team</rdfs:label>
+        <rdfs:label>team</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/Tournament -->
+
+    <owl:Class rdf:about="http://visualdataweb.org/newOntology/Tournament">
+        <rdfs:comment>The tournament a team is currently competing in</rdfs:comment>
+        <rdfs:label xml:lang="en">tournament</rdfs:label>
+        <rdfs:label>tournament</rdfs:label>
+    </owl:Class>
+    
+
+
+    <!-- http://visualdataweb.org/newOntology/Trophy -->
+
+    <owl:Class rdf:about="http://visualdataweb.org/newOntology/Trophy">
+        <rdfs:comment>A trophy won by a team</rdfs:comment>
+        <rdfs:label xml:lang="en">trophy</rdfs:label>
+        <rdfs:label>trophy</rdfs:label>
+    </owl:Class>
+</rdf:RDF>
+
+
+
+<!-- Generated by the OWL API (version 4.5.26.2023-07-17T20:34:13Z) https://github.com/owlcs/owlapi -->
+
