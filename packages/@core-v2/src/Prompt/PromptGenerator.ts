@@ -9,8 +9,8 @@
  */
 
 import { Doc } from "@effect/printer"
-import type { ClassDefinition, PropertyDefinition } from "../Domain/Model/Ontology.js"
 import type { Entity } from "../Domain/Model/Entity.js"
+import type { ClassDefinition, PropertyDefinition } from "../Domain/Model/Ontology.js"
 import { extractLocalName } from "../Utils/Rdf.js"
 import type { RuleSet } from "./RuleSet.js"
 
@@ -43,8 +43,8 @@ const buildTaskSection = (text: string, stage: "mention" | "entity" | "relation"
   const taskDescription = stage === "mention"
     ? "Extract all named entity mentions from the following text WITHOUT assigning types."
     : stage === "entity"
-      ? "Extract all named entities from the following text and map them to the ontology classes defined below."
-      : "Extract relationships between entities from the following text using the ontology properties defined below."
+    ? "Extract all named entities from the following text and map them to the ontology classes defined below."
+    : "Extract relationships between entities from the following text using the ontology properties defined below."
 
   return Doc.vsep([
     Doc.text(taskDescription),
@@ -125,7 +125,7 @@ const buildOntologySection = (ctx: OntologyPromptContext): Doc.Doc<never> => {
  * Build properties section for relation extraction
  */
 const buildPropertiesSection = (ctx: OntologyPromptContext): Doc.Doc<never> => {
-  const parts: Doc.Doc<never>[] = [Doc.text("=== ONTOLOGY PROPERTIES ==="), Doc.empty]
+  const parts: Array<Doc.Doc<never>> = [Doc.text("=== ONTOLOGY PROPERTIES ==="), Doc.empty]
 
   if (ctx.objectProperties.length > 0) {
     parts.push(Doc.text("## Object Properties (link entities together)"))
@@ -154,9 +154,7 @@ const buildEntitiesSection = (ctx: OntologyPromptContext): Doc.Doc<never> => {
     return Doc.empty
   }
 
-  const entityLines = ctx.entities.map((e) =>
-    Doc.text(`- ${e.id} (${e.mention}): [${e.types.join(", ")}]`)
-  )
+  const entityLines = ctx.entities.map((e) => Doc.text(`- ${e.id} (${e.mention}): [${e.types.join(", ")}]`))
 
   return Doc.vsep([
     Doc.text("=== EXTRACTED ENTITIES (from Stage 1) ==="),
@@ -168,7 +166,7 @@ const buildEntitiesSection = (ctx: OntologyPromptContext): Doc.Doc<never> => {
  * Build quick reference section showing allowed values
  */
 const buildQuickReferenceSection = (ruleSet: RuleSet): Doc.Doc<never> => {
-  const parts: Doc.Doc<never>[] = []
+  const parts: Array<Doc.Doc<never>> = []
   const iris = ruleSet.allowedIris
 
   if (iris.classIris.length > 0) {
@@ -210,7 +208,7 @@ const buildRulesSection = (ruleSet: RuleSet): Doc.Doc<never> => {
   const errorRules = ruleSet.errorRules
   const warningRules = ruleSet.warningRules
 
-  const parts: Doc.Doc<never>[] = []
+  const parts: Array<Doc.Doc<never>> = []
 
   // Critical rules
   if (errorRules.length > 0) {
@@ -227,7 +225,7 @@ const buildRulesSection = (ruleSet: RuleSet): Doc.Doc<never> => {
       Doc.text("=== CRITICAL: USE EXACT IRIs ==="),
       Doc.text("Copy class and property IRIs EXACTLY as shown above."),
       Doc.text("Do NOT reconstruct IRIs from labels - labels may have different casing."),
-      Doc.text('Example: Use "http://ontology/Player" NOT "http://ontology/player"'),
+      Doc.text("Example: Use \"http://ontology/Player\" NOT \"http://ontology/player\""),
       Doc.empty
     )
   }
@@ -254,12 +252,12 @@ const buildOutputFormatSection = (stage: "mention" | "entity" | "relation"): Doc
 - mention: exact text from source (human-readable name)
 - context: brief description of what this entity is based on the text`
     : stage === "entity"
-      ? `Return a JSON object with an "entities" array. Each entity should have:
+    ? `Return a JSON object with an "entities" array. Each entity should have:
 - id: snake_case unique identifier (e.g., "arsenal_fc")
 - mention: exact text from source (human-readable name)
 - types: array of ontology class URIs (use the most specific applicable class)
 - attributes: optional object with property URIs as keys and literal values as values`
-      : `Return a JSON object with a "relations" array. Each relation should have:
+    : `Return a JSON object with a "relations" array. Each relation should have:
 - subjectId: entity ID from Stage 1
 - predicate: property URI from allowed list
 - object: entity ID (for object properties) OR literal value (for datatype properties)`
@@ -302,7 +300,7 @@ export const generatePrompt = (
   ruleSet: RuleSet,
   ctx: OntologyPromptContext
 ): string => {
-  const sections: Doc.Doc<never>[] = [
+  const sections: Array<Doc.Doc<never>> = [
     buildTaskSection(text, ruleSet.stage)
   ]
 

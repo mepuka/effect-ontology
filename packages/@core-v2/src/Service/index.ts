@@ -6,6 +6,7 @@
  */
 
 export * from "./Config.js"
+export * from "./EntityLinker.js"
 export * from "./Extraction.js"
 export * from "./GenerateWithFeedback.js"
 export * from "./Grounder.js"

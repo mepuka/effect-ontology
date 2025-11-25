@@ -1,26 +1,51 @@
-import { BunContext, BunRuntime } from "@effect/platform-bun"
+import { FileSystem } from "@effect/platform"
+import { BunContext, BunFileSystem, BunRuntime } from "@effect/platform-bun"
 import { Effect, Layer } from "effect"
+import * as path from "node:path"
+import { defaultEntityResolutionConfig } from "./Domain/Model/EntityResolution.js"
 import { ProductionLayersWithTracing } from "./Runtime/ProductionRuntime.js"
-import { OntologyService } from "./Service/Ontology.js"
-import { extractToTurtle } from "./Workflow/TwoStageExtraction.js"
-
 import { ConfigService } from "./Service/Config.js"
+import { toMermaid } from "./Service/EntityLinker.js"
 import { NlpService } from "./Service/Nlp.js"
+import { OntologyService } from "./Service/Ontology.js"
 import { RdfBuilder } from "./Service/Rdf.js"
+import { buildEntityResolutionGraph, type EntityResolutionGraph } from "./Workflow/EntityResolutionGraph.js"
+import { streamingExtraction } from "./Workflow/StreamingExtraction.js"
 
 const FootballOntologyLayer = OntologyService.Default(
   "/Users/pooks/Dev/effect-ontology/ontologies/football/ontology.ttl"
 ).pipe(Layer.provideMerge(BunContext.layer))
 
 const Live = Layer.mergeAll(
-  ProductionLayersWithTracing.pipe(Layer.provide(ConfigService.Default)),
+  ProductionLayersWithTracing.pipe(Layer.provideMerge(ConfigService.Default)),
   FootballOntologyLayer,
   NlpService.Default,
-  RdfBuilder.Default
+  RdfBuilder.Default,
+  BunFileSystem.layer
 )
 
+/**
+ * Serialize ERG to a saveable format (stats + Mermaid visualization)
+ */
+const serializeERG = (erg: EntityResolutionGraph): string => {
+  const mermaid = toMermaid(erg)
+  return JSON.stringify(
+    {
+      stats: erg.stats,
+      canonicalMap: erg.canonicalMap,
+      createdAt: erg.createdAt.toString(),
+      mermaidDiagram: mermaid
+    },
+    null,
+    2
+  )
+}
+
 const program = Effect.gen(function*() {
-  const result = yield* extractToTurtle(
+  const fs = yield* FileSystem.FileSystem
+
+  // Extract knowledge graph from text
+  const kg = yield* streamingExtraction(
     `Arsenal stretched their lead at the top of the Premier League table to six points by thrashing rivals Tottenham Hotspur 4-1 in the north London derby on Sunday at the Emirates Stadium.
 
 The first half was conducted almost entirely as an attack versus defence experiment. Spurs boss Thomas Frank went with a back five and challenged Arsenal to break his side down — something they nearly did early on when an Eberechi Eze scoop to Declan Rice was well saved by Guglielmo Vicario. The visitors’ tactics weren’t pretty but did frustrate Arsenal for much of the opening period.
@@ -186,9 +211,69 @@ The Tottenham coach was understandably upset at his side’s display on Sunday. 
 
 Frank was also asked whether Tottenham’s lack of creativity this season (only three teams in the Premier League have a lower expected goals figure) was a concern: “It is, of course. We are working very hard to try to make that better, but sometimes it’s not only playing out and finding a nice pass but also in a game like this if you see some of the situations where they won it high, Arsenal, then there was a little bit more open space. We didn’t win it enough in those situations and then create from that.
 
-“For me the creativity, I know it was very low, but it was not my biggest concern today.”`
+"For me the creativity, I know it was very low, but it was not my biggest concern today."`
   )
-  console.log(result)
+
+  console.log("\n=== Knowledge Graph Extracted ===")
+  console.log(`Entities: ${kg.entities.length}`)
+  console.log(`Relations: ${kg.relations.length}`)
+
+  // Show chunk distribution
+  const chunkCounts = new Map<number, number>()
+  for (const entity of kg.entities) {
+    const chunk = entity.chunkIndex ?? -1
+    chunkCounts.set(chunk, (chunkCounts.get(chunk) ?? 0) + 1)
+  }
+  console.log("\nEntities per chunk:")
+  for (const [chunk, count] of [...chunkCounts.entries()].sort((a, b) => a[0] - b[0])) {
+    console.log(`  Chunk ${chunk}: ${count} entities`)
+  }
+
+  // Build Entity Resolution Graph
+  console.log("\n=== Building Entity Resolution Graph ===")
+  const erg = yield* buildEntityResolutionGraph(kg, defaultEntityResolutionConfig)
+
+  console.log(`\nERG Stats:`)
+  console.log(`  Mentions: ${erg.stats.mentionCount}`)
+  console.log(`  Resolved Entities: ${erg.stats.resolvedCount}`)
+  console.log(`  Clusters: ${erg.stats.clusterCount}`)
+  console.log(`  Relations: ${erg.stats.relationCount}`)
+
+  // Show canonical mappings (only clustered entities with multiple mentions)
+  const canonicalGroups = new Map<string, Array<string>>()
+  for (const [entityId, canonicalId] of Object.entries(erg.canonicalMap)) {
+    if (!canonicalGroups.has(canonicalId)) {
+      canonicalGroups.set(canonicalId, [])
+    }
+    canonicalGroups.get(canonicalId)!.push(entityId)
+  }
+
+  const clusteredEntities = [...canonicalGroups.entries()].filter(([_, ids]) => ids.length > 1)
+  if (clusteredEntities.length > 0) {
+    console.log(`\nClustered Entities (${clusteredEntities.length} clusters):`)
+    for (const [canonical, mentions] of clusteredEntities) {
+      console.log(`  ${canonical}: [${mentions.join(", ")}]`)
+    }
+  }
+
+  // Save ERG to file
+  const outputDir = path.resolve(process.cwd(), "output")
+  yield* fs.makeDirectory(outputDir, { recursive: true })
+
+  const ergPath = path.resolve(outputDir, "entity-resolution-graph.json")
+  yield* fs.writeFileString(ergPath, serializeERG(erg))
+  console.log(`\nERG saved to: ${ergPath}`)
+
+  // Also save Mermaid diagram separately for easy viewing
+  const mermaidPath = path.resolve(outputDir, "erg-diagram.md")
+  const mermaidDiagram = toMermaid(erg)
+  yield* fs.writeFileString(mermaidPath, `# Entity Resolution Graph\n\n\`\`\`mermaid\n${mermaidDiagram}\n\`\`\``)
+  console.log(`Mermaid diagram saved to: ${mermaidPath}`)
+
+  // Save KnowledgeGraph JSON for reference
+  const kgPath = path.resolve(outputDir, "knowledge-graph.json")
+  yield* fs.writeFileString(kgPath, JSON.stringify(kg.toJSON(), null, 2))
+  console.log(`Knowledge graph saved to: ${kgPath}`)
 }).pipe(
   Effect.provide(Live)
 )

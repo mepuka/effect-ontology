@@ -18,7 +18,7 @@ import similarity from "wink-nlp/utilities/similarity.js"
 // @ts-expect-error - wink-bm25-text-search has no type definitions
 import winkBM25 from "wink-bm25-text-search"
 import type { ClassDefinition, OntologyContext, PropertyDefinition } from "../Domain/Model/Ontology.js"
-import { enhanceTextForSearch, generateNGrams } from "../Utils/Rdf.js"
+import { enhanceTextForSearch, generateNGrams } from "../Utils/Text.js"
 
 /**
  * Tokenization result

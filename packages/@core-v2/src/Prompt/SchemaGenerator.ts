@@ -37,7 +37,7 @@ export const generateSchemaDescription = (ruleSet: RuleSet): string => {
   const errorRules = ruleSet.errorRules
   const warningRules = ruleSet.warningRules
 
-  const sections: string[] = []
+  const sections: Array<string> = []
 
   // Critical rules section
   if (errorRules.length > 0) {
