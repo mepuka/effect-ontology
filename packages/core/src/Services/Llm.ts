@@ -15,15 +15,16 @@
  */
 
 import { LanguageModel } from "@effect/ai"
-import { Array as A, Duration, Effect, HashMap, JSONSchema, Option, Schedule, Schema as S } from "effect"
+import { Duration, Effect, HashMap, JSONSchema, Option, Schedule } from "effect"
 import { LLMError } from "../Extraction/Events.js"
 import { isClassNode, type OntologyContext } from "../Graph/Types.js"
 import { renderExtractionPrompt } from "../Prompt/DocRenderer.js"
 import type { KnowledgeIndex } from "../Prompt/KnowledgeIndex.js"
 import * as KI from "../Prompt/KnowledgeIndex.js"
 import { StructuredPrompt } from "../Prompt/Model.js"
-import { EmptyVocabularyError } from "../Schema/Factory.js"
-import { makeTripleSchema, type TripleGraph } from "../Schema/TripleFactory.js"
+import { makeEntitySchema } from "../Schema/EntityFactory.js"
+import { makeRelationSchema, type RelationGraph } from "../Schema/RelationFactory.js"
+import type { TripleGraph } from "../Schema/TripleFactory.js"
 import { annotateLlmCall, LlmAttributes } from "../Telemetry/LlmAttributes.js"
 import { TracingContext } from "../Telemetry/TracingContext.js"
 
@@ -204,71 +205,17 @@ export const extractVocabularyFromFocused = (
  */
 
 /**
- * Helper: Creates a Union schema from a non-empty array of string literals
- *
- * @internal
- */
-const unionFromStringArray = <T extends string>(
-  values: ReadonlyArray<T>,
-  errorType: "classes" | "properties"
-): S.Schema<T> => {
-  if (A.isEmptyReadonlyArray(values)) {
-    throw new EmptyVocabularyError({ type: errorType })
-  }
-
-  const literals = values.map((iri) => S.Literal(iri)) as [
-    S.Literal<[T]>,
-    ...Array<S.Literal<[T]>>
-  ]
-
-  return S.Union(...literals)
-}
-
-/**
- * Entity list schema for Stage 1 extraction
- *
- * Creates a schema for extracting just entity names and types, without relations.
- * Used in two-stage extraction to ensure entity consistency.
- *
- * @internal
- */
-const makeEntityListSchema = <ClassIRI extends string>(
-  classIris: ReadonlyArray<ClassIRI>
-) => {
-  const ClassUnion = unionFromStringArray(classIris, "classes")
-
-  return S.Struct({
-    entities: S.Array(
-      S.Struct({
-        name: S.String.annotations({
-          description: "Complete, human-readable entity name (e.g., 'Stanford University' not 'Stanford')"
-        }),
-        type: ClassUnion
-      })
-    ).annotations({
-      description: "All entities mentioned in the text"
-    })
-  }).annotations({
-    identifier: "EntityList",
-    title: "Entity Extraction",
-    description: `Extract all entities from the text.
-    
-CRITICAL: Use complete, unambiguous names. If an entity appears multiple times with different names (e.g., "Stanford" and "Stanford University"), use the most complete form consistently.`
-  })
-}
-
-/**
  * Stage 1: Extract entities only
  *
  * First stage of two-stage extraction. Extracts all entities mentioned in the text
- * with their types, ensuring consistent naming before extracting relations.
+ * with their types and unique IDs, ensuring consistent naming before extracting relations.
  *
  * @param text - Input text to extract entities from
  * @param classIris - Array of allowed class IRIs
  * @param prompt - Structured prompt from Prompt service
- * @returns Effect yielding array of entities with name and type, requires LanguageModel
+ * @returns Effect yielding EntityGraph with entities (mention, id, type, attributes), requires LanguageModel
  *
- * @since 1.0.0
+ * @since 2.0.0
  * @category extraction
  *
  * @example
@@ -278,16 +225,16 @@ CRITICAL: Use complete, unambiguous names. If an entity appears multiple times w
  * import { Effect } from "effect"
  *
  * const program = Effect.gen(function* () {
- *   const entities = yield* extractEntities(
+ *   const entityGraph = yield* extractEntities(
  *     "Alice works at Stanford University. Bob also works there.",
  *     ["http://xmlns.com/foaf/0.1/Person", "http://xmlns.com/foaf/0.1/Organization"],
  *     prompt
  *   )
  *
- *   console.log(entities)
- *   // [{ name: "Alice", type: "http://xmlns.com/foaf/0.1/Person" },
- *   //  { name: "Stanford University", type: "http://xmlns.com/foaf/0.1/Organization" },
- *   //  { name: "Bob", type: "http://xmlns.com/foaf/0.1/Person" }]
+ *   console.log(entityGraph.entities)
+ *   // [{ mention: "Alice", id: "alice", type: "http://xmlns.com/foaf/0.1/Person" },
+ *   //  { mention: "Stanford University", id: "stanford_university", type: "http://xmlns.com/foaf/0.1/Organization" },
+ *   //  { mention: "Bob", id: "bob", type: "http://xmlns.com/foaf/0.1/Person" }]
  * })
  *
  * const params = { provider: "anthropic", anthropic: { ... } }
@@ -299,13 +246,9 @@ export const extractEntities = <ClassIRI extends string>(
   text: string,
   classIris: ReadonlyArray<ClassIRI>,
   prompt: StructuredPrompt
-): Effect.Effect<
-  Array<{ name: string; type: ClassIRI }>,
-  LLMError,
-  LanguageModel.LanguageModel
-> =>
+) =>
   Effect.gen(function*() {
-    const schema = makeEntityListSchema(classIris)
+    const schema = makeEntitySchema(classIris)
     const promptText = renderExtractionPrompt(prompt, text)
 
     // Log LLM call start
@@ -325,7 +268,7 @@ export const extractEntities = <ClassIRI extends string>(
     const response = yield* LanguageModel.generateObject({
       prompt: promptText,
       schema,
-      objectName: "EntityList"
+      objectName: "EntityGraph"
     }).pipe(
       Effect.tap(() =>
         Effect.log("LanguageModel.generateObject returned for entities", {
@@ -343,7 +286,7 @@ export const extractEntities = <ClassIRI extends string>(
         })
       ),
       // Catch timeout and convert to LLMError
-      Effect.catchTag("TimeoutException", () =>
+      Effect.catchTag("TimeoutException", (error) =>
         Effect.gen(function*() {
           yield* Effect.logError("LLM entity extraction timed out", {
             elapsed: Date.now() - callStartTime,
@@ -354,7 +297,8 @@ export const extractEntities = <ClassIRI extends string>(
               module: "extractEntities",
               method: "generateObject",
               reason: "ApiTimeout",
-              description: "LLM request timed out"
+              description: "LLM request timed out",
+              cause: error
             })
           )
         })),
@@ -368,7 +312,7 @@ export const extractEntities = <ClassIRI extends string>(
       )
     )
 
-    const entities = Array.from(response.value.entities)
+    const entityGraph = response.value
 
     // Annotate span with LLM metadata
     const tracingCtx = yield* Effect.serviceOption(TracingContext)
@@ -394,18 +338,18 @@ export const extractEntities = <ClassIRI extends string>(
       outputTokens: response.usage?.outputTokens,
       schemaJson
     })
-    yield* Effect.annotateCurrentSpan(LlmAttributes.ENTITY_COUNT, entities.length)
+    yield* Effect.annotateCurrentSpan(LlmAttributes.ENTITY_COUNT, entityGraph.entities.length)
 
     // Log LLM call completion
     yield* Effect.log("LLM entity extraction call completed", {
-      entityCount: entities.length,
-      entities: entities.map((e) => ({ name: e.name, type: e.type })),
+      entityCount: entityGraph.entities.length,
+      entities: entityGraph.entities.map((e) => ({ mention: e.mention, id: e.id, type: e.type })),
       totalElapsed: Date.now() - callStartTime,
       inputTokens: response.usage?.inputTokens,
       outputTokens: response.usage?.outputTokens
     })
 
-    return entities
+    return entityGraph
   }).pipe(
     Effect.withSpan("llm.extract-entities"),
     Effect.catchAll((error) => {
@@ -446,19 +390,17 @@ export const extractEntities = <ClassIRI extends string>(
 /**
  * Stage 2: Extract relations between known entities
  *
- * Second stage of two-stage extraction. Extracts triples using the entities
- * identified in Stage 1, ensuring entity name consistency.
- *
- * If entities array is empty, extracts triples without entity constraints (single-stage mode).
+ * Second stage of two-stage extraction. Extracts relations using the entity IDs
+ * identified in Stage 1, ensuring entity consistency via schema constraints.
  *
  * @param text - Input text to extract relations from
- * @param classIris - Array of allowed class IRIs (required if entities is empty)
- * @param entities - Array of known entities from Stage 1 (optional, for two-stage mode)
+ * @param validEntityIds - Entity IDs from Stage 1 (constrains subject/object)
+ * @param entityMap - Map from entity ID to entity data (for type inference and conversion)
  * @param propertyIris - Array of allowed property IRIs
  * @param prompt - Structured prompt from Prompt service
  * @returns Effect yielding triple graph or error, requires LanguageModel
  *
- * @since 1.0.0
+ * @since 2.0.0
  * @category extraction
  *
  * @example
@@ -467,17 +409,17 @@ export const extractEntities = <ClassIRI extends string>(
  * import { makeLlmProviderLayer } from "@effect-ontology/core/Services/LlmProvider"
  * import { Effect } from "effect"
  *
- * // Two-stage mode (with entities)
+ * // Two-stage mode (with entity IDs)
  * const program = Effect.gen(function* () {
- *   const entities = [
- *     { name: "Alice", type: "http://xmlns.com/foaf/0.1/Person" },
- *     { name: "Bob", type: "http://xmlns.com/foaf/0.1/Person" }
- *   ]
+ *   const entityMap = new Map([
+ *     ["alice", { mention: "Alice", id: "alice", type: "http://xmlns.com/foaf/0.1/Person" }],
+ *     ["bob", { mention: "Bob", id: "bob", type: "http://xmlns.com/foaf/0.1/Person" }]
+ *   ])
  *
  *   const result = yield* extractTriples(
  *     "Alice knows Bob.",
- *     ["http://xmlns.com/foaf/0.1/Person"], // classIris
- *     entities,
+ *     ["alice", "bob"], // validEntityIds
+ *     entityMap,
  *     ["http://xmlns.com/foaf/0.1/knows"],
  *     prompt
  *   )
@@ -495,8 +437,11 @@ export const extractTriples = <
   PropertyIRI extends string
 >(
   text: string,
-  classIris: ReadonlyArray<ClassIRI>,
-  entities: ReadonlyArray<{ name: string; type: ClassIRI }>,
+  validEntityIds: ReadonlyArray<string>,
+  entityMap: ReadonlyMap<
+    string,
+    { mention: string; id: string; type: ClassIRI; attributes?: Record<string, string | number> }
+  >,
   propertyIris: ReadonlyArray<PropertyIRI>,
   prompt: StructuredPrompt
 ): Effect.Effect<
@@ -505,32 +450,24 @@ export const extractTriples = <
   LanguageModel.LanguageModel
 > =>
   Effect.gen(function*() {
-    // Use classIris from entities if provided, otherwise use passed classIris
-    const effectiveClassIris = entities.length > 0
-      ? (Array.from(new Set(entities.map((e) => e.type))) as ReadonlyArray<ClassIRI>)
-      : classIris
+    // Create relation schema with entity ID constraints
+    const schema = makeRelationSchema(validEntityIds, propertyIris)
 
-    // Create triple schema
-    const schema = makeTripleSchema(effectiveClassIris, propertyIris)
+    // Enhance prompt with known entities
+    const entityContext = `
+YOU HAVE IDENTIFIED THE FOLLOWING ENTITIES:
+${Array.from(entityMap.values()).map((e) => `- ${e.id} (${e.mention}) - Type: ${e.type}`).join("\n")}
 
-    // Enhance prompt with known entities for consistency (if provided)
-    const enhancedPrompt = entities.length > 0
-      ? (() => {
-        const entityContext = `
-KNOWN ENTITIES:
-${entities.map((e) => `- ${e.name} (${e.type})`).join("\n")}
-
-CRITICAL: Only extract relationships between the entities listed above. Use their exact names as shown.
+CRITICAL: Only extract relationships between the entities listed above. Use their exact IDs as shown.
+The subject and object (when referencing an entity) MUST be one of the IDs above.
 `
 
-        return StructuredPrompt.make({
-          system: [...prompt.system],
-          user: [entityContext, ...prompt.user],
-          examples: [...prompt.examples],
-          context: [...prompt.context]
-        })
-      })()
-      : prompt
+    const enhancedPrompt = StructuredPrompt.make({
+      system: [...prompt.system],
+      user: [entityContext, ...prompt.user],
+      examples: [...prompt.examples],
+      context: [...prompt.context]
+    })
 
     // Build the complete prompt using @effect/printer
     const promptText = renderExtractionPrompt(enhancedPrompt, text)
@@ -539,7 +476,7 @@ CRITICAL: Only extract relationships between the entities listed above. Use thei
     const tripleCallStartTime = Date.now()
     yield* Effect.log("LLM triple extraction call started", {
       promptLength: promptText.length,
-      entityCount: entities.length,
+      entityCount: validEntityIds.length,
       propertyCount: propertyIris.length,
       timestamp: new Date().toISOString()
     })
@@ -552,7 +489,7 @@ CRITICAL: Only extract relationships between the entities listed above. Use thei
     const response = yield* LanguageModel.generateObject({
       prompt: promptText,
       schema,
-      objectName: "TripleGraph"
+      objectName: "RelationGraph"
     }).pipe(
       Effect.tap(() =>
         Effect.log("LanguageModel.generateObject returned for triples", {
@@ -595,10 +532,50 @@ CRITICAL: Only extract relationships between the entities listed above. Use thei
       )
     )
 
-    // Return the validated value (cast to TripleGraph type)
-    // Type assertion needed because schema includes core annotation properties
-    // which extend beyond PropertyIRI, but the structure matches TripleGraph
-    const tripleGraph = response.value as unknown as TripleGraph<ClassIRI, PropertyIRI>
+    // Convert RelationGraph to TripleGraph for compatibility
+    const relationGraph = response.value as RelationGraph<PropertyIRI>
+
+    // Convert relations to triples using entity map for type information
+    const triples: Array<{
+      subject: string
+      subject_type: ClassIRI
+      predicate: PropertyIRI
+      object: string | { value: string; type: ClassIRI }
+    }> = []
+
+    for (const relation of relationGraph.relations) {
+      const subjectEntity = entityMap.get(relation.subject)
+      if (!subjectEntity) {
+        // Skip invalid relations (shouldn't happen due to schema constraint, but be safe)
+        continue
+      }
+
+      // Determine if object is an entity ID or literal
+      const objectEntity = typeof relation.object === "string" && entityMap.has(relation.object)
+        ? entityMap.get(relation.object)
+        : null
+
+      // Convert relation object to triple object format
+      let tripleObject: string | { value: string; type: ClassIRI }
+      if (objectEntity) {
+        tripleObject = { value: objectEntity.mention, type: objectEntity.type as ClassIRI }
+      } else if (typeof relation.object === "number") {
+        // Convert number to string for triple format
+        tripleObject = String(relation.object)
+      } else {
+        // Already a string
+        tripleObject = relation.object
+      }
+
+      triples.push({
+        subject: subjectEntity.mention,
+        subject_type: subjectEntity.type,
+        predicate: relation.predicate,
+        object: tripleObject
+      })
+    }
+
+    const tripleGraph: TripleGraph<ClassIRI, PropertyIRI> = { triples }
 
     // Annotate span with LLM metadata
     const tracingCtx = yield* Effect.serviceOption(TracingContext)
@@ -730,11 +707,7 @@ export const extractKnowledgeGraphTwoStage = <
    * vocabulary from a focused KnowledgeIndex for reduced schema complexity.
    */
   vocabulary?: ExtractionVocabulary
-): Effect.Effect<
-  TripleGraph<ClassIRI, PropertyIRI>,
-  LLMError,
-  LanguageModel.LanguageModel
-> =>
+) =>
   Effect.gen(function*() {
     // Use provided vocabulary or extract from full ontology
     const { classIris, propertyIris } = vocabulary ?? extractVocabulary(ontology)
@@ -746,32 +719,39 @@ export const extractKnowledgeGraphTwoStage = <
     })
 
     // Stage 1: Extract entities
-    const entities = yield* extractEntities(
+    const entityGraph = yield* extractEntities(
       text,
       classIris as unknown as ReadonlyArray<ClassIRI>,
       prompt
     ).pipe(
       Effect.withSpan("extraction.stage1.entities"),
-      Effect.tap((entities) =>
+      Effect.tap((entityGraph) =>
         Effect.log("Stage 1: Entity extraction completed", {
-          entityCount: entities.length,
-          entities: entities.map((e) => ({ name: e.name, type: e.type }))
+          entityCount: entityGraph.entities.length,
+          entities: entityGraph.entities.map((e) => ({ mention: e.mention, id: e.id, type: e.type }))
         })
       )
     )
 
+    // Build entity map and extract IDs for Stage 2
+    const entityMap = new Map(
+      entityGraph.entities.map((e) => [e.id, e])
+    )
+    const validEntityIds = entityGraph.entities.map((e) => e.id)
+
     // Log stage 2 start
-    yield* Effect.log("Stage 2: Triple extraction started", {
+    yield* Effect.log("Stage 2: Relation extraction started", {
       textLength: text.length,
-      entityCount: entities.length,
+      entityCount: entityGraph.entities.length,
+      entityIds: validEntityIds,
       propertyCount: propertyIris.length
     })
 
-    // Stage 2: Extract triples with known entities
+    // Stage 2: Extract relations with entity ID constraints
     const triples = yield* extractTriples(
       text,
-      classIris as unknown as ReadonlyArray<ClassIRI>,
-      entities,
+      validEntityIds,
+      entityMap,
       propertyIris as unknown as ReadonlyArray<PropertyIRI>,
       prompt
     ).pipe(

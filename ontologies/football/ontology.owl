@@ -1,0 +1,2140 @@
+<?xml version="1.0"?>
+<Ontology xmlns="http://www.w3.org/2002/07/owl#"
+     xml:base="http://visualdataweb.org/newOntology/"
+     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+     xmlns:xml="http://www.w3.org/XML/1998/namespace"
+     xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+     xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+     ontologyIRI="http://visualdataweb.org/newOntology/">
+    <Prefix name="" IRI="http://visualdataweb.org/newOntology/"/>
+    <Prefix name="dc" IRI="http://purl.org/dc/elements/1.1/#"/>
+    <Prefix name="vs" IRI="http://www.w3.org/2003/06/sw-vocab-status/ns#"/>
+    <Prefix name="owl" IRI="http://www.w3.org/2002/07/owl#"/>
+    <Prefix name="rdf" IRI="http://www.w3.org/1999/02/22-rdf-syntax-ns#"/>
+    <Prefix name="wot" IRI="http://xmlns.com/wot/0.1/"/>
+    <Prefix name="xml" IRI="http://www.w3.org/XML/1998/namespace"/>
+    <Prefix name="xsd" IRI="http://www.w3.org/2001/XMLSchema#"/>
+    <Prefix name="foaf" IRI="http://xmlns.com/foaf/0.1/"/>
+    <Prefix name="rdfs" IRI="http://www.w3.org/2000/01/rdf-schema#"/>
+    <Annotation>
+        <AnnotationProperty abbreviatedIRI="dc:description"/>
+        <Literal xml:lang="en">An ontology about the football domain</Literal>
+    </Annotation>
+    <Annotation>
+        <AnnotationProperty abbreviatedIRI="dc:license"/>
+        <Literal>https://creativecommons.org/licenses/by/4.0/</Literal>
+    </Annotation>
+    <Annotation>
+        <AnnotationProperty abbreviatedIRI="dc:title"/>
+        <Literal xml:lang="en">Footology</Literal>
+    </Annotation>
+    <Declaration>
+        <Class IRI="Award"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="Coach"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="KnockOutTournament"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="League"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="Match"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="PerformanceStats"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="Player"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="Position"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="Referee"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="Stadium"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="Team"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="Tournament"/>
+    </Declaration>
+    <Declaration>
+        <Class IRI="Trophy"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="competesIn"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="hasPerformanceStats"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="hasPlayer"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="hasPosition"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="hasStats"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="hasTeam"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="hostedBy"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="hosts"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="includes"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="includesPlayer"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="isHomeOf"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="isPositionOf"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="isWonBy"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="managedBy"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="manages"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="occuredInMatch"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="officiatedBy"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="officiates"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="partOf"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="participatesIn"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="playsFor"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="playsIn"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="receivedBy"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="receives"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="statsOf"/>
+    </Declaration>
+    <Declaration>
+        <ObjectProperty IRI="wins"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="Assists"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="AwardName"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="AwardSeason"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="CPreferredFormation"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="CPreviousTeams"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="Capacity"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="Champion"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="CoachName"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="CoachNationality"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="Date"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="Fouls"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="GoalsScored"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="HomeTeam"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="LeagueName"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="MatchAwayTeam"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="MatchHomeTeam"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="MatchWinner"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="NumberOfTeams"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="OpeningYear"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="PassAccuracy"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="PlayerBirthdate"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="PlayerName"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="PlayerPosition"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="RBirthdate"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="RedCards"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="RefereeName"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="RefereeNationality"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="Region"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="Score"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="Season"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="SeasonYear"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="StadiumName"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="StadiumRegion"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="TeamFormation"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="TeamLeague"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="TeamName"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="TeamRanking"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="TeamSeason"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="TournamentChampion"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="TournamentName"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="TournamentNumOfTeams"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="TrophyAssociatedLeague"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="TrophyName"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="TrophyWinner"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="YellowCards"/>
+    </Declaration>
+    <Declaration>
+        <DataProperty IRI="height"/>
+    </Declaration>
+    <Declaration>
+        <AnnotationProperty abbreviatedIRI="dc:description"/>
+    </Declaration>
+    <Declaration>
+        <AnnotationProperty abbreviatedIRI="dc:license"/>
+    </Declaration>
+    <Declaration>
+        <AnnotationProperty abbreviatedIRI="dc:title"/>
+    </Declaration>
+    <SubClassOf>
+        <Class IRI="KnockOutTournament"/>
+        <Class IRI="Tournament"/>
+    </SubClassOf>
+    <SubClassOf>
+        <Class IRI="League"/>
+        <Class IRI="Tournament"/>
+    </SubClassOf>
+    <DisjointClasses>
+        <Class IRI="KnockOutTournament"/>
+        <Class IRI="League"/>
+    </DisjointClasses>
+    <InverseObjectProperties>
+        <ObjectProperty IRI="competesIn"/>
+        <ObjectProperty IRI="includes"/>
+    </InverseObjectProperties>
+    <InverseObjectProperties>
+        <ObjectProperty IRI="hasPerformanceStats"/>
+        <ObjectProperty IRI="occuredInMatch"/>
+    </InverseObjectProperties>
+    <InverseObjectProperties>
+        <ObjectProperty IRI="hasPlayer"/>
+        <ObjectProperty IRI="participatesIn"/>
+    </InverseObjectProperties>
+    <InverseObjectProperties>
+        <ObjectProperty IRI="hasPosition"/>
+        <ObjectProperty IRI="isPositionOf"/>
+    </InverseObjectProperties>
+    <InverseObjectProperties>
+        <ObjectProperty IRI="hasStats"/>
+        <ObjectProperty IRI="statsOf"/>
+    </InverseObjectProperties>
+    <InverseObjectProperties>
+        <ObjectProperty IRI="hasTeam"/>
+        <ObjectProperty IRI="partOf"/>
+    </InverseObjectProperties>
+    <InverseObjectProperties>
+        <ObjectProperty IRI="hostedBy"/>
+        <ObjectProperty IRI="hosts"/>
+    </InverseObjectProperties>
+    <InverseObjectProperties>
+        <ObjectProperty IRI="includesPlayer"/>
+        <ObjectProperty IRI="playsFor"/>
+    </InverseObjectProperties>
+    <InverseObjectProperties>
+        <ObjectProperty IRI="isHomeOf"/>
+        <ObjectProperty IRI="playsIn"/>
+    </InverseObjectProperties>
+    <InverseObjectProperties>
+        <ObjectProperty IRI="isWonBy"/>
+        <ObjectProperty IRI="wins"/>
+    </InverseObjectProperties>
+    <InverseObjectProperties>
+        <ObjectProperty IRI="managedBy"/>
+        <ObjectProperty IRI="manages"/>
+    </InverseObjectProperties>
+    <InverseObjectProperties>
+        <ObjectProperty IRI="officiatedBy"/>
+        <ObjectProperty IRI="officiates"/>
+    </InverseObjectProperties>
+    <InverseObjectProperties>
+        <ObjectProperty IRI="receivedBy"/>
+        <ObjectProperty IRI="receives"/>
+    </InverseObjectProperties>
+    <FunctionalObjectProperty>
+        <ObjectProperty IRI="hasTeam"/>
+    </FunctionalObjectProperty>
+    <FunctionalObjectProperty>
+        <ObjectProperty IRI="hostedBy"/>
+    </FunctionalObjectProperty>
+    <FunctionalObjectProperty>
+        <ObjectProperty IRI="hosts"/>
+    </FunctionalObjectProperty>
+    <FunctionalObjectProperty>
+        <ObjectProperty IRI="includesPlayer"/>
+    </FunctionalObjectProperty>
+    <FunctionalObjectProperty>
+        <ObjectProperty IRI="managedBy"/>
+    </FunctionalObjectProperty>
+    <FunctionalObjectProperty>
+        <ObjectProperty IRI="manages"/>
+    </FunctionalObjectProperty>
+    <FunctionalObjectProperty>
+        <ObjectProperty IRI="officiates"/>
+    </FunctionalObjectProperty>
+    <FunctionalObjectProperty>
+        <ObjectProperty IRI="partOf"/>
+    </FunctionalObjectProperty>
+    <FunctionalObjectProperty>
+        <ObjectProperty IRI="playsIn"/>
+    </FunctionalObjectProperty>
+    <FunctionalObjectProperty>
+        <ObjectProperty IRI="receivedBy"/>
+    </FunctionalObjectProperty>
+    <FunctionalObjectProperty>
+        <ObjectProperty IRI="receives"/>
+    </FunctionalObjectProperty>
+    <AsymmetricObjectProperty>
+        <ObjectProperty IRI="hasTeam"/>
+    </AsymmetricObjectProperty>
+    <AsymmetricObjectProperty>
+        <ObjectProperty IRI="hosts"/>
+    </AsymmetricObjectProperty>
+    <AsymmetricObjectProperty>
+        <ObjectProperty IRI="managedBy"/>
+    </AsymmetricObjectProperty>
+    <AsymmetricObjectProperty>
+        <ObjectProperty IRI="manages"/>
+    </AsymmetricObjectProperty>
+    <AsymmetricObjectProperty>
+        <ObjectProperty IRI="officiates"/>
+    </AsymmetricObjectProperty>
+    <AsymmetricObjectProperty>
+        <ObjectProperty IRI="partOf"/>
+    </AsymmetricObjectProperty>
+    <AsymmetricObjectProperty>
+        <ObjectProperty IRI="playsIn"/>
+    </AsymmetricObjectProperty>
+    <AsymmetricObjectProperty>
+        <ObjectProperty IRI="receivedBy"/>
+    </AsymmetricObjectProperty>
+    <AsymmetricObjectProperty>
+        <ObjectProperty IRI="receives"/>
+    </AsymmetricObjectProperty>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="competesIn"/>
+        <Class IRI="Team"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="hasPerformanceStats"/>
+        <Class IRI="Match"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="hasPlayer"/>
+        <Class IRI="Match"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="hasPosition"/>
+        <Class IRI="Player"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="hasStats"/>
+        <Class IRI="Player"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="hasTeam"/>
+        <Class IRI="Tournament"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="hostedBy"/>
+        <Class IRI="Match"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="hosts"/>
+        <Class IRI="Stadium"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="includes"/>
+        <Class IRI="Match"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="includesPlayer"/>
+        <Class IRI="Team"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="isHomeOf"/>
+        <Class IRI="Stadium"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="isPositionOf"/>
+        <Class IRI="Position"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="isWonBy"/>
+        <Class IRI="Trophy"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="managedBy"/>
+        <Class IRI="Team"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="manages"/>
+        <Class IRI="Coach"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="occuredInMatch"/>
+        <Class IRI="PerformanceStats"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="officiatedBy"/>
+        <Class IRI="Match"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="officiates"/>
+        <Class IRI="Referee"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="partOf"/>
+        <Class IRI="Team"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="participatesIn"/>
+        <Class IRI="Player"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="playsFor"/>
+        <Class IRI="Player"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="playsIn"/>
+        <Class IRI="Team"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="receivedBy"/>
+        <Class IRI="Award"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="receives"/>
+        <Class IRI="Player"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="statsOf"/>
+        <Class IRI="PerformanceStats"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyDomain>
+        <ObjectProperty IRI="wins"/>
+        <Class IRI="Team"/>
+    </ObjectPropertyDomain>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="competesIn"/>
+        <Class IRI="Match"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="hasPerformanceStats"/>
+        <Class IRI="PerformanceStats"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="hasPlayer"/>
+        <Class IRI="Player"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="hasPosition"/>
+        <Class IRI="Position"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="hasStats"/>
+        <Class IRI="PerformanceStats"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="hasTeam"/>
+        <Class IRI="Team"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="hostedBy"/>
+        <Class IRI="Stadium"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="hosts"/>
+        <Class IRI="Match"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="includes"/>
+        <Class IRI="Team"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="includesPlayer"/>
+        <Class IRI="Player"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="isHomeOf"/>
+        <Class IRI="Team"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="isPositionOf"/>
+        <Class IRI="Player"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="isWonBy"/>
+        <Class IRI="Team"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="managedBy"/>
+        <Class IRI="Coach"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="manages"/>
+        <Class IRI="Team"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="occuredInMatch"/>
+        <Class IRI="Match"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="officiatedBy"/>
+        <Class IRI="Referee"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="officiates"/>
+        <Class IRI="Match"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="partOf"/>
+        <Class IRI="Tournament"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="participatesIn"/>
+        <Class IRI="Match"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="playsFor"/>
+        <Class IRI="Team"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="playsIn"/>
+        <Class IRI="Stadium"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="receivedBy"/>
+        <Class IRI="Player"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="receives"/>
+        <Class IRI="Award"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="statsOf"/>
+        <Class IRI="Player"/>
+    </ObjectPropertyRange>
+    <ObjectPropertyRange>
+        <ObjectProperty IRI="wins"/>
+        <Class IRI="Trophy"/>
+    </ObjectPropertyRange>
+    <DataPropertyDomain>
+        <DataProperty IRI="Assists"/>
+        <Class IRI="PerformanceStats"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="AwardName"/>
+        <Class IRI="Award"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="AwardSeason"/>
+        <Class IRI="Award"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="CPreferredFormation"/>
+        <Class IRI="Coach"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="CPreviousTeams"/>
+        <Class IRI="Coach"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="Capacity"/>
+        <Class IRI="Stadium"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="Champion"/>
+        <Class IRI="League"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="CoachName"/>
+        <Class IRI="Coach"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="CoachNationality"/>
+        <Class IRI="Coach"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="Date"/>
+        <Class IRI="Match"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="Fouls"/>
+        <Class IRI="PerformanceStats"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="GoalsScored"/>
+        <Class IRI="PerformanceStats"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="HomeTeam"/>
+        <Class IRI="Stadium"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="LeagueName"/>
+        <Class IRI="League"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="MatchAwayTeam"/>
+        <Class IRI="Match"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="MatchHomeTeam"/>
+        <Class IRI="Match"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="MatchWinner"/>
+        <Class IRI="Match"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="NumberOfTeams"/>
+        <Class IRI="League"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="OpeningYear"/>
+        <Class IRI="Stadium"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="PassAccuracy"/>
+        <Class IRI="PerformanceStats"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="PlayerBirthdate"/>
+        <Class IRI="Player"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="PlayerName"/>
+        <Class IRI="Player"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="PlayerPosition"/>
+        <Class IRI="Position"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="RBirthdate"/>
+        <Class IRI="Referee"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="RedCards"/>
+        <Class IRI="PerformanceStats"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="RefereeName"/>
+        <Class IRI="Referee"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="RefereeNationality"/>
+        <Class IRI="Referee"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="Region"/>
+        <Class IRI="League"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="Score"/>
+        <Class IRI="Match"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="Season"/>
+        <Class IRI="PerformanceStats"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="SeasonYear"/>
+        <Class IRI="League"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="StadiumName"/>
+        <Class IRI="Stadium"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="StadiumRegion"/>
+        <Class IRI="Stadium"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="TeamFormation"/>
+        <Class IRI="Team"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="TeamLeague"/>
+        <Class IRI="Team"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="TeamName"/>
+        <Class IRI="Team"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="TeamRanking"/>
+        <Class IRI="Team"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="TeamSeason"/>
+        <Class IRI="Team"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="TournamentChampion"/>
+        <Class IRI="Tournament"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="TournamentName"/>
+        <Class IRI="Tournament"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="TournamentNumOfTeams"/>
+        <Class IRI="Tournament"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="TrophyAssociatedLeague"/>
+        <Class IRI="Trophy"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="TrophyName"/>
+        <Class IRI="Trophy"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="TrophyWinner"/>
+        <Class IRI="Trophy"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="YellowCards"/>
+        <Class IRI="PerformanceStats"/>
+    </DataPropertyDomain>
+    <DataPropertyDomain>
+        <DataProperty IRI="height"/>
+        <Class IRI="Player"/>
+    </DataPropertyDomain>
+    <DataPropertyRange>
+        <DataProperty IRI="Assists"/>
+        <Datatype abbreviatedIRI="xsd:integer"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="AwardName"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="AwardSeason"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="CPreferredFormation"/>
+        <Datatype abbreviatedIRI="rdfs:Literal"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="CPreviousTeams"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="Capacity"/>
+        <Datatype abbreviatedIRI="xsd:integer"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="Champion"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="CoachName"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="CoachNationality"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="Date"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="Fouls"/>
+        <Datatype abbreviatedIRI="xsd:integer"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="GoalsScored"/>
+        <Datatype abbreviatedIRI="xsd:integer"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="HomeTeam"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="LeagueName"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="MatchAwayTeam"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="MatchHomeTeam"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="MatchWinner"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="NumberOfTeams"/>
+        <Datatype abbreviatedIRI="xsd:integer"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="OpeningYear"/>
+        <Datatype abbreviatedIRI="xsd:integer"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="PassAccuracy"/>
+        <Datatype abbreviatedIRI="xsd:integer"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="PlayerBirthdate"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="PlayerName"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="PlayerPosition"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="RBirthdate"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="RedCards"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="RefereeName"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="RefereeNationality"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="Region"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="Score"/>
+        <Datatype abbreviatedIRI="xsd:integer"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="Season"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="SeasonYear"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="StadiumName"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="StadiumRegion"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="TeamFormation"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="TeamLeague"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="TeamName"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="TeamRanking"/>
+        <Datatype abbreviatedIRI="xsd:integer"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="TeamSeason"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="TournamentChampion"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="TournamentName"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="TournamentNumOfTeams"/>
+        <Datatype abbreviatedIRI="xsd:integer"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="TrophyAssociatedLeague"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="TrophyName"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="TrophyWinner"/>
+        <Datatype abbreviatedIRI="xsd:string"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="YellowCards"/>
+        <Datatype abbreviatedIRI="xsd:integer"/>
+    </DataPropertyRange>
+    <DataPropertyRange>
+        <DataProperty IRI="height"/>
+        <Datatype abbreviatedIRI="xsd:integer"/>
+    </DataPropertyRange>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>Assists</IRI>
+        <Literal>The assists of a specific player within a season</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Assists</IRI>
+        <Literal xml:lang="en">assists</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Assists</IRI>
+        <Literal>assists</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>Award</IRI>
+        <Literal>An indivual award won by a player</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Award</IRI>
+        <Literal xml:lang="en">award</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Award</IRI>
+        <Literal>award</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>AwardName</IRI>
+        <Literal>The indivual award name</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>AwardName</IRI>
+        <Literal xml:lang="en">awardName</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>AwardName</IRI>
+        <Literal>awardName</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>AwardSeason</IRI>
+        <Literal>The season of an award</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>AwardSeason</IRI>
+        <Literal xml:lang="en">awardSeason</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>AwardSeason</IRI>
+        <Literal>awardSeason</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>CPreferredFormation</IRI>
+        <Literal>The preferred formation of a coach</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>CPreferredFormation</IRI>
+        <Literal xml:lang="en">cPreferredFormation</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>CPreferredFormation</IRI>
+        <Literal>cPreferredFormation</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>CPreviousTeams</IRI>
+        <Literal>The previous teams a coach has managed so far</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>CPreviousTeams</IRI>
+        <Literal xml:lang="en">cPreviousTeams</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>CPreviousTeams</IRI>
+        <Literal>cPreviousTeams</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>Capacity</IRI>
+        <Literal>The capacity of a stadium</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Capacity</IRI>
+        <Literal xml:lang="en">capacity</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Capacity</IRI>
+        <Literal>capacity</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>Champion</IRI>
+        <Literal>The current champion of a League</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Champion</IRI>
+        <Literal xml:lang="en">champion</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Champion</IRI>
+        <Literal>champion</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>Coach</IRI>
+        <Literal>The coach managing a team</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Coach</IRI>
+        <Literal xml:lang="en">coach</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Coach</IRI>
+        <Literal>coach</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>CoachName</IRI>
+        <Literal>The name of a team coach</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>CoachName</IRI>
+        <Literal xml:lang="en">coachName</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>CoachName</IRI>
+        <Literal>coachName</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>CoachNationality</IRI>
+        <Literal>The nationality of a coach</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>CoachNationality</IRI>
+        <Literal xml:lang="en">coachNationality</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>CoachNationality</IRI>
+        <Literal>coachNationality</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>Date</IRI>
+        <Literal>The date when a match took place</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Date</IRI>
+        <Literal xml:lang="en">date</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Date</IRI>
+        <Literal>date</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>Fouls</IRI>
+        <Literal>The fouls commited by a player</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Fouls</IRI>
+        <Literal xml:lang="en">fouls</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Fouls</IRI>
+        <Literal>fouls</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>GoalsScored</IRI>
+        <Literal>The goals scored by a player</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>GoalsScored</IRI>
+        <Literal xml:lang="en">goalsScored</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>GoalsScored</IRI>
+        <Literal>goalsScored</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>HomeTeam</IRI>
+        <Literal>The home team of a stadium</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>HomeTeam</IRI>
+        <Literal xml:lang="en">homeTeam</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>HomeTeam</IRI>
+        <Literal>homeTeam</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>KnockOutTournament</IRI>
+        <Literal>A knock-out pyramid style of a tournament, where a team has to compete in a KO-Stage like quarter final, semi final and final</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>KnockOutTournament</IRI>
+        <Literal>knockOutTournament</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>League</IRI>
+        <Literal>A league type of tournament, where a team competes with many other teams of a specific league, winning 3, 1, or 0 points each game. At the end of the season, the team that has the most points wins the league</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>League</IRI>
+        <Literal xml:lang="en">league</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>League</IRI>
+        <Literal>league</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>LeagueName</IRI>
+        <Literal>The name of a league</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>LeagueName</IRI>
+        <Literal xml:lang="en">leagueName</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>LeagueName</IRI>
+        <Literal>leagueName</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>Match</IRI>
+        <Literal>A competetive football event held between two teams</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Match</IRI>
+        <Literal xml:lang="en">match</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Match</IRI>
+        <Literal>match</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>MatchAwayTeam</IRI>
+        <Literal>The away team of a specific match</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>MatchAwayTeam</IRI>
+        <Literal xml:lang="en">matchAwayTeam</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>MatchAwayTeam</IRI>
+        <Literal>matchAwayTeam</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>MatchHomeTeam</IRI>
+        <Literal>The home team of a specific match</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>MatchHomeTeam</IRI>
+        <Literal xml:lang="en">matchHomeTeam</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>MatchHomeTeam</IRI>
+        <Literal>matchHomeTeam</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>MatchWinner</IRI>
+        <Literal>The winner of a specific match</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>MatchWinner</IRI>
+        <Literal xml:lang="en">matchWinner</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>MatchWinner</IRI>
+        <Literal>matchWinner</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>NumberOfTeams</IRI>
+        <Literal>The number of teams competing in a specific league</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>NumberOfTeams</IRI>
+        <Literal xml:lang="en">numberOfTeams</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>NumberOfTeams</IRI>
+        <Literal>numberOfTeams</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>OpeningYear</IRI>
+        <Literal>The opening year of a stadium</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>OpeningYear</IRI>
+        <Literal xml:lang="en">openingYear</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>OpeningYear</IRI>
+        <Literal>openingYear</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>PassAccuracy</IRI>
+        <Literal>The pass accuracy of a player in a season</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>PassAccuracy</IRI>
+        <Literal xml:lang="en">passAccuracy</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>PassAccuracy</IRI>
+        <Literal>passAccuracy</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>PerformanceStats</IRI>
+        <Literal>The perfomance statistics of a player like goal scored, assists and so on.</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>PerformanceStats</IRI>
+        <Literal xml:lang="en">performanceStats</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>PerformanceStats</IRI>
+        <Literal>performanceStats</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>Player</IRI>
+        <Literal>A professional football player</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Player</IRI>
+        <Literal xml:lang="en">player</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Player</IRI>
+        <Literal>player</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>PlayerBirthdate</IRI>
+        <Literal>The birthday of a player</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>PlayerBirthdate</IRI>
+        <Literal xml:lang="en">playerBirthdate</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>PlayerBirthdate</IRI>
+        <Literal>playerBirthdate</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>PlayerName</IRI>
+        <Literal>The name of a player</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>PlayerName</IRI>
+        <Literal xml:lang="en">playerName</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>PlayerName</IRI>
+        <Literal>playerName</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>PlayerPosition</IRI>
+        <Literal>The position of a player</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>PlayerPosition</IRI>
+        <Literal xml:lang="en">playerPosition</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>Position</IRI>
+        <Literal>This class shows the parent class &quot;Position&quot; which includes subclasses of positions of a player</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Position</IRI>
+        <Literal xml:lang="en">position</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>RBirthdate</IRI>
+        <Literal>The birthday of a referee</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>RBirthdate</IRI>
+        <Literal xml:lang="en">rBirthdate</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>RBirthdate</IRI>
+        <Literal>rBirthdate</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>RedCards</IRI>
+        <Literal>The red cards a player has gotten in a season</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>RedCards</IRI>
+        <Literal xml:lang="en">redCards</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>RedCards</IRI>
+        <Literal>redCards</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>Referee</IRI>
+        <Literal>The referee officiating a football match</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Referee</IRI>
+        <Literal xml:lang="en">referee</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Referee</IRI>
+        <Literal>referee</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>RefereeName</IRI>
+        <Literal>The name of the referee</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>RefereeName</IRI>
+        <Literal xml:lang="en">refereeName</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>RefereeName</IRI>
+        <Literal>refereeName</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>RefereeNationality</IRI>
+        <Literal>The nationality of a referee</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>RefereeNationality</IRI>
+        <Literal xml:lang="en">refereeNationality</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>RefereeNationality</IRI>
+        <Literal>refereeNationality</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>Region</IRI>
+        <Literal>The region or country a league is playing in</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Region</IRI>
+        <Literal xml:lang="en">region</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Region</IRI>
+        <Literal>region</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>Score</IRI>
+        <Literal>The final score of a match</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Score</IRI>
+        <Literal xml:lang="en">score</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Score</IRI>
+        <Literal>score</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>Season</IRI>
+        <Literal>The season of the performances of a player</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Season</IRI>
+        <Literal xml:lang="en">season</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Season</IRI>
+        <Literal>season</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>SeasonYear</IRI>
+        <Literal>The season of a League</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>SeasonYear</IRI>
+        <Literal xml:lang="en">seasonYear</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>SeasonYear</IRI>
+        <Literal>seasonYear</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>Stadium</IRI>
+        <Literal>The stadium of a football team</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Stadium</IRI>
+        <Literal xml:lang="en">stadium</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Stadium</IRI>
+        <Literal>stadium</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>StadiumName</IRI>
+        <Literal>The name of a stadium</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>StadiumName</IRI>
+        <Literal xml:lang="en">stadiumName</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>StadiumName</IRI>
+        <Literal>stadiumName</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>StadiumRegion</IRI>
+        <Literal>The region or country a stadium is located in</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>StadiumRegion</IRI>
+        <Literal xml:lang="en">stadiumRegion</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>StadiumRegion</IRI>
+        <Literal>stadiumRegion</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>Team</IRI>
+        <Literal>A professional football team</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Team</IRI>
+        <Literal xml:lang="en">team</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Team</IRI>
+        <Literal>team</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>TeamFormation</IRI>
+        <Literal>The formation of a team</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TeamFormation</IRI>
+        <Literal xml:lang="en">teamFormation</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TeamFormation</IRI>
+        <Literal>teamFormation</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>TeamLeague</IRI>
+        <Literal>The league a team is playing in</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TeamLeague</IRI>
+        <Literal xml:lang="en">teamLeague</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TeamLeague</IRI>
+        <Literal>teamLeague</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>TeamName</IRI>
+        <Literal>The name of a team</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TeamName</IRI>
+        <Literal xml:lang="en">teamName</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TeamName</IRI>
+        <Literal>teamName</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>TeamRanking</IRI>
+        <Literal>The league ranking of a team</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TeamRanking</IRI>
+        <Literal xml:lang="en">teamRanking</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TeamRanking</IRI>
+        <Literal>teamRanking</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>TeamSeason</IRI>
+        <Literal>The season of a team</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TeamSeason</IRI>
+        <Literal xml:lang="en">teamSeason</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TeamSeason</IRI>
+        <Literal>teamSeason</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>Tournament</IRI>
+        <Literal>The tournament a team is currently competing in</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Tournament</IRI>
+        <Literal xml:lang="en">tournament</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Tournament</IRI>
+        <Literal>tournament</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>TournamentChampion</IRI>
+        <Literal>The champion of a specific tournament</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TournamentChampion</IRI>
+        <Literal xml:lang="en">tournamentChampion</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TournamentChampion</IRI>
+        <Literal>tournamentChampion</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>TournamentName</IRI>
+        <Literal>The name of the tournament</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TournamentName</IRI>
+        <Literal xml:lang="en">tournamentName</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TournamentName</IRI>
+        <Literal>tournamentName</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>TournamentNumOfTeams</IRI>
+        <Literal>The number of teams in a tournament</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TournamentNumOfTeams</IRI>
+        <Literal xml:lang="en">tournamentNumOfTeams</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TournamentNumOfTeams</IRI>
+        <Literal>tournamentNumOfTeams</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>Trophy</IRI>
+        <Literal>A trophy won by a team</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Trophy</IRI>
+        <Literal xml:lang="en">trophy</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>Trophy</IRI>
+        <Literal>trophy</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>TrophyAssociatedLeague</IRI>
+        <Literal>What kind of team trophy, like DFB Pokal or other trophies from other countries</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TrophyAssociatedLeague</IRI>
+        <Literal xml:lang="en">trophyAssociatedLeague</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TrophyAssociatedLeague</IRI>
+        <Literal>trophyAssociatedLeague</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>TrophyName</IRI>
+        <Literal>The name of a trophy</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TrophyName</IRI>
+        <Literal xml:lang="en">trophyName</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TrophyName</IRI>
+        <Literal>trophyName</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>TrophyWinner</IRI>
+        <Literal>The winner of a trophy</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TrophyWinner</IRI>
+        <Literal xml:lang="en">trophyWinner</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>TrophyWinner</IRI>
+        <Literal>trophyWinner</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>YellowCards</IRI>
+        <Literal>The yellow cards a player has got in a specific season</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>YellowCards</IRI>
+        <Literal xml:lang="en">yellowCards</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>YellowCards</IRI>
+        <Literal>yellowCards</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>competesIn</IRI>
+        <Literal>This represents a relationship between a team and a match</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>competesIn</IRI>
+        <Literal xml:lang="en">competesIn</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>competesIn</IRI>
+        <Literal xml:lang="iri-based">competesIn</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>hasPosition</IRI>
+        <Literal>This shows the position of a specific player</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>hasPosition</IRI>
+        <Literal xml:lang="en">hasPosition</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>hasStats</IRI>
+        <Literal>The performance stats of a specific player, like goals, assists, and so on</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>hasStats</IRI>
+        <Literal xml:lang="en">hasStats</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>hasStats</IRI>
+        <Literal xml:lang="iri-based">hasStats</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>hasTeam</IRI>
+        <Literal>A team included in a tournament</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>hasTeam</IRI>
+        <Literal>hasTeam</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>height</IRI>
+        <Literal>The height of a player</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>height</IRI>
+        <Literal xml:lang="en">height</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>height</IRI>
+        <Literal xml:lang="iri-based">height</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>hostedBy</IRI>
+        <Literal>The stadium of a specific team of a match</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>hostedBy</IRI>
+        <Literal xml:lang="en">hostedBy</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>hostedBy</IRI>
+        <Literal xml:lang="iri-based">hostedBy</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>hosts</IRI>
+        <Literal>The stadium in which a match takes place</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>hosts</IRI>
+        <Literal>hosts</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>includes</IRI>
+        <Literal>A match won by a team</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>includes</IRI>
+        <Literal>isWonBy</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>includesPlayer</IRI>
+        <Literal>A player included in a team</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>includesPlayer</IRI>
+        <Literal>includesPlayer</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>isHomeOf</IRI>
+        <Literal>A stadium a team is home of</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>isHomeOf</IRI>
+        <Literal>isHomeOf</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>isPositionOf</IRI>
+        <Literal>A position held by a player</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>isPositionOf</IRI>
+        <Literal>isPositionOf</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>isWonBy</IRI>
+        <Literal>A trophy won by a team</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>isWonBy</IRI>
+        <Literal>isWonBy</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>managedBy</IRI>
+        <Literal>A team managed by a coach</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>managedBy</IRI>
+        <Literal>managedBy</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>manages</IRI>
+        <Literal>The coach that manages a team</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>manages</IRI>
+        <Literal xml:lang="en">manages</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>manages</IRI>
+        <Literal xml:lang="iri-based">manages</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>officiatedBy</IRI>
+        <Literal>A match officiated by a referee</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>officiatedBy</IRI>
+        <Literal>officiatedBy</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>officiates</IRI>
+        <Literal>The referee that officiates a specific match</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>officiates</IRI>
+        <Literal xml:lang="en">officiates</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>officiates</IRI>
+        <Literal xml:lang="iri-based">officiates</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>partOf</IRI>
+        <Literal>The tournament a specific team is part of</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>partOf</IRI>
+        <Literal xml:lang="en">partOf</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>partOf</IRI>
+        <Literal xml:lang="iri-based">partOf</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>playsFor</IRI>
+        <Literal>The team a specific player is playing for</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>playsFor</IRI>
+        <Literal xml:lang="en">playsFor</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>playsFor</IRI>
+        <Literal xml:lang="iri-based">playsFor</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>playsIn</IRI>
+        <Literal>The home stadium of a team</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>playsIn</IRI>
+        <Literal xml:lang="en">playsIn</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>playsIn</IRI>
+        <Literal xml:lang="iri-based">playsIn</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>receivedBy</IRI>
+        <Literal>An individual award received by a player</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>receivedBy</IRI>
+        <Literal>receivedBy</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>receives</IRI>
+        <Literal>An indivual award won by a player</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>receives</IRI>
+        <Literal xml:lang="en">receives</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>receives</IRI>
+        <Literal xml:lang="iri-based">receives</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>statsOf</IRI>
+        <Literal>The performance stats of a player</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>statsOf</IRI>
+        <Literal>statsOf</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:comment"/>
+        <IRI>wins</IRI>
+        <Literal>A team that wins a trophy</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>wins</IRI>
+        <Literal xml:lang="en">wins</Literal>
+    </AnnotationAssertion>
+    <AnnotationAssertion>
+        <AnnotationProperty abbreviatedIRI="rdfs:label"/>
+        <IRI>wins</IRI>
+        <Literal xml:lang="iri-based">wins</Literal>
+    </AnnotationAssertion>
+</Ontology>
+
+
+
+<!-- Generated by the OWL API (version 4.5.26.2023-07-17T20:34:13Z) https://github.com/owlcs/owlapi -->
+

@@ -54,13 +54,14 @@ const MockLanguageModelLive = Layer.succeed(
     generate: () => Effect.succeed({ value: "", usage: { inputTokens: 0, outputTokens: 0 } }),
     stream: () => Effect.succeed({ value: "", usage: { inputTokens: 0, outputTokens: 0 } }),
     generateObject: (options: any) => {
-      // Stage 1: EntityList (extractEntities)
-      if (options.objectName === "EntityList") {
+      // Stage 1: EntityGraph (extractEntities)
+      if (options.objectName === "EntityGraph") {
         return Effect.succeed({
           value: {
             entities: [
               {
-                name: "Test Person",
+                mention: "Test Person",
+                id: "test_person",
                 type: "http://xmlns.com/foaf/0.1/Person"
               }
             ]
@@ -69,14 +70,13 @@ const MockLanguageModelLive = Layer.succeed(
         } as any)
       }
 
-      // Stage 2: TripleGraph (extractTriples)
-      if (options.objectName === "TripleGraph") {
+      // Stage 2: RelationGraph (extractTriples)
+      if (options.objectName === "RelationGraph") {
         return Effect.succeed({
           value: {
-            triples: [
+            relations: [
               {
-                subject: "Test Person",
-                subject_type: "http://xmlns.com/foaf/0.1/Person",
+                subject: "test_person",
                 predicate: "http://xmlns.com/foaf/0.1/name",
                 object: "Test Person"
               }

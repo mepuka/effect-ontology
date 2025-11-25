@@ -12,10 +12,7 @@
  */
 
 import { Array as A, Schema as S } from "effect"
-import {
-  CORE_ANNOTATION_PROPERTIES,
-  EmptyVocabularyError
-} from "./Factory.js"
+import { CORE_ANNOTATION_PROPERTIES, EmptyVocabularyError } from "./Factory.js"
 
 // Re-export for convenience
 export { EmptyVocabularyError }
@@ -96,6 +93,10 @@ const unionFromStringArray = <T extends string>(
 /**
  * Creates Effect Schema for triple-based extraction
  *
+ * @deprecated Use `makeEntitySchema` (Stage 1) and `makeRelationSchema` (Stage 2) instead.
+ * This function will be removed in v2.0.0. The two-stage approach eliminates identity
+ * hallucination by constraining Stage 2 relations to Stage 1 entity IDs.
+ *
  * @param classIris - Allowed entity types
  * @param propertyIris - Allowed relation types
  * @param options - Schema generation options (currently unused, for future extensibility)
@@ -123,6 +124,7 @@ const unionFromStringArray = <T extends string>(
  *
  * @category constructors
  * @since 1.0.0
+ * @deprecated Use two-stage extraction: `makeEntitySchema` + `makeRelationSchema`
  */
 export const makeTripleSchema = <
   ClassIRI extends string = string,
@@ -161,8 +163,7 @@ export const makeTripleSchema = <
   // Single triple schema
   const TripleSchema = S.Struct({
     subject: S.String.annotations({
-      description:
-        "Subject entity name - use complete, human-readable form (e.g., 'Marie Curie' not 'Marie')"
+      description: "Subject entity name - use complete, human-readable form (e.g., 'Marie Curie' not 'Marie')"
     }),
     subject_type: ClassUnion,
     predicate: PropertyUnion.annotations({
@@ -206,4 +207,3 @@ export type TripleGraphType<
   ClassIRI extends string = string,
   PropertyIRI extends string = string
 > = S.Schema.Type<TripleGraphSchema<ClassIRI, PropertyIRI>>
-
