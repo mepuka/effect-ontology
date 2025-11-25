@@ -99,3 +99,61 @@ export class ValidationFailed extends Schema.TaggedError<ValidationFailed>()(
     data: Schema.optional(Schema.Unknown)
   }
 ) {}
+
+/**
+ * EntityValidationFailed - Entity validation failure during extraction
+ *
+ * Used for per-row validation failures that don't kill the entire chunk.
+ * These errors are logged but don't stop processing.
+ *
+ * @since 2.0.0
+ * @category Error
+ */
+export class EntityValidationFailed extends Schema.TaggedError<EntityValidationFailed>()(
+  "EntityValidationFailed",
+  {
+    /**
+     * Reason for validation failure
+     */
+    reason: Schema.String,
+
+    /**
+     * Raw entity data that failed validation
+     */
+    entityData: Schema.Unknown,
+
+    /**
+     * Optional chunk index for context
+     */
+    chunkIndex: Schema.optional(Schema.Number)
+  }
+) {}
+
+/**
+ * RelationValidationFailed - Relation validation failure during extraction
+ *
+ * Used for per-row validation failures that don't kill the entire chunk.
+ * These errors are logged but don't stop processing.
+ *
+ * @since 2.0.0
+ * @category Error
+ */
+export class RelationValidationFailed extends Schema.TaggedError<RelationValidationFailed>()(
+  "RelationValidationFailed",
+  {
+    /**
+     * Reason for validation failure
+     */
+    reason: Schema.String,
+
+    /**
+     * Raw relation data that failed validation
+     */
+    relationData: Schema.Unknown,
+
+    /**
+     * Optional chunk index for context
+     */
+    chunkIndex: Schema.optional(Schema.Number)
+  }
+) {}

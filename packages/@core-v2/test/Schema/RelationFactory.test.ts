@@ -260,11 +260,8 @@ describe("makeRelationSchema", () => {
     expect(result.relations[0].object).toBe("al_nassr")
   })
 
-  it("should accept literal strings even if they look like entity IDs", () => {
-    // Note: The schema cannot distinguish between entity references and literal strings
-    // at validation time. Entity reference validation happens at runtime via the
-    // Relation.isEntityReference getter. The schema allows any string as a literal.
-    const validEntityIds = ["cristiano_ronaldo"]
+  it("should reject literal values for object properties", () => {
+    const validEntityIds = ["cristiano_ronaldo", "al_nassr"]
     const properties = [
       new PropertyDefinition({
         id: "http://schema.org/memberOf",
@@ -278,21 +275,215 @@ describe("makeRelationSchema", () => {
 
     const schema = makeRelationSchema(validEntityIds, properties)
 
-    // This will pass because "invalid_entity" is a valid literal string
-    // The schema doesn't enforce that object must be in validEntityIds when it's a string
-    // (only when it's explicitly an entity reference, which is determined at runtime)
-    const relation = {
+    // Object property should reject literal string (not entity ID)
+    const invalidRelation = {
       relations: [
         {
           subjectId: "cristiano_ronaldo",
           predicate: "http://schema.org/memberOf",
-          object: "invalid_entity" // Accepted as literal string, not entity reference
+          object: "1985-02-05" // Literal string, not entity ID - should be rejected
+        }
+      ]
+    }
+
+    expect(() => Schema.decodeUnknownSync(schema)(invalidRelation)).toThrow()
+  })
+
+  it("should accept any string for datatype properties (schema cannot distinguish entity IDs from literals)", () => {
+    // Note: Schema validation cannot distinguish between entity IDs and literal strings
+    // because both are strings. The schema enforces structure, not semantic meaning.
+    // Entity ID validation happens at runtime via Relation.isEntityReference.
+    const validEntityIds = ["cristiano_ronaldo", "al_nassr"]
+    const properties = [
+      new PropertyDefinition({
+        id: "http://schema.org/birthDate",
+        label: "birth date",
+        comment: "Date of birth",
+        domain: [],
+        range: [],
+        rangeType: "datatype"
+      })
+    ]
+
+    const schema = makeRelationSchema(validEntityIds, properties)
+
+    // Datatype property accepts any string (including strings that look like entity IDs)
+    // The schema validates structure (string/number/boolean), not semantic meaning
+    const relation = {
+      relations: [
+        {
+          subjectId: "cristiano_ronaldo",
+          predicate: "http://schema.org/birthDate",
+          object: "al_nassr" // String literal - schema accepts it (can't distinguish from entity ID)
         }
       ]
     }
 
     const result = Schema.decodeUnknownSync(schema)(relation)
-    expect(result.relations[0].object).toBe("invalid_entity")
+    expect(result.relations[0].object).toBe("al_nassr")
+  })
+
+  it("should enforce rangeType constraints with mixed properties", () => {
+    const validEntityIds = ["cristiano_ronaldo", "al_nassr"]
+    const properties = [
+      new PropertyDefinition({
+        id: "http://schema.org/memberOf",
+        label: "member of",
+        comment: "Organization membership",
+        domain: [],
+        range: [],
+        rangeType: "object"
+      }),
+      new PropertyDefinition({
+        id: "http://schema.org/birthDate",
+        label: "birth date",
+        comment: "Date of birth",
+        domain: [],
+        range: [],
+        rangeType: "datatype"
+      })
+    ]
+
+    const schema = makeRelationSchema(validEntityIds, properties)
+
+    // Valid: object property with entity ID
+    const validObjectRelation = {
+      relations: [
+        {
+          subjectId: "cristiano_ronaldo",
+          predicate: "http://schema.org/memberOf",
+          object: "al_nassr" // Entity ID - valid for object property
+        }
+      ]
+    }
+    expect(() => Schema.decodeUnknownSync(schema)(validObjectRelation)).not.toThrow()
+
+    // Valid: datatype property with literal
+    const validDatatypeRelation = {
+      relations: [
+        {
+          subjectId: "cristiano_ronaldo",
+          predicate: "http://schema.org/birthDate",
+          object: "1985-02-05" // Literal - valid for datatype property
+        }
+      ]
+    }
+    expect(() => Schema.decodeUnknownSync(schema)(validDatatypeRelation)).not.toThrow()
+
+    // Invalid: object property with literal
+    const invalidObjectRelation = {
+      relations: [
+        {
+          subjectId: "cristiano_ronaldo",
+          predicate: "http://schema.org/memberOf",
+          object: "1985-02-05" // Literal - invalid for object property
+        }
+      ]
+    }
+    expect(() => Schema.decodeUnknownSync(schema)(invalidObjectRelation)).toThrow()
+
+    // Note: Schema cannot reject entity IDs for datatype properties because
+    // entity IDs are strings, and datatype properties accept strings.
+    // The distinction is semantic, not structural, so schema validation passes.
+    // Runtime validation (via Relation.isEntityReference) would catch this.
+    const datatypeRelationWithEntityId = {
+      relations: [
+        {
+          subjectId: "cristiano_ronaldo",
+          predicate: "http://schema.org/birthDate",
+          object: "al_nassr" // String that looks like entity ID - schema accepts as string literal
+        }
+      ]
+    }
+    // Schema accepts this because "al_nassr" is a valid string
+    const result = Schema.decodeUnknownSync(schema)(datatypeRelationWithEntityId)
+    expect(result.relations[0].object).toBe("al_nassr")
+  })
+
+  it("should handle all object properties correctly", () => {
+    const validEntityIds = ["entity_a", "entity_b"]
+    const properties = [
+      new PropertyDefinition({
+        id: "http://schema.org/knows",
+        label: "knows",
+        comment: "Knows relationship",
+        domain: [],
+        range: [],
+        rangeType: "object"
+      }),
+      new PropertyDefinition({
+        id: "http://schema.org/memberOf",
+        label: "member of",
+        comment: "Organization membership",
+        domain: [],
+        range: [],
+        rangeType: "object"
+      })
+    ]
+
+    const schema = makeRelationSchema(validEntityIds, properties)
+
+    // Should accept entity IDs for all object properties
+    const validRelation = {
+      relations: [
+        {
+          subjectId: "entity_a",
+          predicate: "http://schema.org/knows",
+          object: "entity_b"
+        },
+        {
+          subjectId: "entity_a",
+          predicate: "http://schema.org/memberOf",
+          object: "entity_b"
+        }
+      ]
+    }
+
+    const result = Schema.decodeUnknownSync(schema)(validRelation)
+    expect(result.relations).toHaveLength(2)
+  })
+
+  it("should handle all datatype properties correctly", () => {
+    const validEntityIds = ["entity_a"]
+    const properties = [
+      new PropertyDefinition({
+        id: "http://schema.org/name",
+        label: "name",
+        comment: "Entity name",
+        domain: [],
+        range: [],
+        rangeType: "datatype"
+      }),
+      new PropertyDefinition({
+        id: "http://schema.org/age",
+        label: "age",
+        comment: "Age in years",
+        domain: [],
+        range: [],
+        rangeType: "datatype"
+      })
+    ]
+
+    const schema = makeRelationSchema(validEntityIds, properties)
+
+    // Should accept literals for all datatype properties
+    const validRelation = {
+      relations: [
+        {
+          subjectId: "entity_a",
+          predicate: "http://schema.org/name",
+          object: "Alice"
+        },
+        {
+          subjectId: "entity_a",
+          predicate: "http://schema.org/age",
+          object: 30
+        }
+      ]
+    }
+
+    const result = Schema.decodeUnknownSync(schema)(validRelation)
+    expect(result.relations).toHaveLength(2)
   })
 })
 

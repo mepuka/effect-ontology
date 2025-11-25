@@ -8,7 +8,7 @@
  * @module Domain/Model/Entity
  */
 
-import { Schema } from "effect"
+import { Equal, Hash, pipe, Schema } from "effect"
 
 /**
  * Entity - Represents an extracted entity from text
@@ -167,6 +167,31 @@ export class Relation extends Schema.Class<Relation>("Relation")({
    */
   get isEntityReference(): boolean {
     return typeof this.object === "string" && /^[a-z][a-z0-9_]*$/.test(this.object)
+  }
+
+  /**
+   * Structural equality based on (subjectId, predicate, object) signature
+   */
+  [Equal.symbol](that: Relation): boolean {
+    return (
+      Equal.equals(this.subjectId, that.subjectId) &&
+      Equal.equals(this.predicate, that.predicate) &&
+      Equal.equals(this.object, that.object)
+    )
+  }
+
+  /**
+   * Structural hash based on (subjectId, predicate, object) signature
+   */
+  [Hash.symbol](): number {
+    return Hash.cached(
+      this,
+      pipe(
+        Hash.hash(this.subjectId),
+        Hash.combine(Hash.hash(this.predicate)),
+        Hash.combine(Hash.hash(this.object))
+      )
+    )
   }
 
   /**
