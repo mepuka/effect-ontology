@@ -22,7 +22,7 @@ describe("OntologyService - Football Ontology", () => {
   } as ConfigService)
 
   const TestLayer = Layer.mergeAll(
-    OntologyService.Default,
+    OntologyService.Default("/Users/pooks/Dev/effect-ontology/ontologies/football/ontology.ttl"),
     NlpService.Default,
     RdfBuilder.Default,
     TestConfig

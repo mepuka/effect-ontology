@@ -52,6 +52,12 @@ export interface TextChunk {
 export interface ChunkOptions {
   readonly preserveSentences?: boolean
   readonly maxChunkSize?: number
+  /**
+   * Number of sentences to overlap between consecutive chunks.
+   * Default: 2 (good balance for context preservation)
+   * Set to 0 for no overlap.
+   */
+  readonly overlapSentences?: number
 }
 
 /**
@@ -380,24 +386,46 @@ export class NlpService extends Effect.Service<NlpService>()(
           }),
 
         /**
-         * Chunk text while preserving sentence boundaries
+         * Chunk text while preserving sentence boundaries with optional overlap
+         *
+         * Uses wink-nlp's sentence segmentation to create context-preserving chunks.
+         * Supports overlapping chunks via sliding window approach for better context
+         * preservation across chunk boundaries.
          *
          * @param text - Text to chunk
          * @param options - Chunking options
          * @returns Array of text chunks with offsets
+         *
+         * @example
+         * ```typescript
+         * // Chunk with 2 sentence overlap
+         * const chunks = yield* nlp.chunkText(text, {
+         *   maxChunkSize: 500,
+         *   preserveSentences: true,
+         *   overlapSentences: 2
+         * })
+         * ```
          */
         chunkText: (
           text: string,
           options?: ChunkOptions
         ) =>
           Effect.sync(() => {
-            const { maxChunkSize = 500, preserveSentences = true } = options ?? {}
+            const {
+              maxChunkSize = 500,
+              overlapSentences = 2,
+              preserveSentences = true
+            } = options ?? {}
 
             const doc = nlp.readDoc(text)
             const sentences = doc.sentences().out() as Array<string>
 
+            if (sentences.length === 0) {
+              return []
+            }
+
             if (!preserveSentences) {
-              // Simple character-based chunking
+              // Simple character-based chunking (no overlap support)
               const chunks: Array<TextChunk> = []
               let currentChunk = ""
               let startOffset = 0
@@ -428,37 +456,97 @@ export class NlpService extends Effect.Service<NlpService>()(
               return chunks
             }
 
-            // Sentence-aware chunking
+            // Sentence-aware chunking with overlap support
             const chunks: Array<TextChunk> = []
-            let currentChunk: Array<string> = []
-            let currentSize = 0
-            let startOffset = 0
+            const overlap = Math.max(0, overlapSentences)
+
+            // Build sentence index with character offsets for accurate tracking
+            // This handles cases where sentences might appear multiple times in text
+            const sentenceIndex: Array<{ text: string; startOffset: number; endOffset: number }> = []
+            let searchOffset = 0
 
             for (const sentence of sentences) {
-              if (currentSize + sentence.length > maxChunkSize && currentChunk.length > 0) {
-                const chunkText = currentChunk.join(" ")
-                chunks.push({
-                  index: chunks.length,
-                  text: chunkText,
-                  startOffset,
-                  endOffset: startOffset + chunkText.length
+              const start = text.indexOf(sentence, searchOffset)
+              if (start >= 0) {
+                sentenceIndex.push({
+                  text: sentence,
+                  startOffset: start,
+                  endOffset: start + sentence.length
                 })
-                startOffset += chunkText.length + 1
-                currentChunk = []
-                currentSize = 0
+                searchOffset = start + sentence.length
+              } else {
+                // Fallback: estimate offset if sentence not found (shouldn't happen with wink-nlp)
+                const estimatedStart = searchOffset
+                sentenceIndex.push({
+                  text: sentence,
+                  startOffset: estimatedStart,
+                  endOffset: estimatedStart + sentence.length
+                })
+                searchOffset = estimatedStart + sentence.length + 1 // +1 for space
               }
-              currentChunk.push(sentence)
-              currentSize += sentence.length + 1
             }
 
-            if (currentChunk.length > 0) {
-              const chunkText = currentChunk.join(" ")
-              chunks.push({
-                index: chunks.length,
-                text: chunkText,
-                startOffset,
-                endOffset: startOffset + chunkText.length
-              })
+            // Sliding window approach with overlap
+            // Step size = window size - overlap (ensures overlap sentences are included in next chunk)
+            let i = 0
+            let chunkIndex = 0
+
+            while (i < sentences.length) {
+              // Build chunk by collecting sentences until we reach maxChunkSize
+              const chunkSentences: Array<string> = []
+              let chunkSize = 0
+
+              // Collect sentences for this chunk
+              for (let j = i; j < sentences.length; j++) {
+                const sentence = sentences[j]
+                const sentenceLength = sentence.length + (j > i ? 1 : 0) // +1 for space separator (except first)
+
+                // Check if adding this sentence would exceed max size
+                if (chunkSize + sentenceLength > maxChunkSize && chunkSentences.length > 0) {
+                  break
+                }
+
+                chunkSentences.push(sentence)
+                chunkSize += sentenceLength
+              }
+
+              if (chunkSentences.length > 0) {
+                const chunkText = chunkSentences.join(" ")
+                const chunkStartOffset = sentenceIndex[i]?.startOffset ?? 0
+                const lastSentenceIdx = i + chunkSentences.length - 1
+                const chunkEndOffset = sentenceIndex[lastSentenceIdx]?.endOffset ?? chunkStartOffset + chunkText.length
+
+                chunks.push({
+                  index: chunkIndex++,
+                  text: chunkText,
+                  startOffset: chunkStartOffset,
+                  endOffset: chunkEndOffset
+                })
+
+                // Calculate step size: move forward by (chunk size - overlap)
+                // This ensures the next chunk starts with `overlap` sentences from the previous chunk
+                const step = Math.max(1, chunkSentences.length - overlap)
+                i += step
+
+                // If we've processed all sentences, break
+                if (i >= sentences.length) {
+                  break
+                }
+              } else {
+                // Edge case: single sentence exceeds maxChunkSize - include it anyway
+                const sentence = sentences[i]
+                const chunkStartOffset = sentenceIndex[i]?.startOffset ?? 0
+                const chunkEndOffset = sentenceIndex[i]?.endOffset ?? chunkStartOffset + sentence.length
+
+                chunks.push({
+                  index: chunkIndex++,
+                  text: sentence,
+                  startOffset: chunkStartOffset,
+                  endOffset: chunkEndOffset
+                })
+
+                i += 1
+              }
             }
 
             return chunks

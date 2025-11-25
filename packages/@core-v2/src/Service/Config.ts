@@ -24,11 +24,14 @@ export interface Config {
    * LLM provider settings
    */
   readonly llm: {
-    readonly provider: string
+    readonly provider: "anthropic" | "openai" | "google"
     readonly model: string
     readonly timeoutMs: number
     readonly maxTokens: number
     readonly temperature: number
+    readonly anthropicApiKey: string
+    readonly openaiApiKey: string
+    readonly googleApiKey: string
   }
 
   /**
@@ -67,11 +70,14 @@ export interface Config {
  */
 export const DEFAULT_CONFIG: Config = {
   llm: {
-    provider: "openai",
-    model: "gpt-4-turbo-preview",
+    provider: "anthropic",
+    model: "claude-haiku-4-5",
     timeoutMs: 60_000,
     maxTokens: 4096,
-    temperature: 0.1
+    temperature: 0.1,
+    anthropicApiKey: "",
+    openaiApiKey: "",
+    googleApiKey: ""
   },
   rdf: {
     baseNamespace: "http://example.org/kg/",
