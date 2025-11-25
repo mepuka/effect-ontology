@@ -33,16 +33,16 @@ const GROUNDER_CONFIDENCE_THRESHOLD = 0.8
  * 5. Extract relations using RelationExtractor
  * 6. Merge all graph fragments into final KnowledgeGraph
  *
- * Uses Stream.mapEffectPar for parallel processing with bounded concurrency.
- * Final merge uses Stream.runFold with mergeGraphs monoid.
+ * Uses Stream.mapEffect with bounded concurrency and unordered processing
+ * for maximum throughput. Final merge uses Stream.runFold with mergeGraphs monoid.
  *
  * @param text - Source text to extract from
- * @param concurrency - Max parallel extraction tasks (default: 4)
+ * @param concurrency - Max parallel extraction tasks (default: 8)
  * @returns Effect yielding merged KnowledgeGraph
  *
  * @example
  * ```typescript
- * const graph = yield* streamingExtraction(text, 4)
+ * const graph = yield* streamingExtraction(text, 8)
  * ```
  *
  * @since 2.0.0
@@ -50,7 +50,7 @@ const GROUNDER_CONFIDENCE_THRESHOLD = 0.8
  */
 export const streamingExtraction = (
   text: string,
-  concurrency: number = 4
+  concurrency: number = 8
 ): Effect.Effect<
   KnowledgeGraph,
   ExtractionError,
@@ -99,7 +99,7 @@ export const streamingExtraction = (
       })
     }
 
-    // Phase 2-5: Process chunks in parallel with bounded concurrency
+    // Phase 2-5: Process chunks in parallel with bounded concurrency (unordered for max throughput)
     // Wrap each chunk in Effect.either to isolate failures - prevents fail-fast interruption
     const graphFragments = yield* Stream.fromIterable(chunks)
       .pipe(
@@ -436,7 +436,7 @@ export const streamingExtraction = (
                 })
               )
             ), // Close Effect.either
-          { concurrency }
+          { concurrency, unordered: true }
         ),
         // Handle Either results - log failures, return empty graphs for failed chunks
         Stream.mapEffect((result) =>

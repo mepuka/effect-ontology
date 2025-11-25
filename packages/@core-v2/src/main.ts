@@ -46,172 +46,110 @@ const program = Effect.gen(function*() {
 
   // Extract knowledge graph from text
   const kg = yield* streamingExtraction(
-    `Arsenal stretched their lead at the top of the Premier League table to six points by thrashing rivals Tottenham Hotspur 4-1 in the north London derby on Sunday at the Emirates Stadium.
+    `ANALYSIS
+Luke Shaw criticised by Gary Neville for 'ambling' in Man Utd's loss to Everton but was Ruben Amorim's inflexibility to blame?
 
-The first half was conducted almost entirely as an attack versus defence experiment. Spurs boss Thomas Frank went with a back five and challenged Arsenal to break his side down — something they nearly did early on when an Eberechi Eze scoop to Declan Rice was well saved by Guglielmo Vicario. The visitors’ tactics weren’t pretty but did frustrate Arsenal for much of the opening period.
+Luke Shaw came under fire as Man Utd's defeat to Everton raised more questions of Ruben Amorim's system; Gary Neville on Luke Shaw against Everton: "He's ambling. You can't do that. He should be running forward every single time"
 
-Advertisement
+By Nick Wright, Oliver Yew and Adam Smith
 
+Tuesday 25 November 2025 15:06, UK
 
-Such a defensive approach only looks wise if it works, though — and two well-constructed goals, from Leandro Trossard on 36 minutes and Eze five minutes later, put the hosts in the driving seat.
+Gary Neville slammed Luke Shaw's lack of intensity as Manchester United slumped to another low under head coach Ruben Amorim with their 1-0 defeat to 10-man Everton.
 
-And within a minute of the second half starting, Arsenal were three up — Eze again, with a lovely left-footed finish. The scoring hadn’t finished there, either. Richarlison reduced the deficit with a sensational long-range goal that caught David Raya way off his line but this was Eze’s day, and he completed an excellent hat-trick on 76 minutes to cap off a memorable day for both him and his new team.
+The 30-year-old, playing as the left-sided centre-back in Ruben Amorim's back three, was singled out for "ambling" forward as Manchester United tried, and failed, to recover from a goal down.
 
-Art de Roché, Jay Harris and Dan Sheldon break down the key moments from the game.
+Was the Sky Sports pundit's criticism justified? Or is Amorim's system a bigger problem? The defeat raised yet more questions of his devotion to using three at the back.
 
+Man Utd 0-1 Everton - report & highlights
+Got Sky? Watch Premier League games LIVE on your phone📱
+Not got Sky? Get Sky Sports or stream with no contract on NOW📺
+Have injuries taken a toll on Shaw?
 
+Shaw is one of four Manchester United players, along with Matthijs De Ligt, Bruno Fernandes and Bryan Mbeumo, to have started every Premier League game this season. It has been a rare period of availability for a player dogged by fitness issues.
 
-A seismic weekend in the title race?
-As rounds of Premier League matches go, this one could not have gone better for Arsenal.
+Last season, he only completed 90 minutes once in the Premier League, having only done so seven times in the campaign before that. You have to go back to 2022/23 for the last time he managed to feature consistently across a full season.
 
-With Manchester City and Liverpool both losing on Saturday, it created a significant opportunity for Arteta’s side to extend their lead at the top of the table. They are now seven points clear of third-place Manchester City and 11 ahead of Liverpool, whose title defence seems over before anyone has even had the chance to open the first door on their Advent calendars.
+Staying fit has proved a major challenge for Shaw.
 
+Once a marauding full-back with the energy to shuttle between the two boxes, his physicality is not what it used to be. His lack of intensity against Everton riled Neville with Manchester United trailing against 10 men and needing a goal.
 
-Ben Stansall/AFP via Getty Images
-By playing a day later than City and Liverpool, and knowing they had both dropped points, it added an element of pressure on Arsenal to ensure they capitalised on the chance to further cement their status as this season’s team to beat.
+Also See:
 
-And the fact they did this comfortably against Tottenham, who had not lost away from home in the league this season until losing at the Emirates on Sunday, will only make the weekend even sweeter.
+Man Utd fixtures
 
-Dan Sheldon
+Man Utd news and transfer latest
 
-Where does this result leave Frank?
-Tottenham enjoyed a relatively kind start to the season, which meant October and November was going to be the period when they were truly tested, with fixtures against Aston Villa, Chelsea, Manchester United and Arsenal. The fact they have failed to win any of those games only underlines the scale of the job on new head coach Frank’s hands.
+Watch FREE Premier League highlights
 
-Advertisement
+Stream the Premier League with no contract
 
+"You have Shaw, [Leny] Yoro and [Matthijs] De Ligt behind the ball," he said on co-commentary. "Shaw is getting forward more, but he's ambling forward, let's be clear. He's been bugging me for the last 20 minutes. He's ambling. You can't do that.
 
-What will be truly frustrating for the fanbase is that they failed to produce a good performance against any of those opponents. They had an impressive 10-minute spell at home against United but threw it away by allowing Matthijs de Ligt to snatch a draw in added time. Spurs offered barely any attacking threat against Chelsea and were torn apart today by Arsenal.
+Play Video - 'So disappointing' - Neville questions 'pedestrian' Man Utd in Everton defeat
+Speaking on the Gary Neville Podcast, the former Man Utd full-back called his former side's defeat against Everton an 'embarrassment'
 
+"He should be running forward every single time. I don't care. Yoro, I have a little bit more sympathy for but Shaw? That's a waste of time. I don't care. It's not conning anybody. I'm not having it."
 
-Julian Finney/Getty Images
-They are struggling without injured attacking trio Dominic Solanke, James Maddison and Dejan Kulusevski, but still possess enough quality in their squad to pose Arsenal more problems than they did.
+Shaw's physical decline can be seen in the numbers. There is a caveat in that he has been used in a role which requires less running under Amorim, as a centre-back rather than a full-back, but the drop-off in many areas predates the head coach's arrival.
 
-This result leaves Frank in a challenging position.
+Shaw's sprints and kilometres covered per 90 minutes have followed a downward trend and his attacking output has also declined.
 
-Supporters are becoming restless because this team seems to have plateaued over the past month. Frank needs to be bolder and more adventurous with his tactics. Awkward questions will be asked over how he started with a back five here, yet Spurs conceded four goals.
+Shaw has steadily contributed fewer crosses, goal involvements and chances created over the course of the last five seasons.
 
-He cannot be blamed for everything, though. The squad lacks quality in key areas, and that was painfully clear when Eze, who Tottenham tried to sign from Crystal Palace in the summer, scored a hat-trick. If Spurs had been more clinical in the transfer market, he would have been playing for them in this one, instead of embarrassing them.
+Neville: Complacent Man Utd performance will erode trust
 
-The worst thing is that things do not get any easier, as they are away at holders Paris Saint-Germain in the Champions League on Wednesday. Fans will be fearful that another chastening 90 minutes awaits.
+Gary Neville says Manchester United's performance in the 1-0 defeat to 10-man Everton "smelt of complacency" and will "erode trust" in Ruben Amorim's team.
 
-Jay Harris
+Why Shaw sums up Amorim's inflexibility
+Play Video - 'Amorim has to take a lot of the blame!' | Carra critical of United's tactics after loss
+Speaking on MNF, Jamie Carragher believes Ruben Amorim was at fault after Manchester United's 1-0 loss to Everton, with the Toffees going down to 10 men after only 13 minutes
 
-Just how good was Eze?
-What an afternoon this was for Eze. Just like when he was presented on the pitch after signing from Palace in August, the 27-year-old’s face told the story after his second goal.
+Despite Shaw's limitations, Amorim's system once again came under intense scrutiny.
 
-Arsenal’s No 10, a boyhood fan of the club, seemed in utter disbelief at what he had just done by putting them 3-0 up against their big local rivals, with two exceptional goals in his first north London derby as a player.
+Still trailing, Amorim made changes to try and get back into the game, bringing on Diogo Dalot for Patrick Dorgu and Kobbie Mainoo for Casemiro. They were like-for-like substitution as the United boss left Shaw, De Ligt and Yoro on the pitch, sticking with his three-at-the back system for the full 90 minutes.
 
+It was a move that left many Man Utd fans frustrated, particularly bringing on the right-footed Dalot to play in front of Shaw as the pair ended up getting in each other's way on Manchester United's left side.
 
-Justin Setterfield/Getty Images
-For his first, the close control on the edge of the box to create the opening is exactly what Arsenal have been looking to open games up for in recent years. The clinical strike off his left foot for his second was just indicative of someone who was in a flow state. Sitting down yet another Spurs defender before completing his hat-trick was the icing on the cake.
+"You have to have urgency and make the pitch as big as possible, and you have to put as many players as possible in forward areas," said Neville.
 
-Advertisement
+Image:
+Man Utd struggled early as 10-man Everton struck first, leaving United lacking a focal point in their push for an equaliser
 
+"Ruben Amorim has a question to answer," he added.
 
-Eze is the first player to score a hat-trick in the north London derby since Alan Sunderland did it for Arsenal in 1978.
+"Bringing Dalot on over there in front of Shaw? I don't quite see it. You have five at the back, why? Embarrassing.
 
-Hat-tricks in the north London derby
-Ted Drake
-Arsenal
-1934
-Terry Dyson
-Tottenham
-1961
-Alan Sunderland
-Arsenal
-1978
-Eberechi Eze
-Arsenal
-2025
-The backdrop of this game being the love triangle-like transfer saga that involved Eze and these two clubs in the summer will only make these goals sweeter.
+"This should be like the Alamo. Really quick, high-tempo passing side-to-side, getting into good wide areas, putting crosses in, getting bodies in attack, sustaining attacks. It's very slow from United. There is no presence in the box whatsoever."
 
-While Spurs seemed to be in the driving seat, Eze’s last-minute phone call to Arsenal manager Mikel Arteta showed just how much he wanted to rejoin the club — 14 years after they released him as a kid.
+Once again, Amorim being wedded to his 3-4-3 formation and his reluctance to change in-game proved costly for United. His devotion to playing three at the back has come to be seen as a flaw, especially when trying to chase games.
 
-He has since spoken openly about regularly asking whether Arsenal were interested in him when links to other clubs were brought to his attention, most recently with veteran striker turned podcaster Adebayo Akinfenwa earlier this week. He also spoke to actor Idris Elba for Sky Sports in the build-up to this game, so there’s no doubt the spotlight was on him.
+Questions will be asked again of Amorim and his flexibility. It's hard to see why he kept his three central defenders on the pitch and didn't throw extra attackers on against Everton when it was obvious they were lacking a focal point in the absence of the injured Benjamin Sesko and Matheus Cunha, something which was also highlighted by Jamie Carragher after the game on Monday Night Football.
 
-Spurs boss Frank had replied “Who?” when asked about Eze in his pre-match press conference on Friday.
+"Ruben Amorim feels like the first manager I've seen who sticks with a system rather than an idea of how to play," Carragher said. "It feels like the formation is his baby and to not change it or alter it in certain situations like that [against Everton], I don't understand how you can stick with it so steadfastly.
 
-It’s fair to say he won’t need any reminders now.
+"If you have to stick with the system, put a midfielder in defence, which we have seen managers do in the past, because you are going to have so much of the ball.
 
-Art de Roché
+"It's not about losing the three points against Everton, I think it is one of those moments where people will really question the manager. He will take a lot of the blame."
 
+Amorim: Man Utd are nowhere near where we should be
+Man Utd's underperforming wing-backs
 
+Amorim still has Lisandro Martinez to return from injury. The Argentina international will likely slot back into the left-sided centre-back role, but Shaw looks unsuited to playing at wing-back and Amorim's other options are also underperforming.
 
-Was Spurs’ first-half approach too meek?
-Tottenham set up in a 3-4-3 system which was all about frustrating Arteta’s side. It was the same game plan Frank used against them with previous club Brentford. The problem is that you have to show more bravery when you are in charge of Tottenham and playing away to their fiercest rivals.
+At Sporting, his wing-backs were attacking outlets vital in making his system work. In his final full season in charge, in 2023/24, Nuno Santos, Geny Catamo and Ricardo Esagio, his three most-used wing-backs, contributed a combined total of 26 goals or assists between them in league games alone.
 
-There have been a few occasions this season when Frank’s pragmatic tactics have worked — the best examples being the 2-0 victory at Manchester City in August and the preceding UEFA Super Cup against Paris Saint-Germain. But Spurs took the lead in both of those games, which forced their opponents to push up higher and allowed them to play on the counter.
+Play Video - 'Out of his depth!' | Players or Amorim? Who takes the blame for Man Utd defeat?
+Poor performance or bad tactics? Charlie Austin and Jamie O'Hara debate who should take responsibility for Man Utd's defeat to Everton
 
-Tottenham’s game plan worked for the first half an hour on Sunday but it was in tatters from the moment Trossard put Arsenal in front. They did not have the right blend of players on the pitch to be more expansive and take control of the game. Eze’s first goal, Arsenal’s second, hammered that point home.
+Amorim's wing-backs at Manchester United have contributed half as many goals or assists across a similar number of league games.
 
-Advertisement
+And nine of their 13 goals and assists, roughly 70 per cent, have come from Amad Diallo, with the others used in the position, Dorgu, Dalot, Noussair Mazraoui, Harry Amass and Tyrell Malacia, only managing four between them in a combined 67 starts at wing-back.
 
+The struggles of Amorim's wing-backs raise further questions about Amorim's devotion to his system. If they are not contributing offensively, then what are they really bringing to the table?
 
-Spurs did not have a single shot in the first half and only registered two touches in Arsenal’s penalty area. Frank abandoned the back three at half-time by bringing on forward Xavi Simons for centre-back Kevin Danso. That plan self-destructed less than a minute into the second half as Eze scored the third.
-
-
-Ben Stansall/AFP via Getty Images
-Richarlison’s spectacular lob might have made the scoreline look slightly better but it was a freak goal, as opposed to something which came from Spurs exerting dominance.
-
-Frank desperately needs to find a way to make this team more confident in possession. They have produced three meek Premier League performances in a row against Chelsea, Manchester United and Arsenal.
-
-Jay Harris
-
-How did Arsenal break through Spurs’ back five?
-With Viktor Gyokeres out through injury, Arsenal could not rely on anyone to repeatedly stretch Tottenham’s back five through energy alone.
-
-But they found another way to break it down: the scoop.
-
-In only the third minute, Eze played in Rice with a beautiful lofted ball over the top, which led to Vicario making a good stop to prevent Arsenal taking an early lead.
-
-However, when you have as many players as comfortable on the ball — and in tight spaces — as Arsenal do, then it is only ever going to be a matter of time before they try that move again. So, when Mikel Merino received the ball in front of the Spurs penalty area, looked up and spotted Trossard’s run, there was only going to be one outcome.
-
-
-
-The Spaniard played a perfectly-weighed pass over the defence into Trossard’s path, with the Belgian taking a touch and spinning his body before directing a shot into the bottom corner for the opening goal of the game.
-
-Dan Sheldon
-
-How did Piero Hincapie get on?
-With Gabriel now out for the foreseeable future, the biggest selection dilemma for Arteta would have been how to replace the Brazilian in central defence. He had three options in Piero Hincapie, Riccardo Calafiori and Cristhian Mosquera and opted for the most logical in Hincapie.
-
-Advertisement
-
-
-This was the 23-year-old Ecuador international’s first league start for Arsenal after signing from Bayer Leverkusen on loan late in the summer transfer window, but he stepped in without missing a beat.
-
-
-Julian Finney/Getty Images
-The William Saliba/Gabriel partnership is defined by their differences, as the latter tends to be the more aggressive defender of the two. That was the case with Hincapie in his place, as Saliba’s new partner was extremely comfortable defending in higher areas of the pitch.
-
-Early on, his interventions helped Arsenal pin Spurs into their half of the pitch, stopping the visitors gaining any momentum in the game. It was his battle with Mohammed Kudus that was particularly impressive, as he continuously disrupted the Spurs forward, negating any chances for him to carry Tottenham upfield.
-
-That combative approach was vital to setting the tone for Arsenal, and gave them a solid platform before they scored their two first-half goals.
-
-Art de Roché
-
-What did Mikel Arteta say?
-The Arsenal manager was delighted by his team’s performance in a comprehensive win: “Well, a great day. I enjoyed every minute of it, from the preparation, since the moment that the players came back from international duty I sensed a feeling that they wanted to be together again, that they were ready for a fight, they were ready for a big week, and the preparation was top.
-
-“Then you have to deliver it, obviously, with the energy that our people brought to the stadium. It makes a huge difference. I think, individually, the players were exceptional from the minute one. They were super-dominant in almost every phase of the play. So, yeah, a day to remember. You don’t win a derby 4-1 every time and hopefully we made a lot of Arsenal supporters very proud and happy.”
-
-Arteta praised Eze after his three-goal display: “Things happen for a reason. And after the international duty, he had two days off, and after one day he wanted to train, and he wanted to improve, and he wanted to do extra practice and he was asking me questions about this and that. And when a player has such a talent, and his desire is at that level, then these things happen. And he fully deserves it. I’m so happy for him, because since the day that he came, he brought something else to the team. So it’s a joy, it’s an aura that this team needed and hopefully it will give him a lot of confidence, him and the team, that at any moment he can win us a game. And that’s the ability that he has, and he certainly needs to fulfil that talent.”
-
-
-He was also asked about how much significance Arsenal going six points clear at the top of the table has: “In this league? Not much. We are doing really well. We’ve been really consistent, and that’s it. I mean, when you look at the results, whether they win or lose, the difference in the scoreline and actually what happens in games is really small.
-
-“We know that. We need players back immediately today. We’ve got Noni (Madueke, who had been out since September with a knee injury) back on the pitch, which is great, but we’re still missing a lot of important players and we’re going to need all of them.”
-
-What did Thomas Frank say?
-The Tottenham coach was understandably upset at his side’s display on Sunday. “Where should I start? This is, of course, hugely disappointing that we didn’t perform better in the game against Arsenal, our biggest rivals. I can only apologise to the fans for that.
-
-“I was very confident on Friday when we spoke (to the media) that we would be competitive today. We tried to come here and be aggressive and press high and, in spells, go after them. We didn’t succeed with that bit. We didn’t manage to get near enough to them in the situations we could. It means we got pushed back and got a little too passive. It looks like we are running after them. When we finally got on the ball, we were not good enough to get out of those situations.
-
-“No matter how painful it is to admit, they are definitely six years down the line and we are four months down the line, but even with that I was still expecting much more from us today. Not that we could dominate over 90 minutes but that we could be as competitive as we were against Manchester City and PSG.”
-
-Frank was also asked whether Tottenham’s lack of creativity this season (only three teams in the Premier League have a lower expected goals figure) was a concern: “It is, of course. We are working very hard to try to make that better, but sometimes it’s not only playing out and finding a nice pass but also in a game like this if you see some of the situations where they won it high, Arsenal, then there was a little bit more open space. We didn’t win it enough in those situations and then create from that.
-
-"For me the creativity, I know it was very low, but it was not my biggest concern today."`
+It is just one of many questions for their under-fire head coach, who can add Shaw's decline to a growing list of problems.
+`
   )
 
   console.log("\n=== Knowledge Graph Extracted ===")
