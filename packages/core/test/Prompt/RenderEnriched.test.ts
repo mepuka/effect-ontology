@@ -7,7 +7,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Data, Effect, HashMap, Option } from "effect"
 import { PropertyConstraint } from "../../src/Graph/Constraint"
-import { KnowledgeUnit, EnrichedStructuredPrompt } from "../../src/Prompt/Model"
+import { EnrichedStructuredPrompt, KnowledgeUnit } from "../../src/Prompt/Model"
 import { renderEnrichedStats, renderToEnrichedPrompt } from "../../src/Prompt/Renderer"
 
 describe("Prompt.RenderEnriched", () => {

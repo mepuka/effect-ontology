@@ -20,10 +20,7 @@ import { EntityDiscoveryServiceLive } from "../../src/Services/EntityDiscovery.j
 import { OntologyCacheLive } from "../../src/Services/OntologyCache.js"
 import { RdfService } from "../../src/Services/Rdf.js"
 import { RunServiceLive } from "../../src/Services/RunService.js"
-import {
-  WorkflowManagerService,
-  WorkflowManagerServiceLive
-} from "../../src/Services/WorkflowManager.js"
+import { WorkflowManagerService, WorkflowManagerServiceLive } from "../../src/Services/WorkflowManager.js"
 import { CheckpointCoordinatorService } from "../../src/Workflow/CheckpointCoordination.js"
 import type { ResumeWorkflowParams, StartWorkflowParams } from "../../src/Workflow/ExtractionWorkflow.js"
 
@@ -295,4 +292,3 @@ describe("WorkflowManagerService", () => {
       expect(count2).toBe(0)
     }).pipe(Effect.scoped, Effect.provide(testLayer)))
 })
-

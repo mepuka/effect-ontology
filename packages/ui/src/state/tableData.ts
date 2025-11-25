@@ -1,8 +1,8 @@
-import { runtime } from "../runtime/atoms"
-import { ontologyGraphAtom, enrichedPromptsAtom } from "./store"
-import { Effect, HashMap } from "effect"
 import { Result } from "@effect-atom/atom"
 import { isClassNode } from "@effect-ontology/core/Graph/Types"
+import { Effect, HashMap } from "effect"
+import { runtime } from "../runtime/atoms"
+import { enrichedPromptsAtom, ontologyGraphAtom } from "./store"
 
 /**
  * Ontology Classes Table Data
@@ -184,7 +184,7 @@ export const runningPromptsTableAtom = runtime.atom((get) =>
     const prompts = []
 
     for (const section of enriched.sections) {
-      const text = section.fragments.map(f => f.text).join("")
+      const text = section.fragments.map((f) => f.text).join("")
       const sources = new Set<string>()
 
       for (const frag of section.fragments) {

@@ -4,8 +4,8 @@
  * @module test/Schema/RelationFactory
  */
 
-import { describe, expect, it } from "vitest"
 import { JSONSchema, Schema } from "effect"
+import { describe, expect, it } from "vitest"
 import { PropertyDefinition } from "../../src/Domain/Model/Ontology.js"
 import { EmptyVocabularyError, makeRelationSchema } from "../../src/Schema/RelationFactory.js"
 
@@ -486,4 +486,3 @@ describe("makeRelationSchema", () => {
     expect(result.relations).toHaveLength(2)
   })
 })
-

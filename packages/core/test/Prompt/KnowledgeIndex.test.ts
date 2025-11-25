@@ -12,8 +12,8 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Data, Option } from "effect"
 import { PropertyConstraint } from "../../src/Graph/Constraint.js"
-import { KnowledgeUnit } from "../../src/Prompt/Model.js"
 import * as KnowledgeIndex from "../../src/Prompt/KnowledgeIndex.js"
+import { KnowledgeUnit } from "../../src/Prompt/Model.js"
 
 describe("KnowledgeIndex", () => {
   describe("KnowledgeUnit", () => {

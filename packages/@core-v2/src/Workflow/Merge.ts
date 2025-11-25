@@ -66,6 +66,67 @@ const RelationOrder: Order.Order<Relation> = Order.combine(
 )
 
 /**
+ * Select best types using frequency voting
+ *
+ * Counts occurrences of each type and selects the most frequent ones.
+ * Prefers types that appear in majority of occurrences.
+ *
+ * @param existingTypes - Types from existing entity
+ * @param newTypes - Types from new entity occurrence
+ * @returns Selected types (most frequent, up to 2-3 types)
+ *
+ * @internal
+ */
+const selectBestTypes = (
+  existingTypes: ReadonlyArray<string>,
+  newTypes: ReadonlyArray<string>
+): ReadonlyArray<string> => {
+  // Count type frequencies
+  const typeFrequency = new Map<string, number>()
+
+  // Count existing types (weighted as 1 occurrence)
+  for (const type of existingTypes) {
+    typeFrequency.set(type, (typeFrequency.get(type) || 0) + 1)
+  }
+
+  // Count new types (weighted as 1 occurrence)
+  for (const type of newTypes) {
+    typeFrequency.set(type, (typeFrequency.get(type) || 0) + 1)
+  }
+
+  // If only one type, return it
+  if (typeFrequency.size === 1) {
+    return Array.from(typeFrequency.keys())
+  }
+
+  // Sort by frequency (descending)
+  const sortedTypes = Array.from(typeFrequency.entries()).sort((a, b) => b[1] - a[1])
+
+  // Select top types:
+  // - If highest frequency is >= 2, take all types with that frequency
+  // - Otherwise, take top 2-3 types (but at least the most frequent)
+  const maxFrequency = sortedTypes[0]![1]
+  const selectedTypes: Array<string> = []
+
+  if (maxFrequency >= 2) {
+    // Majority voting: take all types that appear in majority
+    for (const [type, freq] of sortedTypes) {
+      if (freq >= maxFrequency) {
+        selectedTypes.push(type)
+      } else {
+        break
+      }
+    }
+    // Limit to top 3 even if multiple have same frequency
+    return selectedTypes.slice(0, 3)
+  } else {
+    // No clear majority: take top 2-3 most frequent
+    // Prefer keeping 1-2 types for clarity
+    return sortedTypes.slice(0, 2).map(([type]) => type)
+  }
+}
+
+/**
  * Merge two knowledge graphs
  *
  * Merges entities by `id` and relations by `(subjectId, predicate, object)` signature.
@@ -120,11 +181,8 @@ export const mergeGraphs = (a: KnowledgeGraph, b: KnowledgeGraph): KnowledgeGrap
     if (existing._tag === "Some") {
       // Merge attributes: union with preference for non-empty values
       const mergedAttributes = { ...existing.value.attributes, ...entity.attributes }
-      // Union types using HashSet for deduplication
-      const existingTypesSet = HashSet.fromIterable(existing.value.types)
-      const entityTypesSet = HashSet.fromIterable(entity.types)
-      const mergedTypesSet = HashSet.union(existingTypesSet, entityTypesSet)
-      const mergedTypes = HashSet.toValues(mergedTypesSet)
+      // Select best types using frequency voting (instead of union)
+      const mergedTypes = selectBestTypes(existing.value.types, entity.types)
       // Keep longest mention
       const mergedMention = entity.mention.length > existing.value.mention.length
         ? entity.mention
@@ -219,11 +277,8 @@ export const mergeGraphsWithConflicts = (
 
       // Merge attributes: union with preference for non-empty values
       const mergedAttributes = { ...existing.value.attributes, ...entity.attributes }
-      // Union types using HashSet for deduplication
-      const existingTypesSet = HashSet.fromIterable(existing.value.types)
-      const entityTypesSet = HashSet.fromIterable(entity.types)
-      const mergedTypesSet = HashSet.union(existingTypesSet, entityTypesSet)
-      const mergedTypes = HashSet.toValues(mergedTypesSet)
+      // Select best types using frequency voting (instead of union)
+      const mergedTypes = selectBestTypes(existing.value.types, entity.types)
       // Keep longest mention
       const mergedMention = entity.mention.length > existing.value.mention.length
         ? entity.mention

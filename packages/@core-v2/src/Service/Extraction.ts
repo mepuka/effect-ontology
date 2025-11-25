@@ -9,53 +9,29 @@
  */
 
 import { LanguageModel } from "@effect/ai"
-import { Chunk, Duration, Effect, JSONSchema, Layer, Schedule, Stream } from "effect"
-import { EntityExtractionFailed, RelationExtractionFailed } from "../Domain/Error/Extraction.js"
+import { Cause, Chunk, Duration, Effect, JSONSchema, Layer, Ref, Schedule, Stream } from "effect"
+import {
+  EntityExtractionFailed,
+  MentionExtractionFailed,
+  RelationExtractionFailed
+} from "../Domain/Error/Extraction.js"
 import { Entity, Relation } from "../Domain/Model/Entity.js"
 import type { ClassDefinition, PropertyDefinition } from "../Domain/Model/Ontology.js"
+import { generateEntityPrompt, generateMentionPrompt, generateRelationPrompt } from "../Prompt/index.js"
 import { makeEntitySchema } from "../Schema/EntityFactory.js"
+import { type Mention, MentionGraphSchema } from "../Schema/MentionFactory.js"
 import { makeRelationSchema } from "../Schema/RelationFactory.js"
+import {
+  annotateError,
+  annotateExtraction,
+  annotateLlmCall,
+  annotateRetry,
+  LlmAttributes
+} from "../Telemetry/LlmAttributes.js"
+import { buildCaseInsensitiveIriMap, normalizeIri } from "../Utils/Iri.js"
 import { ConfigService } from "./Config.js"
-
-/**
- * Build prompt for entity extraction
- *
- * Creates a prompt that includes the text, candidate classes, and extraction rules.
- *
- * @internal
- */
-const buildEntityPrompt = (
-  text: string,
-  candidates: ReadonlyArray<ClassDefinition>
-): string => {
-  const classList = candidates
-    .map((c) => `- ${c.id} (${c.label}): ${c.comment || "No description"}`)
-    .join("\n")
-
-  return `Extract all named entities from the following text and map them to the ontology classes listed below.
-
-TEXT TO EXTRACT FROM:
-${text}
-
-ALLOWED ONTOLOGY CLASSES:
-${classList}
-
-EXTRACTION RULES:
-1. Extract all named entities (people, places, organizations, concepts, etc.)
-2. Map each entity to at least one ontology class from the allowed list above
-3. Assign a unique snake_case ID to each entity (e.g., "cristiano_ronaldo" for "Cristiano Ronaldo")
-4. Use complete, human-readable names for mentions (e.g., "Stanford University" not "Stanford")
-5. Reuse the exact same ID when referring to the same entity
-6. Extract as many entities as possible
-7. Include optional attributes (property-value pairs) when mentioned in the text
-
-OUTPUT FORMAT:
-Return a JSON object with an "entities" array. Each entity should have:
-- id: snake_case unique identifier
-- mention: exact text from source
-- types: array of ontology class URIs (at least one required)
-- attributes: optional object with property URIs as keys and literal values (string/number/boolean) as values`
-}
+import { generateObjectWithFeedback } from "./GenerateWithFeedback.js"
+import { makeRetryPolicy } from "./Retry.js"
 
 /**
  * Generate deterministic snake_case ID from mention
@@ -86,13 +62,15 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
 
     const llm = yield* LanguageModel.LanguageModel
 
-    // Retry policy for LLM calls
-    const retryPolicy = Schedule.exponential(
-      Duration.millis(config.runtime.retryInitialDelayMs)
-    ).pipe(
-      Schedule.intersect(Schedule.recurs(config.runtime.retryMaxAttempts - 1)),
-      Schedule.jittered
-    )
+    // Note: generateObjectWithFeedback handles its own retry logic internally
+    // keeping this for potential future use in other operations
+    const _retryPolicy = makeRetryPolicy({
+      initialDelayMs: config.runtime.retryInitialDelayMs,
+      maxDelayMs: config.runtime.retryMaxDelayMs,
+      maxAttempts: config.runtime.retryMaxAttempts,
+      serviceName: "EntityExtractor"
+    })
+    void _retryPolicy
 
     return {
       /**
@@ -104,7 +82,8 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
        */
       extract: (
         text: string,
-        candidates: ReadonlyArray<ClassDefinition>
+        candidates: ReadonlyArray<ClassDefinition>,
+        datatypeProperties?: ReadonlyArray<PropertyDefinition>
       ) =>
         Effect.gen(function*() {
           // Validate candidates
@@ -117,11 +96,13 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
             )
           }
 
-          // Build prompt
-          const prompt = buildEntityPrompt(text, candidates)
+          const datatypeProps = datatypeProperties ?? []
 
-          // Create schema from candidate classes
-          const schema = makeEntitySchema(candidates)
+          // Build prompt using unified Prompt module (ensures schema-prompt alignment)
+          const prompt = generateEntityPrompt(text, candidates, datatypeProps)
+
+          // Create schema from candidate classes and datatype properties
+          const schema = makeEntitySchema(candidates, datatypeProps)
 
           // Log extraction stage details
           yield* Effect.logDebug("Entity extraction stage", {
@@ -141,6 +122,7 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
 
           // Log schema summary
           const jsonSchema = JSONSchema.make(schema)
+          const schemaJson = JSON.stringify(jsonSchema).slice(0, 2000)
           yield* Effect.logDebug("Entity extraction schema", {
             stage: "entity-extraction",
             schemaIdentifier: jsonSchema.$defs?.EntityGraph?.title || "EntityGraph",
@@ -148,23 +130,47 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
             allowedClassCount: candidates.length
           })
 
-          // Call LLM for structured output using LanguageModel.generateObject directly
-          const response = yield* llm.generateObject({
+          // Call LLM for structured output using generateObjectWithFeedback
+          // This handles retries with schema validation feedback automatically
+          const response = yield* generateObjectWithFeedback(llm, {
             prompt,
             schema,
-            objectName: "EntityGraph"
+            objectName: "EntityGraph",
+            maxAttempts: config.runtime.retryMaxAttempts,
+            serviceName: "EntityExtractor",
+            timeoutMs: config.llm.timeoutMs
           }).pipe(
-            Effect.timeout(Duration.millis(config.llm.timeoutMs)),
-            Effect.retry(retryPolicy),
-            Effect.withLogSpan("entity-extraction-llm-call"),
             Effect.tap((response) =>
-              Effect.logInfo("Entity extraction LLM response", {
-                stage: "entity-extraction",
-                entityCount: response.value.entities.length,
-                inputTokens: response.usage.inputTokens,
-                outputTokens: response.usage.outputTokens
-              })
+              Effect.all([
+                Effect.logInfo("Entity extraction LLM response", {
+                  stage: "entity-extraction",
+                  entityCount: response.value.entities.length,
+                  inputTokens: response.usage.inputTokens,
+                  outputTokens: response.usage.outputTokens
+                }),
+                annotateLlmCall({
+                  model: config.llm.model,
+                  provider: config.llm.provider,
+                  promptLength: prompt.length,
+                  inputTokens: response.usage.inputTokens,
+                  outputTokens: response.usage.outputTokens,
+                  promptText: prompt.slice(0, 2000),
+                  schemaJson
+                }),
+                annotateExtraction({
+                  entityCount: response.value.entities.length,
+                  candidateClassCount: candidates.length
+                })
+              ])
             ),
+            Effect.withSpan("entity-extraction-llm", {
+              attributes: {
+                [LlmAttributes.PROMPT_LENGTH]: prompt.length,
+                [LlmAttributes.CANDIDATE_CLASS_COUNT]: candidates.length,
+                [LlmAttributes.PROMPT_TEXT]: prompt.slice(0, 2000),
+                [LlmAttributes.REQUEST_SCHEMA]: schemaJson
+              }
+            }),
             Effect.mapError((error) =>
               new EntityExtractionFailed({
                 message: `LLM entity extraction failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -174,10 +180,17 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
             )
           )
 
+          // Build set of valid property IRIs for post-extraction filtering
+          // Schema is permissive (accepts any string keys), we filter invalid keys here
+          const validPropertyIris = new Set(
+            (datatypeProps ?? []).map((p) => p.id)
+          )
+
           // Convert to Entity domain models
           // Schema validation already enforced all constraints (types in candidate classes, ID format)
           // If generateObject succeeded, all entities are valid
           // Only perform business logic transformations (ID generation, attribute filtering)
+          let filteredAttributeCount = 0
           const entities = yield* Stream.fromIterable(response.value.entities)
             .pipe(
               Stream.map((entityData) => {
@@ -187,12 +200,19 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
                   entityId = generateEntityId(entityData.mention)
                 }
 
-                // Convert attributes to proper format (transformation, not validation)
+                // Convert attributes to proper format and filter invalid keys
+                // Only keep attributes with keys that are valid ontology property IRIs
                 const attributes: Record<string, string | number | boolean> = {}
                 if (entityData.attributes) {
                   for (const [key, value] of Object.entries(entityData.attributes)) {
-                    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-                      attributes[key] = value
+                    // Filter: only keep if validPropertyIris is empty (no constraints) or key is valid
+                    if (validPropertyIris.size === 0 || validPropertyIris.has(key)) {
+                      if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+                        attributes[key] = value
+                      }
+                    } else {
+                      // Track filtered attributes for logging
+                      filteredAttributeCount++
                     }
                   }
                 }
@@ -207,6 +227,15 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
               }),
               Stream.runCollect
             )
+
+          // Log if any attributes were filtered
+          if (filteredAttributeCount > 0) {
+            yield* Effect.logDebug("Filtered invalid attribute keys", {
+              stage: "entity-extraction",
+              filteredAttributeCount,
+              validPropertyCount: validPropertyIris.size
+            })
+          }
 
           // Log extracted entities summary
           const entityArray = Chunk.toReadonlyArray(entities)
@@ -235,7 +264,8 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
       _tag: "EntityExtractor" as const,
       extract: (
         _text: string,
-        candidates: ReadonlyArray<ClassDefinition>
+        candidates: ReadonlyArray<ClassDefinition>,
+        _datatypeProperties?: ReadonlyArray<PropertyDefinition>
       ): Effect.Effect<Chunk.Chunk<Entity>, EntityExtractionFailed, LanguageModel.LanguageModel> =>
         Effect.succeed(
           Chunk.fromIterable([
@@ -252,59 +282,162 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
 }
 
 /**
- * Build prompt for relation extraction
+ * MentionExtractor - Pre-Stage 1 mention detection
  *
- * Creates a prompt that includes the text, entities, and scoped properties.
+ * Extracts entity mentions from text without type assignment.
+ * This enables entity-level semantic search for better class retrieval.
  *
- * @internal
+ * @since 2.0.0
+ * @category Services
  */
-const buildRelationPrompt = (
-  text: string,
-  entities: Chunk.Chunk<Entity>,
-  properties: ReadonlyArray<PropertyDefinition>
-): string => {
-  const entityList = Chunk.toReadonlyArray(entities)
-    .map((e) => `- ${e.id} (${e.mention}): ${e.types.join(", ")}`)
-    .join("\n")
+export class MentionExtractor extends Effect.Service<MentionExtractor>()("MentionExtractor", {
+  effect: Effect.gen(function*() {
+    const config = yield* ConfigService
 
-  const propertyList = properties
-    .map((p) => {
-      const rangeNote = p.rangeType === "datatype" ? "literal value" : "entity ID"
-      return `- ${p.id} (${p.label}): ${p.comment || "No description"} - Expects ${rangeNote}`
+    const llm = yield* LanguageModel.LanguageModel
+
+    // Retry policy for LLM calls with logging and max delay cap
+    const retryPolicy = makeRetryPolicy({
+      initialDelayMs: config.runtime.retryInitialDelayMs,
+      maxDelayMs: config.runtime.retryMaxDelayMs,
+      maxAttempts: config.runtime.retryMaxAttempts,
+      serviceName: "MentionExtractor"
     })
-    .join("\n")
 
-  const entityIds = Chunk.toReadonlyArray(entities).map((e) => e.id)
+    return {
+      /**
+       * Extract entity mentions from text (without types)
+       *
+       * @param text - Source text to extract from
+       * @returns Chunk of extracted mentions
+       */
+      extract: (text: string) =>
+        Effect.gen(function*() {
+          // Build prompt using unified Prompt module (ensures schema-prompt alignment)
+          const prompt = generateMentionPrompt(text)
 
-  return `Extract relationships between entities from the following text.
+          yield* Effect.logDebug("Mention extraction stage", {
+            stage: "mention-extraction",
+            textLength: text.length,
+            textPreview: text.slice(0, 200)
+          })
 
-TEXT TO EXTRACT FROM:
-${text}
+          // Track retry count for observability
+          const retryCount = yield* Ref.make(0)
 
-EXTRACTED ENTITIES (from Stage 1):
-${entityList}
+          const response = yield* llm.generateObject({
+            prompt,
+            schema: MentionGraphSchema,
+            objectName: "MentionGraph"
+          }).pipe(
+            Effect.timeout(Duration.millis(config.llm.timeoutMs)),
+            Effect.retry(
+              retryPolicy.pipe(
+                Schedule.tapInput(() => Ref.update(retryCount, (n) => n + 1))
+              )
+            ),
+            Effect.tapErrorCause((cause) =>
+              Effect.all([
+                Effect.logError("Mention extraction LLM call failed, will retry", {
+                  stage: "mention-extraction",
+                  promptLength: prompt.length,
+                  textPreview: text.slice(0, 500),
+                  cause: Cause.pretty(cause)
+                }),
+                annotateError({
+                  errorType: Cause.isFailType(cause)
+                    ? (cause.error as Error).constructor?.name ?? "UnknownError"
+                    : "UnknownCause",
+                  errorMessage: Cause.pretty(cause).slice(0, 500)
+                })
+              ])
+            ),
+            Effect.tap((response) =>
+              Effect.gen(function*() {
+                const retries = yield* Ref.get(retryCount)
+                yield* Effect.all([
+                  Effect.logInfo("Mention extraction LLM response", {
+                    stage: "mention-extraction",
+                    mentionCount: response.value.mentions.length,
+                    inputTokens: response.usage.inputTokens,
+                    outputTokens: response.usage.outputTokens,
+                    retryCount: retries
+                  }),
+                  annotateLlmCall({
+                    model: config.llm.model,
+                    provider: config.llm.provider,
+                    promptLength: prompt.length,
+                    inputTokens: response.usage.inputTokens,
+                    outputTokens: response.usage.outputTokens,
+                    promptText: prompt.slice(0, 2000)
+                  }),
+                  annotateExtraction({
+                    mentionCount: response.value.mentions.length
+                  }),
+                  annotateRetry({
+                    retryCount: retries,
+                    maxAttempts: config.runtime.retryMaxAttempts
+                  })
+                ])
+              })
+            ),
+            Effect.withSpan("mention-extraction-llm", {
+              attributes: {
+                [LlmAttributes.PROMPT_LENGTH]: prompt.length,
+                [LlmAttributes.CHUNK_TEXT_LENGTH]: text.length,
+                [LlmAttributes.PROMPT_TEXT]: prompt.slice(0, 2000)
+              }
+            }),
+            Effect.mapError((error) =>
+              new MentionExtractionFailed({
+                message: `LLM mention extraction failed: ${error instanceof Error ? error.message : String(error)}`,
+                cause: error,
+                text
+              })
+            )
+          )
 
-ALLOWED PROPERTIES:
-${propertyList}
+          // Convert to Mention objects
+          const mentions = response.value.mentions.map((m): Mention => ({
+            id: m.id && /^[a-z][a-z0-9_]*$/.test(m.id)
+              ? m.id
+              : generateEntityId(m.mention),
+            mention: m.mention,
+            context: m.context
+          }))
 
-VALID ENTITY IDs (use these exact IDs):
-${entityIds.join(", ")}
+          yield* Effect.logInfo("Mention extraction complete", {
+            stage: "mention-extraction",
+            extractedCount: mentions.length,
+            mentionIds: mentions.map((m) => m.id).slice(0, 10)
+          })
 
-EXTRACTION RULES:
-1. Extract relationships between the entities listed above
-2. Subject MUST be one of the entity IDs from Stage 1
-3. Object can be either:
-   - An entity ID from Stage 1 (for relationships between entities)
-   - A literal string/number/boolean (for datatype properties)
-4. Predicate MUST be one of the allowed properties above
-5. Use the exact entity IDs from Stage 1 - do not create new IDs
-6. Extract as many relations as possible
-
-OUTPUT FORMAT:
-Return a JSON object with a "relations" array. Each relation should have:
-- subjectId: entity ID from Stage 1
-- predicate: property URI from allowed list
-- object: entity ID (for object properties) or literal value (for datatype properties)`
+          return Chunk.fromIterable(mentions)
+        })
+    }
+  }),
+  dependencies: [ConfigService.Default],
+  accessors: true
+}) {
+  /**
+   * Test layer with deterministic fake mentions
+   *
+   * @since 2.0.0
+   */
+  static Test = Layer.effect(
+    MentionExtractor,
+    Effect.succeed({
+      _tag: "MentionExtractor" as const,
+      extract: (
+        _text: string
+      ): Effect.Effect<Chunk.Chunk<Mention>, MentionExtractionFailed, LanguageModel.LanguageModel> =>
+        Effect.succeed(
+          Chunk.fromIterable([
+            { id: "test_entity", mention: "Test Entity", context: "A test entity" }
+          ])
+        )
+    } as MentionExtractor)
+  )
 }
 
 /**
@@ -321,13 +454,13 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
 
     const llm = yield* LanguageModel.LanguageModel
 
-    // Retry policy for LLM calls
-    const retryPolicy = Schedule.exponential(
-      Duration.millis(config.runtime.retryInitialDelayMs)
-    ).pipe(
-      Schedule.intersect(Schedule.recurs(config.runtime.retryMaxAttempts - 1)),
-      Schedule.jittered
-    )
+    // Retry policy for LLM calls with logging and max delay cap
+    const retryPolicy = makeRetryPolicy({
+      initialDelayMs: config.runtime.retryInitialDelayMs,
+      maxDelayMs: config.runtime.retryMaxDelayMs,
+      maxAttempts: config.runtime.retryMaxAttempts,
+      serviceName: "RelationExtractor"
+    })
 
     return {
       /**
@@ -357,8 +490,8 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
           // Extract entity IDs for schema constraints
           const validEntityIds = entityArray.map((e) => e.id)
 
-          // Build prompt
-          const prompt = buildRelationPrompt(text, entities, properties)
+          // Build prompt using unified Prompt module (ensures schema-prompt alignment)
+          const prompt = generateRelationPrompt(text, entityArray, properties)
 
           // Create schema from entity IDs and properties
           const schema = makeRelationSchema(validEntityIds, properties)
@@ -383,6 +516,7 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
 
           // Log schema summary
           const jsonSchema = JSONSchema.make(schema)
+          const schemaJson = JSON.stringify(jsonSchema).slice(0, 2000)
           yield* Effect.logDebug("Relation extraction schema", {
             stage: "relation-extraction",
             schemaIdentifier: jsonSchema.$defs?.RelationGraph?.title || "RelationGraph",
@@ -391,6 +525,9 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
             allowedPropertyCount: properties.length
           })
 
+          // Track retry count for observability
+          const retryCount = yield* Ref.make(0)
+
           // Call LLM for structured output using LanguageModel.generateObject directly
           const response = yield* llm.generateObject({
             prompt,
@@ -398,16 +535,68 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
             objectName: "RelationGraph"
           }).pipe(
             Effect.timeout(Duration.millis(config.llm.timeoutMs)),
-            Effect.retry(retryPolicy),
-            Effect.withLogSpan("relation-extraction-llm-call"),
+            Effect.retry(
+              retryPolicy.pipe(
+                Schedule.tapInput(() => Ref.update(retryCount, (n) => n + 1))
+              )
+            ),
+            Effect.tapErrorCause((cause) =>
+              Effect.all([
+                Effect.logError("Relation extraction LLM call failed, will retry", {
+                  stage: "relation-extraction",
+                  promptLength: prompt.length,
+                  entityCount: entityArray.length,
+                  propertyCount: properties.length,
+                  textPreview: text.slice(0, 500),
+                  cause: Cause.pretty(cause)
+                }),
+                annotateError({
+                  errorType: Cause.isFailType(cause)
+                    ? (cause.error as Error).constructor?.name ?? "UnknownError"
+                    : "UnknownCause",
+                  errorMessage: Cause.pretty(cause).slice(0, 500)
+                })
+              ])
+            ),
             Effect.tap((response) =>
-              Effect.logInfo("Relation extraction LLM response", {
-                stage: "relation-extraction",
-                relationCount: response.value.relations.length,
-                inputTokens: response.usage.inputTokens,
-                outputTokens: response.usage.outputTokens
+              Effect.gen(function*() {
+                const retries = yield* Ref.get(retryCount)
+                yield* Effect.all([
+                  Effect.logInfo("Relation extraction LLM response", {
+                    stage: "relation-extraction",
+                    relationCount: response.value.relations.length,
+                    inputTokens: response.usage.inputTokens,
+                    outputTokens: response.usage.outputTokens,
+                    retryCount: retries
+                  }),
+                  annotateLlmCall({
+                    model: config.llm.model,
+                    provider: config.llm.provider,
+                    promptLength: prompt.length,
+                    inputTokens: response.usage.inputTokens,
+                    outputTokens: response.usage.outputTokens,
+                    promptText: prompt.slice(0, 2000),
+                    schemaJson
+                  }),
+                  annotateExtraction({
+                    relationCount: response.value.relations.length,
+                    entityCount: entityArray.length
+                  }),
+                  annotateRetry({
+                    retryCount: retries,
+                    maxAttempts: config.runtime.retryMaxAttempts
+                  })
+                ])
               })
             ),
+            Effect.withSpan("relation-extraction-llm", {
+              attributes: {
+                [LlmAttributes.PROMPT_LENGTH]: prompt.length,
+                [LlmAttributes.ENTITY_COUNT]: entityArray.length,
+                [LlmAttributes.PROMPT_TEXT]: prompt.slice(0, 2000),
+                [LlmAttributes.REQUEST_SCHEMA]: schemaJson
+              }
+            }),
             Effect.mapError((error) =>
               new RelationExtractionFailed({
                 message: `LLM relation extraction failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -417,18 +606,22 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
             )
           )
 
-          // Convert to Relation domain models
+          // Convert to Relation domain models with IRI normalization
           // Schema validation already enforced all constraints (subjectId, predicate, rangeType)
           // If generateObject succeeded, all relations are valid
+          // Post-extraction normalization ensures canonical IRI casing as a backup
+          const propertyIriMap = buildCaseInsensitiveIriMap(properties.map((p) => p.id))
           const relations = yield* Stream.fromIterable(response.value.relations)
             .pipe(
-              Stream.map((relationData) =>
-                new Relation({
+              Stream.map((relationData) => {
+                // Normalize predicate IRI casing to match canonical ontology form
+                const normalizedPredicate = normalizeIri(relationData.predicate, propertyIriMap)
+                return new Relation({
                   subjectId: relationData.subjectId,
-                  predicate: relationData.predicate,
+                  predicate: normalizedPredicate,
                   object: relationData.object
                 })
-              ),
+              }),
               Stream.runCollect
             )
 

@@ -75,4 +75,3 @@ export const generateIri = (
   const sanitized = sanitizeEntityName(name)
   return `${baseUri}${sanitized}`
 }
-

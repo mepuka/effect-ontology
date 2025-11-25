@@ -40,8 +40,8 @@ import * as N3 from "n3"
 import { RdfError } from "../Extraction/Events.js"
 import type { OntologyContext } from "../Graph/Types.js"
 import { isClassNode } from "../Graph/Types.js"
-import { generateIri } from "./IriUtils.js"
 import type { TripleGraph } from "../Schema/TripleFactory.js"
+import { generateIri } from "./IriUtils.js"
 
 /**
  * Re-exported N3 types for type safety
@@ -426,40 +426,39 @@ export class RdfService extends Effect.Service<RdfService>()("RdfService", {
             // Add predicate triple
             const predicate = namedNode(triple.predicate)
 
-            const object =
-              typeof triple.object === "string"
-                ? (() => {
-                    // Literal value - infer datatype from ontology
-                    const normalizedValue = triple.object.trim()
-                    const datatype = inferDatatype(triple.predicate, ontology)
-                    return datatype
-                      ? literal(normalizedValue, datatype)
-                      : literal(normalizedValue)
-                  })()
-                : (() => {
-                    // Entity reference
-                    const objectIri = getOrCreateIri(triple.object.value)
+            const object = typeof triple.object === "string"
+              ? (() => {
+                // Literal value - infer datatype from ontology
+                const normalizedValue = triple.object.trim()
+                const datatype = inferDatatype(triple.predicate, ontology)
+                return datatype
+                  ? literal(normalizedValue, datatype)
+                  : literal(normalizedValue)
+              })()
+              : (() => {
+                // Entity reference
+                const objectIri = getOrCreateIri(triple.object.value)
 
-                    // Add type for object entity
-                    store.addQuad(
-                      quad(
-                        namedNode(objectIri),
-                        namedNode("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
-                        namedNode(triple.object.type)
-                      )
-                    )
+                // Add type for object entity
+                store.addQuad(
+                  quad(
+                    namedNode(objectIri),
+                    namedNode("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+                    namedNode(triple.object.type)
+                  )
+                )
 
-                    // Add label for object entity
-                    store.addQuad(
-                      quad(
-                        namedNode(objectIri),
-                        namedNode("http://www.w3.org/2000/01/rdf-schema#label"),
-                        literal(triple.object.value)
-                      )
-                    )
+                // Add label for object entity
+                store.addQuad(
+                  quad(
+                    namedNode(objectIri),
+                    namedNode("http://www.w3.org/2000/01/rdf-schema#label"),
+                    literal(triple.object.value)
+                  )
+                )
 
-                    return namedNode(objectIri)
-                  })()
+                return namedNode(objectIri)
+              })()
 
             store.addQuad(quad(subject, predicate, object))
           }
@@ -738,40 +737,39 @@ export class RdfService extends Effect.Service<RdfService>()("RdfService", {
           // Add predicate triple
           const predicate = namedNode(triple.predicate)
 
-          const object =
-            typeof triple.object === "string"
-              ? (() => {
-                  // Literal value - infer datatype from ontology
-                  const normalizedValue = triple.object.trim()
-                  const datatype = inferDatatype(triple.predicate, ontology)
-                  return datatype
-                    ? literal(normalizedValue, datatype)
-                    : literal(normalizedValue)
-                })()
-              : (() => {
-                  // Entity reference
-                  const objectIri = getOrCreateIri(triple.object.value)
+          const object = typeof triple.object === "string"
+            ? (() => {
+              // Literal value - infer datatype from ontology
+              const normalizedValue = triple.object.trim()
+              const datatype = inferDatatype(triple.predicate, ontology)
+              return datatype
+                ? literal(normalizedValue, datatype)
+                : literal(normalizedValue)
+            })()
+            : (() => {
+              // Entity reference
+              const objectIri = getOrCreateIri(triple.object.value)
 
-                  // Add type for object entity
-                  store.addQuad(
-                    quad(
-                      namedNode(objectIri),
-                      namedNode("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
-                      namedNode(triple.object.type)
-                    )
-                  )
+              // Add type for object entity
+              store.addQuad(
+                quad(
+                  namedNode(objectIri),
+                  namedNode("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+                  namedNode(triple.object.type)
+                )
+              )
 
-                  // Add label for object entity
-                  store.addQuad(
-                    quad(
-                      namedNode(objectIri),
-                      namedNode("http://www.w3.org/2000/01/rdf-schema#label"),
-                      literal(triple.object.value)
-                    )
-                  )
+              // Add label for object entity
+              store.addQuad(
+                quad(
+                  namedNode(objectIri),
+                  namedNode("http://www.w3.org/2000/01/rdf-schema#label"),
+                  literal(triple.object.value)
+                )
+              )
 
-                  return namedNode(objectIri)
-                })()
+              return namedNode(objectIri)
+            })()
 
           store.addQuad(quad(subject, predicate, object))
         }

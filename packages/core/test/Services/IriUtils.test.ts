@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { sanitizeEntityName, generateIri } from "../../src/Services/IriUtils.js"
+import { generateIri, sanitizeEntityName } from "../../src/Services/IriUtils.js"
 
 describe("IriUtils", () => {
   describe("sanitizeEntityName", () => {
@@ -76,4 +76,3 @@ describe("IriUtils", () => {
     })
   })
 })
-

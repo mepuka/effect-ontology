@@ -29,4 +29,3 @@ export class EmptyVocabularyError extends Schema.TaggedError<EmptyVocabularyErro
     })
   }
 ) {}
-

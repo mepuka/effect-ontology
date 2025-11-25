@@ -5,4 +5,6 @@
  * @module Utils
  */
 
+export * from "./Iri.js"
 export * from "./Rdf.js"
+export * from "./String.js"

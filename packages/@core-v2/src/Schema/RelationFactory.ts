@@ -13,6 +13,7 @@
 
 import { Array as A, Schema as S } from "effect"
 import type { PropertyDefinition } from "../Domain/Model/Ontology.js"
+import { buildCaseInsensitiveIriMap, normalizeIri } from "../Utils/Iri.js"
 import { EmptyVocabularyError } from "./Errors.js"
 
 // Re-export for convenience
@@ -39,6 +40,53 @@ const unionFromStringArray = <T extends string>(
 
   // Union them - TypeScript will infer the correct type
   return S.Union(...literals)
+}
+
+/**
+ * Helper: Creates a case-insensitive IRI schema
+ *
+ * Accepts any string input, normalizes casing to match canonical IRIs,
+ * then validates that the normalized value is in the allowed list.
+ * This handles the mismatch between ontology IRI local names (PascalCase)
+ * and rdfs:label values (camelCase) that LLMs may use interchangeably.
+ *
+ * @internal
+ */
+const caseInsensitiveIriSchema = (
+  values: ReadonlyArray<string>,
+  errorType: "classes" | "properties"
+): S.Schema<string> => {
+  if (A.isEmptyReadonlyArray(values)) {
+    throw new EmptyVocabularyError({
+      message: `Cannot create schema with zero ${errorType} IRIs`,
+      type: errorType
+    })
+  }
+
+  // Build case-insensitive lookup map
+  const iriMap = buildCaseInsensitiveIriMap(values)
+  const validIris = new Set(values)
+
+  // Transform schema: normalize casing on decode, pass through on encode
+  return S.transform(
+    S.String, // Input: any string
+    S.String, // Output: normalized string
+    {
+      decode: (input) => normalizeIri(input, iriMap),
+      encode: (canonical) => canonical
+    }
+  ).pipe(
+    // After normalization, filter to ensure it's a valid IRI
+    S.filter(
+      (iri) => validIris.has(iri),
+      {
+        message: () =>
+          `IRI not in allowed ${errorType} list (checked case-insensitively). Valid options: ${
+            values.slice(0, 5).join(", ")
+          }${values.length > 5 ? "..." : ""}`
+      }
+    )
+  )
 }
 
 /**
@@ -93,12 +141,13 @@ export const makeRelationSchema = (
   const objectProperties = properties.filter((p) => p.rangeType === "object")
   const datatypeProperties = properties.filter((p) => p.rangeType === "datatype")
 
-  // Create property unions for each type
+  // Create case-insensitive property IRI schemas for each type
+  // This handles the mismatch between ontology IRI casing and LLM output
   const ObjectPropertyUnion = objectProperties.length > 0
-    ? unionFromStringArray(objectProperties.map((p) => p.id), "properties")
+    ? caseInsensitiveIriSchema(objectProperties.map((p) => p.id), "properties")
     : null
   const DatatypePropertyUnion = datatypeProperties.length > 0
-    ? unionFromStringArray(datatypeProperties.map((p) => p.id), "properties")
+    ? caseInsensitiveIriSchema(datatypeProperties.map((p) => p.id), "properties")
     : null
 
   // Create relation schemas discriminated by rangeType

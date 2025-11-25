@@ -6,12 +6,7 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Option } from "effect"
-import {
-  EnrichedStructuredPrompt,
-  estimateTokenCount,
-  FragmentMetadata,
-  PromptFragment
-} from "../../src/Prompt/Model"
+import { EnrichedStructuredPrompt, estimateTokenCount, FragmentMetadata, PromptFragment } from "../../src/Prompt/Model"
 
 describe("Prompt.Fragment", () => {
   describe("PromptFragment", () => {

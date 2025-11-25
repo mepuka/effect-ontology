@@ -7,7 +7,8 @@
  * @module Prompt/EmbeddingIndex
  */
 
-import { HashMap, Option } from "effect"
+import type { Option } from "effect"
+import { HashMap } from "effect"
 
 /**
  * EmbeddedEntry - A text with its embedding and metadata
@@ -45,50 +46,42 @@ export const combine = (left: EmbeddingIndex, right: EmbeddingIndex): EmbeddingI
 /**
  * Monoid: Combine multiple indexes
  */
-export const combineAll = (indexes: ReadonlyArray<EmbeddingIndex>): EmbeddingIndex =>
-  indexes.reduce(combine, empty())
+export const combineAll = (indexes: ReadonlyArray<EmbeddingIndex>): EmbeddingIndex => indexes.reduce(combine, empty())
 
 /**
  * Create index from single entry
  */
-export const fromEntry = (entry: EmbeddedEntry): EmbeddingIndex =>
-  HashMap.make([entry.id, entry])
+export const fromEntry = (entry: EmbeddedEntry): EmbeddingIndex => HashMap.make([entry.id, entry])
 
 /**
  * Create index from multiple entries
  */
-export const fromEntries = (entries: ReadonlyArray<EmbeddedEntry>): EmbeddingIndex =>
-  combineAll(entries.map(fromEntry))
+export const fromEntries = (entries: ReadonlyArray<EmbeddedEntry>): EmbeddingIndex => combineAll(entries.map(fromEntry))
 
 /**
  * Get entry by id
  */
-export const get = (index: EmbeddingIndex, id: string): Option.Option<EmbeddedEntry> =>
-  HashMap.get(index, id)
+export const get = (index: EmbeddingIndex, id: string): Option.Option<EmbeddedEntry> => HashMap.get(index, id)
 
 /**
  * Check if id exists
  */
-export const has = (index: EmbeddingIndex, id: string): boolean =>
-  HashMap.has(index, id)
+export const has = (index: EmbeddingIndex, id: string): boolean => HashMap.has(index, id)
 
 /**
  * Get all entries
  */
-export const values = (index: EmbeddingIndex): Iterable<EmbeddedEntry> =>
-  HashMap.values(index)
+export const values = (index: EmbeddingIndex): Iterable<EmbeddedEntry> => HashMap.values(index)
 
 /**
  * Convert to array
  */
-export const toArray = (index: EmbeddingIndex): ReadonlyArray<EmbeddedEntry> =>
-  Array.from(values(index))
+export const toArray = (index: EmbeddingIndex): ReadonlyArray<EmbeddedEntry> => Array.from(values(index))
 
 /**
  * Get index size
  */
-export const size = (index: EmbeddingIndex): number =>
-  HashMap.size(index)
+export const size = (index: EmbeddingIndex): number => HashMap.size(index)
 
 /**
  * Filter by predicate
@@ -99,8 +92,7 @@ export const size = (index: EmbeddingIndex): number =>
 export const filterByPredicate = (
   index: EmbeddingIndex,
   predicate: string
-): EmbeddingIndex =>
-  HashMap.filter(index, (entry) => entry.predicates.includes(predicate))
+): EmbeddingIndex => HashMap.filter(index, (entry) => entry.predicates.includes(predicate))
 
 /**
  * Filter by any of the given predicates
@@ -110,9 +102,7 @@ export const filterByPredicates = (
   predicates: ReadonlyArray<string>
 ): EmbeddingIndex => {
   const predicateSet = new Set(predicates)
-  return HashMap.filter(index, (entry) =>
-    entry.predicates.some((p) => predicateSet.has(p))
-  )
+  return HashMap.filter(index, (entry) => entry.predicates.some((p) => predicateSet.has(p)))
 }
 
 /**
@@ -121,8 +111,4 @@ export const filterByPredicates = (
 export const filterByEntityType = (
   index: EmbeddingIndex,
   entityType: string
-): EmbeddingIndex =>
-  HashMap.filter(index, (entry) =>
-    entry.entityTypes?.includes(entityType) ?? false
-  )
-
+): EmbeddingIndex => HashMap.filter(index, (entry) => entry.entityTypes?.includes(entityType) ?? false)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
-import { LlmAttributes, annotateLlmCall } from "../../src/Telemetry/LlmAttributes.js"
+import { annotateLlmCall, LlmAttributes } from "../../src/Telemetry/LlmAttributes.js"
 
 describe("LlmAttributes", () => {
   describe("constants", () => {
@@ -37,8 +37,7 @@ describe("LlmAttributes", () => {
 
         // If we get here, the function executed successfully
         expect(true).toBe(true)
-      })
-    )
+      }))
 
     it.effect("handles optional parameters correctly", () =>
       Effect.gen(function*() {
@@ -57,11 +56,10 @@ describe("LlmAttributes", () => {
           inputTokens: 500,
           outputTokens: 200,
           promptText: "Extract entities...",
-          responseText: '{"entities": []}'
+          responseText: "{\"entities\": []}"
         }).pipe(Effect.withSpan("test-span-full"))
 
         expect(true).toBe(true)
-      })
-    )
+      }))
   })
 })

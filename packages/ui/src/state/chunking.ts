@@ -6,16 +6,16 @@
  */
 
 import { Atom } from "@effect-atom/atom"
-import { Effect } from "effect"
 import {
-  type ChunkingConfig,
   type ChunkInfo,
+  type ChunkingConfig,
   defaultSemanticConfig,
-  makeSemanticChunkingConfig,
+  getChunkCoverage,
   makeCharacterChunkingConfig,
-  previewChunks,
-  getChunkCoverage
+  makeSemanticChunkingConfig,
+  previewChunks
 } from "@effect-ontology/core/Services/ChunkingStrategy"
+import { Effect } from "effect"
 import { runtime } from "../runtime/atoms"
 import { extractionInputAtom } from "./extraction"
 
@@ -40,7 +40,7 @@ export const chunksPreviewAtom = runtime.atom((get) =>
     const config = get(chunkingConfigAtom)
 
     if (!text.trim()) {
-      return [] as ChunkInfo[]
+      return [] as Array<ChunkInfo>
     }
 
     return previewChunks(text, config)
@@ -74,10 +74,9 @@ export const setChunkingStrategy = (
   windowSize?: number,
   overlap?: number
 ) => {
-  const config =
-    strategy === "semantic"
-      ? makeSemanticChunkingConfig({ windowSize, overlap })
-      : makeCharacterChunkingConfig({ windowSize, overlap })
+  const config = strategy === "semantic"
+    ? makeSemanticChunkingConfig({ windowSize, overlap })
+    : makeCharacterChunkingConfig({ windowSize, overlap })
 
   return Atom.set(chunkingConfigAtom, config)
 }

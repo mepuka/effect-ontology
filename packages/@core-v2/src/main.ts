@@ -1,6 +1,6 @@
 import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { Effect, Layer } from "effect"
-import { ExtractionLayersLive } from "./Runtime/ProductionRuntime.js"
+import { ProductionLayersWithTracing } from "./Runtime/ProductionRuntime.js"
 import { OntologyService } from "./Service/Ontology.js"
 import { extractToTurtle } from "./Workflow/TwoStageExtraction.js"
 
@@ -13,7 +13,7 @@ const FootballOntologyLayer = OntologyService.Default(
 ).pipe(Layer.provideMerge(BunContext.layer))
 
 const Live = Layer.mergeAll(
-  ExtractionLayersLive.pipe(Layer.provide(ConfigService.Default)),
+  ProductionLayersWithTracing.pipe(Layer.provide(ConfigService.Default)),
   FootballOntologyLayer,
   NlpService.Default,
   RdfBuilder.Default

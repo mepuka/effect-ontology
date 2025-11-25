@@ -25,8 +25,7 @@ describe("DynamicFewShotService", () => {
         expect(ex.text).toBeDefined()
         expect(ex.score).toBeGreaterThanOrEqual(0)
       }
-    }).pipe(Effect.provide(testLayer))
-  )
+    }).pipe(Effect.provide(testLayer)))
 
   it.effect("selectExamples with predicate filter", () =>
     Effect.gen(function*() {
@@ -38,8 +37,7 @@ describe("DynamicFewShotService", () => {
       })
 
       expect(selected.length).toBeLessThanOrEqual(3)
-    }).pipe(Effect.provide(testLayer))
-  )
+    }).pipe(Effect.provide(testLayer)))
 
   it.effect("renderSelectedExamples produces string array", () =>
     Effect.gen(function*() {
@@ -54,7 +52,5 @@ describe("DynamicFewShotService", () => {
       for (const r of rendered) {
         expect(r).toContain("Text:")
       }
-    }).pipe(Effect.provide(testLayer))
-  )
+    }).pipe(Effect.provide(testLayer)))
 })
-

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Layer } from "effect"
-import { makeTracingLayer, TracingTestLayer, type TracingConfig } from "../../src/Telemetry/Tracing.js"
+import { makeTracingLayer, type TracingConfig, TracingTestLayer } from "../../src/Telemetry/Tracing.js"
 
 describe("Tracing", () => {
   describe("makeTracingLayer", () => {
@@ -29,7 +29,6 @@ describe("Tracing", () => {
       Effect.gen(function*() {
         // Should run without errors
         yield* Effect.void
-      }).pipe(Effect.provide(TracingTestLayer))
-    )
+      }).pipe(Effect.provide(TracingTestLayer)))
   })
 })
