@@ -287,6 +287,96 @@ export const ENTITY_STATIC_RULES: ReadonlyArray<ExtractionRule> = [
     }),
     schemaDescription: "Extract all named entities from the text",
     validationTemplate: "May have missed entities - extraction found only {value}"
+  }),
+
+  // =============================================================================
+  // Entity Exclusion Rules
+  // =============================================================================
+
+  new ExtractionRule({
+    id: "entity-exclude-photo-credits",
+    category: "entity_exclusion",
+    severity: "error",
+    instruction: "DO NOT extract photo credits, news agencies, or photographer/journalist names as entities. " +
+      "Common patterns: 'Photo by X', 'X/AFP', 'X/Getty Images', bylines like 'By John Smith'",
+    example: new RuleExample({
+      input: "Ben Stansall/AFP via Getty Images",
+      output: "(skip - not an entity)",
+      explanation: "Photo credits and photographer names are NOT entities"
+    }),
+    counterExample: new RuleExample({
+      input: "Ben Stansall/AFP via Getty Images",
+      output: "{ id: 'ben_stansall', types: ['Player'] }",
+      explanation: "WRONG - this is a photographer credit, not a football player"
+    }),
+    schemaDescription: "Skip photo credits, agency names, and journalist bylines",
+    validationTemplate: "'{value}' appears to be a photo credit or journalist - do not extract"
+  }),
+
+  new ExtractionRule({
+    id: "entity-exclude-agencies",
+    category: "entity_exclusion",
+    severity: "error",
+    instruction: "DO NOT extract news/photo agencies as sports entities. Agencies include: AFP, Reuters, " +
+      "Getty Images, AP, PA Media, EPA. These are never players, teams, or leagues.",
+    example: new RuleExample({
+      input: "AFP reported the score",
+      output: "(skip - news agency, not a sports entity)",
+      explanation: "AFP is a news agency, not a sports organization"
+    }),
+    counterExample: new RuleExample({
+      input: "AFP",
+      output: "{ id: 'afp', types: ['Team'] }",
+      explanation: "WRONG - AFP is a news agency, not a team"
+    }),
+    schemaDescription: "Skip news and photo agencies - they are not sports entities",
+    validationTemplate: "'{value}' is a news/photo agency - do not extract as sports entity"
+  }),
+
+  // =============================================================================
+  // Canonical Name Rules
+  // =============================================================================
+
+  new ExtractionRule({
+    id: "entity-full-canonical-name",
+    category: "mention_format",
+    severity: "error",
+    instruction: "ALWAYS use full canonical names for organizations, teams, and places. " +
+      "Never use ambiguous short forms that could refer to multiple entities. " +
+      "Example: 'Manchester United' not 'United', 'Arsenal Football Club' not 'Arsenal'",
+    example: new RuleExample({
+      input: "United won the match",
+      output: "manchester_united (mention: 'Manchester United')",
+      explanation: "Expand 'United' to full unambiguous name from context"
+    }),
+    counterExample: new RuleExample({
+      input: "United won the match",
+      output: "united (mention: 'United')",
+      explanation: "WRONG - 'United' is ambiguous (Man Utd, Newcastle Utd, Leeds Utd, etc.)"
+    }),
+    schemaDescription: "Use full canonical name, not ambiguous short form",
+    validationTemplate: "'{value}' is ambiguous - use full canonical name"
+  }),
+
+  new ExtractionRule({
+    id: "entity-disambiguate-from-context",
+    category: "mention_format",
+    severity: "warning",
+    instruction: "When text uses short forms or nicknames, infer the full canonical name from context. " +
+      "Use other entities, locations, and domain knowledge to disambiguate. " +
+      "E.g., if 'City' appears in an article about Premier League with 'Pep Guardiola', it means 'Manchester City'",
+    example: new RuleExample({
+      input: "City, managed by Pep Guardiola, beat Arsenal",
+      output: "manchester_city (mention: 'Manchester City')",
+      explanation: "Pep Guardiola context indicates Manchester City, not other 'City' teams"
+    }),
+    counterExample: new RuleExample({
+      input: "City beat Arsenal",
+      output: "city (mention: 'City')",
+      explanation: "WRONG - must disambiguate using context clues"
+    }),
+    schemaDescription: "Disambiguate short forms using surrounding context",
+    validationTemplate: "'{value}' needs disambiguation - check context for clues"
   })
 ]
 
@@ -396,6 +486,73 @@ export const RELATION_STATIC_RULES: ReadonlyArray<ExtractionRule> = [
     }),
     schemaDescription: "Extract all valid relations from the text",
     validationTemplate: "May have missed relations - extraction found only {value}"
+  }),
+
+  // =============================================================================
+  // Relation Context Validation Rules
+  // =============================================================================
+
+  new ExtractionRule({
+    id: "relation-verify-text-support",
+    category: "context_validation",
+    severity: "error",
+    instruction: "Relations MUST be explicitly stated or strongly implied by the text. " +
+      "Do NOT infer relations from general knowledge - only extract what the text actually says. " +
+      "If the text says 'X scored against Y', extract that relation, not unmentioned team affiliations.",
+    example: new RuleExample({
+      input: "Vicario made a save against Arsenal",
+      output: "vicario-playedAgainst->arsenal",
+      explanation: "The text supports 'played against', not 'plays for'"
+    }),
+    counterExample: new RuleExample({
+      input: "Vicario made a save against Arsenal",
+      output: "vicario-playsFor->arsenal",
+      explanation: "WRONG - text says he played AGAINST Arsenal, not FOR them"
+    }),
+    schemaDescription: "Extract only relations supported by the text",
+    validationTemplate: "Relation '{value}' is not supported by the text context"
+  }),
+
+  new ExtractionRule({
+    id: "relation-opponent-vs-team",
+    category: "context_validation",
+    severity: "error",
+    instruction: "Carefully distinguish between opponent relationships and team membership. " +
+      "'X vs Y', 'X against Y', 'X faced Y' indicate opponents, NOT team membership. " +
+      "Only use 'playsFor' when text explicitly states team affiliation.",
+    example: new RuleExample({
+      input: "Hincapie's Leverkusen lost to Arsenal",
+      output: "hincapie-playsFor->leverkusen, leverkusen-playedAgainst->arsenal",
+      explanation: "Hincapie plays FOR Leverkusen, who played AGAINST Arsenal"
+    }),
+    counterExample: new RuleExample({
+      input: "Hincapie's tackle against Arsenal",
+      output: "hincapie-playsFor->arsenal",
+      explanation: "WRONG - 'against Arsenal' means opponent, not team membership"
+    }),
+    schemaDescription: "Distinguish opponent relations from team membership",
+    validationTemplate: "'{value}' confuses opponent relationship with team membership"
+  }),
+
+  new ExtractionRule({
+    id: "relation-possessive-indicates-affiliation",
+    category: "context_validation",
+    severity: "warning",
+    instruction: "Possessive patterns indicate affiliation: 'X's Y', 'Y of X' suggest membership/ownership. " +
+      "E.g., 'Arsenal's goalkeeper' means the goalkeeper plays for Arsenal. " +
+      "'Spurs keeper Vicario' means Vicario plays for Tottenham (Spurs).",
+    example: new RuleExample({
+      input: "Tottenham's goalkeeper Vicario saved the shot",
+      output: "vicario-playsFor->tottenham",
+      explanation: "Possessive 'Tottenham's goalkeeper' indicates team membership"
+    }),
+    counterExample: new RuleExample({
+      input: "Arsenal faced Tottenham's goalkeeper",
+      output: "vicario-playsFor->arsenal",
+      explanation: "WRONG - Vicario is TOTTENHAM's goalkeeper, not Arsenal's"
+    }),
+    schemaDescription: "Use possessive patterns to infer team affiliation",
+    validationTemplate: "Check possessive pattern for correct affiliation in '{value}'"
   })
 ]
 

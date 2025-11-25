@@ -24,7 +24,9 @@ export const RuleCategory = S.Literal(
   "cardinality", // Min/max value rules
   "reference_integrity", // Entity reference rules
   "mention_format", // Mention text formatting rules
-  "literal_format" // Literal value formatting rules
+  "literal_format", // Literal value formatting rules
+  "entity_exclusion", // Rules for what NOT to extract (photo credits, agencies)
+  "context_validation" // Rules for validating relations match text context
 )
 export type RuleCategory = S.Schema.Type<typeof RuleCategory>
 
