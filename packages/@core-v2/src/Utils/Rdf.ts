@@ -517,8 +517,25 @@ export const entityToQuads = (
 
   // Add attribute triples
   for (const [predicate, value] of Object.entries(entity.attributes)) {
+    // Check if predicate is already a valid IRI
+    let predicateIri: string
+    try {
+      // Try to validate as IRI - if it passes, use as-is
+      Schema.decodeSync(IriSchema)(predicate)
+      predicateIri = predicate
+    } catch {
+      // Not a valid IRI - try to convert using schema.org prefix or base namespace
+      // First try schema.org (common for attributes)
+      if (prefixes.schema) {
+        predicateIri = `${prefixes.schema}${predicate}`
+      } else {
+        // Fall back to base namespace
+        predicateIri = buildIri(baseNamespace, predicate)
+      }
+    }
+
     const objectTerm = valueToLiteral(value, prefixes, builders)
-    quads.push(builders.quad(subject, builders.namedNode(predicate), objectTerm))
+    quads.push(builders.quad(subject, builders.namedNode(predicateIri), objectTerm))
   }
 
   return quads

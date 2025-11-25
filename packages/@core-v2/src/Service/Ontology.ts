@@ -689,10 +689,12 @@ export class OntologyService extends Effect.Service<OntologyService>()(
     effect: (path: string | undefined) =>
       Effect.gen(function*() {
         const config = yield* ConfigService
-        const fs = yield* FileSystem.FileSystem
-        const rdf = yield* RdfBuilder
 
         const ontologyPath = path || config.ontology.path
+
+        const fs = yield* FileSystem.FileSystem
+        const rdf = yield* RdfBuilder
+        const nlp = yield* NlpService
 
         // Load ontology file using FileSystem layer
         const turtleContent = yield* fs.readFileString(ontologyPath).pipe(
@@ -709,7 +711,6 @@ export class OntologyService extends Effect.Service<OntologyService>()(
         // Parse turtle content into RDF store using RdfService
         const store = yield* rdf.parseTurtle(turtleContent)
 
-        // Extract classes and properties from store using RdfService queries
         const { classes, properties } = yield* parseOntologyFromStore(
           rdf,
           store,
@@ -720,6 +721,10 @@ export class OntologyService extends Effect.Service<OntologyService>()(
           classes: Chunk.toReadonlyArray(classes),
           properties: Chunk.toReadonlyArray(properties)
         })
+
+        const index = yield* nlp.createOntologyIndex(ontology)
+
+        // Extract classes and properties from store using RdfService queries
 
         return {
           /**
@@ -746,10 +751,7 @@ export class OntologyService extends Effect.Service<OntologyService>()(
            */
           searchClasses: (query: string, limit: number = 10) =>
             Effect.gen(function*() {
-              const nlp = yield* NlpService
-
               // Create index from ontology
-              const index = yield* nlp.createOntologyIndex(ontology)
 
               // Search - get raw results (both Classes and Properties)
               const results = yield* nlp.searchOntologyIndex(index, query, limit)

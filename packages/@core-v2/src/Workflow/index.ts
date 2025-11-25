@@ -5,5 +5,6 @@
  * @module Workflow
  */
 
+export * from "./Merge.js"
 export * from "./StreamingExtraction.js"
 export * from "./TwoStageExtraction.js"

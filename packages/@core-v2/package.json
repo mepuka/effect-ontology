@@ -20,7 +20,6 @@
         "check": "tsc -b tsconfig.json"
     },
     "dependencies": {
-        "@effect/ai": "^0.13.0",
         "@effect/opentelemetry": "^0.59.1",
         "@effect/platform-bun": "^0.84.0",
         "@effect/printer": "^0.47.0",
