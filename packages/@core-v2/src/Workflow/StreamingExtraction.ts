@@ -11,7 +11,7 @@
 
 import { Chunk, Effect, Either, HashMap, Stream } from "effect"
 import { ExtractionError } from "../Domain/Error/Extraction.js"
-import { KnowledgeGraph } from "../Domain/Model/Entity.js"
+import { Entity, KnowledgeGraph } from "../Domain/Model/Entity.js"
 import type { ClassDefinition } from "../Domain/Model/Ontology.js"
 import { EntityExtractor, MentionExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { Grounder } from "../Service/Grounder.js"
@@ -243,7 +243,7 @@ export const streamingExtraction = (
                     )
                   )
 
-                const entities = yield* entityExtractor
+                const rawEntities = yield* entityExtractor
                   .extract(chunk.text, classArray, candidateDatatypeProperties)
                   .pipe(
                     Effect.annotateLogs({ chunkIndex: chunk.index }),
@@ -257,6 +257,16 @@ export const streamingExtraction = (
                         })
                     )
                   )
+
+                // Add chunk index to each entity for provenance tracking
+                const entities = Chunk.map(rawEntities, (entity) =>
+                  new Entity({
+                    id: entity.id,
+                    mention: entity.mention,
+                    types: [...entity.types],
+                    attributes: { ...entity.attributes },
+                    chunkIndex: chunk.index
+                  }))
 
                 const entityArray = Chunk.toReadonlyArray(entities)
 

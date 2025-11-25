@@ -9,6 +9,7 @@
  */
 
 import { Equal, Hash, pipe, Schema } from "effect"
+import { AttributesSchema, EntityIdSchema } from "./shared.js"
 
 /**
  * Entity - Represents an extracted entity from text
@@ -35,13 +36,7 @@ export class Entity extends Schema.Class<Entity>("Entity")({
    *
    * @example "cristiano_ronaldo", "al_nassr_fc"
    */
-  id: Schema.String.pipe(
-    Schema.pattern(/^[a-z][a-z0-9_]*$/),
-    Schema.annotations({
-      title: "Entity ID",
-      description: "Unique identifier in snake_case format"
-    })
-  ),
+  id: EntityIdSchema,
 
   /**
    * Original text mention from source
@@ -80,12 +75,19 @@ export class Entity extends Schema.Class<Entity>("Entity")({
    * }
    * ```
    */
-  attributes: Schema.Record({
-    key: Schema.String,
-    value: Schema.Union(Schema.String, Schema.Number, Schema.Boolean)
-  }).annotations({
-    title: "Attributes",
-    description: "Property-value pairs (literal values only)"
+  attributes: AttributesSchema,
+
+  /**
+   * Source chunk index for provenance tracking
+   *
+   * Set during streaming extraction to track which chunk this entity was extracted from.
+   * Used by entity resolution to create MentionRecords with proper provenance.
+   *
+   * @example 0, 1, 2 (index of chunk in document)
+   */
+  chunkIndex: Schema.optional(Schema.Number).annotations({
+    title: "Chunk Index",
+    description: "Source chunk index for provenance (optional)"
   })
 }) {
   /**
@@ -97,7 +99,8 @@ export class Entity extends Schema.Class<Entity>("Entity")({
       id: this.id,
       mention: this.mention,
       types: this.types,
-      attributes: this.attributes
+      attributes: this.attributes,
+      chunkIndex: this.chunkIndex
     }
   }
 }

@@ -8,12 +8,8 @@
  */
 
 import { Schema } from "effect"
-import {
-  enhanceTextForSearch,
-  extractLocalName,
-  splitCamelCase,
-  transformIriArrayToLocalNames
-} from "../../Utils/Rdf.js"
+import { extractLocalName, transformIriArrayToLocalNames } from "../../Utils/Rdf.js"
+import { enhanceTextForSearch, splitCamelCase } from "../../Utils/Text.js"
 
 /**
  * ClassDefinition - OWL/RDFS Class metadata

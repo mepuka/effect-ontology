@@ -11,7 +11,7 @@
 import { Data } from "effect"
 import type { ClassDefinition, PropertyDefinition } from "../Domain/Model/Ontology.js"
 import { buildCaseInsensitiveIriMap } from "../Utils/Iri.js"
-import { ExtractionRule, RuleExample, type ExtractionStage } from "./ExtractionRule.js"
+import { ExtractionRule, type ExtractionStage, RuleExample } from "./ExtractionRule.js"
 
 /**
  * AllowedIriSet - Type-safe IRI constraints with case-insensitive lookups
@@ -65,10 +65,10 @@ export class AllowedIriSet extends Data.Class<{
     const iris = type === "classes"
       ? this.classIris
       : type === "objectProperties"
-        ? this.objectPropertyIris
-        : type === "datatypeProperties"
-          ? this.datatypePropertyIris
-          : this.entityIds
+      ? this.objectPropertyIris
+      : type === "datatypeProperties"
+      ? this.datatypePropertyIris
+      : this.entityIds
 
     const preview = iris.slice(0, limit).join(", ")
     return iris.length > limit ? `${preview}...` : preview
@@ -138,7 +138,8 @@ export const ENTITY_STATIC_RULES: ReadonlyArray<ExtractionRule> = [
     id: "entity-id-format",
     category: "id_format",
     severity: "error",
-    instruction: "Assign unique snake_case IDs starting with a lowercase letter (e.g., 'cristiano_ronaldo' for 'Cristiano Ronaldo')",
+    instruction:
+      "Assign unique snake_case IDs starting with a lowercase letter (e.g., 'cristiano_ronaldo' for 'Cristiano Ronaldo')",
     example: new RuleExample({
       input: "Cristiano Ronaldo",
       output: "cristiano_ronaldo",
@@ -149,7 +150,8 @@ export const ENTITY_STATIC_RULES: ReadonlyArray<ExtractionRule> = [
       output: "CristianoRonaldo",
       explanation: "Avoid PascalCase or camelCase for entity IDs"
     }),
-    schemaDescription: "Snake_case unique identifier - use this exact ID when referring to this entity in relations (e.g., 'cristiano_ronaldo')",
+    schemaDescription:
+      "Snake_case unique identifier - use this exact ID when referring to this entity in relations (e.g., 'cristiano_ronaldo')",
     validationTemplate: "Entity ID '{value}' must be snake_case starting with a lowercase letter"
   }),
 
@@ -187,7 +189,8 @@ export const ENTITY_STATIC_RULES: ReadonlyArray<ExtractionRule> = [
       output: "Stanford",
       explanation: "Incomplete - prefer full canonical form"
     }),
-    schemaDescription: "Human-readable entity name found in text - use complete, canonical form (e.g., 'Cristiano Ronaldo' not 'Ronaldo')",
+    schemaDescription:
+      "Human-readable entity name found in text - use complete, canonical form (e.g., 'Cristiano Ronaldo' not 'Ronaldo')",
     validationTemplate: "Mention '{value}' may be incomplete - prefer full canonical form"
   }),
 
@@ -198,7 +201,7 @@ export const ENTITY_STATIC_RULES: ReadonlyArray<ExtractionRule> = [
     instruction: "Map each entity to at least one ontology class from the allowed list",
     example: new RuleExample({
       input: "Cristiano Ronaldo is a footballer",
-      output: '["http://schema.org/Person"]',
+      output: "[\"http://schema.org/Person\"]",
       explanation: "At least one type IRI is required"
     }),
     counterExample: new RuleExample({
@@ -306,12 +309,12 @@ export const RELATION_STATIC_RULES: ReadonlyArray<ExtractionRule> = [
     instruction: "Subject MUST be one of the entity IDs from Stage 1",
     example: new RuleExample({
       input: "cristiano_ronaldo plays for al_nassr",
-      output: '{ "subjectId": "cristiano_ronaldo" }',
+      output: "{ \"subjectId\": \"cristiano_ronaldo\" }",
       explanation: "Use exact entity ID from Stage 1"
     }),
     counterExample: new RuleExample({
       input: "cristiano_ronaldo plays for al_nassr",
-      output: '{ "subjectId": "ronaldo" }',
+      output: "{ \"subjectId\": \"ronaldo\" }",
       explanation: "Must use exact ID from Stage 1, not abbreviated"
     }),
     schemaDescription: "Subject entity ID - MUST be from Stage 1 entity list",
@@ -341,15 +344,16 @@ export const RELATION_STATIC_RULES: ReadonlyArray<ExtractionRule> = [
     id: "relation-object-type",
     category: "property_usage",
     severity: "error",
-    instruction: "Object type depends on property: object properties require entity ID, datatype properties require literal value",
+    instruction:
+      "Object type depends on property: object properties require entity ID, datatype properties require literal value",
     example: new RuleExample({
       input: "Object property 'playsFor'",
-      output: '{ "object": "al_nassr" }',
+      output: "{ \"object\": \"al_nassr\" }",
       explanation: "Object property → entity ID as object"
     }),
     counterExample: new RuleExample({
       input: "Object property 'playsFor'",
-      output: '{ "object": "Al-Nassr" }',
+      output: "{ \"object\": \"Al-Nassr\" }",
       explanation: "Must use entity ID, not literal string"
     }),
     schemaDescription: "Object: entity ID (for object properties) OR literal value (for datatype properties)",
@@ -630,7 +634,7 @@ export const makeMentionRuleSet = (): RuleSet => {
       instruction: "Include brief context about each entity to help with later classification",
       example: new RuleExample({
         input: "Ronaldo scored a goal",
-        output: '{ "context": "A professional footballer who scored" }',
+        output: "{ \"context\": \"A professional footballer who scored\" }",
         explanation: "Context helps with type assignment in Stage 1"
       }),
       counterExample: null,

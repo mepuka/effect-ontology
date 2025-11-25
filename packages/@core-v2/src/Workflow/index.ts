@@ -5,6 +5,7 @@
  * @module Workflow
  */
 
+export * from "./EntityResolutionGraph.js"
 export * from "./Merge.js"
 export * from "./StreamingExtraction.js"
 export * from "./TwoStageExtraction.js"

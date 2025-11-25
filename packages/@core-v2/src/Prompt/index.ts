@@ -12,13 +12,7 @@
  */
 
 // Core Types
-export {
-  ExtractionRule,
-  ExtractionStage,
-  RuleCategory,
-  RuleExample,
-  RuleSeverity
-} from "./ExtractionRule.js"
+export { ExtractionRule, ExtractionStage, RuleCategory, RuleExample, RuleSeverity } from "./ExtractionRule.js"
 export type {
   ExtractionStage as ExtractionStageType,
   RuleCategory as RuleCategoryType,
@@ -26,13 +20,7 @@ export type {
 } from "./ExtractionRule.js"
 
 // Rule Collections
-export {
-  AllowedIriSet,
-  makeEntityRuleSet,
-  makeMentionRuleSet,
-  makeRelationRuleSet,
-  RuleSet
-} from "./RuleSet.js"
+export { AllowedIriSet, makeEntityRuleSet, makeMentionRuleSet, makeRelationRuleSet, RuleSet } from "./RuleSet.js"
 
 // Generators
 export {
