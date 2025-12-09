@@ -372,43 +372,85 @@ export type EREdge = typeof EREdge.Type
  * @since 2.0.0
  * @category Configuration
  */
-export interface EntityResolutionConfig {
+/**
+ * EntityResolutionConfig - Configuration for entity resolution
+ *
+ * @since 2.0.0
+ * @category Configuration
+ */
+export class EntityResolutionConfig extends Schema.Class<EntityResolutionConfig>("EntityResolutionConfig")({
   /**
    * Overall similarity threshold for clustering
    * @default 0.7
    */
-  readonly similarityThreshold: number
+  /**
+   * Overall similarity threshold for clustering
+   * @default 0.7
+   */
+  similarityThreshold: Schema.propertySignature(
+    Schema.Number.pipe(Schema.between(0, 1))
+  ).pipe(
+    Schema.withConstructorDefault(() => 0.7)
+  ),
 
   /**
    * Weight for mention string similarity
    * @default 0.5
    */
-  readonly mentionWeight: number
+  mentionWeight: Schema.propertySignature(
+    Schema.Number.pipe(Schema.between(0, 1))
+  ).pipe(
+    Schema.withConstructorDefault(() => 0.5)
+  ),
 
   /**
    * Weight for type overlap
    * @default 0.3
    */
-  readonly typeWeight: number
+  typeWeight: Schema.propertySignature(
+    Schema.Number.pipe(Schema.between(0, 1))
+  ).pipe(
+    Schema.withConstructorDefault(() => 0.3)
+  ),
 
   /**
    * Weight for neighbor similarity
    * @default 0.2
    */
-  readonly neighborWeight: number
+  neighborWeight: Schema.propertySignature(
+    Schema.Number.pipe(Schema.between(0, 1))
+  ).pipe(
+    Schema.withConstructorDefault(() => 0.2)
+  ),
+
+  /**
+   * Weight for embedding similarity (0 to disable)
+   * @default 0
+   */
+  embeddingWeight: Schema.propertySignature(
+    Schema.Number.pipe(Schema.between(0, 1))
+  ).pipe(
+    Schema.withConstructorDefault(() => 0)
+  ),
 
   /**
    * Require type overlap for clustering
    * @default true
    */
-  readonly requireTypeOverlap: boolean
+  requireTypeOverlap: Schema.propertySignature(Schema.Boolean).pipe(
+    Schema.withConstructorDefault(() => true)
+  ),
 
   /**
    * Minimum type overlap ratio if required
    * @default 0.5
    */
-  readonly typeOverlapRatio: number
-}
+  typeOverlapRatio: Schema.propertySignature(
+    Schema.Number.pipe(Schema.between(0, 1))
+  ).pipe(
+    Schema.withConstructorDefault(() => 0.5)
+  )
+}) {}
 
 /**
  * Default entity resolution configuration
@@ -416,11 +458,4 @@ export interface EntityResolutionConfig {
  * @since 2.0.0
  * @category Configuration
  */
-export const defaultEntityResolutionConfig: EntityResolutionConfig = {
-  similarityThreshold: 0.7,
-  mentionWeight: 0.5,
-  typeWeight: 0.3,
-  neighborWeight: 0.2,
-  requireTypeOverlap: true,
-  typeOverlapRatio: 0.5
-}
+export const defaultEntityResolutionConfig = new EntityResolutionConfig({})

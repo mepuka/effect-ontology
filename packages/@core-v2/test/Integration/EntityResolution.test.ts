@@ -11,13 +11,24 @@
  * @module test/Integration/EntityResolution
  */
 
-import { describe, expect, it } from "@effect/vitest"
-import { Effect, Option } from "effect"
-
+import { BunContext } from "@effect/platform-bun"
+import { Effect, Layer, Option } from "effect"
+import { describe, expect, it } from "vitest"
 import { Entity, KnowledgeGraph, Relation } from "../../src/Domain/Model/Entity.js"
 import { defaultEntityResolutionConfig } from "../../src/Domain/Model/EntityResolution.js"
 import { getCanonicalId, getMentionsForEntity, toMermaid } from "../../src/Service/EntityLinker.js"
+import { NomicNlpService } from "../../src/Service/NomicNlp.js"
 import { buildEntityResolutionGraph } from "../../src/Workflow/EntityResolutionGraph.js"
+
+const MockNomicLayer = Layer.succeed(
+  NomicNlpService,
+  {
+    embed: (_text) => Effect.succeed([]),
+    cosineSimilarity: (_a, _b) => 0.0
+  }
+)
+
+const TestLayer = MockNomicLayer.pipe(Layer.provideMerge(BunContext.layer))
 
 // =============================================================================
 // Test Fixtures: Football Extraction Scenario
@@ -115,7 +126,7 @@ const createFootballScenario = () => {
 // =============================================================================
 
 describe("Entity Resolution Pipeline - Football Scenario", () => {
-  it.effect("should resolve Arsenal mentions to single canonical entity", () =>
+  it("should resolve Arsenal mentions to single canonical entity", () =>
     Effect.gen(function*() {
       const kg = createFootballScenario()
       const config = {
@@ -143,9 +154,9 @@ describe("Entity Resolution Pipeline - Football Scenario", () => {
 
       expect(canonical1).toBe(canonical2)
       expect(canonical2).toBe(canonical3)
-    }))
+    }).pipe(Effect.provide(TestLayer), Effect.runPromise))
 
-  it.effect("should preserve chunkIndex provenance for all mentions", () =>
+  it("should preserve chunkIndex provenance for all mentions", () =>
     Effect.gen(function*() {
       const kg = createFootballScenario()
       const erg = yield* buildEntityResolutionGraph(kg, defaultEntityResolutionConfig)
@@ -162,9 +173,9 @@ describe("Entity Resolution Pipeline - Football Scenario", () => {
         expect(typeof mention.chunkIndex).toBe("number")
         expect(mention.chunkIndex).toBeGreaterThanOrEqual(0)
       }
-    }))
+    }).pipe(Effect.provide(TestLayer), Effect.runPromise))
 
-  it.effect("should maintain separate entities for different teams", () =>
+  it("should maintain separate entities for different teams", () =>
     Effect.gen(function*() {
       const kg = createFootballScenario()
       const erg = yield* buildEntityResolutionGraph(kg, defaultEntityResolutionConfig)
@@ -179,9 +190,9 @@ describe("Entity Resolution Pipeline - Football Scenario", () => {
       expect(Option.getOrThrow(arsenalCanonical)).not.toBe(
         Option.getOrThrow(tottenhamCanonical)
       )
-    }))
+    }).pipe(Effect.provide(TestLayer), Effect.runPromise))
 
-  it.effect("should track player-team relations correctly", () =>
+  it("should track player-team relations correctly", () =>
     Effect.gen(function*() {
       const kg = createFootballScenario()
       const erg = yield* buildEntityResolutionGraph(kg, defaultEntityResolutionConfig)
@@ -199,9 +210,9 @@ describe("Entity Resolution Pipeline - Football Scenario", () => {
       expect(Option.getOrThrow(sakaCanonical)).not.toBe(
         Option.getOrThrow(martinelliCanonical)
       )
-    }))
+    }).pipe(Effect.provide(TestLayer), Effect.runPromise))
 
-  it.effect("should generate valid Mermaid visualization", () =>
+  it("should generate valid Mermaid visualization", () =>
     Effect.gen(function*() {
       const kg = createFootballScenario()
       const erg = yield* buildEntityResolutionGraph(kg, defaultEntityResolutionConfig)
@@ -213,9 +224,9 @@ describe("Entity Resolution Pipeline - Football Scenario", () => {
 
       // Should have node definitions
       expect(mermaid.length).toBeGreaterThan(50)
-    }))
+    }).pipe(Effect.provide(TestLayer), Effect.runPromise))
 
-  it.effect("should report accurate cluster count", () =>
+  it("should report accurate cluster count", () =>
     Effect.gen(function*() {
       const kg = createFootballScenario()
       const erg = yield* buildEntityResolutionGraph(kg, defaultEntityResolutionConfig)
@@ -223,7 +234,7 @@ describe("Entity Resolution Pipeline - Football Scenario", () => {
       // Should have fewer clusters than entities (due to merging)
       expect(erg.stats.clusterCount).toBeLessThanOrEqual(erg.stats.mentionCount)
       expect(erg.stats.resolvedCount).toBe(erg.stats.clusterCount)
-    }))
+    }).pipe(Effect.provide(TestLayer), Effect.runPromise))
 })
 
 // =============================================================================
@@ -231,7 +242,7 @@ describe("Entity Resolution Pipeline - Football Scenario", () => {
 // =============================================================================
 
 describe("Entity Resolution Pipeline - Edge Cases", () => {
-  it.effect("should handle single entity KnowledgeGraph", () =>
+  it("should handle single entity KnowledgeGraph", () =>
     Effect.gen(function*() {
       const kg = new KnowledgeGraph({
         entities: [
@@ -253,9 +264,9 @@ describe("Entity Resolution Pipeline - Edge Cases", () => {
 
       const canonical = getCanonicalId(erg, "solo")
       expect(Option.isSome(canonical)).toBe(true)
-    }))
+    }).pipe(Effect.provide(TestLayer), Effect.runPromise))
 
-  it.effect("should handle entities with attributes", () =>
+  it("should handle entities with attributes", () =>
     Effect.gen(function*() {
       const kg = new KnowledgeGraph({
         entities: [
@@ -287,9 +298,9 @@ describe("Entity Resolution Pipeline - Edge Cases", () => {
 
       // Should be same canonical (due to containment)
       expect(Option.getOrThrow(canonical1)).toBe(Option.getOrThrow(canonical2))
-    }))
+    }).pipe(Effect.provide(TestLayer), Effect.runPromise))
 
-  it.effect("should handle self-referential relations", () =>
+  it("should handle self-referential relations", () =>
     Effect.gen(function*() {
       const kg = new KnowledgeGraph({
         entities: [
@@ -313,9 +324,9 @@ describe("Entity Resolution Pipeline - Edge Cases", () => {
 
       // Should not crash
       expect(erg.stats.mentionCount).toBe(1)
-    }))
+    }).pipe(Effect.provide(TestLayer), Effect.runPromise))
 
-  it.effect("should handle relations to non-existent entities", () =>
+  it("should handle relations to non-existent entities", () =>
     Effect.gen(function*() {
       const kg = new KnowledgeGraph({
         entities: [
@@ -340,5 +351,5 @@ describe("Entity Resolution Pipeline - Edge Cases", () => {
       // Should not crash - relation just won't be added to graph
       expect(erg.stats.mentionCount).toBe(1)
       expect(erg.stats.relationCount).toBe(1) // Relation still counted
-    }))
+    }).pipe(Effect.provide(TestLayer), Effect.runPromise))
 })

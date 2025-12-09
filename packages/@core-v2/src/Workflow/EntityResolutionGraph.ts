@@ -19,7 +19,9 @@ import {
   ResolutionEdge,
   ResolvedEntity
 } from "../Domain/Model/EntityResolution.js"
+import { NomicNlpService } from "../Service/NomicNlp.js"
 import { computeEntitySimilarity, detectResolutionMethod, shouldConsiderMerge } from "../Utils/Similarity.js"
+import { simpleTokenize } from "../Utils/String.js"
 
 // =============================================================================
 // Types
@@ -76,6 +78,19 @@ export interface EntityCluster {
   readonly methods: ReadonlyArray<ResolutionMethod>
 }
 
+/**
+ * Result of clustering with embeddings
+ *
+ * @since 2.0.0
+ * @category Types
+ */
+export interface ClusteringResult {
+  /** Entity clusters */
+  readonly clusters: ReadonlyArray<EntityCluster>
+  /** Embedding map: entity ID → embedding vector */
+  readonly embeddingMap: ReadonlyMap<string, ReadonlyArray<number>>
+}
+
 // =============================================================================
 // Graph-Based Clustering
 // =============================================================================
@@ -84,10 +99,11 @@ export interface EntityCluster {
  * Cluster entities using Effect Graph's connectedComponents
  *
  * Algorithm:
- * 1. Build undirected similarity graph (entities as nodes)
- * 2. Add edge between entities with similarity ≥ threshold
- * 3. Call Graph.connectedComponents() to find clusters
- * 4. Each component = one resolved entity cluster
+ * 1. Generate embeddings for all entities (batch with concurrency limit)
+ * 2. Build undirected similarity graph (entities as nodes)
+ * 3. Add edge between entities with similarity ≥ threshold (using embeddings if available)
+ * 4. Call Graph.connectedComponents() to find clusters
+ * 5. Each component = one resolved entity cluster
  *
  * @param entities - Entities to cluster
  * @param relations - Relations for neighbor similarity
@@ -111,19 +127,50 @@ export const clusterEntities = (
   entities: ReadonlyArray<Entity>,
   relations: ReadonlyArray<Relation>,
   config: EntityResolutionConfig
-): Effect.Effect<ReadonlyArray<EntityCluster>> =>
-  Effect.sync(() => {
+): Effect.Effect<ClusteringResult, never, NomicNlpService> =>
+  Effect.gen(function*() {
+    const nomic = yield* NomicNlpService
+
     // Handle edge cases
     if (entities.length === 0) {
-      return []
+      return {
+        clusters: [],
+        embeddingMap: new Map()
+      }
     }
 
     if (entities.length === 1) {
-      return [{
-        entities: [entities[0]],
-        minSimilarity: 1.0,
-        methods: []
-      }]
+      return {
+        clusters: [{
+          entities: [entities[0]],
+          minSimilarity: 1.0,
+          methods: []
+        }],
+        embeddingMap: new Map()
+      }
+    }
+
+    // Generate embeddings for all entities (batch with concurrency limit)
+    // Only generate if embeddingWeight > 0 (optimization)
+    const embeddingMap = new Map<string, ReadonlyArray<number>>()
+
+    if (config.embeddingWeight > 0) {
+      const entityEmbeddings = yield* Effect.all(
+        entities.map((entity) =>
+          nomic.embed(entity.mention, "clustering").pipe(
+            Effect.map((embedding) => ({ entityId: entity.id, embedding })),
+            Effect.catchAll(() => Effect.succeed(null)) // Gracefully handle embedding failures
+          )
+        ),
+        { concurrency: 5 }
+      )
+
+      // Store valid embeddings in Map for O(1) lookup
+      for (const item of entityEmbeddings) {
+        if (item) {
+          embeddingMap.set(item.entityId, item.embedding)
+        }
+      }
     }
 
     // Build node index mapping
@@ -142,15 +189,123 @@ export const clusterEntities = (
         indexToEntity.set(idx, entity)
       }
 
-      // Add edges for pairs above similarity threshold (O(n²))
+      // Blocking Strategy: Inverted Index
+      // Map robust tokens to list of entity indices
+      const invertedIndex = new Map<string, Array<number>>()
+      const USE_BLOCKING_THRESHOLD = 50
+      const MAX_BLOCK_SIZE = 50 // Skip tokens that are too common (e.g. "Agency" in a list of agencies)
+
+      // Common stop words to ignore for blocking (English + Corporate)
+      const STOP_WORDS = new Set([
+        "the",
+        "and",
+        "of",
+        "in",
+        "on",
+        "at",
+        "for",
+        "to",
+        "a",
+        "an",
+        "inc",
+        "incorporated",
+        "corp",
+        "corporation",
+        "llc",
+        "ltd",
+        "limited",
+        "co",
+        "company",
+        "group",
+        "association",
+        "department",
+        "university",
+        "school",
+        "college",
+        "institute"
+      ])
+
+      // Only build index if we have enough entities to justify the overhead
+      if (entities.length >= USE_BLOCKING_THRESHOLD) {
+        for (let i = 0; i < entities.length; i++) {
+          const entity = entities[i]
+          // Normalize: lowercase, remove non-word chars, split
+          const tokens = simpleTokenize(entity.mention.toLowerCase())
+            .map((t) => t.replace(/[^\w]/g, ""))
+            .filter((t) => t.length > 2 && !STOP_WORDS.has(t))
+
+          for (const token of new Set(tokens)) {
+            if (!invertedIndex.has(token)) {
+              invertedIndex.set(token, [])
+            }
+            invertedIndex.get(token)!.push(i)
+          }
+        }
+      }
+
+      // Track processed pairs to avoid duplicates
+      const processedPairs = new Set<string>()
+      const getPairKey = (a: number, b: number) => a < b ? `${a}-${b}` : `${b}-${a}`
+
+      // Iterate entities and compare candidates
       for (let i = 0; i < entities.length; i++) {
-        for (let j = i + 1; j < entities.length; j++) {
-          const entityA = entities[i]
+        // Cooperative multitasking: Yield every 20 entities to allow other fibers to run
+        if (i % 20 === 0) {
+          // We can't yield directly inside the synchronous graph builder callback easily...
+          // Wait, Graph.undirected callback is synchronous.
+          // We should move this logic OUTSIDE the Graph constructor if possible?
+          // Or construct edges first, then add to Graph.
+          // The loop below executes synchronous logic (shouldConsiderMerge etc).
+          // If these are expensive, we block the event loop.
+        }
+
+        const entityA = entities[i]
+        const candidates = new Set<number>()
+
+        if (entities.length < USE_BLOCKING_THRESHOLD) {
+          // Small dataset: Compare with ALL subsequent entities (O(n^2))
+          for (let j = i + 1; j < entities.length; j++) {
+            candidates.add(j)
+          }
+        } else {
+          // Large dataset: Use blocking
+          const tokens = simpleTokenize(entityA.mention.toLowerCase())
+            .map((t) => t.replace(/[^\w]/g, ""))
+            .filter((t) => t.length > 2 && !STOP_WORDS.has(t))
+
+          if (tokens.length === 0) {
+            // Fallback: limited scan? For now, skip.
+          } else {
+            for (const token of tokens) {
+              const matches = invertedIndex.get(token)
+              // Only consider blocks that are selective enough
+              if (matches && matches.length <= MAX_BLOCK_SIZE) {
+                for (const matchIdx of matches) {
+                  if (matchIdx > i) { // Only look forward
+                    candidates.add(matchIdx)
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Process candidates
+        for (const j of candidates) {
+          const pairKey = getPairKey(i, j)
+          if (processedPairs.has(pairKey)) continue
+          processedPairs.add(pairKey)
+
           const entityB = entities[j]
 
-          // Check if entities should be considered for merging
-          if (shouldConsiderMerge(entityA, entityB, relations, config)) {
-            const similarity = computeEntitySimilarity(entityA, entityB, relations, config)
+          // Compute embedding similarity if available
+          const embeddingSim = embeddingMap.has(entityA.id) && embeddingMap.has(entityB.id)
+            ? nomic.cosineSimilarity(embeddingMap.get(entityA.id)!, embeddingMap.get(entityB.id)!)
+            : undefined
+
+          // Check if entities should be considered for merging (with embedding similarity)
+          if (shouldConsiderMerge(entityA, entityB, relations, config, embeddingSim)) {
+            const similarity = computeEntitySimilarity(entityA, entityB, relations, config, embeddingSim)
             const method = detectResolutionMethod(entityA, entityB, relations)
 
             const edge: SimilarityEdge = { similarity, method }
@@ -171,7 +326,7 @@ export const clusterEntities = (
     const components = Graph.connectedComponents(similarityGraph)
 
     // Map NodeIndex clusters back to EntityCluster
-    return components.map((component) => {
+    const clusters = components.map((component) => {
       const clusterEntities = component.map((nodeIdx) => Option.getOrThrow(Graph.getNode(similarityGraph, nodeIdx)))
 
       // Find minimum similarity and methods within this cluster
@@ -192,6 +347,11 @@ export const clusterEntities = (
         methods
       }
     })
+
+    return {
+      clusters,
+      embeddingMap
+    }
   })
 
 // =============================================================================
@@ -303,8 +463,9 @@ const mergeClusterToResolved = (
 export const buildEntityResolutionGraph = (
   kg: KnowledgeGraph,
   config: EntityResolutionConfig
-): Effect.Effect<EntityResolutionGraph> =>
+): Effect.Effect<EntityResolutionGraph, never, NomicNlpService> =>
   Effect.gen(function*() {
+    const nomic = yield* NomicNlpService
     // Phase 1: Create MentionRecord nodes from entities (preserve provenance)
     const mentionRecords = kg.entities.map((e, idx) =>
       new MentionRecord({
@@ -324,7 +485,9 @@ export const buildEntityResolutionGraph = (
     }
 
     // Phase 2: Cluster similar entities using graph-based algorithm
-    const clusters = yield* clusterEntities(kg.entities, kg.relations, config)
+    const clusteringResult = yield* clusterEntities(kg.entities, kg.relations, config)
+    const clusters = clusteringResult.clusters
+    const embeddingMap = clusteringResult.embeddingMap
 
     // Phase 3: Create ResolvedEntity for each cluster
     const resolvedEntities = clusters.map((cluster) => mergeClusterToResolved(cluster))
@@ -350,8 +513,13 @@ export const buildEntityResolutionGraph = (
             method: "exact"
           })
         } else if (canonicalEntity) {
-          // Compute similarity between this entity and canonical
-          const similarity = computeEntitySimilarity(entity, canonicalEntity, kg.relations, config)
+          // Compute embedding similarity if available
+          const embeddingSim = embeddingMap.has(entity.id) && embeddingMap.has(canonicalId)
+            ? nomic.cosineSimilarity(embeddingMap.get(entity.id)!, embeddingMap.get(canonicalId)!)
+            : undefined
+
+          // Compute similarity between this entity and canonical (with embedding)
+          const similarity = computeEntitySimilarity(entity, canonicalEntity, kg.relations, config, embeddingSim)
           const method = detectResolutionMethod(entity, canonicalEntity, kg.relations)
 
           resolutionInfoMap.set(entity.id, {
