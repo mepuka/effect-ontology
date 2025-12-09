@@ -28,6 +28,8 @@ export const OWL_CLASS: IRI = iri("http://www.w3.org/2002/07/owl#Class")
 export const OWL_OBJECT_PROPERTY: IRI = iri("http://www.w3.org/2002/07/owl#ObjectProperty")
 export const OWL_DATATYPE_PROPERTY: IRI = iri("http://www.w3.org/2002/07/owl#DatatypeProperty")
 export const OWL_FUNCTIONAL_PROPERTY: IRI = iri("http://www.w3.org/2002/07/owl#FunctionalProperty")
+export const OWL_INVERSEOF: IRI = iri("http://www.w3.org/2002/07/owl#inverseOf")
+export const OWL_EQUIVALENT_CLASS: IRI = iri("http://www.w3.org/2002/07/owl#equivalentClass")
 
 /**
  * RDFS Vocabulary IRIs
@@ -36,6 +38,8 @@ export const RDFS_LABEL: IRI = iri("http://www.w3.org/2000/01/rdf-schema#label")
 export const RDFS_COMMENT: IRI = iri("http://www.w3.org/2000/01/rdf-schema#comment")
 export const RDFS_DOMAIN: IRI = iri("http://www.w3.org/2000/01/rdf-schema#domain")
 export const RDFS_RANGE: IRI = iri("http://www.w3.org/2000/01/rdf-schema#range")
+export const RDFS_SUBCLASSOF: IRI = iri("http://www.w3.org/2000/01/rdf-schema#subClassOf")
+export const RDFS_SUBPROPERTYOF: IRI = iri("http://www.w3.org/2000/01/rdf-schema#subPropertyOf")
 
 /**
  * SKOS Vocabulary IRIs

@@ -34,6 +34,24 @@ export const IriSchema = Schema.String.pipe(
 export type IRI = typeof IriSchema.Type
 
 /**
+ * LocalName - The local part of an atomic IRI
+ *
+ * Branded string type for local names (e.g. "Person" from "http://schema.org/Person")
+ *
+ * @since 2.0.0
+ * @category Domain
+ */
+export const LocalNameSchema = Schema.String.pipe(
+  Schema.brand("LocalName"),
+  Schema.annotations({
+    title: "LocalName",
+    description: "Local name part of an IRI (branded string)"
+  })
+)
+
+export type LocalName = typeof LocalNameSchema.Type
+
+/**
  * BlankNode - RDF Blank Node identifier
  *
  * Represents unnamed nodes in RDF graphs (starts with _:).

@@ -296,18 +296,48 @@ export const createN3Builders = (
  * // => Literal("hello")
  * ```
  */
+/**
+ * Convert JavaScript value to N3 literal with appropriate datatype
+ *
+ * @param value - JavaScript value (string, number, boolean, or object with language)
+ * @param prefixes - RDF prefixes for datatype IRIs
+ * @param builders - N3 term builders
+ * @returns N3 Literal term
+ *
+ * @example
+ * ```typescript
+ * valueToLiteral(42, { xsd: "..." }, builders)
+ * // => Literal("42", NamedNode("xsd:decimal"))
+ *
+ * valueToLiteral("hello", prefixes, builders)
+ * // => Literal("hello")
+ *
+ * valueToLiteral({ value: "Bonjour", language: "fr" }, prefixes, builders)
+ * // => Literal("Bonjour", "fr")
+ * ```
+ */
 export const valueToLiteral = (
-  value: string | number | boolean,
+  value: string | number | boolean | { value: string; language?: string },
   prefixes: Record<string, string>,
   builders: N3TermBuilders
 ): N3.Literal => {
+  if (typeof value === "object" && value !== null && "value" in value) {
+    // Handle language-tagged string
+    const valStr = String(value.value)
+    if (value.language) {
+      return builders.literal(valStr, value.language)
+    }
+    return builders.literal(valStr)
+  }
+
   const valueStr = String(value)
 
   if (typeof value === "string") {
     return builders.literal(valueStr)
   }
 
-  const datatypeIri = getXsdDatatype(value, prefixes.xsd)
+  // Handle numbers and booleans
+  const datatypeIri = getXsdDatatype(value as number | boolean, prefixes.xsd)
 
   if (datatypeIri) {
     return builders.literal(valueStr, builders.namedNode(datatypeIri))

@@ -9,6 +9,8 @@
  * @module Utils/Iri
  */
 
+import type { IRI, LocalName } from "../Domain/Rdf/Types.js"
+
 /**
  * Build a case-insensitive lookup map from IRIs.
  *
@@ -23,21 +25,21 @@
  * const map = buildCaseInsensitiveIriMap([
  *   "http://ontology/TeamRanking",
  *   "http://ontology/PlayerName"
- * ])
+ * ] as IRI[])
  * // map.get("http://ontology/teamranking") => "http://ontology/TeamRanking"
  * ```
  *
  * @since 2.0.0
  */
 export const buildCaseInsensitiveIriMap = (
-  iris: ReadonlyArray<string>
-): Map<string, string> => new Map(iris.map((iri) => [iri.toLowerCase(), iri]))
+  iris: ReadonlyArray<IRI>
+): Map<string, IRI> => new Map(iris.map((iri) => [iri.toLowerCase(), iri]))
 
 /**
  * Normalize an IRI to its canonical form using case-insensitive matching.
  *
  * If the input IRI matches a canonical IRI (case-insensitively), returns the canonical form.
- * Otherwise, returns the input unchanged.
+ * Otherwise, returns the input unchanged (cast as IRI).
  *
  * @param input - IRI to normalize (potentially with wrong casing)
  * @param iriMap - Case-insensitive lookup map from buildCaseInsensitiveIriMap
@@ -45,7 +47,7 @@ export const buildCaseInsensitiveIriMap = (
  *
  * @example
  * ```typescript
- * const map = buildCaseInsensitiveIriMap(["http://ontology/TeamRanking"])
+ * const map = buildCaseInsensitiveIriMap(["http://ontology/TeamRanking" as IRI])
  * normalizeIri("http://ontology/teamranking", map) // => "http://ontology/TeamRanking"
  * normalizeIri("http://ontology/Unknown", map) // => "http://ontology/Unknown"
  * ```
@@ -54,8 +56,8 @@ export const buildCaseInsensitiveIriMap = (
  */
 export const normalizeIri = (
   input: string,
-  iriMap: Map<string, string>
-): string => iriMap.get(input.toLowerCase()) ?? input
+  iriMap: Map<string, IRI>
+): IRI => (iriMap.get(input.toLowerCase()) ?? input) as IRI
 
 /**
  * Normalize an array of IRIs to their canonical forms.
@@ -68,8 +70,8 @@ export const normalizeIri = (
  */
 export const normalizeIris = (
   inputs: ReadonlyArray<string>,
-  iriMap: Map<string, string>
-): ReadonlyArray<string> => inputs.map((iri) => normalizeIri(iri, iriMap))
+  iriMap: Map<string, IRI>
+): ReadonlyArray<IRI> => inputs.map((iri) => normalizeIri(iri, iriMap))
 
 /**
  * Check if an IRI exists in the canonical set (case-insensitively).
@@ -82,5 +84,118 @@ export const normalizeIris = (
  */
 export const iriExistsCaseInsensitive = (
   input: string,
-  iriMap: Map<string, string>
+  iriMap: Map<string, IRI>
 ): boolean => iriMap.has(input.toLowerCase())
+
+// =============================================================================
+// Local Name Expansion Utilities
+// =============================================================================
+
+/**
+ * Extract local name from an IRI (part after last / or #)
+ *
+ * @param iri - Full IRI string
+ * @returns Local name portion
+ *
+ * @example
+ * ```typescript
+ * extractLocalNameFromIri("http://ontology/Player") // => "Player"
+ * extractLocalNameFromIri("http://www.w3.org/2001/XMLSchema#string") // => "string"
+ * ```
+ *
+ * @since 2.0.0
+ */
+export const extractLocalNameFromIri = (iri: string): LocalName => {
+  const lastSlash = iri.lastIndexOf("/")
+  const lastHash = iri.lastIndexOf("#")
+  const splitIndex = Math.max(lastSlash, lastHash)
+  return (splitIndex >= 0 ? iri.slice(splitIndex + 1) : iri) as LocalName
+}
+
+/**
+ * Build a case-insensitive local name to IRI map.
+ *
+ * Creates a Map where keys are lowercase local names and values are the full canonical IRIs.
+ * This allows case-insensitive local name matching while providing the full IRI.
+ *
+ * @param iris - Array of canonical IRIs
+ * @returns Map from lowercase local name to full canonical IRI
+ *
+ * @example
+ * ```typescript
+ * const map = buildLocalNameToIriMap([
+ *   "http://ontology/Player",
+ *   "http://ontology/TeamRanking"
+ * ] as IRI[])
+ * // map.get("player") => "http://ontology/Player"
+ * // map.get("teamranking") => "http://ontology/TeamRanking"
+ * ```
+ *
+ * @since 2.0.0
+ */
+export const buildLocalNameToIriMap = (
+  iris: ReadonlyArray<IRI>
+): Map<string, IRI> => new Map(iris.map((iri) => [extractLocalNameFromIri(iri).toLowerCase(), iri]))
+
+/**
+ * Expand a local name to its full IRI using case-insensitive matching.
+ *
+ * @param localName - Local name (e.g., "Player")
+ * @param localNameMap - Case-insensitive local name to IRI map from buildLocalNameToIriMap
+ * @returns Full IRI if found, undefined otherwise
+ *
+ * @example
+ * ```typescript
+ * const map = buildLocalNameToIriMap(["http://ontology/Player" as IRI])
+ * expandLocalNameToIri("player", map) // => "http://ontology/Player"
+ * expandLocalNameToIri("Player", map) // => "http://ontology/Player"
+ * expandLocalNameToIri("Unknown", map) // => undefined
+ * ```
+ *
+ * @since 2.0.0
+ */
+export const expandLocalNameToIri = (
+  localName: string,
+  localNameMap: Map<string, IRI>
+): IRI | undefined => localNameMap.get(localName.toLowerCase())
+
+/**
+ * Expand an array of local names to full IRIs.
+ *
+ * Filters out any local names that don't match known IRIs.
+ *
+ * @param localNames - Array of local names
+ * @param localNameMap - Case-insensitive local name to IRI map
+ * @returns Array of full IRIs (only valid expansions)
+ *
+ * @example
+ * ```typescript
+ * const map = buildLocalNameToIriMap([
+ *   "http://ontology/Player",
+ *   "http://ontology/Team"
+ * ] as IRI[])
+ * expandTypesToIris(["player", "Team", "Unknown"], map)
+ * // => ["http://ontology/Player", "http://ontology/Team"]
+ * ```
+ *
+ * @since 2.0.0
+ */
+export const expandTypesToIris = (
+  localNames: ReadonlyArray<string>,
+  localNameMap: Map<string, IRI>
+): ReadonlyArray<IRI> =>
+  localNames
+    .map((name) => expandLocalNameToIri(name, localNameMap))
+    .filter((iri): iri is IRI => iri !== undefined)
+
+/**
+ * Get all valid local names from a set of IRIs.
+ *
+ * @param iris - Array of canonical IRIs
+ * @returns Set of lowercase local names
+ *
+ * @since 2.0.0
+ */
+export const getLocalNameSet = (
+  iris: ReadonlyArray<IRI>
+): Set<string> => new Set(iris.map((iri) => extractLocalNameFromIri(iri).toLowerCase()))
