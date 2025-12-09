@@ -1,28 +1,28 @@
-import { FileSystem } from "@effect/platform"
-import { BunContext, BunFileSystem, BunRuntime } from "@effect/platform-bun"
+import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { Effect, Layer } from "effect"
-import * as path from "node:path"
 import { defaultEntityResolutionConfig } from "./Domain/Model/EntityResolution.js"
+import type { RunConfig, RunStats } from "./Domain/Model/ExtractionRun.js"
 import { ProductionLayersWithTracing } from "./Runtime/ProductionRuntime.js"
 import { ConfigService } from "./Service/Config.js"
 import { toMermaid } from "./Service/EntityLinker.js"
+import { ExtractionRunService, ExtractionRunServiceDefault, getRunIdFromText } from "./Service/ExtractionRun.js"
 import { NlpService } from "./Service/Nlp.js"
+import { NomicNlpServiceDefault } from "./Service/NomicNlp.js"
 import { OntologyService } from "./Service/Ontology.js"
 import { RdfBuilder } from "./Service/Rdf.js"
 import { buildEntityResolutionGraph, type EntityResolutionGraph } from "./Workflow/EntityResolutionGraph.js"
 import { streamingExtraction } from "./Workflow/StreamingExtraction.js"
 
-const FootballOntologyLayer = OntologyService.Default(
-  "/Users/pooks/Dev/effect-ontology/ontologies/football/ontology.ttl"
-).pipe(Layer.provideMerge(BunContext.layer))
+const FootballOntologyLayer = OntologyService.Default.pipe(Layer.provideMerge(BunContext.layer))
 
 const Live = Layer.mergeAll(
   ProductionLayersWithTracing.pipe(Layer.provideMerge(ConfigService.Default)),
   FootballOntologyLayer,
   NlpService.Default,
   RdfBuilder.Default,
-  BunFileSystem.layer
-)
+  ExtractionRunServiceDefault,
+  NomicNlpServiceDefault
+).pipe(Layer.provideMerge(BunContext.layer))
 
 /**
  * Serialize ERG to a saveable format (stats + Mermaid visualization)
@@ -42,119 +42,40 @@ const serializeERG = (erg: EntityResolutionGraph): string => {
 }
 
 const program = Effect.gen(function*() {
-  const fs = yield* FileSystem.FileSystem
+  const runService = yield* ExtractionRunService
+  const rdf = yield* RdfBuilder
+  const config = yield* ConfigService
 
-  // Extract knowledge graph from text
-  const kg = yield* streamingExtraction(
-    `ANALYSIS
-Luke Shaw criticised by Gary Neville for 'ambling' in Man Utd's loss to Everton but was Ruben Amorim's inflexibility to blame?
+  const inputText =
+    `The Dutch soccer teams of the 1960s and '70s were famous for developing Total Football, a radical system in which every player could play every position. Those tactics have died out, but their influence remains.I llustration by Michael Houtz; photographs by Getty Images
 
-Luke Shaw came under fire as Man Utd's defeat to Everton raised more questions of Ruben Amorim's system; Gary Neville on Luke Shaw against Everton: "He's ambling. You can't do that. He should be running forward every single time"
+Fans who adopt a team may never feel the pulsing joy and panic known to native supporters, but that doesn’t stop our screaming, our praying, shaking our fists at the screen. It certainly didn’t prevent blood from rushing into my face when the Netherlands faced Senegal last week in the World Cup, and after 83 minutes, Dutchman Cody Gakpo snuck into the box—just the right speed, just the right time—and launched himself into a ballsy header that put Holland on top. 
 
-By Nick Wright, Oliver Yew and Adam Smith
+At the same time, the sight of those orange jerseys also brought pain and sadness. This is my first World Cup without Lars, the friend who turned me orange, so to speak, and taught me to appreciate the game in all its complexity. 
 
-Tuesday 25 November 2025 15:06, UK
 
-Gary Neville slammed Luke Shaw's lack of intensity as Manchester United slumped to another low under head coach Ruben Amorim with their 1-0 defeat to 10-man Everton.
-
-The 30-year-old, playing as the left-sided centre-back in Ruben Amorim's back three, was singled out for "ambling" forward as Manchester United tried, and failed, to recover from a goal down.
-
-Was the Sky Sports pundit's criticism justified? Or is Amorim's system a bigger problem? The defeat raised yet more questions of his devotion to using three at the back.
-
-Man Utd 0-1 Everton - report & highlights
-Got Sky? Watch Premier League games LIVE on your phone📱
-Not got Sky? Get Sky Sports or stream with no contract on NOW📺
-Have injuries taken a toll on Shaw?
-
-Shaw is one of four Manchester United players, along with Matthijs De Ligt, Bruno Fernandes and Bryan Mbeumo, to have started every Premier League game this season. It has been a rare period of availability for a player dogged by fitness issues.
-
-Last season, he only completed 90 minutes once in the Premier League, having only done so seven times in the campaign before that. You have to go back to 2022/23 for the last time he managed to feature consistently across a full season.
-
-Staying fit has proved a major challenge for Shaw.
-
-Once a marauding full-back with the energy to shuttle between the two boxes, his physicality is not what it used to be. His lack of intensity against Everton riled Neville with Manchester United trailing against 10 men and needing a goal.
-
-Also See:
-
-Man Utd fixtures
-
-Man Utd news and transfer latest
-
-Watch FREE Premier League highlights
-
-Stream the Premier League with no contract
-
-"You have Shaw, [Leny] Yoro and [Matthijs] De Ligt behind the ball," he said on co-commentary. "Shaw is getting forward more, but he's ambling forward, let's be clear. He's been bugging me for the last 20 minutes. He's ambling. You can't do that.
-
-Play Video - 'So disappointing' - Neville questions 'pedestrian' Man Utd in Everton defeat
-Speaking on the Gary Neville Podcast, the former Man Utd full-back called his former side's defeat against Everton an 'embarrassment'
-
-"He should be running forward every single time. I don't care. Yoro, I have a little bit more sympathy for but Shaw? That's a waste of time. I don't care. It's not conning anybody. I'm not having it."
-
-Shaw's physical decline can be seen in the numbers. There is a caveat in that he has been used in a role which requires less running under Amorim, as a centre-back rather than a full-back, but the drop-off in many areas predates the head coach's arrival.
-
-Shaw's sprints and kilometres covered per 90 minutes have followed a downward trend and his attacking output has also declined.
-
-Shaw has steadily contributed fewer crosses, goal involvements and chances created over the course of the last five seasons.
-
-Neville: Complacent Man Utd performance will erode trust
-
-Gary Neville says Manchester United's performance in the 1-0 defeat to 10-man Everton "smelt of complacency" and will "erode trust" in Ruben Amorim's team.
-
-Why Shaw sums up Amorim's inflexibility
-Play Video - 'Amorim has to take a lot of the blame!' | Carra critical of United's tactics after loss
-Speaking on MNF, Jamie Carragher believes Ruben Amorim was at fault after Manchester United's 1-0 loss to Everton, with the Toffees going down to 10 men after only 13 minutes
-
-Despite Shaw's limitations, Amorim's system once again came under intense scrutiny.
-
-Still trailing, Amorim made changes to try and get back into the game, bringing on Diogo Dalot for Patrick Dorgu and Kobbie Mainoo for Casemiro. They were like-for-like substitution as the United boss left Shaw, De Ligt and Yoro on the pitch, sticking with his three-at-the back system for the full 90 minutes.
-
-It was a move that left many Man Utd fans frustrated, particularly bringing on the right-footed Dalot to play in front of Shaw as the pair ended up getting in each other's way on Manchester United's left side.
-
-"You have to have urgency and make the pitch as big as possible, and you have to put as many players as possible in forward areas," said Neville.
-
-Image:
-Man Utd struggled early as 10-man Everton struck first, leaving United lacking a focal point in their push for an equaliser
-
-"Ruben Amorim has a question to answer," he added.
-
-"Bringing Dalot on over there in front of Shaw? I don't quite see it. You have five at the back, why? Embarrassing.
-
-"This should be like the Alamo. Really quick, high-tempo passing side-to-side, getting into good wide areas, putting crosses in, getting bodies in attack, sustaining attacks. It's very slow from United. There is no presence in the box whatsoever."
-
-Once again, Amorim being wedded to his 3-4-3 formation and his reluctance to change in-game proved costly for United. His devotion to playing three at the back has come to be seen as a flaw, especially when trying to chase games.
-
-Questions will be asked again of Amorim and his flexibility. It's hard to see why he kept his three central defenders on the pitch and didn't throw extra attackers on against Everton when it was obvious they were lacking a focal point in the absence of the injured Benjamin Sesko and Matheus Cunha, something which was also highlighted by Jamie Carragher after the game on Monday Night Football.
-
-"Ruben Amorim feels like the first manager I've seen who sticks with a system rather than an idea of how to play," Carragher said. "It feels like the formation is his baby and to not change it or alter it in certain situations like that [against Everton], I don't understand how you can stick with it so steadfastly.
-
-"If you have to stick with the system, put a midfielder in defence, which we have seen managers do in the past, because you are going to have so much of the ball.
-
-"It's not about losing the three points against Everton, I think it is one of those moments where people will really question the manager. He will take a lot of the blame."
-
-Amorim: Man Utd are nowhere near where we should be
-Man Utd's underperforming wing-backs
-
-Amorim still has Lisandro Martinez to return from injury. The Argentina international will likely slot back into the left-sided centre-back role, but Shaw looks unsuited to playing at wing-back and Amorim's other options are also underperforming.
-
-At Sporting, his wing-backs were attacking outlets vital in making his system work. In his final full season in charge, in 2023/24, Nuno Santos, Geny Catamo and Ricardo Esagio, his three most-used wing-backs, contributed a combined total of 26 goals or assists between them in league games alone.
-
-Play Video - 'Out of his depth!' | Players or Amorim? Who takes the blame for Man Utd defeat?
-Poor performance or bad tactics? Charlie Austin and Jamie O'Hara debate who should take responsibility for Man Utd's defeat to Everton
-
-Amorim's wing-backs at Manchester United have contributed half as many goals or assists across a similar number of league games.
-
-And nine of their 13 goals and assists, roughly 70 per cent, have come from Amad Diallo, with the others used in the position, Dorgu, Dalot, Noussair Mazraoui, Harry Amass and Tyrell Malacia, only managing four between them in a combined 67 starts at wing-back.
-
-The struggles of Amorim's wing-backs raise further questions about Amorim's devotion to his system. If they are not contributing offensively, then what are they really bringing to the table?
-
-It is just one of many questions for their under-fire head coach, who can add Shaw's decline to a growing list of problems.
 `
-  )
+  // Create run configuration
+  const runConfig: RunConfig = {
+    chunking: {
+      maxChunkSize: 500,
+      preserveSentences: true
+    },
+    concurrency: config.runtime.extractionConcurrency,
+    ontologyPath: config.ontology.path
+  }
+
+  // Extract knowledge graph (run is created internally)
+  const kg = yield* streamingExtraction(inputText, runConfig)
+
+  // Get run ID for saving outputs (deterministic from text hash)
+  const runId = getRunIdFromText(inputText)
+  console.log("\n=== Extraction Run ===")
+  console.log("Run ID: " + runId)
 
   console.log("\n=== Knowledge Graph Extracted ===")
-  console.log(`Entities: ${kg.entities.length}`)
-  console.log(`Relations: ${kg.relations.length}`)
+  console.log("Entities: " + kg.entities.length)
+  console.log("Relations: " + kg.relations.length)
 
   // Show chunk distribution
   const chunkCounts = new Map<number, number>()
@@ -166,6 +87,11 @@ It is just one of many questions for their under-fire head coach, who can add Sh
   for (const [chunk, count] of [...chunkCounts.entries()].sort((a, b) => a[0] - b[0])) {
     console.log(`  Chunk ${chunk}: ${count} entities`)
   }
+
+  // Save knowledge graph JSON
+  const kgJson = JSON.stringify(kg.toJSON(), null, 2)
+  yield* runService.saveOutput(runId, "knowledge-graph", kgJson)
+  console.log(`\nKnowledge graph saved to run outputs`)
 
   // Build Entity Resolution Graph
   console.log("\n=== Building Entity Resolution Graph ===")
@@ -194,26 +120,47 @@ It is just one of many questions for their under-fire head coach, who can add Sh
     }
   }
 
-  // Save ERG to file
-  const outputDir = path.resolve(process.cwd(), "output")
-  yield* fs.makeDirectory(outputDir, { recursive: true })
+  // Save ERG JSON
+  const ergJson = serializeERG(erg)
+  yield* runService.saveOutput(runId, "entity-resolution-graph", ergJson)
+  console.log(`\nEntity resolution graph saved to run outputs`)
 
-  const ergPath = path.resolve(outputDir, "entity-resolution-graph.json")
-  yield* fs.writeFileString(ergPath, serializeERG(erg))
-  console.log(`\nERG saved to: ${ergPath}`)
-
-  // Also save Mermaid diagram separately for easy viewing
-  const mermaidPath = path.resolve(outputDir, "erg-diagram.md")
+  // Save Mermaid diagram
   const mermaidDiagram = toMermaid(erg)
-  yield* fs.writeFileString(mermaidPath, `# Entity Resolution Graph\n\n\`\`\`mermaid\n${mermaidDiagram}\n\`\`\``)
-  console.log(`Mermaid diagram saved to: ${mermaidPath}`)
+  const mermaidContent = `# Entity Resolution Graph\n\n\`\`\`mermaid\n${mermaidDiagram}\n\`\`\``
+  yield* runService.saveOutput(runId, "mermaid-diagram", mermaidContent)
+  console.log(`Mermaid diagram saved to run outputs`)
 
-  // Save KnowledgeGraph JSON for reference
-  const kgPath = path.resolve(outputDir, "knowledge-graph.json")
-  yield* fs.writeFileString(kgPath, JSON.stringify(kg.toJSON(), null, 2))
-  console.log(`Knowledge graph saved to: ${kgPath}`)
+  // Convert to RDF and save Turtle
+  const turtle = yield* Effect.gen(function*() {
+    const store = yield* rdf.makeStore
+    yield* rdf.addEntities(store, kg.entities)
+    yield* rdf.addRelations(store, kg.relations)
+    return yield* rdf.toTurtle(store)
+  }).pipe(Effect.scoped)
+
+  yield* runService.saveOutput(runId, "rdf-turtle", turtle)
+  console.log(`RDF Turtle saved to run outputs`)
+
+  // Update run statistics
+  const stats: RunStats = {
+    chunkCount: chunkCounts.size,
+    entityCount: kg.entities.length,
+    relationCount: kg.relations.length,
+    resolvedCount: erg.stats.resolvedCount,
+    clusterCount: erg.stats.clusterCount
+  }
+  yield* runService.updateStats(runId, stats)
+
+  // Mark run as completed
+  yield* runService.completeRun(runId)
+
+  console.log("\n=== Extraction Run Complete ===")
+  const run = yield* runService.getRun(runId)
+  console.log("All artifacts saved to: " + run.outputDir)
 }).pipe(
-  Effect.provide(Live)
+  Effect.provide(Live),
+  Effect.orDie
 )
 
 BunRuntime.runMain(program)

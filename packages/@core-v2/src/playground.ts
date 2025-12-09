@@ -1,13 +1,14 @@
 import { FileSystem } from "@effect/platform"
 import { BunContext } from "@effect/platform-bun"
 import { Chunk, Console, Effect, Layer } from "effect"
+import type { IRI } from "./Domain/Rdf/Types.js"
 import { ConfigService } from "./Service/Config.js"
 import { NlpService } from "./Service/Nlp.js"
 import { OntologyService } from "./Service/Ontology.js"
 import { RdfBuilder } from "./Service/Rdf.js"
 
 const liveLayer = Layer.mergeAll(
-  OntologyService.Default("/Users/pooks/Dev/effect-ontology/ontologies/football/ontology.ttl"),
+  OntologyService.Default,
   NlpService.Default,
   RdfBuilder.Default,
   ConfigService.Default
@@ -212,7 +213,7 @@ const runTest = (
       : yield* ontology.searchClassesSemantic(testCase.query, 10)
 
     const resultIds = Chunk.toReadonlyArray(results).map((c) => c.id)
-    const foundExpected = testCase.expectedClasses.filter((expected) => resultIds.includes(expected))
+    const foundExpected = testCase.expectedClasses.filter((expected) => resultIds.includes(expected as IRI))
     const passed = foundExpected.length === testCase.expectedClasses.length
     const score = testCase.expectedClasses.length > 0 ? foundExpected.length / testCase.expectedClasses.length : 0
 
@@ -314,4 +315,4 @@ const program = Effect.gen(function*() {
   }
 }).pipe(Effect.provide(liveLayer))
 
-program.pipe(Effect.runPromise)
+program.pipe(Effect.orDie, Effect.runPromise)

@@ -103,7 +103,7 @@ export const makeLanguageModelLayer = Layer.unwrapEffect(
 
       case "google": {
         // Only load Google API key from environment
-        const apiKeyRedacted = yield* Config.redacted("GOOGLE_API_KEY").pipe(
+        const apiKeyRedacted = yield* Config.redacted("GEMINI_API_KEY").pipe(
           Config.orElse(() => Config.redacted("VITE_LLM_GEMINI_API_KEY")),
           Config.orElse(() => Config.succeed(Redacted.make(config.llm.googleApiKey)))
         )

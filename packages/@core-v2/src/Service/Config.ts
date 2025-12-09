@@ -97,7 +97,7 @@ export const DEFAULT_CONFIG: Config = {
     cacheTtlSeconds: 3600
   },
   runtime: {
-    extractionConcurrency: 2, // Reduced from 4 to avoid API rate limits
+    extractionConcurrency: 8, // Reduced from 4 to avoid API rate limits
     retryMaxAttempts: 8, // Increased for transient network/rate limit errors
     retryInitialDelayMs: 3000, // Base delay for exponential backoff
     retryMaxDelayMs: 30_000 // Cap max delay at 30s to avoid excessively long waits

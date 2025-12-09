@@ -9,9 +9,10 @@
  * @module Runtime/TestRuntime
  */
 
+import type { Response } from "@effect/ai"
 import { LanguageModel } from "@effect/ai"
 import { BunContext } from "@effect/platform-bun"
-import { Effect, Layer, ManagedRuntime } from "effect"
+import { Effect, Layer, ManagedRuntime, Stream } from "effect"
 import { ConfigService } from "../Service/Config.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { NlpService } from "../Service/Nlp.js"
@@ -28,15 +29,17 @@ import { RdfBuilder } from "../Service/Rdf.js"
  */
 const MockLanguageModel = Layer.succeed(
   LanguageModel.LanguageModel,
-  {
-    generate: () => Effect.succeed({ value: "", usage: { inputTokens: 0, outputTokens: 0 } }),
-    stream: () => Effect.succeed({ value: "", usage: { inputTokens: 0, outputTokens: 0 } }),
+  LanguageModel.LanguageModel.of({
+    generateText: () => Effect.succeed(new LanguageModel.GenerateTextResponse<{}>([])),
+    streamText: () => Stream.fromIterable<Response.StreamPart<{}>>([]),
     generateObject: () =>
-      Effect.succeed({
-        value: { entities: [], relations: [] },
-        usage: { inputTokens: 0, outputTokens: 0 }
-      })
-  } as LanguageModel.LanguageModel
+      Effect.succeed(
+        new LanguageModel.GenerateObjectResponse<{}, any>(
+          { entities: [], relations: [] },
+          []
+        ) as LanguageModel.GenerateObjectResponse<any, any>
+      )
+  })
 )
 
 /**
@@ -50,11 +53,15 @@ const MockLanguageModel = Layer.succeed(
  *
  * @since 2.0.0
  */
+const ontologyLayer = OntologyService.Default.pipe(
+  Layer.provide(BunContext.layer)
+)
+
 export const TestLayers = Layer.mergeAll(
   ConfigService.Default,
   NlpService.Default,
   RdfBuilder.Default,
-  OntologyService.Default,
+  ontologyLayer,
   MockLanguageModel,
   EntityExtractor.Test,
   RelationExtractor.Test,
