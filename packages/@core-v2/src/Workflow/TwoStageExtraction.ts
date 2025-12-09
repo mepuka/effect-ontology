@@ -10,10 +10,7 @@
 
 import { Effect } from "effect"
 import { ExtractionError } from "../Domain/Error/Extraction.js"
-import type { EntityExtractor, MentionExtractor, RelationExtractor } from "../Service/Extraction.js"
-import type { Grounder } from "../Service/Grounder.js"
-import type { NlpService } from "../Service/Nlp.js"
-import type { OntologyService } from "../Service/Ontology.js"
+import { makeRunConfig, type RunConfig } from "../Domain/Model/ExtractionRun.js"
 import { RdfBuilder } from "../Service/Rdf.js"
 import { streamingExtraction } from "./StreamingExtraction.js"
 
@@ -26,40 +23,34 @@ import { streamingExtraction } from "./StreamingExtraction.js"
  * 3. Serialize RDF store to Turtle format
  *
  * @param text - Source text to extract from
- * @param concurrency - Max parallel extraction tasks (default: 4)
+ * @param config - Run configuration (use makeRunConfig helper)
  * @returns Turtle RDF string
  *
  * @example
  * ```typescript
- * const turtle = yield* extractToTurtle("Cristiano Ronaldo plays for Al-Nassr")
+ * const config = makeRunConfig("/path/to/ontology.ttl")
+ * const turtle = yield* extractToTurtle("Cristiano Ronaldo plays for Al-Nassr", config)
  * ```
  *
  * @since 2.0.0
  * @category Workflows
  */
-export const extractToTurtle = (
-  text: string,
-  concurrency: number = 4
-): Effect.Effect<
-  string,
-  ExtractionError,
-  EntityExtractor | MentionExtractor | RelationExtractor | Grounder | OntologyService | NlpService | RdfBuilder
-> =>
+export const extractToTurtle = (text: string, config: RunConfig) =>
   Effect.gen(function*() {
     yield* Effect.logInfo("Starting two-stage extraction", {
       stage: "two-stage-extraction",
       textLength: text.length,
-      concurrency
+      concurrency: config.concurrency
     })
 
     // Phase 1: Extract knowledge graph from text
-    const graph = yield* streamingExtraction(text, concurrency).pipe(
+    const graph = yield* streamingExtraction(text, config).pipe(
       Effect.withLogSpan("extraction-phase"),
-      Effect.tap((graph) =>
+      Effect.tap((g) =>
         Effect.logInfo("Knowledge graph extracted", {
           stage: "extraction-phase",
-          entityCount: graph.entities.length,
-          relationCount: graph.relations.length
+          entityCount: g.entities.length,
+          relationCount: g.relations.length
         })
       ),
       Effect.mapError(
@@ -72,82 +63,63 @@ export const extractToTurtle = (
       )
     )
 
-    const rdf = yield* RdfBuilder
-
-    // Phase 2: Convert KnowledgeGraph to RDF and serialize to Turtle
-    const turtle = yield* Effect.gen(function*() {
-      yield* Effect.logDebug("Converting graph to RDF", {
-        stage: "rdf-conversion",
-        entityCount: graph.entities.length,
-        relationCount: graph.relations.length
-      })
-
-      // Create scoped RDF store
-      const store = yield* rdf.makeStore
-
-      // Add entities to store
-      yield* rdf.addEntities(store, graph.entities).pipe(
-        Effect.withLogSpan("rdf-entity-conversion"),
-        Effect.tap(() =>
-          Effect.logDebug("Entities added to RDF store", {
-            stage: "rdf-conversion",
-            entityCount: graph.entities.length
+    // Phase 2: Convert to RDF
+    const rdfBuilder = yield* RdfBuilder
+    const store = yield* rdfBuilder.createStore
+    yield* rdfBuilder.addEntities(store, graph.entities).pipe(
+      Effect.mapError(
+        (error) =>
+          new ExtractionError({
+            message: `RDF entity conversion failed: ${error.message}`,
+            cause: error,
+            text
           })
-        ),
-        Effect.mapError(
-          (error) =>
-            new ExtractionError({
-              message: `Failed to add entities to RDF store: ${error.message}`,
-              cause: error,
-              text
-            })
-        )
       )
-
-      // Add relations to store
-      yield* rdf.addRelations(store, graph.relations).pipe(
-        Effect.withLogSpan("rdf-relation-conversion"),
-        Effect.tap(() =>
-          Effect.logDebug("Relations added to RDF store", {
-            stage: "rdf-conversion",
-            relationCount: graph.relations.length
+    )
+    yield* rdfBuilder.addRelations(store, graph.relations).pipe(
+      Effect.mapError(
+        (error) =>
+          new ExtractionError({
+            message: `RDF relation conversion failed: ${error.message}`,
+            cause: error,
+            text
           })
-        ),
-        Effect.mapError(
-          (error) =>
-            new ExtractionError({
-              message: `Failed to add relations to RDF store: ${error.message}`,
-              cause: error,
-              text
-            })
-        )
       )
+    )
 
-      // Serialize to Turtle
-      return yield* rdf.toTurtle(store).pipe(
-        Effect.withLogSpan("turtle-serialization"),
-        Effect.tap((turtle) =>
-          Effect.logInfo("Turtle serialization complete", {
-            stage: "turtle-serialization",
-            turtleLength: turtle.length,
-            lineCount: turtle.split("\n").length
+    // Phase 3: Serialize to Turtle
+    const turtle = yield* rdfBuilder.toTurtle(store).pipe(
+      Effect.withLogSpan("turtle-serialization"),
+      Effect.mapError(
+        (error) =>
+          new ExtractionError({
+            message: `Turtle serialization failed: ${error.message}`,
+            cause: error,
+            text
           })
-        ),
-        Effect.mapError(
-          (error) =>
-            new ExtractionError({
-              message: `Turtle serialization failed: ${error.message}`,
-              cause: error,
-              text
-            })
-        )
       )
-    }).pipe(Effect.scoped)
+    )
 
     yield* Effect.logInfo("Two-stage extraction complete", {
       stage: "two-stage-extraction",
-      finalTurtleLength: turtle.length
+      entityCount: graph.entities.length,
+      relationCount: graph.relations.length,
+      turtleSize: turtle.length
     })
 
     return turtle
   })
+
+/**
+ * Convenience function with default config
+ *
+ * @param text - Source text to extract from
+ * @param ontologyPath - Path to ontology file
+ * @param concurrency - Max parallel extraction tasks (default: 4)
+ * @returns Turtle RDF string
+ */
+export const extractToTurtleSimple = (
+  text: string,
+  ontologyPath: string,
+  concurrency: number = 4
+) => extractToTurtle(text, makeRunConfig(ontologyPath, { concurrency }))

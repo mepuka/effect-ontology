@@ -9,7 +9,7 @@
  */
 
 import { LanguageModel } from "@effect/ai"
-import { Cause, Chunk, Duration, Effect, JSONSchema, Layer, Ref, Schedule, Stream } from "effect"
+import { Cause, Chunk, Duration, Effect, JSONSchema, Layer, Option, Ref, Schedule, Stream } from "effect"
 import {
   EntityExtractionFailed,
   MentionExtractionFailed,
@@ -17,6 +17,7 @@ import {
 } from "../Domain/Error/Extraction.js"
 import { Entity, Relation } from "../Domain/Model/Entity.js"
 import type { ClassDefinition, PropertyDefinition } from "../Domain/Model/Ontology.js"
+import type { IRI } from "../Domain/Rdf/Types.js"
 import { generateEntityPrompt, generateMentionPrompt, generateRelationPrompt } from "../Prompt/index.js"
 import { makeEntitySchema } from "../Schema/EntityFactory.js"
 import { type Mention, MentionGraphSchema } from "../Schema/MentionFactory.js"
@@ -28,7 +29,7 @@ import {
   annotateRetry,
   LlmAttributes
 } from "../Telemetry/LlmAttributes.js"
-import { buildCaseInsensitiveIriMap, normalizeIri } from "../Utils/Iri.js"
+import { buildLocalNameToIriMap, expandLocalNameToIri, expandTypesToIris } from "../Utils/Iri.js"
 import { ConfigService } from "./Config.js"
 import { generateObjectWithFeedback } from "./GenerateWithFeedback.js"
 import { makeRetryPolicy } from "./Retry.js"
@@ -186,18 +187,34 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
             (datatypeProps ?? []).map((p) => p.id)
           )
 
+          // Build local name to IRI map for expanding types post-extraction
+          // LLM outputs local names (e.g., "Player") which we expand to full IRIs
+          const classIris = candidates.map((c) => c.id) as unknown as ReadonlyArray<IRI>
+          const localNameToIriMap = buildLocalNameToIriMap(classIris)
+
           // Convert to Entity domain models
           // Schema validation already enforced all constraints (types in candidate classes, ID format)
           // If generateObject succeeded, all entities are valid
-          // Only perform business logic transformations (ID generation, attribute filtering)
+          // Only perform business logic transformations (ID generation, attribute filtering, IRI expansion)
           let filteredAttributeCount = 0
+          let skippedEntityCount = 0
           const entities = yield* Stream.fromIterable(response.value.entities)
             .pipe(
-              Stream.map((entityData) => {
+              Stream.filterMap((entityData): Option.Option<Entity> => {
                 // Generate deterministic ID if not provided or invalid (business logic, not validation)
                 let entityId = entityData.id
                 if (!entityId || !/^[a-z][a-z0-9_]*$/.test(entityId)) {
                   entityId = generateEntityId(entityData.mention)
+                }
+
+                // Expand local names to full IRIs
+                // LLM outputs local names (e.g., ["Player", "Team"]) and we expand to full IRIs
+                const expandedTypes = expandTypesToIris(entityData.types, localNameToIriMap)
+
+                // Skip entities with no valid types after expansion
+                if (expandedTypes.length === 0) {
+                  skippedEntityCount++
+                  return Option.none()
                 }
 
                 // Convert attributes to proper format and filter invalid keys
@@ -217,16 +234,27 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
                   }
                 }
 
-                // Create Entity domain model - types are already validated by schema
-                return new Entity({
-                  id: entityId,
-                  mention: entityData.mention,
-                  types: entityData.types, // Schema ensures these are in candidate classes
-                  attributes
-                })
+                // Create Entity domain model with expanded types (full IRIs)
+                return Option.some(
+                  new Entity({
+                    id: entityId,
+                    mention: entityData.mention,
+                    types: expandedTypes as ReadonlyArray<IRI>, // Expanded to full IRIs
+                    attributes
+                  })
+                )
               }),
               Stream.runCollect
             )
+
+          // Log if any entities were skipped due to invalid types
+          if (skippedEntityCount > 0) {
+            yield* Effect.logWarning("Skipped entities with no valid types after expansion", {
+              stage: "entity-extraction",
+              skippedEntityCount,
+              candidateClassCount: classIris.length
+            })
+          }
 
           // Log if any attributes were filtered
           if (filteredAttributeCount > 0) {
@@ -261,7 +289,6 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
   static Test = Layer.effect(
     EntityExtractor,
     Effect.succeed({
-      _tag: "EntityExtractor" as const,
       extract: (
         _text: string,
         candidates: ReadonlyArray<ClassDefinition>,
@@ -427,7 +454,6 @@ export class MentionExtractor extends Effect.Service<MentionExtractor>()("Mentio
   static Test = Layer.effect(
     MentionExtractor,
     Effect.succeed({
-      _tag: "MentionExtractor" as const,
       extract: (
         _text: string
       ): Effect.Effect<Chunk.Chunk<Mention>, MentionExtractionFailed, LanguageModel.LanguageModel> =>
@@ -606,24 +632,42 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
             )
           )
 
-          // Convert to Relation domain models with IRI normalization
+          // Convert to Relation domain models with local name to IRI expansion
           // Schema validation already enforced all constraints (subjectId, predicate, rangeType)
           // If generateObject succeeded, all relations are valid
-          // Post-extraction normalization ensures canonical IRI casing as a backup
-          const propertyIriMap = buildCaseInsensitiveIriMap(properties.map((p) => p.id))
+          // Post-extraction expansion converts local names (e.g., "playsFor") to full IRIs
+          const propertyIris = properties.map((p) => p.id) as unknown as ReadonlyArray<IRI>
+          const localNameToIriMap = buildLocalNameToIriMap(propertyIris)
+          let skippedRelationCount = 0
           const relations = yield* Stream.fromIterable(response.value.relations)
             .pipe(
-              Stream.map((relationData) => {
-                // Normalize predicate IRI casing to match canonical ontology form
-                const normalizedPredicate = normalizeIri(relationData.predicate, propertyIriMap)
-                return new Relation({
-                  subjectId: relationData.subjectId,
-                  predicate: normalizedPredicate,
-                  object: relationData.object
-                })
+              Stream.filterMap((relationData): Option.Option<Relation> => {
+                // Expand predicate local name to full IRI
+                const expandedPredicate = expandLocalNameToIri(relationData.predicate, localNameToIriMap)
+                if (!expandedPredicate) {
+                  // Skip relations with invalid predicates (should not happen if schema validated)
+                  skippedRelationCount++
+                  return Option.none()
+                }
+                return Option.some(
+                  new Relation({
+                    subjectId: relationData.subjectId,
+                    predicate: expandedPredicate as IRI,
+                    object: relationData.object
+                  })
+                )
               }),
               Stream.runCollect
             )
+
+          // Log if any relations were skipped due to invalid predicates
+          if (skippedRelationCount > 0) {
+            yield* Effect.logWarning("Skipped relations with invalid predicates after expansion", {
+              stage: "relation-extraction",
+              skippedRelationCount,
+              validPropertyCount: propertyIris.length
+            })
+          }
 
           // Log extracted relations summary
           const relationArray = Chunk.toReadonlyArray(relations)
@@ -653,7 +697,6 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
   static Test = Layer.effect(
     RelationExtractor,
     Effect.succeed({
-      _tag: "RelationExtractor" as const,
       extract: (
         _text: string,
         entities: Chunk.Chunk<Entity>,

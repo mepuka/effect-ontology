@@ -12,6 +12,7 @@ import { Doc } from "@effect/printer"
 import type { Entity } from "../Domain/Model/Entity.js"
 import type { ClassDefinition, PropertyDefinition } from "../Domain/Model/Ontology.js"
 import { extractLocalName } from "../Utils/Rdf.js"
+import { makeEntityRuleSet, makeMentionRuleSet, makeRelationRuleSet } from "./RuleSet.js"
 import type { RuleSet } from "./RuleSet.js"
 
 /**
@@ -37,25 +38,58 @@ export interface OntologyPromptContext {
 // =============================================================================
 
 /**
- * Build task header section
+ * Build namespace prefix section
+ * Explains that we use local names for token efficiency and will expand to full IRIs
  */
-const buildTaskSection = (text: string, stage: "mention" | "entity" | "relation"): Doc.Doc<never> => {
-  const taskDescription = stage === "mention"
-    ? "Extract all named entity mentions from the following text WITHOUT assigning types."
-    : stage === "entity"
-    ? "Extract all named entities from the following text and map them to the ontology classes defined below."
-    : "Extract relationships between entities from the following text using the ontology properties defined below."
+const buildNamespacePrefixSection = (ctx: OntologyPromptContext): Doc.Doc<never> => {
+  if (ctx.classes.length === 0) {
+    return Doc.empty
+  }
+
+  // Extract common namespace from first class
+  const sampleIri = ctx.classes[0]?.id ?? ""
+  const lastSlash = sampleIri.lastIndexOf("/")
+  const lastHash = sampleIri.lastIndexOf("#")
+  const splitIndex = Math.max(lastSlash, lastHash)
+  const namespace = splitIndex > 0 ? sampleIri.substring(0, splitIndex + 1) : ""
 
   return Doc.vsep([
-    Doc.text(taskDescription),
+    Doc.text("=== NAMESPACE ==="),
+    Doc.text(`Base: ${namespace}`),
+    Doc.text("Use LOCAL NAMES only (e.g., 'Player' not full URI)."),
+    Doc.text("We will expand to full URIs automatically."),
+    Doc.empty
+  ])
+}
+
+/**
+ * Build task header section (without input text - text is added at end of prompt)
+ */
+const buildTaskSection = (stage: "mention" | "entity" | "relation"): Doc.Doc<never> => {
+  const taskDescription = stage === "mention"
+    ? "Extract all named entity mentions from the text provided at the end WITHOUT assigning types."
+    : stage === "entity"
+    ? "Extract all named entities from the text provided at the end and map them to the ontology classes defined below."
+    : "Extract relationships between entities from the text provided at the end using the ontology properties defined below."
+
+  return Doc.text(taskDescription)
+}
+
+/**
+ * Build input text section (placed at end of prompt for LLM recency bias)
+ */
+const buildInputTextSection = (text: string): Doc.Doc<never> => {
+  return Doc.vsep([
+    Doc.text("=== INPUT TEXT ==="),
+    Doc.text("Extract from the following text:"),
     Doc.empty,
-    Doc.text("TEXT TO EXTRACT FROM:"),
     Doc.text(text)
   ])
 }
 
 /**
  * Build class snippet for ontology documentation
+ * Uses local names instead of full IRIs for token efficiency
  */
 const buildClassSnippet = (
   cls: ClassDefinition,
@@ -63,13 +97,19 @@ const buildClassSnippet = (
 ): Doc.Doc<never> => {
   const clsLocalName = extractLocalName(cls.id)
   const props = applicableProperties.filter(
-    (p) => p.domain.includes(clsLocalName) || p.domain.length === 0
+    // Fix: Ensure we are comparing local names. Property domain might store full IRIs or local names.
+    // We normalize both to local names to be safe.
+    (p) => {
+      const propertyDomains = p.domain.map(extractLocalName)
+      return propertyDomains.includes(clsLocalName) || propertyDomains.length === 0
+    }
   )
 
   const propLines = props.length > 0
     ? props.map((p) => {
+      const propLocalName = extractLocalName(p.id)
       const rangeNote = p.rangeType === "datatype" ? "literal value" : "entity reference"
-      return Doc.text(`    - ${p.label} (${p.id}): ${p.comment || "No description"} [expects ${rangeNote}]`)
+      return Doc.text(`    - ${propLocalName}: ${p.comment || "No description"} [expects ${rangeNote}]`)
     })
     : [Doc.text("    (no specific properties)")]
 
@@ -78,7 +118,7 @@ const buildClassSnippet = (
     : Doc.empty
 
   return Doc.vsep([
-    Doc.text(`## ${cls.label} (${cls.id})`),
+    Doc.text(`## ${clsLocalName}`),
     Doc.text(cls.comment || "No description available."),
     broaderNote,
     Doc.text("Properties:"),
@@ -88,14 +128,16 @@ const buildClassSnippet = (
 
 /**
  * Build property snippet for relation extraction
+ * Uses local names instead of full IRIs for token efficiency
  */
 const buildPropertySnippet = (prop: PropertyDefinition): Doc.Doc<never> => {
+  const propLocalName = extractLocalName(prop.id)
   const rangeType = prop.rangeType === "datatype" ? "LITERAL VALUE" : "ENTITY REFERENCE"
   const domainNote = prop.domain.length > 0 ? `Domain: ${prop.domain.join(", ")}` : "Domain: any entity"
   const rangeNote = prop.range.length > 0 ? `Range: ${prop.range.join(", ")}` : `Range: ${rangeType.toLowerCase()}`
 
   return Doc.vsep([
-    Doc.text(`### ${prop.label} (${prop.id})`),
+    Doc.text(`### ${propLocalName}`),
     Doc.text(prop.comment || "No description available."),
     Doc.text(`- ${domainNote}`),
     Doc.text(`- ${rangeNote}`),
@@ -164,26 +206,29 @@ const buildEntitiesSection = (ctx: OntologyPromptContext): Doc.Doc<never> => {
 
 /**
  * Build quick reference section showing allowed values
+ * Uses local names instead of full IRIs for token efficiency
  */
 const buildQuickReferenceSection = (ruleSet: RuleSet): Doc.Doc<never> => {
   const parts: Array<Doc.Doc<never>> = []
   const iris = ruleSet.allowedIris
 
   if (iris.classIris.length > 0) {
-    const classListSimple = iris.classIris.map((iri) => Doc.text(`- ${iri}`))
+    // Convert to local names for compact display
+    const localNames = iris.classIris.map(extractLocalName)
     parts.push(
-      Doc.text("=== QUICK REFERENCE: ALLOWED CLASSES ==="),
-      ...classListSimple,
+      Doc.text("=== ALLOWED CLASSES ==="),
+      Doc.text(localNames.join(", ")),
       Doc.empty
     )
   }
 
   const allPropertyIris = [...iris.objectPropertyIris, ...iris.datatypePropertyIris]
   if (allPropertyIris.length > 0) {
-    const propertyListSimple = allPropertyIris.map((iri) => Doc.text(`- ${iri}`))
+    // Convert to local names for compact display
+    const localNames = allPropertyIris.map(extractLocalName)
     parts.push(
-      Doc.text("=== QUICK REFERENCE: ALLOWED PROPERTIES ==="),
-      ...propertyListSimple,
+      Doc.text("=== ALLOWED PROPERTIES ==="),
+      Doc.text(localNames.join(", ")),
       Doc.empty
     )
   }
@@ -219,13 +264,13 @@ const buildRulesSection = (ruleSet: RuleSet): Doc.Doc<never> => {
     parts.push(Doc.empty)
   }
 
-  // IRI casing warning (always include for entity/relation)
+  // Local names instruction (always include for entity/relation)
   if (ruleSet.stage !== "mention") {
     parts.push(
-      Doc.text("=== CRITICAL: USE EXACT IRIs ==="),
-      Doc.text("Copy class and property IRIs EXACTLY as shown above."),
-      Doc.text("Do NOT reconstruct IRIs from labels - labels may have different casing."),
-      Doc.text("Example: Use \"http://ontology/Player\" NOT \"http://ontology/player\""),
+      Doc.text("=== CRITICAL: USE LOCAL NAMES ==="),
+      Doc.text("Use the short class/property names shown above (e.g., 'Player', 'Team')."),
+      Doc.text("Do NOT use full URIs - we will expand them automatically."),
+      Doc.text("Example: Use 'Player' NOT 'http://ontology/Player'"),
       Doc.empty
     )
   }
@@ -244,6 +289,7 @@ const buildRulesSection = (ruleSet: RuleSet): Doc.Doc<never> => {
 
 /**
  * Build output format section
+ * Updated to use local names instead of URIs
  */
 const buildOutputFormatSection = (stage: "mention" | "entity" | "relation"): Doc.Doc<never> => {
   const formatContent = stage === "mention"
@@ -255,11 +301,11 @@ const buildOutputFormatSection = (stage: "mention" | "entity" | "relation"): Doc
     ? `Return a JSON object with an "entities" array. Each entity should have:
 - id: snake_case unique identifier (e.g., "arsenal_fc")
 - mention: exact text from source (human-readable name)
-- types: array of ontology class URIs (use the most specific applicable class)
-- attributes: optional object with property URIs as keys and literal values as values`
+- types: array of class names (e.g., ["Player", "Team"]) - use local names, not full URIs
+- attributes: optional object with property names as keys and literal values`
     : `Return a JSON object with a "relations" array. Each relation should have:
 - subjectId: entity ID from Stage 1
-- predicate: property URI from allowed list
+- predicate: property name (e.g., "playsFor") - use local name, not full URI
 - object: entity ID (for object properties) OR literal value (for datatype properties)`
 
   return Doc.vsep([
@@ -301,21 +347,30 @@ export const generatePrompt = (
   ctx: OntologyPromptContext
 ): string => {
   const sections: Array<Doc.Doc<never>> = [
-    buildTaskSection(text, ruleSet.stage)
+    buildTaskSection(ruleSet.stage),
+    Doc.empty,
+    // Critical rules FIRST so they aren't lost in context
+    buildRulesSection(ruleSet)
   ]
 
   // Stage-specific sections
   if (ruleSet.stage === "entity") {
+    // Add namespace prefix section for entity extraction (explains local name usage)
+    sections.push(Doc.empty, buildNamespacePrefixSection(ctx))
+    sections.push(Doc.empty, buildQuickReferenceSection(ruleSet))
     sections.push(Doc.empty, buildOntologySection(ctx))
   } else if (ruleSet.stage === "relation") {
     sections.push(Doc.empty, buildEntitiesSection(ctx))
+    sections.push(Doc.empty, buildQuickReferenceSection(ruleSet))
     sections.push(Doc.empty, buildPropertiesSection(ctx))
   }
 
-  // Common sections
-  sections.push(Doc.empty, buildQuickReferenceSection(ruleSet))
-  sections.push(Doc.empty, buildRulesSection(ruleSet))
+  // Common sections - Output Format closes the instructions
   sections.push(Doc.empty, buildOutputFormatSection(ruleSet.stage))
+
+  // Input text at the END - LLMs have recency bias, so the text to extract
+  // should be the last thing they see before generating the response
+  sections.push(Doc.empty, buildInputTextSection(text))
 
   const doc = Doc.vsep(sections)
   return Doc.render(doc, { style: "pretty", options: { lineWidth: 120 } })
@@ -338,8 +393,7 @@ export const generateEntityPrompt = (
   classes: ReadonlyArray<ClassDefinition>,
   datatypeProperties: ReadonlyArray<PropertyDefinition>
 ): string => {
-  // Import here to avoid circular dependency
-  const { makeEntityRuleSet } = require("./RuleSet.js")
+  // Use imported function
   const ruleSet = makeEntityRuleSet(classes, datatypeProperties)
 
   return generatePrompt(text, ruleSet, {
@@ -366,8 +420,7 @@ export const generateRelationPrompt = (
   entities: ReadonlyArray<Entity>,
   properties: ReadonlyArray<PropertyDefinition>
 ): string => {
-  // Import here to avoid circular dependency
-  const { makeRelationRuleSet } = require("./RuleSet.js")
+  // Use imported function
   const entityIds = entities.map((e) => e.id)
   const ruleSet = makeRelationRuleSet(entityIds, properties)
 
@@ -394,8 +447,7 @@ export const generateRelationPrompt = (
  * @since 2.0.0
  */
 export const generateMentionPrompt = (text: string): string => {
-  // Import here to avoid circular dependency
-  const { makeMentionRuleSet } = require("./RuleSet.js")
+  // Use imported function
   const ruleSet = makeMentionRuleSet()
 
   return generatePrompt(text, ruleSet, {

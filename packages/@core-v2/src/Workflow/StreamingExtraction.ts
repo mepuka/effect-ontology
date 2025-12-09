@@ -9,11 +9,14 @@
  * @module Workflow/StreamingExtraction
  */
 
-import { Chunk, Effect, Either, HashMap, Stream } from "effect"
+import type { FileSystem } from "@effect/platform"
+import { Chunk, Effect, Stream } from "effect"
 import { ExtractionError } from "../Domain/Error/Extraction.js"
+import { LlmRateLimit, LlmTimeout } from "../Domain/Error/Llm.js"
 import { Entity, KnowledgeGraph } from "../Domain/Model/Entity.js"
-import type { ClassDefinition } from "../Domain/Model/Ontology.js"
+import { getChunkId, type RunConfig } from "../Domain/Model/ExtractionRun.js"
 import { EntityExtractor, MentionExtractor, RelationExtractor } from "../Service/Extraction.js"
+import { ExtractionRunService } from "../Service/ExtractionRun.js"
 import { Grounder } from "../Service/Grounder.js"
 import { NlpService } from "../Service/Nlp.js"
 import { OntologyService } from "../Service/Ontology.js"
@@ -21,6 +24,28 @@ import { annotateExtraction, LlmAttributes } from "../Telemetry/LlmAttributes.js
 import { mergeGraphs } from "./Merge.js"
 
 const GROUNDER_CONFIDENCE_THRESHOLD = 0.8
+
+/**
+ * Determine if an error is systemic and should halt the workflow
+ */
+const isSystemicError = (error: unknown): boolean => {
+  // Unwrap ExtractionError if present
+  const cause = error instanceof ExtractionError ? error.cause : error
+
+  return (
+    cause instanceof LlmRateLimit ||
+    cause instanceof LlmTimeout || // Timeouts might imply service degradation
+    // Database/FS errors from ExtractionRunService would usually be generic Errors or platform errors
+    // We can assume if it's NOT a content error (LlmInvalidResponse, etc), it might be systemic?
+    // For now, fail on known systemic LLM errors.
+    // Use heuristic: if it mentions "database" or "connection"
+    (cause instanceof Error && (
+      cause.message.toLowerCase().includes("connection") ||
+      cause.message.toLowerCase().includes("database") ||
+      cause.message.toLowerCase().includes("econnrefused")
+    ))
+  )
+}
 
 /**
  * Streaming Extraction Workflow
@@ -33,16 +58,21 @@ const GROUNDER_CONFIDENCE_THRESHOLD = 0.8
  * 5. Extract relations using RelationExtractor
  * 6. Merge all graph fragments into final KnowledgeGraph
  *
+ * Always creates an extraction run (from text hash) and manages it internally.
+ * Saves chunks and attaches chunk IDs to entities for full provenance tracking.
+ *
  * Uses Stream.mapEffect with bounded concurrency and unordered processing
  * for maximum throughput. Final merge uses Stream.runFold with mergeGraphs monoid.
  *
  * @param text - Source text to extract from
- * @param concurrency - Max parallel extraction tasks (default: 8)
+ * @param config - Run configuration (chunking params, concurrency, ontology path)
+ * @param concurrency - Max parallel extraction tasks (default: from config)
  * @returns Effect yielding merged KnowledgeGraph
  *
  * @example
  * ```typescript
- * const graph = yield* streamingExtraction(text, 8)
+ * const config: RunConfig = { chunking: {...}, concurrency: 4, ontologyPath: "..." }
+ * const graph = yield* streamingExtraction(text, config)
  * ```
  *
  * @since 2.0.0
@@ -50,11 +80,19 @@ const GROUNDER_CONFIDENCE_THRESHOLD = 0.8
  */
 export const streamingExtraction = (
   text: string,
-  concurrency: number = 8
+  config: RunConfig,
+  concurrency?: number
 ): Effect.Effect<
   KnowledgeGraph,
   ExtractionError,
-  EntityExtractor | MentionExtractor | RelationExtractor | Grounder | OntologyService | NlpService
+  | EntityExtractor
+  | MentionExtractor
+  | RelationExtractor
+  | Grounder
+  | OntologyService
+  | NlpService
+  | ExtractionRunService
+  | FileSystem.FileSystem
 > =>
   Effect.gen(function*() {
     const nlp = yield* NlpService
@@ -63,17 +101,33 @@ export const streamingExtraction = (
     const entityExtractor = yield* EntityExtractor
     const relationExtractor = yield* RelationExtractor
     const grounder = yield* Grounder
+    const runService = yield* ExtractionRunService
+
+    // Create extraction run from text hash
+    const run = yield* runService.createRun(text, config).pipe(
+      Effect.mapError(
+        (error: Error) =>
+          new ExtractionError({
+            message: `Failed to create extraction run: ${error.message}`,
+            cause: error,
+            text
+          })
+      )
+    )
+
+    const effectiveConcurrency = concurrency ?? config.concurrency
 
     yield* Effect.logInfo("Starting streaming extraction", {
       stage: "streaming-extraction",
       textLength: text.length,
-      concurrency
+      concurrency: effectiveConcurrency,
+      runId: run.runId
     })
 
     // Phase 1: Chunk text
     const chunks = yield* nlp.chunkText(text, {
-      maxChunkSize: 500,
-      preserveSentences: true
+      maxChunkSize: config.chunking.maxChunkSize,
+      preserveSentences: config.chunking.preserveSentences
     }).pipe(
       Effect.withLogSpan("chunking"),
       Effect.tap((chunks) =>
@@ -85,6 +139,23 @@ export const streamingExtraction = (
             : 0
         })
       )
+    )
+
+    // Save chunks to run folder
+    yield* Effect.all(
+      chunks.map((chunk) =>
+        runService.saveChunk(run.runId, chunk.index, chunk.text).pipe(
+          Effect.tapError((error) =>
+            Effect.logWarning("Failed to save chunk", {
+              stage: "chunking",
+              chunkIndex: chunk.index,
+              error: String(error)
+            })
+          ),
+          Effect.orElseSucceed(() => undefined)
+        )
+      ),
+      { concurrency: 4 }
     )
 
     // Short-circuit if no chunks
@@ -100,365 +171,349 @@ export const streamingExtraction = (
     }
 
     // Phase 2-5: Process chunks in parallel with bounded concurrency (unordered for max throughput)
-    // Wrap each chunk in Effect.either to isolate failures - prevents fail-fast interruption
     const graphFragments = yield* Stream.fromIterable(chunks)
       .pipe(
-        // Phase 2-5: Process each chunk through the full pipeline (wrapped in Either)
+        // Phase 2-5: Process each chunk through the full pipeline
+        // We use catchAll to selectively isolate failures or propagate them
         Stream.mapEffect(
           (chunk) =>
-            Effect.either(
-              Effect.gen(function*() {
-                yield* Effect.logDebug("Processing chunk", {
-                  stage: "chunk-processing",
-                  chunkIndex: chunk.index,
-                  chunkLength: chunk.text.length,
-                  chunkPreview: chunk.text.slice(0, 100)
-                })
+            Effect.gen(function*() {
+              yield* Effect.logDebug("Processing chunk", {
+                stage: "chunk-processing",
+                chunkIndex: chunk.index,
+                chunkLength: chunk.text.length,
+                chunkPreview: chunk.text.slice(0, 100)
+              })
 
-                // Phase 2a: Mention extraction - extract entity mentions without types
-                const mentions = yield* mentionExtractor
-                  .extract(chunk.text)
-                  .pipe(
-                    Effect.withLogSpan(`chunk-${chunk.index}-mention-extraction`),
-                    Effect.tap((mentions) =>
-                      Effect.logDebug("Mention extraction complete", {
-                        stage: "mention-extraction",
-                        chunkIndex: chunk.index,
-                        mentionCount: Chunk.toReadonlyArray(mentions).length
-                      })
-                    ),
-                    Effect.mapError(
-                      (error) =>
-                        new ExtractionError({
-                          message: `Mention extraction failed for chunk ${chunk.index}`,
-                          cause: error,
-                          text: chunk.text
-                        })
-                    )
-                  )
-
-                const mentionArray = Chunk.toReadonlyArray(mentions)
-
-                // Skip if no mentions found
-                if (mentionArray.length === 0) {
-                  yield* Effect.logWarning("No mentions found for chunk", {
-                    stage: "mention-extraction",
-                    chunkIndex: chunk.index
-                  })
-                  return new KnowledgeGraph({
-                    entities: [],
-                    relations: []
-                  })
-                }
-
-                // Phase 2b: Entity-level semantic search - get classes per mention
-                // Use mention text + context for better class retrieval
-                const mentionClassResults = yield* Effect.all(
-                  mentionArray.map((mention) => {
-                    const searchText = mention.context
-                      ? `${mention.mention}: ${mention.context}`
-                      : mention.mention
-                    return ontology.searchClassesSemantic(searchText, 5).pipe(
-                      Effect.map((classes) => ({
-                        mentionId: mention.id,
-                        classes: Chunk.toReadonlyArray(classes)
-                      })),
-                      Effect.mapError(
-                        (error) =>
-                          new ExtractionError({
-                            message: `Class retrieval failed for mention ${mention.id}`,
-                            cause: error,
-                            text: chunk.text
-                          })
-                      )
-                    )
-                  }),
-                  { concurrency: 5 } // Limit concurrent semantic searches
-                ).pipe(
-                  Effect.withLogSpan(`chunk-${chunk.index}-entity-level-retrieval`),
-                  Effect.tap((results) =>
-                    Effect.logDebug("Entity-level class retrieval complete", {
-                      stage: "entity-level-retrieval",
+              // Phase 2a: Mention extraction - extract entity mentions without types
+              const mentions = yield* mentionExtractor
+                .extract(chunk.text)
+                .pipe(
+                  Effect.withLogSpan(`chunk-${chunk.index}-mention-extraction`),
+                  Effect.tap((mentions) =>
+                    Effect.logDebug("Mention extraction complete", {
+                      stage: "mention-extraction",
                       chunkIndex: chunk.index,
-                      mentionCount: results.length,
-                      totalClasses: results.reduce((sum, r) => sum + r.classes.length, 0)
-                    })
-                  )
-                )
-
-                // Build mention-to-classes map
-                let mentionClasses = HashMap.empty<string, ReadonlyArray<ClassDefinition>>()
-                for (const result of mentionClassResults) {
-                  mentionClasses = HashMap.set(mentionClasses, result.mentionId, result.classes)
-                }
-
-                // Aggregate all unique classes across mentions for entity extraction
-                const allClassesSet = new Set<string>()
-                const allClassesMap = new Map<string, ClassDefinition>()
-                for (const result of mentionClassResults) {
-                  for (const cls of result.classes) {
-                    if (!allClassesSet.has(cls.id)) {
-                      allClassesSet.add(cls.id)
-                      allClassesMap.set(cls.id, cls)
-                    }
-                  }
-                }
-                const classArray = Array.from(allClassesMap.values())
-
-                // Skip if no classes found
-                if (classArray.length === 0) {
-                  yield* Effect.logWarning("No classes found for any mention", {
-                    stage: "entity-level-retrieval",
-                    chunkIndex: chunk.index
-                  })
-                  return new KnowledgeGraph({
-                    entities: [],
-                    relations: []
-                  })
-                }
-
-                // Phase 3: Entity extraction with aggregated candidate classes
-                // Pre-compute datatype properties allowed for these classes (attribute constraints)
-                const candidateDatatypeProperties = yield* ontology
-                  .getPropertiesFor(classArray.map((c) => c.id))
-                  .pipe(
-                    Effect.withLogSpan(`chunk-${chunk.index}-datatype-properties`),
-                    Effect.tap((properties) =>
-                      Effect.logDebug("Datatype properties scoped", {
-                        stage: "datatype-properties",
-                        chunkIndex: chunk.index,
-                        propertyCount: Chunk.toReadonlyArray(properties).length
-                      })
-                    ),
-                    Effect.map((properties) =>
-                      Chunk.toReadonlyArray(properties).filter((p) => p.rangeType === "datatype")
-                    ),
-                    Effect.mapError(
-                      (error) =>
-                        new ExtractionError({
-                          message: `Datatype property scoping failed for chunk ${chunk.index}`,
-                          cause: error,
-                          text: chunk.text
-                        })
-                    )
-                  )
-
-                const rawEntities = yield* entityExtractor
-                  .extract(chunk.text, classArray, candidateDatatypeProperties)
-                  .pipe(
-                    Effect.annotateLogs({ chunkIndex: chunk.index }),
-                    Effect.withLogSpan(`chunk-${chunk.index}-entity-extraction`),
-                    Effect.mapError(
-                      (error) =>
-                        new ExtractionError({
-                          message: `Entity extraction failed for chunk ${chunk.index}`,
-                          cause: error,
-                          text: chunk.text
-                        })
-                    )
-                  )
-
-                // Add chunk index to each entity for provenance tracking
-                const entities = Chunk.map(rawEntities, (entity) =>
-                  new Entity({
-                    id: entity.id,
-                    mention: entity.mention,
-                    types: [...entity.types],
-                    attributes: { ...entity.attributes },
-                    chunkIndex: chunk.index
-                  }))
-
-                const entityArray = Chunk.toReadonlyArray(entities)
-
-                // Short-circuit if no entities
-                if (entityArray.length === 0) {
-                  yield* Effect.logWarning("No entities extracted from chunk", {
-                    stage: "entity-extraction",
-                    chunkIndex: chunk.index
-                  })
-                  return new KnowledgeGraph({
-                    entities: [],
-                    relations: []
-                  })
-                }
-
-                // Phase 4: Property scoping - get properties for entity types
-                // Collect all unique types from entities
-                const typeSet = new Set<string>()
-                for (const entity of entityArray) {
-                  for (const type of entity.types) {
-                    typeSet.add(type)
-                  }
-                }
-
-                const typeArray = Array.from(typeSet)
-                const properties = yield* ontology.getPropertiesFor(typeArray).pipe(
-                  Effect.withLogSpan(`chunk-${chunk.index}-property-scoping`),
-                  Effect.tap((properties) =>
-                    Effect.logDebug("Property scoping complete", {
-                      stage: "property-scoping",
-                      chunkIndex: chunk.index,
-                      typeCount: typeArray.length,
-                      propertyCount: Chunk.toReadonlyArray(properties).length
+                      mentionCount: Chunk.toReadonlyArray(mentions).length
                     })
                   ),
                   Effect.mapError(
                     (error) =>
                       new ExtractionError({
-                        message: `Property scoping failed for chunk ${chunk.index}`,
+                        message: `Mention extraction failed for chunk ${chunk.index}`,
                         cause: error,
                         text: chunk.text
                       })
                   )
                 )
 
-                const propertyArray = Chunk.toReadonlyArray(properties)
+              const mentionArray = Chunk.toReadonlyArray(mentions)
 
-                // Phase 5: Relation extraction
-                // Short-circuit if insufficient entities or properties
-                if (entityArray.length < 2 || propertyArray.length === 0) {
-                  yield* Effect.logDebug("Skipping relation extraction", {
-                    stage: "relation-extraction",
+              // Skip if no mentions found
+              if (mentionArray.length === 0) {
+                yield* Effect.logWarning("No mentions found for chunk", {
+                  stage: "mention-extraction",
+                  chunkIndex: chunk.index
+                })
+                return new KnowledgeGraph({
+                  entities: [],
+                  relations: []
+                })
+              }
+
+              // Phase 2b: Chunk-level hybrid search - get candidate classes for all mentions
+              // Aggregate all mention contexts for better retrieval (1 search instead of N)
+              const aggregatedQuery = mentionArray
+                .map((m) => m.context ? `${m.mention}: ${m.context}` : m.mention)
+                .join(" ")
+
+              const candidateClasses = yield* ontology.searchClassesHybrid(aggregatedQuery, 100).pipe(
+                Effect.withLogSpan(`chunk-${chunk.index}-hybrid-class-retrieval`),
+                Effect.tap((classes) =>
+                  Effect.logDebug("Hybrid class retrieval complete", {
+                    stage: "hybrid-class-retrieval",
                     chunkIndex: chunk.index,
-                    reason: entityArray.length < 2 ? "insufficient entities" : "no properties",
-                    entityCount: entityArray.length,
-                    propertyCount: propertyArray.length
+                    mentionCount: mentionArray.length,
+                    candidateClassCount: Chunk.size(classes)
                   })
-                  return new KnowledgeGraph({
-                    entities: Array.from(entities),
-                    relations: []
+                ),
+                // Graceful fallback: if hybrid search fails, get all ontology classes up to limit
+                Effect.catchAll((error) =>
+                  Effect.gen(function*() {
+                    yield* Effect.logWarning("Hybrid search failed, using ontology fallback", {
+                      stage: "hybrid-class-retrieval",
+                      chunkIndex: chunk.index,
+                      error: String(error)
+                    })
+                    const ctx = yield* ontology.ontology
+                    return Chunk.fromIterable(ctx.classes.slice(0, 100))
                   })
-                }
+                )
+              )
 
-                const relations = yield* relationExtractor.extract(chunk.text, entities, propertyArray).pipe(
-                  Effect.annotateLogs({ chunkIndex: chunk.index }),
-                  Effect.withLogSpan(`chunk-${chunk.index}-relation-extraction`),
+              const classArray = Chunk.toReadonlyArray(candidateClasses)
+
+              // Skip if no classes found
+              if (classArray.length === 0) {
+                yield* Effect.logWarning("No classes found for any mention", {
+                  stage: "entity-level-retrieval",
+                  chunkIndex: chunk.index
+                })
+                return new KnowledgeGraph({
+                  entities: [],
+                  relations: []
+                })
+              }
+
+              // Phase 3: Entity extraction with aggregated candidate classes
+              // Pre-compute datatype properties allowed for these classes (attribute constraints)
+              const candidateDatatypeProperties = yield* ontology
+                .getPropertiesFor(classArray.map((c) => c.id))
+                .pipe(
+                  Effect.withLogSpan(`chunk-${chunk.index}-datatype-properties`),
+                  Effect.tap((properties) =>
+                    Effect.logDebug("Datatype properties scoped", {
+                      stage: "datatype-properties",
+                      chunkIndex: chunk.index,
+                      propertyCount: Chunk.toReadonlyArray(properties).length
+                    })
+                  ),
+                  Effect.map((properties) =>
+                    Chunk.toReadonlyArray(properties).filter((p) => p.rangeType === "datatype")
+                  ),
                   Effect.mapError(
                     (error) =>
                       new ExtractionError({
-                        message: `Relation extraction failed for chunk ${chunk.index}`,
+                        message: `Datatype property scoping failed for chunk ${chunk.index}`,
                         cause: error,
                         text: chunk.text
                       })
                   )
                 )
 
-                const relationArray = Chunk.toReadonlyArray(relations)
-
-                // Phase 5b: Grounding verification - filter relations by context alignment
-                // Uses batched verification to reduce LLM API calls
-                const verificationInputs = relationArray.map((relation) => {
-                  const subject = entityArray.find((entity) => entity.id === relation.subjectId)
-                  const objectEntity = typeof relation.object === "string"
-                    ? entityArray.find((entity) => entity.id === relation.object)
-                    : undefined
-                  const predicate = propertyArray.find((property) => property.id === relation.predicate)
-
-                  return {
-                    context: chunk.text,
-                    relation,
-                    subject: subject && {
-                      entityId: subject.id,
-                      mention: subject.mention,
-                      types: subject.types
-                    },
-                    predicate,
-                    object: typeof relation.object === "string"
-                      ? {
-                        entityId: relation.object,
-                        mention: objectEntity?.mention,
-                        types: objectEntity?.types
-                      }
-                      : {
-                        literal: relation.object
-                      }
-                  }
-                })
-
-                // Batch verify all relations in one LLM call (or skip if none)
-                const verificationResults = verificationInputs.length > 0
-                  ? yield* grounder.verifyRelationBatch(chunk.text, verificationInputs).pipe(
-                    Effect.annotateLogs({ chunkIndex: chunk.index }),
-                    Effect.withLogSpan(`chunk-${chunk.index}-grounding`),
-                    Effect.mapError(
-                      (error) =>
-                        new ExtractionError({
-                          message: `Grounder verification failed for chunk ${chunk.index}`,
-                          cause: error,
-                          text: chunk.text
-                        })
-                    )
+              const rawEntities = yield* entityExtractor
+                .extract(chunk.text, classArray, candidateDatatypeProperties)
+                .pipe(
+                  Effect.annotateLogs({ chunkIndex: chunk.index }),
+                  Effect.withLogSpan(`chunk-${chunk.index}-entity-extraction`),
+                  Effect.mapError(
+                    (error) =>
+                      new ExtractionError({
+                        message: `Entity extraction failed for chunk ${chunk.index}`,
+                        cause: error,
+                        text: chunk.text
+                      })
                   )
-                  : []
+                )
 
-                // Filter to only grounded relations with sufficient confidence
-                const verifiedRelationArray = verificationResults
-                  .filter((result) => result.grounded && result.confidence >= GROUNDER_CONFIDENCE_THRESHOLD)
-                  .map((result) => result.relation)
-
-                yield* Effect.logInfo("Grounder verification complete", {
-                  stage: "grounder",
+              // Add chunk index and chunk ID to each entity for provenance tracking
+              const chunkId = getChunkId(run.runId, chunk.index)
+              const entities = Chunk.map(rawEntities, (entity) =>
+                new Entity({
+                  id: entity.id,
+                  mention: entity.mention,
+                  types: [...entity.types],
+                  attributes: { ...entity.attributes },
                   chunkIndex: chunk.index,
-                  inputRelations: relationArray.length,
-                  verifiedRelations: verifiedRelationArray.length
-                })
+                  chunkId
+                }))
 
-                // Build KnowledgeGraph fragment
-                const fragment = new KnowledgeGraph({
+              const entityArray = Chunk.toReadonlyArray(entities)
+
+              // Short-circuit if no entities
+              if (entityArray.length === 0) {
+                yield* Effect.logWarning("No entities extracted from chunk", {
+                  stage: "entity-extraction",
+                  chunkIndex: chunk.index
+                })
+                return new KnowledgeGraph({
+                  entities: [],
+                  relations: []
+                })
+              }
+
+              // Phase 4: Property scoping - get properties for entity types
+              // Collect all unique types from entities
+              const typeSet = new Set<string>()
+              for (const entity of entityArray) {
+                for (const type of entity.types) {
+                  typeSet.add(type)
+                }
+              }
+
+              const typeArray = Array.from(typeSet)
+              const properties = yield* ontology.getPropertiesFor(typeArray).pipe(
+                Effect.withLogSpan(`chunk-${chunk.index}-property-scoping`),
+                Effect.tap((properties) =>
+                  Effect.logDebug("Property scoping complete", {
+                    stage: "property-scoping",
+                    chunkIndex: chunk.index,
+                    typeCount: typeArray.length,
+                    propertyCount: Chunk.toReadonlyArray(properties).length
+                  })
+                ),
+                Effect.mapError(
+                  (error) =>
+                    new ExtractionError({
+                      message: `Property scoping failed for chunk ${chunk.index}`,
+                      cause: error,
+                      text: chunk.text
+                    })
+                )
+              )
+
+              const propertyArray = Chunk.toReadonlyArray(properties)
+
+              // Phase 5: Relation extraction
+              // Short-circuit if insufficient entities or properties
+              if (entityArray.length < 2 || propertyArray.length === 0) {
+                yield* Effect.logDebug("Skipping relation extraction", {
+                  stage: "relation-extraction",
+                  chunkIndex: chunk.index,
+                  reason: entityArray.length < 2 ? "insufficient entities" : "no properties",
+                  entityCount: entityArray.length,
+                  propertyCount: propertyArray.length
+                })
+                return new KnowledgeGraph({
                   entities: Array.from(entities),
-                  relations: verifiedRelationArray
+                  relations: []
                 })
+              }
 
-                yield* Effect.all([
-                  Effect.logDebug("Chunk processing complete", {
+              const relations = yield* relationExtractor.extract(chunk.text, entities, propertyArray).pipe(
+                Effect.annotateLogs({ chunkIndex: chunk.index }),
+                Effect.withLogSpan(`chunk-${chunk.index}-relation-extraction`),
+                Effect.mapError(
+                  (error) =>
+                    new ExtractionError({
+                      message: `Relation extraction failed for chunk ${chunk.index}`,
+                      cause: error,
+                      text: chunk.text
+                    })
+                )
+              )
+
+              const relationArray = Chunk.toReadonlyArray(relations)
+
+              // Phase 5b: Grounding verification - filter relations by context alignment
+              // Uses batched verification to reduce LLM API calls
+              const verificationInputs = relationArray.map((relation) => {
+                const subject = entityArray.find((entity) => entity.id === relation.subjectId)
+                const objectEntity = typeof relation.object === "string"
+                  ? entityArray.find((entity) => entity.id === relation.object)
+                  : undefined
+                const predicate = propertyArray.find((property) => property.id === relation.predicate)
+
+                return {
+                  context: chunk.text,
+                  relation,
+                  subject: subject && {
+                    entityId: subject.id,
+                    mention: subject.mention,
+                    types: subject.types
+                  },
+                  predicate,
+                  object: typeof relation.object === "string"
+                    ? {
+                      entityId: relation.object,
+                      mention: objectEntity?.mention,
+                      types: objectEntity?.types
+                    }
+                    : {
+                      literal: relation.object
+                    }
+                }
+              })
+
+              // Batch verify all relations in one LLM call (or skip if none)
+              const verificationResults = verificationInputs.length > 0
+                ? yield* grounder.verifyRelationBatch(chunk.text, verificationInputs).pipe(
+                  Effect.annotateLogs({ chunkIndex: chunk.index }),
+                  Effect.withLogSpan(`chunk-${chunk.index}-grounding`),
+                  Effect.mapError(
+                    (error) =>
+                      new ExtractionError({
+                        message: `Grounder verification failed for chunk ${chunk.index}`,
+                        cause: error,
+                        text: chunk.text
+                      })
+                  )
+                )
+                : []
+
+              // Filter to only grounded relations with sufficient confidence
+              const verifiedRelationArray = verificationResults
+                .filter((result) => result.grounded && result.confidence >= GROUNDER_CONFIDENCE_THRESHOLD)
+                .map((result) => result.relation)
+
+              yield* Effect.logInfo("Grounder verification complete", {
+                stage: "grounder",
+                chunkIndex: chunk.index,
+                inputRelations: relationArray.length,
+                verifiedRelations: verifiedRelationArray.length
+              })
+
+              // Build KnowledgeGraph fragment
+              const fragment = new KnowledgeGraph({
+                entities: Array.from(entities),
+                relations: verifiedRelationArray
+              })
+
+              yield* Effect.all([
+                Effect.logDebug("Chunk processing complete", {
+                  stage: "chunk-processing",
+                  chunkIndex: chunk.index,
+                  entityCount: fragment.entities.length,
+                  relationCount: fragment.relations.length
+                }),
+                annotateExtraction({
+                  chunkIndex: chunk.index,
+                  chunkTextLength: chunk.text.length,
+                  entityCount: fragment.entities.length,
+                  relationCount: fragment.relations.length,
+                  mentionCount: mentionArray.length,
+                  candidateClassCount: classArray.length
+                })
+              ])
+
+              return fragment
+            }).pipe(
+              Effect.withSpan(`chunk-${chunk.index}-processing`, {
+                attributes: {
+                  [LlmAttributes.CHUNK_INDEX]: chunk.index,
+                  [LlmAttributes.CHUNK_TEXT_LENGTH]: chunk.text.length
+                }
+              }),
+              // Catch all errors from chunk processing
+              Effect.catchAll((error) => {
+                if (isSystemicError(error)) {
+                  // Fail fast for systemic errors (propagates failure to Stream)
+                  return Effect.fail(error)
+                }
+
+                // Log and suppress content errors (return empty graph)
+                return Effect.gen(function*() {
+                  yield* Effect.logError("Chunk processing failed (content error - skipping)", {
                     stage: "chunk-processing",
                     chunkIndex: chunk.index,
-                    entityCount: fragment.entities.length,
-                    relationCount: fragment.relations.length
-                  }),
-                  annotateExtraction({
-                    chunkIndex: chunk.index,
-                    chunkTextLength: chunk.text.length,
-                    entityCount: fragment.entities.length,
-                    relationCount: fragment.relations.length,
-                    mentionCount: mentionArray.length,
-                    candidateClassCount: classArray.length
+                    error: error instanceof Error ? error.message : String(error),
+                    errorType: error instanceof Error ? error.constructor.name : "Unknown",
+                    isSystemic: false
                   })
-                ])
+                  yield* Effect.annotateCurrentSpan("chunk.failed", true)
+                  yield* Effect.annotateCurrentSpan(
+                    "chunk.error_type",
+                    error instanceof Error ? error.constructor.name : "Unknown"
+                  )
+                  return new KnowledgeGraph({ entities: [], relations: [] })
+                })
+              })
+            ), // End Effect.gen
+          { concurrency: effectiveConcurrency, unordered: true }
+        ),
+        // No Stream.mapEffect logic needed for Either anymore
+        // Stream failures will propagate if Systemic, or continue if Content
 
-                return fragment
-              }).pipe(
-                Effect.withSpan(`chunk-${chunk.index}-processing`, {
-                  attributes: {
-                    [LlmAttributes.CHUNK_INDEX]: chunk.index,
-                    [LlmAttributes.CHUNK_TEXT_LENGTH]: chunk.text.length
-                  }
-                })
-              )
-            ), // Close Effect.either
-          { concurrency, unordered: true }
-        ),
-        // Handle Either results - log failures, return empty graphs for failed chunks
-        Stream.mapEffect((result) =>
-          Either.match(result, {
-            onLeft: (error) =>
-              Effect.gen(function*() {
-                yield* Effect.logError("Chunk processing failed (isolated)", {
-                  stage: "chunk-processing",
-                  error: error instanceof Error ? error.message : String(error),
-                  errorType: error instanceof Error ? error.constructor.name : "Unknown"
-                })
-                yield* Effect.annotateCurrentSpan("chunk.failed", true)
-                yield* Effect.annotateCurrentSpan(
-                  "chunk.error_type",
-                  error instanceof Error ? error.constructor.name : "Unknown"
-                )
-                // Return empty graph for failed chunks instead of failing the whole pipeline
-                return new KnowledgeGraph({ entities: [], relations: [] })
-              }),
-            onRight: (graph) => Effect.succeed(graph)
-          })
-        ),
         // Phase 6: Merge all fragments using monoid operation
         Stream.runFold(
           new KnowledgeGraph({ entities: [], relations: [] }), // Identity element
@@ -482,9 +537,30 @@ export const streamingExtraction = (
 
     return graphFragments
   }).pipe(
+    Effect.mapError(
+      (error: unknown): ExtractionError =>
+        error instanceof ExtractionError
+          ? error
+          : new ExtractionError({
+            message: `Streaming extraction failed: ${error instanceof Error ? error.message : String(error)}`,
+            cause: error instanceof Error ? error : new Error(String(error)),
+            text
+          })
+    ),
     Effect.withSpan("extraction-pipeline", {
       attributes: {
         "extraction.type": "streaming"
       }
     })
-  )
+  ) as Effect.Effect<
+    KnowledgeGraph,
+    ExtractionError,
+    | EntityExtractor
+    | MentionExtractor
+    | RelationExtractor
+    | Grounder
+    | OntologyService
+    | NlpService
+    | ExtractionRunService
+    | FileSystem.FileSystem
+  >

@@ -195,7 +195,9 @@ export const mergeGraphs = (a: KnowledgeGraph, b: KnowledgeGraph): KnowledgeGrap
           id: entity.id,
           mention: mergedMention,
           types: mergedTypes,
-          attributes: mergedAttributes
+          attributes: mergedAttributes,
+          chunkIndex: existing.value.chunkIndex ?? entity.chunkIndex,
+          chunkId: existing.value.chunkId ?? entity.chunkId
         })
       )
     } else {
@@ -291,7 +293,9 @@ export const mergeGraphsWithConflicts = (
           id: entity.id,
           mention: mergedMention,
           types: mergedTypes,
-          attributes: mergedAttributes
+          attributes: mergedAttributes,
+          chunkIndex: existing.value.chunkIndex ?? entity.chunkIndex,
+          chunkId: existing.value.chunkId ?? entity.chunkId
         })
       )
     } else {

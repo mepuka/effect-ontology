@@ -10,6 +10,7 @@
 
 import { Data } from "effect"
 import type { ClassDefinition, PropertyDefinition } from "../Domain/Model/Ontology.js"
+import type { IRI } from "../Domain/Rdf/Types.js"
 import { buildCaseInsensitiveIriMap } from "../Utils/Iri.js"
 import { ExtractionRule, type ExtractionStage, RuleExample } from "./ExtractionRule.js"
 
@@ -53,8 +54,8 @@ export class AllowedIriSet extends Data.Class<{
       objectPropertyIris,
       datatypePropertyIris,
       entityIds,
-      classIriMap: buildCaseInsensitiveIriMap(classIris),
-      propertyIriMap: buildCaseInsensitiveIriMap(allPropertyIris)
+      classIriMap: buildCaseInsensitiveIriMap(classIris as unknown as ReadonlyArray<IRI>),
+      propertyIriMap: buildCaseInsensitiveIriMap(allPropertyIris as unknown as ReadonlyArray<IRI>)
     })
   }
 
