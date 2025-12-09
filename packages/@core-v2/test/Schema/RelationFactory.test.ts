@@ -71,11 +71,12 @@ describe("makeRelationSchema", () => {
     const schema = makeRelationSchema(validEntityIds, properties)
 
     // Test that schema validates correct Relation structure
+    // Schema now expects local names (e.g., "memberOf") which are expanded to IRIs post-extraction
     const validRelation = {
       relations: [
         {
           subjectId: "cristiano_ronaldo",
-          predicate: "http://schema.org/memberOf",
+          predicate: "memberOf", // Local name, not full IRI
           object: "al_nassr" // Entity reference
         }
       ]
@@ -84,7 +85,7 @@ describe("makeRelationSchema", () => {
     const result = Schema.decodeUnknownSync(schema)(validRelation)
     expect(result.relations).toHaveLength(1)
     expect(result.relations[0].subjectId).toBe("cristiano_ronaldo")
-    expect(result.relations[0].predicate).toBe("http://schema.org/memberOf")
+    expect(result.relations[0].predicate).toBe("memberOf") // Returns local name, IRI expansion is post-extraction
     expect(result.relations[0].object).toBe("al_nassr")
   })
 
@@ -107,7 +108,7 @@ describe("makeRelationSchema", () => {
       relations: [
         {
           subjectId: "invalid_entity_id", // Not in validEntityIds
-          predicate: "http://schema.org/memberOf",
+          predicate: "memberOf", // Local name
           object: "cristiano_ronaldo"
         }
       ]
@@ -135,7 +136,7 @@ describe("makeRelationSchema", () => {
       relations: [
         {
           subjectId: "cristiano_ronaldo",
-          predicate: "http://schema.org/invalidProperty", // Not in allowed properties
+          predicate: "invalidProperty", // Not in allowed properties (local name doesn't match)
           object: "al_nassr"
         }
       ]
@@ -163,7 +164,7 @@ describe("makeRelationSchema", () => {
       relations: [
         {
           subjectId: "cristiano_ronaldo",
-          predicate: "http://schema.org/birthDate",
+          predicate: "birthDate", // Local name
           object: "1985-02-05" // Literal string
         }
       ]
@@ -192,7 +193,7 @@ describe("makeRelationSchema", () => {
       relations: [
         {
           subjectId: "cristiano_ronaldo",
-          predicate: "http://schema.org/age",
+          predicate: "age", // Local name
           object: 39 // Literal number
         }
       ]
@@ -221,7 +222,7 @@ describe("makeRelationSchema", () => {
       relations: [
         {
           subjectId: "cristiano_ronaldo",
-          predicate: "http://schema.org/active",
+          predicate: "active", // Local name
           object: true // Literal boolean
         }
       ]
@@ -250,7 +251,7 @@ describe("makeRelationSchema", () => {
       relations: [
         {
           subjectId: "cristiano_ronaldo",
-          predicate: "http://schema.org/memberOf",
+          predicate: "memberOf", // Local name
           object: "al_nassr" // Entity reference (must be in validEntityIds)
         }
       ]
@@ -280,7 +281,7 @@ describe("makeRelationSchema", () => {
       relations: [
         {
           subjectId: "cristiano_ronaldo",
-          predicate: "http://schema.org/memberOf",
+          predicate: "memberOf", // Local name
           object: "1985-02-05" // Literal string, not entity ID - should be rejected
         }
       ]
@@ -313,7 +314,7 @@ describe("makeRelationSchema", () => {
       relations: [
         {
           subjectId: "cristiano_ronaldo",
-          predicate: "http://schema.org/birthDate",
+          predicate: "birthDate", // Local name
           object: "al_nassr" // String literal - schema accepts it (can't distinguish from entity ID)
         }
       ]
@@ -351,7 +352,7 @@ describe("makeRelationSchema", () => {
       relations: [
         {
           subjectId: "cristiano_ronaldo",
-          predicate: "http://schema.org/memberOf",
+          predicate: "memberOf", // Local name
           object: "al_nassr" // Entity ID - valid for object property
         }
       ]
@@ -363,7 +364,7 @@ describe("makeRelationSchema", () => {
       relations: [
         {
           subjectId: "cristiano_ronaldo",
-          predicate: "http://schema.org/birthDate",
+          predicate: "birthDate", // Local name
           object: "1985-02-05" // Literal - valid for datatype property
         }
       ]
@@ -375,7 +376,7 @@ describe("makeRelationSchema", () => {
       relations: [
         {
           subjectId: "cristiano_ronaldo",
-          predicate: "http://schema.org/memberOf",
+          predicate: "memberOf", // Local name
           object: "1985-02-05" // Literal - invalid for object property
         }
       ]
@@ -390,7 +391,7 @@ describe("makeRelationSchema", () => {
       relations: [
         {
           subjectId: "cristiano_ronaldo",
-          predicate: "http://schema.org/birthDate",
+          predicate: "birthDate", // Local name
           object: "al_nassr" // String that looks like entity ID - schema accepts as string literal
         }
       ]
@@ -428,12 +429,12 @@ describe("makeRelationSchema", () => {
       relations: [
         {
           subjectId: "entity_a",
-          predicate: "http://schema.org/knows",
+          predicate: "knows", // Local name
           object: "entity_b"
         },
         {
           subjectId: "entity_a",
-          predicate: "http://schema.org/memberOf",
+          predicate: "memberOf", // Local name
           object: "entity_b"
         }
       ]
@@ -471,12 +472,12 @@ describe("makeRelationSchema", () => {
       relations: [
         {
           subjectId: "entity_a",
-          predicate: "http://schema.org/name",
+          predicate: "name", // Local name
           object: "Alice"
         },
         {
           subjectId: "entity_a",
-          predicate: "http://schema.org/age",
+          predicate: "age", // Local name
           object: 30
         }
       ]

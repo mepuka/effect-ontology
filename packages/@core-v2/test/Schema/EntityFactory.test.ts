@@ -54,12 +54,13 @@ describe("makeEntitySchema", () => {
     const schema = makeEntitySchema(classes)
 
     // Test that schema validates correct Entity structure
+    // Schema now expects local names (e.g., "Person") which are expanded to IRIs post-extraction
     const validEntity = {
       entities: [
         {
           id: "cristiano_ronaldo",
           mention: "Cristiano Ronaldo",
-          types: ["http://schema.org/Person"],
+          types: ["Person"], // Local name, not full IRI
           attributes: {
             "http://schema.org/age": 39
           }
@@ -70,7 +71,7 @@ describe("makeEntitySchema", () => {
     const result = Schema.decodeUnknownSync(schema)(validEntity)
     expect(result.entities).toHaveLength(1)
     expect(result.entities[0].id).toBe("cristiano_ronaldo")
-    expect(result.entities[0].types).toEqual(["http://schema.org/Person"])
+    expect(result.entities[0].types).toEqual(["Person"]) // Returns local names, IRI expansion is post-extraction
   })
 
   it("should reject entities with invalid types", () => {
@@ -90,7 +91,7 @@ describe("makeEntitySchema", () => {
         {
           id: "test_entity",
           mention: "Test",
-          types: ["http://schema.org/InvalidClass"] // Not in allowed classes
+          types: ["InvalidClass"] // Not in allowed classes (local name doesn't match)
         }
       ]
     }
@@ -115,7 +116,7 @@ describe("makeEntitySchema", () => {
         {
           id: "Invalid-ID", // Not snake_case
           mention: "Test",
-          types: ["http://schema.org/Person"]
+          types: ["Person"] // Local name
         }
       ]
     }
@@ -171,7 +172,7 @@ describe("makeEntitySchema", () => {
         {
           id: "cristiano_ronaldo",
           mention: "Cristiano Ronaldo",
-          types: ["http://schema.org/Person", "http://schema.org/Athlete"]
+          types: ["Person", "Athlete"] // Local names
         }
       ]
     }
@@ -198,7 +199,7 @@ describe("makeEntitySchema", () => {
         {
           id: "test_entity",
           mention: "Test",
-          types: ["http://schema.org/Person"]
+          types: ["Person"] // Local name
         }
       ]
     }
@@ -212,7 +213,7 @@ describe("makeEntitySchema", () => {
         {
           id: "test_entity",
           mention: "Test",
-          types: ["http://schema.org/Person"],
+          types: ["Person"], // Local name
           attributes: {
             "http://schema.org/age": 39,
             "http://schema.org/name": "Test Name",

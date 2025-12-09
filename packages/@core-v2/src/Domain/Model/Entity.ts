@@ -88,6 +88,20 @@ export class Entity extends Schema.Class<Entity>("Entity")({
   chunkIndex: Schema.optional(Schema.Number).annotations({
     title: "Chunk Index",
     description: "Source chunk index for provenance (optional)"
+  }),
+
+  /**
+   * Chunk ID for extraction run tracking
+   *
+   * Unique chunk identifier when extraction run is provided.
+   * Format: `{documentId}-chunk-{index}` (e.g., `doc-abc123-chunk-0`).
+   * Used for full provenance tracking in contained extraction artifacts.
+   *
+   * @example "doc-abc123def456-chunk-0"
+   */
+  chunkId: Schema.optional(Schema.String).annotations({
+    title: "Chunk ID",
+    description: "Unique chunk ID for extraction run provenance (optional)"
   })
 }) {
   /**
@@ -100,7 +114,8 @@ export class Entity extends Schema.Class<Entity>("Entity")({
       mention: this.mention,
       types: this.types,
       attributes: this.attributes,
-      chunkIndex: this.chunkIndex
+      chunkIndex: this.chunkIndex,
+      chunkId: this.chunkId
     }
   }
 }
