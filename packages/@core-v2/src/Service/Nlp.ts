@@ -9,16 +9,14 @@
  */
 
 import { Effect } from "effect"
-import vectors from "wink-embeddings-sg-100d"
 import model from "wink-eng-lite-web-model"
 import winkNLP from "wink-nlp"
-import BM25Vectorizer from "wink-nlp/utilities/bm25-vectorizer"
-// @ts-expect-error - wink-nlp/utilities/similarity has no type definitions
-import similarity from "wink-nlp/utilities/similarity.js"
+
 // @ts-expect-error - wink-bm25-text-search has no type definitions
 import winkBM25 from "wink-bm25-text-search"
 import type { ClassDefinition, OntologyContext, PropertyDefinition } from "../Domain/Model/Ontology.js"
 import { enhanceTextForSearch, generateNGrams } from "../Utils/Text.js"
+import { NomicNlpService, NomicNlpServiceDefault } from "./NomicNlp.js"
 
 /**
  * Tokenization result
@@ -178,12 +176,14 @@ const prepareText = (text: string, nlp: ReturnType<typeof winkNLP>): Array<strin
 export class NlpService extends Effect.Service<NlpService>()(
   "NlpService",
   {
-    sync: () => {
-      // Initialize wink-nlp with model, pipes (sbd+pos for embeddings), and vectors
+    effect: Effect.gen(function*() {
+      const nomic = yield* NomicNlpService
+
+      // Initialize wink-nlp with model, pipes (sbd+pos for embeddings)
       // sbd = sentence boundary detection, pos = part-of-speech (required for lemmas/contextual vectors)
-      const nlp = winkNLP(model, ["sbd", "pos"], vectors)
+      const nlp = winkNLP(model, ["sbd", "pos"])
       const its = nlp.its
-      const as = nlp.as
+      const _as = nlp.as
 
       // Store for BM25 engines (keyed by index reference)
       const bm25Engines = new WeakMap<OntologyBM25Index, ReturnType<typeof winkBM25>>()
@@ -203,50 +203,6 @@ export class NlpService extends Effect.Service<NlpService>()(
         Map<string, ClassDefinition | PropertyDefinition>
       >()
       const semanticOntologies = new WeakMap<OntologySemanticIndex, OntologyContext>()
-
-      /**
-       * Compute document embedding from text
-       *
-       * Tokenizes text, filters to words (non-stopwords), and gets averaged embedding vector.
-       * Uses wink-nlp's built-in vector averaging via as.vector reducer.
-       * Returns a 100-dimensional vector representing the document.
-       */
-      const computeDocumentEmbedding = (text: string): ReadonlyArray<number> | null => {
-        const doc = nlp.readDoc(text)
-        const tokens = doc
-          .tokens()
-          .filter((t) => t.out(its.type) === "word" && !t.out(its.stopWordFlag))
-
-        // Check if we have any tokens by trying to get the first one
-        const firstToken = tokens.itemAt(0)
-        if (!firstToken) {
-          return null
-        }
-
-        // Get averaged embedding vector directly from wink-nlp
-        // as.vector on a token collection returns the averaged vector
-        const embedding = tokens.out(its.value, as.vector) as ReadonlyArray<number> | null
-
-        if (!embedding || embedding.length === 0) {
-          return null
-        }
-
-        return embedding
-      }
-
-      /**
-       * Compute cosine similarity between two vectors using wink-nlp's built-in utility
-       */
-      const cosineSimilarity = (
-        a: ReadonlyArray<number>,
-        b: ReadonlyArray<number>
-      ): number => {
-        if (a.length !== b.length) {
-          return 0
-        }
-        // Use wink-nlp's built-in similarity utility
-        return similarity.vector.cosine(a, b) as number
-      }
 
       return {
         /**
@@ -284,41 +240,44 @@ export class NlpService extends Effect.Service<NlpService>()(
           k: number = 5
         ) =>
           Effect.sync(() => {
-            // Create BM25 vectorizer with default config
-            const bm25 = BM25Vectorizer()
+            // Create BM25 search engine
+            const engine = winkBM25()
 
-            // Learn from documents (train the model)
-            docs.forEach((doc) => {
-              const tokens = nlp.readDoc(doc).tokens().out(its.normal)
-              bm25.learn(tokens)
+            // Define text preparation pipeline (same as ontology index)
+            engine.definePrepTasks([(text: string) => prepareText(text, nlp)])
+
+            // Configure
+            engine.defineConfig({
+              fldWeights: { text: 1 }
             })
 
-            // Get query vector
-            const queryTokens = nlp.readDoc(query).tokens().out(its.normal)
-            const queryVector = bm25.vectorOf(queryTokens)
+            // Add documents to index
+            docs.forEach((doc, index) => {
+              engine.addDoc({ text: doc }, index.toString())
+            })
 
-            // Compute similarities for all documents using wink-nlp's built-in similarity
-            const results = docs
-              .map((doc, index) => {
-                const docTokens = nlp.readDoc(doc).tokens().out(its.normal)
-                const docVector = bm25.vectorOf(docTokens)
+            // Consolidate index
+            engine.consolidate()
 
-                // Use wink-nlp's built-in cosine similarity
-                const score = similarity.vector.cosine(queryVector, docVector) as number
+            // Search
+            const rawResults = engine.search(query, k)
 
-                return { doc, index, score }
-              })
-              .filter((r) => r.score > 0)
-              .sort((a, b) => b.score - a.score)
-              .slice(0, k)
-
-            return results
+            // Map results
+            return rawResults.map((result: any) => {
+              const [id, score] = result
+              const index = Number.parseInt(id)
+              return {
+                doc: docs[index],
+                index,
+                score
+              }
+            })
           }),
 
         /**
          * Search similar documents using embeddings (semantic search)
          *
-         * Uses word embeddings via as.vector for semantic similarity.
+         * Uses Nomic embeddings for semantic similarity.
          * More robust to paraphrasing than BM25.
          *
          * @param query - Search query
@@ -331,28 +290,26 @@ export class NlpService extends Effect.Service<NlpService>()(
           docs: ReadonlyArray<string>,
           k: number = 5
         ) =>
-          Effect.sync(() => {
-            // Get query vector (average of token embeddings)
-            const queryDoc = nlp.readDoc(query)
-            const queryVector = queryDoc.tokens().out(its.value, as.vector) as Array<number>
+          Effect.gen(function*() {
+            // Get query vector
+            const queryVector = yield* nomic.embed(query, "search_query")
 
-            if (!queryVector || queryVector.length === 0) {
-              return []
-            }
+            // Compute embeddings for all docs (in parallel with concurrency limit)
+            const docEmbeddings = yield* Effect.all(
+              docs.map((doc, index) =>
+                nomic.embed(doc, "search_document").pipe(
+                  Effect.map((embedding) => ({ doc, index, embedding })),
+                  Effect.catchAll(() => Effect.succeed(null))
+                )
+              ),
+              { concurrency: 5 }
+            )
 
-            // Compute cosine similarity for each document using wink-nlp's built-in utility
-            const results = docs
-              .map((doc, index) => {
-                const docObj = nlp.readDoc(doc)
-                const docVector = docObj.tokens().out(its.value, as.vector) as Array<number>
-
-                if (!docVector || docVector.length === 0) {
-                  return { doc, index, score: 0 }
-                }
-
-                // Use wink-nlp's built-in cosine similarity
-                const score = similarity.vector.cosine(queryVector, docVector) as number
-
+            // Compute cosine similarity for each document
+            const results = docEmbeddings
+              .filter((item): item is NonNullable<typeof item> => item !== null)
+              .map(({ doc, embedding, index }) => {
+                const score = nomic.cosineSimilarity(queryVector, embedding)
                 return { doc, index, score }
               })
               .filter((r) => r.score > 0)
@@ -670,9 +627,8 @@ export class NlpService extends Effect.Service<NlpService>()(
         /**
          * Create semantic search index from ontology context
          *
-         * Builds an in-memory semantic index using word embeddings from the ontology's
-         * classes and properties. Each document is converted to a 100-dimensional embedding
-         * vector using wink-embeddings-sg-100d. The index maps IRIs to domain models for retrieval.
+         * Builds an in-memory semantic index using Nomic embeddings from the ontology's
+         * classes and properties. The index maps IRIs to domain models for retrieval.
          *
          * @param ontology - Ontology context to index
          * @returns Effect yielding opaque OntologySemanticIndex
@@ -685,18 +641,30 @@ export class NlpService extends Effect.Service<NlpService>()(
         createOntologySemanticIndex: (
           ontology: OntologyContext
         ): Effect.Effect<OntologySemanticIndex, Error> =>
-          Effect.sync(() => {
+          Effect.gen(function*() {
             // Get documents from ontology (returns [IRI, document] tuples)
             const documents = ontology.toDocuments()
 
             // Create mapping from IRI to embedding and domain model
+
             const embeddingMap = new Map<string, ReadonlyArray<number>>()
             const domainModelMap = new Map<string, ClassDefinition | PropertyDefinition>()
 
-            // Compute embeddings for each document
-            for (const [iri, document] of documents) {
-              const embedding = computeDocumentEmbedding(document)
-              if (embedding) {
+            // Compute embeddings for each document (in parallel)
+            const embeddings = yield* Effect.all(
+              documents.map(([iri, document]) =>
+                nomic.embed(document, "search_document").pipe(
+                  Effect.map((embedding) => ({ iri, embedding })),
+                  Effect.catchAll(() => Effect.succeed(null))
+                )
+              ),
+              { concurrency: 5 }
+            )
+
+            // Store valid embeddings
+            for (const item of embeddings) {
+              if (item) {
+                const { embedding, iri } = item
                 embeddingMap.set(iri, embedding)
 
                 // Map IRI to domain model for later retrieval
@@ -747,7 +715,7 @@ export class NlpService extends Effect.Service<NlpService>()(
           query: string,
           limit: number = 10
         ): Effect.Effect<ReadonlyArray<OntologySearchResult>, Error> =>
-          Effect.sync(() => {
+          Effect.gen(function*() {
             const embeddingMap = semanticEmbeddings.get(index)
             const domainModelMap = semanticDomainModels.get(index)
             const ontology = semanticOntologies.get(index)
@@ -757,15 +725,12 @@ export class NlpService extends Effect.Service<NlpService>()(
             }
 
             // Compute query embedding
-            const queryEmbedding = computeDocumentEmbedding(query)
-            if (!queryEmbedding) {
-              return []
-            }
+            const queryEmbedding = yield* nomic.embed(query, "search_query")
 
             // Compute cosine similarity for each document
             const results: Array<OntologySearchResult & { score: number }> = []
             for (const [iri, docEmbedding] of embeddingMap.entries()) {
-              const score = cosineSimilarity(queryEmbedding, docEmbedding)
+              const score = nomic.cosineSimilarity(queryEmbedding, docEmbedding)
 
               if (score > 0) {
                 const domainModel = domainModelMap.get(iri)
@@ -790,7 +755,8 @@ export class NlpService extends Effect.Service<NlpService>()(
               .slice(0, limit)
           })
       }
-    },
-    accessors: true
+    }),
+    dependencies: [NomicNlpServiceDefault]
   }
-) {}
+) {
+}

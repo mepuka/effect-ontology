@@ -17,13 +17,17 @@ import { ClassDefinition, OntologyContext, PropertyDefinition } from "../Domain/
 import {
   OWL_CLASS,
   OWL_DATATYPE_PROPERTY,
+  OWL_EQUIVALENT_CLASS,
   OWL_FUNCTIONAL_PROPERTY,
+  OWL_INVERSEOF,
   OWL_OBJECT_PROPERTY,
   RDF_TYPE,
   RDFS_COMMENT,
   RDFS_DOMAIN,
   RDFS_LABEL,
   RDFS_RANGE,
+  RDFS_SUBCLASSOF,
+  RDFS_SUBPROPERTYOF,
   SKOS_ALTLABEL,
   SKOS_BROADER,
   SKOS_CLOSEMATCH,
@@ -66,208 +70,92 @@ const parseOntologyFromStore = (
   {
     classes: Chunk.Chunk<ClassDefinition>
     properties: Chunk.Chunk<PropertyDefinition>
+    hierarchy: Record<string, Array<string>>
+    propertyHierarchy: Record<string, Array<string>>
   },
   OntologyParsingFailed
 > =>
   Effect.gen(function*() {
-    // Query 1: Find all classes (subjects where ?s rdf:type owl:Class)
+    // Helper to fetch all values for a predicate into a Map
+    const fetchPredicateMap = (predicate: IRI) =>
+      Effect.gen(function*() {
+        const quads = yield* rdf.queryStore(store, { predicate })
+        const map = new Map<string, Array<string>>()
+        for (const quad of Chunk.toReadonlyArray(quads)) {
+          if (typeof quad.subject === "string" && !quad.subject.startsWith("_:")) {
+            const subject = quad.subject
+            const value = quad.object instanceof Literal ? quad.object.value : (quad.object as string)
+            if (!map.has(subject)) {
+              map.set(subject, [])
+            }
+            map.get(subject)!.push(value)
+          }
+        }
+        return map
+      })
+
+    // Fetch all metadata in parallel batches
+    const [
+      labels,
+      comments,
+      domains,
+      ranges,
+      subClassOf,
+      subPropertyOf,
+      prefLabels,
+      altLabels,
+      hiddenLabels,
+      definitions,
+      scopeNotes,
+      examples,
+      broaders,
+      narrowers,
+      relateds,
+      exactMatches,
+      closeMatches,
+      inverseOfs,
+      equivalentClasses
+    ] = yield* Effect.all([
+      fetchPredicateMap(RDFS_LABEL),
+      fetchPredicateMap(RDFS_COMMENT),
+      fetchPredicateMap(RDFS_DOMAIN),
+      fetchPredicateMap(RDFS_RANGE),
+      fetchPredicateMap(RDFS_SUBCLASSOF),
+      fetchPredicateMap(RDFS_SUBPROPERTYOF),
+      fetchPredicateMap(SKOS_PREFLABEL),
+      fetchPredicateMap(SKOS_ALTLABEL),
+      fetchPredicateMap(SKOS_HIDDENLABEL),
+      fetchPredicateMap(SKOS_DEFINITION),
+      fetchPredicateMap(SKOS_SCOPENOTE),
+      fetchPredicateMap(SKOS_EXAMPLE),
+      fetchPredicateMap(SKOS_BROADER),
+      fetchPredicateMap(SKOS_NARROWER),
+      fetchPredicateMap(SKOS_RELATED),
+      fetchPredicateMap(SKOS_EXACTMATCH),
+      fetchPredicateMap(SKOS_CLOSEMATCH),
+      fetchPredicateMap(OWL_INVERSEOF),
+      fetchPredicateMap(OWL_EQUIVALENT_CLASS)
+    ], { concurrency: 5 })
+
+    // Find all classes (subjects where ?s rdf:type owl:Class)
     const classQuads = yield* rdf.queryStore(store, {
       predicate: RDF_TYPE,
       object: OWL_CLASS
     })
-    const classMap = new Map<
-      IRI,
-      {
-        label: string
-        comment: string
-        properties: Array<IRI>
-        prefLabels: Array<string>
-        altLabels: Array<string>
-        hiddenLabels: Array<string>
-        definition: string
-        scopeNote: string
-        example: string
-        broader: Array<IRI>
-        narrower: Array<IRI>
-        related: Array<IRI>
-        exactMatch: Array<IRI>
-        closeMatch: Array<IRI>
-      }
-    >()
 
-    // Initialize class entries
-    const classQuadsArray = Chunk.toReadonlyArray(classQuads)
-    for (const quad of classQuadsArray) {
-      if (typeof quad.subject === "string" && !quad.subject.startsWith("_:")) {
-        const classIri = quad.subject as IRI
-        if (!classMap.has(classIri)) {
-          classMap.set(classIri, {
-            label: "",
-            comment: "",
-            properties: [],
-            prefLabels: [],
-            altLabels: [],
-            hiddenLabels: [],
-            definition: "",
-            scopeNote: "",
-            example: "",
-            broader: [],
-            narrower: [],
-            related: [],
-            exactMatch: [],
-            closeMatch: []
-          })
-        }
-      }
+    // Build hierarchy map (child -> parents)
+    const hierarchy: Record<string, Array<string>> = {}
+    for (const [child, parents] of subClassOf.entries()) {
+      hierarchy[child] = parents
     }
 
-    // Query 2: Get labels, comments, and SKOS properties for each class
-    for (const [classIri] of classMap.entries()) {
-      const classInfo = classMap.get(classIri)!
-
-      // Get rdfs:label
-      const labelQuads = yield* rdf.queryStore(store, {
-        subject: classIri,
-        predicate: RDFS_LABEL
-      })
-      const labelArray = Chunk.toReadonlyArray(labelQuads)
-      if (labelArray.length > 0 && labelArray[0].object instanceof Literal) {
-        classInfo.label = labelArray[0].object.value
-      }
-
-      // Get rdfs:comment
-      const commentQuads = yield* rdf.queryStore(store, {
-        subject: classIri,
-        predicate: RDFS_COMMENT
-      })
-      const commentArray = Chunk.toReadonlyArray(commentQuads)
-      if (
-        commentArray.length > 0 &&
-        commentArray[0].object instanceof Literal
-      ) {
-        classInfo.comment = commentArray[0].object.value
-      }
-
-      // Get skos:prefLabel (can have multiple with different language tags)
-      const prefLabelQuads = yield* rdf.queryStore(store, {
-        subject: classIri,
-        predicate: SKOS_PREFLABEL
-      })
-      classInfo.prefLabels = Chunk.toReadonlyArray(prefLabelQuads)
-        .map((q) => (q.object instanceof Literal ? q.object.value : ""))
-        .filter((s) => s !== "")
-
-      // Get skos:altLabel (synonyms)
-      const altLabelQuads = yield* rdf.queryStore(store, {
-        subject: classIri,
-        predicate: SKOS_ALTLABEL
-      })
-      classInfo.altLabels = Chunk.toReadonlyArray(altLabelQuads)
-        .map((q) => (q.object instanceof Literal ? q.object.value : ""))
-        .filter((s) => s !== "")
-
-      // Get skos:hiddenLabel (misspellings, abbreviations)
-      const hiddenLabelQuads = yield* rdf.queryStore(store, {
-        subject: classIri,
-        predicate: SKOS_HIDDENLABEL
-      })
-      classInfo.hiddenLabels = Chunk.toReadonlyArray(hiddenLabelQuads)
-        .map((q) => (q.object instanceof Literal ? q.object.value : ""))
-        .filter((s) => s !== "")
-
-      // Get skos:definition (preferred over rdfs:comment)
-      const definitionQuads = yield* rdf.queryStore(store, {
-        subject: classIri,
-        predicate: SKOS_DEFINITION
-      })
-      const definitionArray = Chunk.toReadonlyArray(definitionQuads)
-      if (
-        definitionArray.length > 0 &&
-        definitionArray[0].object instanceof Literal
-      ) {
-        classInfo.definition = definitionArray[0].object.value
-      }
-
-      // Get skos:scopeNote
-      const scopeNoteQuads = yield* rdf.queryStore(store, {
-        subject: classIri,
-        predicate: SKOS_SCOPENOTE
-      })
-      const scopeNoteArray = Chunk.toReadonlyArray(scopeNoteQuads)
-      if (
-        scopeNoteArray.length > 0 &&
-        scopeNoteArray[0].object instanceof Literal
-      ) {
-        classInfo.scopeNote = scopeNoteArray[0].object.value
-      }
-
-      // Get skos:example
-      const exampleQuads = yield* rdf.queryStore(store, {
-        subject: classIri,
-        predicate: SKOS_EXAMPLE
-      })
-      const exampleArray = Chunk.toReadonlyArray(exampleQuads)
-      if (exampleArray.length > 0 && exampleArray[0].object instanceof Literal) {
-        classInfo.example = exampleArray[0].object.value
-      }
-
-      // Get skos:broader (parent concepts)
-      const broaderQuads = yield* rdf.queryStore(store, {
-        subject: classIri,
-        predicate: SKOS_BROADER
-      })
-      for (const quad of Chunk.toReadonlyArray(broaderQuads)) {
-        if (typeof quad.object === "string" && !quad.object.startsWith("_:")) {
-          classInfo.broader.push(quad.object as IRI)
-        }
-      }
-
-      // Get skos:narrower (child concepts)
-      const narrowerQuads = yield* rdf.queryStore(store, {
-        subject: classIri,
-        predicate: SKOS_NARROWER
-      })
-      for (const quad of Chunk.toReadonlyArray(narrowerQuads)) {
-        if (typeof quad.object === "string" && !quad.object.startsWith("_:")) {
-          classInfo.narrower.push(quad.object as IRI)
-        }
-      }
-
-      // Get skos:related (related concepts)
-      const relatedQuads = yield* rdf.queryStore(store, {
-        subject: classIri,
-        predicate: SKOS_RELATED
-      })
-      for (const quad of Chunk.toReadonlyArray(relatedQuads)) {
-        if (typeof quad.object === "string" && !quad.object.startsWith("_:")) {
-          classInfo.related.push(quad.object as IRI)
-        }
-      }
-
-      // Get skos:exactMatch
-      const exactMatchQuads = yield* rdf.queryStore(store, {
-        subject: classIri,
-        predicate: SKOS_EXACTMATCH
-      })
-      for (const quad of Chunk.toReadonlyArray(exactMatchQuads)) {
-        if (typeof quad.object === "string" && !quad.object.startsWith("_:")) {
-          classInfo.exactMatch.push(quad.object as IRI)
-        }
-      }
-
-      // Get skos:closeMatch
-      const closeMatchQuads = yield* rdf.queryStore(store, {
-        subject: classIri,
-        predicate: SKOS_CLOSEMATCH
-      })
-      for (const quad of Chunk.toReadonlyArray(closeMatchQuads)) {
-        if (typeof quad.object === "string" && !quad.object.startsWith("_:")) {
-          classInfo.closeMatch.push(quad.object as IRI)
-        }
-      }
+    // Build property hierarchy map (child -> parents)
+    const propertyHierarchy: Record<string, Array<string>> = {}
+    for (const [child, parents] of subPropertyOf.entries()) {
+      propertyHierarchy[child] = parents
     }
 
-    // Query 3: Find all properties (ObjectProperty or DatatypeProperty)
+    // Process Properties
     const objectPropQuads = yield* rdf.queryStore(store, {
       predicate: RDF_TYPE,
       object: OWL_OBJECT_PROPERTY
@@ -276,392 +164,108 @@ const parseOntologyFromStore = (
       predicate: RDF_TYPE,
       object: OWL_DATATYPE_PROPERTY
     })
-    const propertyMap = new Map<
-      IRI,
-      {
-        label: string
-        comment: string
-        domain: Array<IRI>
-        range: Array<IRI>
-        rangeType: "datatype" | "object"
-        isFunctional: boolean
-        prefLabels: Array<string>
-        altLabels: Array<string>
-        hiddenLabels: Array<string>
-        definition: string
-        scopeNote: string
-        example: string
-        broader: Array<IRI>
-        narrower: Array<IRI>
-        related: Array<IRI>
-        exactMatch: Array<IRI>
-        closeMatch: Array<IRI>
-      }
-    >()
+    const functionalPropQuads = yield* rdf.queryStore(store, {
+      predicate: RDF_TYPE,
+      object: OWL_FUNCTIONAL_PROPERTY
+    })
+    const functionalProps = new Set(Chunk.toReadonlyArray(functionalPropQuads).map((q) => q.subject))
 
-    // Initialize property entries
-    const objectPropQuadsArray = Chunk.toReadonlyArray(objectPropQuads)
-    for (const quad of objectPropQuadsArray) {
+    const propInfos = new Map<string, { id: string; rangeType: "object" | "datatype" }>()
+    for (const quad of Chunk.toReadonlyArray(objectPropQuads)) {
       if (typeof quad.subject === "string" && !quad.subject.startsWith("_:")) {
-        const propIri = quad.subject as IRI
-        if (!propertyMap.has(propIri)) {
-          propertyMap.set(propIri, {
-            label: "",
-            comment: "",
-            domain: [],
-            range: [],
-            rangeType: "object",
-            isFunctional: false,
-            prefLabels: [],
-            altLabels: [],
-            hiddenLabels: [],
-            definition: "",
-            scopeNote: "",
-            example: "",
-            broader: [],
-            narrower: [],
-            related: [],
-            exactMatch: [],
-            closeMatch: []
-          })
-        }
+        propInfos.set(quad.subject, { id: quad.subject, rangeType: "object" })
       }
     }
-    const datatypePropQuadsArray = Chunk.toReadonlyArray(datatypePropQuads)
-    for (const quad of datatypePropQuadsArray) {
+    for (const quad of Chunk.toReadonlyArray(datatypePropQuads)) {
       if (typeof quad.subject === "string" && !quad.subject.startsWith("_:")) {
-        const propIri = quad.subject as IRI
-        if (!propertyMap.has(propIri)) {
-          propertyMap.set(propIri, {
-            label: "",
-            comment: "",
-            domain: [],
-            range: [],
-            rangeType: "datatype",
-            isFunctional: false,
-            prefLabels: [],
-            altLabels: [],
-            hiddenLabels: [],
-            definition: "",
-            scopeNote: "",
-            example: "",
-            broader: [],
-            narrower: [],
-            related: [],
-            exactMatch: [],
-            closeMatch: []
-          })
+        propInfos.set(quad.subject, { id: quad.subject, rangeType: "datatype" })
+      }
+    }
+
+    // Link props to classes
+    const classProperties = new Map<string, Array<string>>() // classIRI -> propIRIs
+    for (const [propIri, _] of propInfos) {
+      const propDomains = domains.get(propIri) || []
+      for (const domainIri of propDomains) {
+        if (!classProperties.has(domainIri)) {
+          classProperties.set(domainIri, [])
+        }
+        classProperties.get(domainIri)!.push(propIri)
+      }
+    }
+
+    // Helper to transform IRIs
+    const toLocalResult = (iris: Array<string>) => Schema.decodeUnknownSync(iriArrayToLocalNameArrayTransform())(iris)
+
+    // Finalize Classes
+    const finalClasses: Array<ClassDefinition> = []
+    const classSet = new Set<string>() // To ensure unique classes
+    for (const quad of Chunk.toReadonlyArray(classQuads)) {
+      if (typeof quad.subject === "string" && !quad.subject.startsWith("_:")) {
+        const id = quad.subject
+        if (classSet.has(id)) continue
+        classSet.add(id)
+
+        if ((labels.get(id)?.[0] || prefLabels.get(id)?.[0])) {
+          finalClasses.push(
+            new ClassDefinition({
+              id: id as IRI,
+              label: labels.get(id)?.[0] || "",
+              comment: comments.get(id)?.[0] || "",
+              properties: toLocalResult(classProperties.get(id) || []) as unknown as ReadonlyArray<IRI>,
+              prefLabels: prefLabels.get(id) || [],
+              altLabels: altLabels.get(id) || [],
+              hiddenLabels: hiddenLabels.get(id) || [],
+              definition: definitions.get(id)?.[0],
+              scopeNote: scopeNotes.get(id)?.[0],
+              example: examples.get(id)?.[0],
+              broader: toLocalResult(broaders.get(id) || []) as unknown as ReadonlyArray<IRI>,
+              narrower: toLocalResult(narrowers.get(id) || []) as unknown as ReadonlyArray<IRI>,
+              related: toLocalResult(relateds.get(id) || []) as unknown as ReadonlyArray<IRI>,
+              exactMatch: toLocalResult(exactMatches.get(id) || []) as unknown as ReadonlyArray<IRI>,
+              closeMatch: toLocalResult(closeMatches.get(id) || []) as unknown as ReadonlyArray<IRI>,
+              equivalentClass: toLocalResult(equivalentClasses.get(id) || []) as unknown as ReadonlyArray<IRI>
+            })
+          )
         }
       }
     }
 
-    // Query 4: Get metadata for each property (label, comment, domain, range, SKOS)
-    for (const [propIri] of propertyMap.entries()) {
-      const propInfo = propertyMap.get(propIri)!
-
-      // Get rdfs:label
-      const labelQuads = yield* rdf.queryStore(store, {
-        subject: propIri,
-        predicate: RDFS_LABEL
-      })
-      const labelArray = Chunk.toReadonlyArray(labelQuads)
-      if (labelArray.length > 0 && labelArray[0].object instanceof Literal) {
-        propInfo.label = labelArray[0].object.value
-      }
-
-      // Get rdfs:comment
-      const commentQuads = yield* rdf.queryStore(store, {
-        subject: propIri,
-        predicate: RDFS_COMMENT
-      })
-      const commentArray = Chunk.toReadonlyArray(commentQuads)
-      if (
-        commentArray.length > 0 &&
-        commentArray[0].object instanceof Literal
-      ) {
-        propInfo.comment = commentArray[0].object.value
-      }
-
-      // Get domain (can have multiple)
-      const domainQuads = yield* rdf.queryStore(store, {
-        subject: propIri,
-        predicate: RDFS_DOMAIN
-      })
-      for (const quad of Chunk.toReadonlyArray(domainQuads)) {
-        if (typeof quad.object === "string" && !quad.object.startsWith("_:")) {
-          propInfo.domain.push(quad.object as IRI)
-        }
-      }
-
-      // Get range (can have multiple)
-      const rangeQuads = yield* rdf.queryStore(store, {
-        subject: propIri,
-        predicate: RDFS_RANGE
-      })
-      for (const quad of Chunk.toReadonlyArray(rangeQuads)) {
-        if (typeof quad.object === "string" && !quad.object.startsWith("_:")) {
-          propInfo.range.push(quad.object as IRI)
-        }
-      }
-
-      // Check if property is functional (owl:FunctionalProperty)
-      const functionalQuads = yield* rdf.queryStore(store, {
-        subject: propIri,
-        predicate: RDF_TYPE,
-        object: OWL_FUNCTIONAL_PROPERTY
-      })
-      if (Chunk.toReadonlyArray(functionalQuads).length > 0) {
-        propInfo.isFunctional = true
-      }
-
-      // Get skos:prefLabel (can have multiple with different language tags)
-      const prefLabelQuads = yield* rdf.queryStore(store, {
-        subject: propIri,
-        predicate: SKOS_PREFLABEL
-      })
-      propInfo.prefLabels = Chunk.toReadonlyArray(prefLabelQuads)
-        .map((q) => (q.object instanceof Literal ? q.object.value : ""))
-        .filter((s) => s !== "")
-
-      // Get skos:altLabel (synonyms)
-      const altLabelQuads = yield* rdf.queryStore(store, {
-        subject: propIri,
-        predicate: SKOS_ALTLABEL
-      })
-      propInfo.altLabels = Chunk.toReadonlyArray(altLabelQuads)
-        .map((q) => (q.object instanceof Literal ? q.object.value : ""))
-        .filter((s) => s !== "")
-
-      // Get skos:hiddenLabel (misspellings, abbreviations)
-      const hiddenLabelQuads = yield* rdf.queryStore(store, {
-        subject: propIri,
-        predicate: SKOS_HIDDENLABEL
-      })
-      propInfo.hiddenLabels = Chunk.toReadonlyArray(hiddenLabelQuads)
-        .map((q) => (q.object instanceof Literal ? q.object.value : ""))
-        .filter((s) => s !== "")
-
-      // Get skos:definition (preferred over rdfs:comment)
-      const definitionQuads = yield* rdf.queryStore(store, {
-        subject: propIri,
-        predicate: SKOS_DEFINITION
-      })
-      const definitionArray = Chunk.toReadonlyArray(definitionQuads)
-      if (
-        definitionArray.length > 0 &&
-        definitionArray[0].object instanceof Literal
-      ) {
-        propInfo.definition = definitionArray[0].object.value
-      }
-
-      // Get skos:scopeNote
-      const scopeNoteQuads = yield* rdf.queryStore(store, {
-        subject: propIri,
-        predicate: SKOS_SCOPENOTE
-      })
-      const scopeNoteArray = Chunk.toReadonlyArray(scopeNoteQuads)
-      if (
-        scopeNoteArray.length > 0 &&
-        scopeNoteArray[0].object instanceof Literal
-      ) {
-        propInfo.scopeNote = scopeNoteArray[0].object.value
-      }
-
-      // Get skos:example
-      const exampleQuads = yield* rdf.queryStore(store, {
-        subject: propIri,
-        predicate: SKOS_EXAMPLE
-      })
-      const exampleArray = Chunk.toReadonlyArray(exampleQuads)
-      if (exampleArray.length > 0 && exampleArray[0].object instanceof Literal) {
-        propInfo.example = exampleArray[0].object.value
-      }
-
-      // Get skos:broader (parent properties)
-      const broaderQuads = yield* rdf.queryStore(store, {
-        subject: propIri,
-        predicate: SKOS_BROADER
-      })
-      for (const quad of Chunk.toReadonlyArray(broaderQuads)) {
-        if (typeof quad.object === "string" && !quad.object.startsWith("_:")) {
-          propInfo.broader.push(quad.object as IRI)
-        }
-      }
-
-      // Get skos:narrower (child properties)
-      const narrowerQuads = yield* rdf.queryStore(store, {
-        subject: propIri,
-        predicate: SKOS_NARROWER
-      })
-      for (const quad of Chunk.toReadonlyArray(narrowerQuads)) {
-        if (typeof quad.object === "string" && !quad.object.startsWith("_:")) {
-          propInfo.narrower.push(quad.object as IRI)
-        }
-      }
-
-      // Get skos:related (related properties)
-      const relatedQuads = yield* rdf.queryStore(store, {
-        subject: propIri,
-        predicate: SKOS_RELATED
-      })
-      for (const quad of Chunk.toReadonlyArray(relatedQuads)) {
-        if (typeof quad.object === "string" && !quad.object.startsWith("_:")) {
-          propInfo.related.push(quad.object as IRI)
-        }
-      }
-
-      // Get skos:exactMatch
-      const exactMatchQuads = yield* rdf.queryStore(store, {
-        subject: propIri,
-        predicate: SKOS_EXACTMATCH
-      })
-      for (const quad of Chunk.toReadonlyArray(exactMatchQuads)) {
-        if (typeof quad.object === "string" && !quad.object.startsWith("_:")) {
-          propInfo.exactMatch.push(quad.object as IRI)
-        }
-      }
-
-      // Get skos:closeMatch
-      const closeMatchQuads = yield* rdf.queryStore(store, {
-        subject: propIri,
-        predicate: SKOS_CLOSEMATCH
-      })
-      for (const quad of Chunk.toReadonlyArray(closeMatchQuads)) {
-        if (typeof quad.object === "string" && !quad.object.startsWith("_:")) {
-          propInfo.closeMatch.push(quad.object as IRI)
-        }
-      }
-    }
-
-    // Link properties to classes based on domain
-    for (const [propIri, propInfo] of propertyMap.entries()) {
-      for (const domainClass of propInfo.domain) {
-        const classInfo = classMap.get(domainClass)
-        if (classInfo) {
-          classInfo.properties.push(propIri)
-        }
-      }
-    }
-
-    // Transform schemas: convert IRIs to local names
-    const propertiesTransform = iriArrayToLocalNameArrayTransform()
-    const domainTransform = iriArrayToLocalNameArrayTransform()
-    const rangeTransform = iriArrayToLocalNameArrayTransform()
-
-    // Transform schemas for relationship IRIs
-    const broaderTransform = iriArrayToLocalNameArrayTransform()
-    const narrowerTransform = iriArrayToLocalNameArrayTransform()
-    const relatedTransform = iriArrayToLocalNameArrayTransform()
-    const exactMatchTransform = iriArrayToLocalNameArrayTransform()
-    const closeMatchTransform = iriArrayToLocalNameArrayTransform()
-
-    // Build ClassDefinition Chunk with transforms applied
-    const classesBuilder: Array<ClassDefinition> = []
-    for (const [id, info] of classMap.entries()) {
-      // Only include classes with labels (rdfs:label or skos:prefLabel)
-      if (info.label || info.prefLabels.length > 0) {
-        // Transform properties IRIs to local names using Schema transform
-        const propertiesLocalNames = Schema.decodeUnknownSync(
-          propertiesTransform
-        )(info.properties)
-
-        // Transform relationship IRIs to local names
-        const broaderLocalNames = Schema.decodeUnknownSync(broaderTransform)(
-          info.broader
-        )
-        const narrowerLocalNames = Schema.decodeUnknownSync(narrowerTransform)(
-          info.narrower
-        )
-        const relatedLocalNames = Schema.decodeUnknownSync(relatedTransform)(
-          info.related
-        )
-        const exactMatchLocalNames = Schema.decodeUnknownSync(
-          exactMatchTransform
-        )(info.exactMatch)
-        const closeMatchLocalNames = Schema.decodeUnknownSync(
-          closeMatchTransform
-        )(info.closeMatch)
-
-        classesBuilder.push(
-          new ClassDefinition({
-            id,
-            label: info.label,
-            comment: info.comment || "",
-            properties: propertiesLocalNames,
-            prefLabels: info.prefLabels,
-            altLabels: info.altLabels,
-            hiddenLabels: info.hiddenLabels,
-            definition: info.definition || undefined,
-            scopeNote: info.scopeNote || undefined,
-            example: info.example || undefined,
-            broader: broaderLocalNames,
-            narrower: narrowerLocalNames,
-            related: relatedLocalNames,
-            exactMatch: exactMatchLocalNames,
-            closeMatch: closeMatchLocalNames
-          })
-        )
-      }
-    }
-
-    // Build PropertyDefinition Chunk with transforms applied
-    const propertiesBuilder: Array<PropertyDefinition> = []
-    for (const [id, info] of propertyMap.entries()) {
-      // Only include properties with labels (rdfs:label or skos:prefLabel)
-      if (info.label || info.prefLabels.length > 0) {
-        // Transform domain and range IRIs to local names using Schema transforms
-        const domainLocalNames = Schema.decodeUnknownSync(domainTransform)(
-          info.domain
-        )
-        const rangeLocalNames = Schema.decodeUnknownSync(rangeTransform)(
-          info.range
-        )
-
-        // Transform relationship IRIs to local names
-        const broaderLocalNames = Schema.decodeUnknownSync(broaderTransform)(
-          info.broader
-        )
-        const narrowerLocalNames = Schema.decodeUnknownSync(narrowerTransform)(
-          info.narrower
-        )
-        const relatedLocalNames = Schema.decodeUnknownSync(relatedTransform)(
-          info.related
-        )
-        const exactMatchLocalNames = Schema.decodeUnknownSync(
-          exactMatchTransform
-        )(info.exactMatch)
-        const closeMatchLocalNames = Schema.decodeUnknownSync(
-          closeMatchTransform
-        )(info.closeMatch)
-
-        propertiesBuilder.push(
+    // Finalize Properties
+    const finalProperties: Array<PropertyDefinition> = []
+    for (const [id, info] of propInfos) {
+      if ((labels.get(id)?.[0] || prefLabels.get(id)?.[0])) {
+        finalProperties.push(
           new PropertyDefinition({
-            id,
-            label: info.label,
-            comment: info.comment || "",
-            domain: domainLocalNames,
-            range: rangeLocalNames,
+            id: id as IRI,
+            label: labels.get(id)?.[0] || "",
+            comment: comments.get(id)?.[0] || "",
+            domain: toLocalResult(domains.get(id) || []) as unknown as ReadonlyArray<IRI>,
+            range: toLocalResult(ranges.get(id) || []) as unknown as ReadonlyArray<IRI>,
             rangeType: info.rangeType,
-            isFunctional: info.isFunctional,
-            prefLabels: info.prefLabels,
-            altLabels: info.altLabels,
-            hiddenLabels: info.hiddenLabels,
-            definition: info.definition || undefined,
-            scopeNote: info.scopeNote || undefined,
-            example: info.example || undefined,
-            broader: broaderLocalNames,
-            narrower: narrowerLocalNames,
-            related: relatedLocalNames,
-            exactMatch: exactMatchLocalNames,
-            closeMatch: closeMatchLocalNames
+            isFunctional: functionalProps.has(id as any),
+            prefLabels: prefLabels.get(id) || [],
+            altLabels: altLabels.get(id) || [],
+            hiddenLabels: hiddenLabels.get(id) || [],
+            definition: definitions.get(id)?.[0],
+            scopeNote: scopeNotes.get(id)?.[0],
+            example: examples.get(id)?.[0],
+            broader: toLocalResult(broaders.get(id) || []) as unknown as ReadonlyArray<IRI>,
+            narrower: toLocalResult(narrowers.get(id) || []) as unknown as ReadonlyArray<IRI>,
+            related: toLocalResult(relateds.get(id) || []) as unknown as ReadonlyArray<IRI>,
+            exactMatch: toLocalResult(exactMatches.get(id) || []) as unknown as ReadonlyArray<IRI>,
+            closeMatch: toLocalResult(closeMatches.get(id) || []) as unknown as ReadonlyArray<IRI>,
+            inverseOf: toLocalResult(inverseOfs.get(id) || []) as unknown as ReadonlyArray<IRI>
           })
         )
       }
     }
 
     return {
-      classes: Chunk.fromIterable(classesBuilder),
-      properties: Chunk.fromIterable(propertiesBuilder)
+      classes: Chunk.fromIterable(finalClasses),
+      properties: Chunk.fromIterable(finalProperties),
+      hierarchy,
+      propertyHierarchy
     }
   }).pipe(
     Effect.mapError(
@@ -686,265 +290,412 @@ const parseOntologyFromStore = (
 export class OntologyService extends Effect.Service<OntologyService>()(
   "OntologyService",
   {
-    effect: (path: string | undefined) =>
-      Effect.gen(function*() {
-        const config = yield* ConfigService
+    effect: Effect.gen(function*() {
+      const config = yield* ConfigService
+      const fs = yield* FileSystem.FileSystem
+      const rdf = yield* RdfBuilder
+      const nlp = yield* NlpService
 
-        const ontologyPath = path || config.ontology.path
-
-        const fs = yield* FileSystem.FileSystem
-        const rdf = yield* RdfBuilder
-        const nlp = yield* NlpService
-
-        // Load ontology file using FileSystem layer
-        const turtleContent = yield* fs.readFileString(ontologyPath).pipe(
-          Effect.mapError(
-            (error) =>
-              new OntologyFileNotFound({
-                message: `Ontology file not found at ${ontologyPath}`,
-                path: ontologyPath,
-                cause: error
-              })
+      // use cached to ensure we only load and parse once per process
+      const getOntology = yield* Effect.cached(
+        Effect.gen(function*() {
+          const ontologyPath = config.ontology.path
+          const turtleContent = yield* fs.readFileString(ontologyPath).pipe(
+            Effect.mapError(
+              (error) =>
+                new OntologyFileNotFound({
+                  message: `Ontology file not found at ${ontologyPath}`,
+                  path: ontologyPath,
+                  cause: error
+                })
+            )
           )
-        )
 
-        // Parse turtle content into RDF store using RdfService
-        const store = yield* rdf.parseTurtle(turtleContent)
-
-        const { classes, properties } = yield* parseOntologyFromStore(
-          rdf,
-          store,
-          ontologyPath
-        )
-
-        const ontology = new OntologyContext({
-          classes: Chunk.toReadonlyArray(classes),
-          properties: Chunk.toReadonlyArray(properties)
+          const store = yield* rdf.parseTurtle(turtleContent)
+          return yield* parseOntologyFromStore(
+            rdf,
+            store,
+            ontologyPath
+          )
         })
+      )
 
-        const index = yield* nlp.createOntologyIndex(ontology)
+      // Cache BM25 index
+      const getBm25Index = yield* Effect.cached(
+        Effect.gen(function*() {
+          const { classes, hierarchy, properties, propertyHierarchy } = yield* getOntology
+          const ontology = new OntologyContext({
+            classes: Chunk.toReadonlyArray(classes),
+            hierarchy,
+            propertyHierarchy,
+            properties: Chunk.toReadonlyArray(properties)
+          })
+          return yield* nlp.createOntologyIndex(ontology)
+        })
+      )
 
-        // Extract classes and properties from store using RdfService queries
+      // Cache Semantic index
+      const getSemanticIndex = yield* Effect.cached(
+        Effect.gen(function*() {
+          const { classes, hierarchy, properties, propertyHierarchy } = yield* getOntology
+          const ontology = new OntologyContext({
+            classes: Chunk.toReadonlyArray(classes),
+            hierarchy,
+            propertyHierarchy,
+            properties: Chunk.toReadonlyArray(properties)
+          })
+          return yield* nlp.createOntologySemanticIndex(ontology)
+        })
+      )
 
-        return {
-          /**
-           * Get the ontology context
-           *
-           * @returns OntologyContext object
-           */
-          ontology: Effect.succeed(ontology),
+      return {
+        /**
+         * Get the ontology context
+         *
+         * @returns OntologyContext object
+         */
+        ontology: Effect.gen(function*() {
+          const { classes, hierarchy, properties, propertyHierarchy } = yield* getOntology
+          return new OntologyContext({
+            classes: Chunk.toReadonlyArray(classes),
+            hierarchy,
+            propertyHierarchy,
+            properties: Chunk.toReadonlyArray(properties)
+          })
+        }),
 
-          /**
-           * Search for classes matching the query using BM25
-           *
-           * Creates a BM25 index from the ontology and searches for matching classes.
-           * Returns top-k classes ranked by relevance score.
-           *
-           * @param query - Search query string
-           * @param limit - Maximum number of results (default: 10)
-           * @returns Chunk of ClassDefinition objects matching the query
-           *
-           * @example
-           * ```typescript
-           * const classes = yield* OntologyService.searchClasses("person entity", 5)
-           * ```
-           */
-          searchClasses: (query: string, limit: number = 10) =>
-            Effect.gen(function*() {
-              // Create index from ontology
-
-              // Search - get raw results (both Classes and Properties)
-              const results = yield* nlp.searchOntologyIndex(index, query, limit)
-
-              // Map to Classes, handling Property -> Domain resolution
-              const validClasses = new Map<string, ClassDefinition>()
-
-              for (const result of results) {
-                // A. Direct Class Match
-                if (result.class) {
-                  validClasses.set(result.class.id, result.class)
-                }
-
-                // B. Property Match -> Resolve Domain Classes
-                if (result.property) {
-                  for (const domainLocalName of result.property.domain) {
-                    // Find class by matching local name
-                    const domainClass = ontology.classes.find(
-                      (c) => extractLocalName(c.id) === domainLocalName
-                    )
-                    if (domainClass) {
-                      validClasses.set(domainClass.id, domainClass)
-                    }
-                  }
-                }
-              }
-
-              return Chunk.fromIterable(validClasses.values())
-            }),
-
-          /**
-           * Search for properties matching the query using BM25
-           *
-           * Creates a BM25 index from the ontology and searches for matching properties.
-           * Returns top-k properties ranked by relevance score.
-           *
-           * @param query - Search query string
-           * @param limit - Maximum number of results (default: 10)
-           * @returns Chunk of PropertyDefinition objects matching the query
-           *
-           * @example
-           * ```typescript
-           * const properties = yield* OntologyService.searchProperties("name field", 5)
-           * ```
-           */
-          searchProperties: (query: string, limit: number = 10) =>
-            Effect.gen(function*() {
-              const nlp = yield* NlpService
-
-              // Create index from ontology
-              const index = yield* nlp.createOntologyIndex(ontology)
-
-              // Search
-              const results = yield* nlp.searchOntologyIndex(index, query, limit)
-
-              // Filter to properties only and return as Chunk
-              return Chunk.fromIterable(
-                results
-                  .filter((r) => r.property !== undefined)
-                  .map((r) => r.property!)
-              )
-            }),
-
-          /**
-           * Get properties for given class IRIs
-           *
-           * Returns all properties whose domain includes any of the provided class IRIs.
-           *
-           * @param classIris - Array of class IRIs to get properties for
-           * @returns Chunk of PropertyDefinition objects
-           *
-           * @example
-           * ```typescript
-           * const properties = yield* OntologyService.getPropertiesFor(["http://schema.org/Person"])
-           * ```
-           */
-          getPropertiesFor: (classIris: ReadonlyArray<string>) =>
-            Effect.sync(() => {
-              const properties: Array<PropertyDefinition> = []
-              for (const classIri of classIris) {
-                const classProps = ontology.getPropertiesForClass(classIri)
-                for (const prop of classProps) {
-                  properties.push(prop)
-                }
-              }
-              // Remove duplicates (same property might be in multiple classes)
-              const uniqueProps = new Map<string, PropertyDefinition>()
-              for (const prop of properties) {
-                uniqueProps.set(prop.id, prop)
-              }
-              return Chunk.fromIterable(uniqueProps.values())
-            }),
-
-          /**
-           * Search for classes matching the query using semantic embeddings
-           *
-           * Creates a semantic index from the ontology and searches for matching classes
-           * using cosine similarity of word embeddings. More robust to paraphrasing than BM25.
-           * Returns top-k classes ranked by semantic similarity score.
-           *
-           * @param query - Search query string
-           * @param limit - Maximum number of results (default: 10)
-           * @returns Chunk of ClassDefinition objects matching the query
-           *
-           * @example
-           * ```typescript
-           * const classes = yield* OntologyService.searchClassesSemantic("athlete person", 5)
-           * ```
-           */
-          searchClassesSemantic: (query: string, limit: number = 10) =>
-            Effect.gen(function*() {
-              const nlp = yield* NlpService
-
-              // Create semantic index from ontology
-              const index = yield* nlp.createOntologySemanticIndex(ontology)
-
-              // Search - get raw results (both Classes and Properties)
-              const results = yield* nlp.searchOntologySemanticIndex(
-                index,
-                query,
-                limit
-              )
-
-              // Map to Classes, handling Property -> Domain resolution
-              const validClasses = new Map<string, ClassDefinition>()
-
-              for (const result of results) {
-                // A. Direct Class Match
-                if (result.class) {
-                  validClasses.set(result.class.id, result.class)
-                }
-
-                // B. Property Match -> Resolve Domain Classes
-                if (result.property) {
-                  for (const domainLocalName of result.property.domain) {
-                    // Find class by matching local name
-                    const domainClass = ontology.classes.find(
-                      (c) => extractLocalName(c.id) === domainLocalName
-                    )
-                    if (domainClass) {
-                      validClasses.set(domainClass.id, domainClass)
-                    }
-                  }
-                }
-              }
-
-              return Chunk.fromIterable(validClasses.values())
-            }),
-
-          /**
-           * Search for properties matching the query using semantic embeddings
-           *
-           * Creates a semantic index from the ontology and searches for matching properties
-           * using cosine similarity of word embeddings. More robust to paraphrasing than BM25.
-           * Returns top-k properties ranked by semantic similarity score.
-           *
-           * @param query - Search query string
-           * @param limit - Maximum number of results (default: 10)
-           * @returns Chunk of PropertyDefinition objects matching the query
-           *
-           * @example
-           * ```typescript
-           * const properties = yield* OntologyService.searchPropertiesSemantic("name identifier", 5)
-           * ```
-           */
-          searchPropertiesSemantic: (query: string, limit: number = 10) =>
-            Effect.gen(function*() {
-              const nlp = yield* NlpService
-
-              // Create semantic index from ontology
-              const index = yield* nlp.createOntologySemanticIndex(ontology)
-
-              // Search
-              const results = yield* nlp.searchOntologySemanticIndex(
-                index,
-                query,
-                limit
-              )
-
-              // Filter to properties only and return as Chunk
-              return Chunk.fromIterable(
-                results
-                  .filter((r) => r.property !== undefined)
-                  .map((r) => r.property!)
-              )
+        /**
+         * Search for classes matching the query using BM25
+         *
+         * Creates a BM25 index from the ontology and searches for matching classes.
+         * Returns top-k classes ranked by relevance score.
+         *
+         * @param query - Search query string
+         * @param limit - Maximum number of results (default: 10)
+         * @returns Chunk of ClassDefinition objects matching the query
+         *
+         * @example
+         * ```typescript
+         * const classes = yield* OntologyService.searchClasses("person entity", 5)
+         * ```
+         */
+        searchClasses: (query: string, limit: number = 10) =>
+          Effect.gen(function*() {
+            const { classes, hierarchy, properties, propertyHierarchy } = yield* getOntology
+            const ontology = new OntologyContext({
+              classes: Chunk.toReadonlyArray(classes),
+              hierarchy,
+              propertyHierarchy,
+              properties: Chunk.toReadonlyArray(properties)
             })
-        }
-      }),
+            const index = yield* getBm25Index
+            const results = yield* nlp.searchOntologyIndex(index, query, limit)
+
+            // Map to Classes, handling Property -> Domain resolution
+            const validClasses = new Map<string, ClassDefinition>()
+
+            for (const result of results) {
+              // A. Direct Class Match
+              if (result.class) {
+                validClasses.set(result.class.id, result.class)
+              }
+
+              // B. Property Match -> Resolve Domain Classes
+              if (result.property) {
+                for (const domainLocalName of result.property.domain) {
+                  // Find class by matching local name
+                  const domainClass = ontology.classes.find(
+                    (c) => extractLocalName(c.id) === domainLocalName
+                  )
+                  if (domainClass) {
+                    validClasses.set(domainClass.id, domainClass)
+                  }
+                }
+              }
+            }
+
+            return Chunk.fromIterable(validClasses.values())
+          }),
+
+        /**
+         * Search for properties matching the query using BM25
+         *
+         * Creates a BM25 index from the ontology and searches for matching properties.
+         * Returns top-k properties ranked by relevance score.
+         *
+         * @param query - Search query string
+         * @param limit - Maximum number of results (default: 10)
+         * @returns Chunk of PropertyDefinition objects matching the query
+         *
+         * @example
+         * ```typescript
+         * const properties = yield* OntologyService.searchProperties("name field", 5)
+         * ```
+         */
+        searchProperties: (query: string, limit: number = 10) =>
+          Effect.gen(function*() {
+            const index = yield* getBm25Index
+            const results = yield* nlp.searchOntologyIndex(index, query, limit)
+
+            // Filter to properties only and return as Chunk
+            return Chunk.fromIterable(
+              results
+                .filter((r) => r.property !== undefined)
+                .map((r) => r.property!)
+            )
+          }),
+
+        /**
+         * Get properties for given class IRIs
+         *
+         * Returns all properties whose domain includes any of the provided class IRIs.
+         *
+         * @param classIris - Array of class IRIs to get properties for
+         * @returns Chunk of PropertyDefinition objects
+         *
+         * @example
+         * ```typescript
+         * const properties = yield* OntologyService.getPropertiesFor(["http://schema.org/Person"])
+         * ```
+         */
+        getPropertiesFor: (classIris: ReadonlyArray<string>) =>
+          Effect.gen(function*() {
+            const { classes, hierarchy, properties, propertyHierarchy } = yield* getOntology
+            const ontology = new OntologyContext({
+              classes: Chunk.toReadonlyArray(classes),
+              hierarchy,
+              propertyHierarchy,
+              properties: Chunk.toReadonlyArray(properties)
+            })
+            const props: Array<PropertyDefinition> = []
+            for (const classIri of classIris) {
+              const classProps = ontology.getPropertiesForClass(classIri)
+              for (const prop of classProps) {
+                props.push(prop)
+              }
+            }
+            // Remove duplicates (same property might be in multiple classes)
+            const uniqueProps = new Map<string, PropertyDefinition>()
+            for (const prop of props) {
+              uniqueProps.set(prop.id, prop)
+            }
+            return Chunk.fromIterable(uniqueProps.values())
+          }),
+
+        /**
+         * Search for classes matching the query using semantic embeddings
+         *
+         * Creates a semantic index from the ontology and searches for matching classes
+         * using cosine similarity of word embeddings. More robust to paraphrasing than BM25.
+         * Returns top-k classes ranked by semantic similarity score.
+         *
+         * @param query - Search query string
+         * @param limit - Maximum number of results (default: 10)
+         * @returns Chunk of ClassDefinition objects matching the query
+         *
+         * @example
+         * ```typescript
+         * const classes = yield* OntologyService.searchClassesSemantic("athlete person", 5)
+         * ```
+         */
+        searchClassesSemantic: (query: string, limit: number = 10) =>
+          Effect.gen(function*() {
+            const { classes, hierarchy, properties, propertyHierarchy } = yield* getOntology
+            const ontology = new OntologyContext({
+              classes: Chunk.toReadonlyArray(classes),
+              hierarchy,
+              propertyHierarchy,
+              properties: Chunk.toReadonlyArray(properties)
+            })
+
+            const index = yield* getSemanticIndex
+            const results = yield* nlp.searchOntologySemanticIndex(
+              index,
+              query,
+              limit
+            )
+
+            // Map to Classes, handling Property -> Domain resolution
+            const validClasses = new Map<string, ClassDefinition>()
+
+            for (const result of results) {
+              // A. Direct Class Match
+              if (result.class) {
+                validClasses.set(result.class.id, result.class)
+              }
+
+              // B. Property Match -> Resolve Domain Classes
+              if (result.property) {
+                for (const domainLocalName of result.property.domain) {
+                  // Find class by matching local name
+                  const domainClass = ontology.classes.find(
+                    (c) => extractLocalName(c.id) === domainLocalName
+                  )
+                  if (domainClass) {
+                    validClasses.set(domainClass.id, domainClass)
+                  }
+                }
+              }
+            }
+
+            return Chunk.fromIterable(validClasses.values())
+          }),
+
+        /**
+         * Search for properties matching the query using semantic embeddings
+         *
+         * Creates a semantic index from the ontology and searches for matching properties
+         * using cosine similarity of word embeddings. More robust to paraphrasing than BM25.
+         * Returns top-k properties ranked by semantic similarity score.
+         *
+         * @param query - Search query string
+         * @param limit - Maximum number of results (default: 10)
+         * @returns Chunk of PropertyDefinition objects matching the query
+         *
+         * @example
+         * ```typescript
+         * const properties = yield* OntologyService.searchPropertiesSemantic("name identifier", 5)
+         * ```
+         */
+        searchPropertiesSemantic: (query: string, limit: number = 10) =>
+          Effect.gen(function*() {
+            const index = yield* getSemanticIndex
+            const results = yield* nlp.searchOntologySemanticIndex(
+              index,
+              query,
+              limit
+            )
+
+            // Filter to properties only and return as Chunk
+            return Chunk.fromIterable(
+              results
+                .filter((r) => r.property !== undefined)
+                .map((r) => r.property!)
+            )
+          }),
+
+        /**
+         * Search for classes using hybrid approach (semantic + BM25)
+         *
+         * Combines semantic search (using embeddings) with BM25 text search for
+         * improved recall. Semantic search failures are gracefully handled by
+         * returning empty results. For small ontologies, includes all classes
+         * up to the limit.
+         *
+         * @param query - Search query string
+         * @param limit - Maximum number of results (default: 100)
+         * @returns Chunk of ClassDefinition objects matching the query
+         *
+         * @example
+         * ```typescript
+         * const classes = yield* OntologyService.searchClassesHybrid("player scored goal", 100)
+         * ```
+         */
+        searchClassesHybrid: (query: string, limit: number = 100) =>
+          Effect.gen(function*() {
+            const { classes, hierarchy, properties, propertyHierarchy } = yield* getOntology
+            const ontology = new OntologyContext({
+              classes: Chunk.toReadonlyArray(classes),
+              hierarchy,
+              propertyHierarchy,
+              properties: Chunk.toReadonlyArray(properties)
+            })
+
+            const searchLimit = Math.ceil(limit * 0.7)
+
+            // Run semantic and BM25 searches in parallel
+            // Semantic search gracefully returns empty on failure
+            const [semanticResults, bm25Results] = yield* Effect.all([
+              Effect.gen(function*() {
+                const semanticIndex = yield* getSemanticIndex
+                const results = yield* nlp.searchOntologySemanticIndex(
+                  semanticIndex,
+                  query,
+                  searchLimit
+                )
+                // Map to ClassDefinitions
+                const classesMap = new Map<string, ClassDefinition>()
+                for (const result of results) {
+                  if (result.class) {
+                    classesMap.set(result.class.id, result.class)
+                  }
+                  if (result.property) {
+                    for (const domainLocalName of result.property.domain) {
+                      const domainClass = ontology.classes.find(
+                        (c) => extractLocalName(c.id) === domainLocalName
+                      )
+                      if (domainClass) {
+                        classesMap.set(domainClass.id, domainClass)
+                      }
+                    }
+                  }
+                }
+                return Chunk.fromIterable(classesMap.values())
+              }).pipe(
+                Effect.catchAll((error) =>
+                  Effect.gen(function*() {
+                    yield* Effect.logWarning("Semantic search failed, using BM25 fallback", {
+                      error: String(error),
+                      query
+                    })
+                    return Chunk.empty<ClassDefinition>()
+                  })
+                )
+              ),
+              // BM25 search - more reliable, uses local index
+              Effect.gen(function*() {
+                const bm25Index = yield* getBm25Index
+                const results = yield* nlp.searchOntologyIndex(bm25Index, query, searchLimit)
+                const classesMap = new Map<string, ClassDefinition>()
+                for (const result of results) {
+                  if (result.class) {
+                    classesMap.set(result.class.id, result.class)
+                  }
+                  if (result.property) {
+                    for (const domainLocalName of result.property.domain) {
+                      const domainClass = ontology.classes.find(
+                        (c) => extractLocalName(c.id) === domainLocalName
+                      )
+                      if (domainClass) {
+                        classesMap.set(domainClass.id, domainClass)
+                      }
+                    }
+                  }
+                }
+                return Chunk.fromIterable(classesMap.values())
+              })
+            ], { concurrency: 2 })
+
+            // Merge and deduplicate - semantic results ranked higher
+            const merged = new Map<string, ClassDefinition>()
+            for (const cls of semanticResults) merged.set(cls.id, cls)
+            for (const cls of bm25Results) {
+              if (!merged.has(cls.id)) merged.set(cls.id, cls)
+            }
+
+            // If results are sparse, include ALL classes up to limit
+            // This ensures small ontologies get full coverage
+            if (merged.size < limit && ontology.classes.length <= limit) {
+              for (const cls of ontology.classes) merged.set(cls.id, cls)
+            }
+
+            yield* Effect.logDebug("Hybrid search complete", {
+              query,
+              semanticCount: Chunk.size(semanticResults),
+              bm25Count: Chunk.size(bm25Results),
+              mergedCount: merged.size,
+              ontologySize: ontology.classes.length,
+              limit
+            })
+
+            return Chunk.fromIterable(Array.from(merged.values()).slice(0, limit))
+          })
+      }
+    }),
     dependencies: [
       RdfBuilder.Default,
       ConfigService.Default,
       NlpService.Default
-    ],
-    accessors: true
+    ]
   }
 ) {}

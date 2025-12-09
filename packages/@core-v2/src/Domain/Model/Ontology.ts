@@ -10,6 +10,7 @@
 import { Schema } from "effect"
 import { extractLocalName, transformIriArrayToLocalNames } from "../../Utils/Rdf.js"
 import { enhanceTextForSearch, splitCamelCase } from "../../Utils/Text.js"
+import { IriSchema } from "../Rdf/Types.js"
 
 /**
  * ClassDefinition - OWL/RDFS Class metadata
@@ -35,7 +36,7 @@ export class ClassDefinition extends Schema.Class<ClassDefinition>("ClassDefinit
    *
    * @example "http://schema.org/Person"
    */
-  id: Schema.String.annotations({
+  id: IriSchema.annotations({
     title: "Class IRI",
     description: "Full IRI of the OWL/RDFS class"
   }),
@@ -65,7 +66,7 @@ export class ClassDefinition extends Schema.Class<ClassDefinition>("ClassDefinit
    *
    * @example ["http://schema.org/name", "http://schema.org/birthDate"]
    */
-  properties: Schema.Array(Schema.String).annotations({
+  properties: Schema.Array(IriSchema).annotations({
     title: "Properties",
     description: "Property IRIs that can be used with this class"
   }),
@@ -210,6 +211,18 @@ export class ClassDefinition extends Schema.Class<ClassDefinition>("ClassDefinit
     }),
     Schema.propertySignature,
     Schema.withConstructorDefault(() => [])
+  ),
+
+  /**
+   * Equivalent classes (owl:equivalentClass)
+   */
+  equivalentClass: Schema.Array(Schema.String).pipe(
+    Schema.annotations({
+      title: "Equivalent Classes",
+      description: "List of equivalent class IRIs"
+    }),
+    Schema.propertySignature,
+    Schema.withConstructorDefault(() => [])
   )
 }) {
   toJSON() {
@@ -229,7 +242,8 @@ export class ClassDefinition extends Schema.Class<ClassDefinition>("ClassDefinit
       narrower: this.narrower,
       related: this.related,
       exactMatch: this.exactMatch,
-      closeMatch: this.closeMatch
+      closeMatch: this.closeMatch,
+      equivalentClass: this.equivalentClass
     }
   }
 
@@ -407,6 +421,18 @@ export class PropertyDefinition extends Schema.Class<PropertyDefinition>("Proper
     title: "Range Type",
     description: "Whether property links entities (object) or has literal values (datatype)"
   }),
+
+  /**
+   * Inverse property IRIs (owl:inverseOf)
+   */
+  inverseOf: Schema.Array(Schema.String).pipe(
+    Schema.annotations({
+      title: "Inverse Properties",
+      description: "List of inverse property IRIs"
+    }),
+    Schema.propertySignature,
+    Schema.withConstructorDefault(() => [])
+  ),
 
   /**
    * Whether property is functional (has at most one value)
@@ -757,7 +783,31 @@ export class OntologyContext extends Schema.Class<OntologyContext>("OntologyCont
   metadata: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.String })).annotations({
     title: "Metadata",
     description: "Ontology-level metadata (title, version, etc.)"
-  })
+  }),
+
+  /**
+   * Class hierarchy (child IRI -> parent IRIs)
+   */
+  hierarchy: Schema.Record({ key: Schema.String, value: Schema.Array(Schema.String) }).pipe(
+    Schema.annotations({
+      title: "Class Hierarchy",
+      description: "Map of class IRI to list of parent class IRIs (rdfs:subClassOf)"
+    }),
+    Schema.propertySignature,
+    Schema.withConstructorDefault(() => ({}))
+  ),
+
+  /**
+   * Property hierarchy (child IRI -> parent IRIs)
+   */
+  propertyHierarchy: Schema.Record({ key: Schema.String, value: Schema.Array(Schema.String) }).pipe(
+    Schema.annotations({
+      title: "Property Hierarchy",
+      description: "Map of property IRI to list of parent property IRIs (rdfs:subPropertyOf)"
+    }),
+    Schema.propertySignature,
+    Schema.withConstructorDefault(() => ({}))
+  )
 }) {
   /**
    * Get class by IRI
@@ -774,15 +824,130 @@ export class OntologyContext extends Schema.Class<OntologyContext>("OntologyCont
   }
 
   /**
-   * Get all properties for a class
+   * Get all properties for a class (including inherited)
    *
    * Accepts either full IRI or local name. Extracts local name for comparison
    * since property domains are stored as local names.
+   * Traverses up the class hierarchy to find properties defined on superclasses.
    */
   getPropertiesForClass(classIri: string): Array<PropertyDefinition> {
-    // Extract local name for comparison since domains are stored as local names
     const localName = extractLocalName(classIri)
-    return this.properties.filter((p) => p.domain.includes(localName))
+
+    // Get all superclasses to check for inherited properties
+    const superClasses = this.getAllSuperClasses(classIri)
+    const validDomains = new Set([
+      localName,
+      ...superClasses.map(extractLocalName)
+    ])
+
+    return this.properties.filter((p) => p.domain.some((d) => validDomains.has(d)))
+  }
+
+  /**
+   * Get all superclasses for a class (transitive closure)
+   *
+   * Traverses the hierarchy recursively to find all parent classes.
+   * Returns a deduplicated list of all ancestor class IRIs.
+   */
+  getAllSuperClasses(classIri: string): ReadonlyArray<string> {
+    const visited = new Set<string>()
+    const queue = [...this.getSuperClasses(classIri)]
+    const result = new Set<string>()
+
+    while (queue.length > 0) {
+      const current = queue.shift()!
+      if (visited.has(current)) continue
+      visited.add(current)
+      result.add(current)
+
+      // Add parents of current class
+      const parents = this.getSuperClasses(current)
+      for (const parent of parents) {
+        if (!visited.has(parent)) {
+          queue.push(parent)
+        }
+      }
+    }
+
+    return Array.from(result)
+  }
+
+  /**
+   * Get direct superclasses for a class
+   */
+  getSuperClasses(classIri: string): ReadonlyArray<string> {
+    return this.hierarchy[classIri] || []
+  }
+
+  /**
+   * Get direct subclasses for a class
+   *
+   * Note: This is an expensive O(N) operation as map is keyed by child.
+   */
+  getSubClasses(parentIri: string): ReadonlyArray<string> {
+    const subs: Array<string> = []
+    for (const [child, parents] of Object.entries(this.hierarchy)) {
+      if (parents.includes(parentIri)) {
+        subs.push(child)
+      }
+    }
+    return subs
+  }
+
+  /**
+   * Check if a class is a subclass of another (transitive check possible if implemented, here direct/recursive)
+   */
+  isSubClassOf(childIri: string, parentIri: string): boolean {
+    if (childIri === parentIri) return true
+
+    const parents = this.getSuperClasses(childIri)
+    if (parents.includes(parentIri)) return true
+
+    // Recursive check
+    for (const parent of parents) {
+      if (this.isSubClassOf(parent, parentIri)) return true
+    }
+
+    return false
+  }
+
+  /**
+   * Get direct superproperties for a property
+   */
+  getSuperProperties(propertyIri: string): ReadonlyArray<string> {
+    return this.propertyHierarchy[propertyIri] || []
+  }
+
+  /**
+   * Get direct subproperties for a property
+   *
+   * Note: This is an expensive O(N) operation as map is keyed by child.
+   */
+  getSubProperties(parentIri: string): ReadonlyArray<string> {
+    const subs: Array<string> = []
+    for (const [child, parents] of Object.entries(this.propertyHierarchy)) {
+      if (parents.includes(parentIri)) {
+        subs.push(child)
+      }
+    }
+    return subs
+  }
+
+  /**
+   * Check if a property is a subproperty of another (transitive check possible if implemented, here direct/recursive)
+   */
+  isSubPropertyOf(childIri: string, parentIri: string): boolean {
+    if (childIri === parentIri) return true
+
+    const parents = this.getSuperProperties(childIri)
+    if (parents.includes(parentIri)) return true
+
+    // Recursive check
+    for (const parent of parents) {
+      if (this.isSubPropertyOf(parent, parentIri)) return true
+    }
+
+    return false
   }
 
   /**
