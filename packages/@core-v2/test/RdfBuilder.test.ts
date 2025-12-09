@@ -146,7 +146,7 @@ describe("RdfBuilder", () => {
               attributes: {}
             })
           ])
-          storeSize = store.size
+          storeSize = store._store.size
         }).pipe(Effect.scoped)
 
         // Store should have had quads

@@ -17,12 +17,12 @@ describe("OntologyService - Football Ontology", () => {
     ...DEFAULT_CONFIG,
     ontology: {
       ...DEFAULT_CONFIG.ontology,
-      path: path.join(process.cwd(), "../../../ontologies/football/ontology.ttl")
+      path: path.join(process.cwd(), "../../ontologies/football/ontology.ttl")
     }
   } as ConfigService)
 
   const TestLayer = Layer.mergeAll(
-    OntologyService.Default("/Users/pooks/Dev/effect-ontology/ontologies/football/ontology.ttl"),
+    OntologyService.Default,
     NlpService.Default,
     RdfBuilder.Default,
     TestConfig
