@@ -16,6 +16,6 @@
     "rootDir": ".",
     "composite": true
   },
-  "include": ["src/**/*", "test/**/*"],
+  "include": ["src/**/*", "test/**/*", "../@core-v2/src/Service/NomicNlp.ts"],
   "exclude": ["node_modules", "dist"]
 }

@@ -21,6 +21,7 @@ import type { ValidationReport } from "../Extraction/Events.js"
 import type { NodeId, OntologyContext } from "../Graph/Types.js"
 import { buildStage2Prompt, knowledgeIndexAlgebra, solveToKnowledgeIndex } from "../Prompt/Builder.js"
 import * as EC from "../Prompt/EntityCache.js"
+import * as KI from "../Prompt/KnowledgeIndex.js"
 import type { KnowledgeIndex } from "../Prompt/KnowledgeIndex.js"
 import { renderToStructuredPrompt } from "../Prompt/Renderer.js"
 import type { TripleGraph } from "../Schema/TripleFactory.js"
@@ -207,6 +208,32 @@ export const extractEntitiesFromTriples = (
 }
 
 /**
+ * Build vocabulary from the full KnowledgeIndex.
+ * Used as a safe fallback when focused vocabularies are empty.
+ */
+const vocabularyFromIndex = (
+  index: KnowledgeIndex
+): { classIris: Array<string>; propertyIris: Array<string> } => {
+  const classIris = new Set<string>()
+  const propertyIris = new Set<string>()
+
+  for (const unit of KI.values(index)) {
+    classIris.add(unit.iri)
+    for (const prop of unit.properties) {
+      propertyIris.add(prop.propertyIri)
+    }
+    for (const prop of unit.inheritedProperties) {
+      propertyIris.add(prop.propertyIri)
+    }
+  }
+
+  return {
+    classIris: Array.from(classIris),
+    propertyIris: Array.from(propertyIris)
+  }
+}
+
+/**
  * Build or retrieve KnowledgeIndex based on vocabulary config
  */
 export const getKnowledgeIndex = (
@@ -313,13 +340,11 @@ export const processChunk = (
     }
 
     // 2. Extract vocabulary from focused index
-    const vocabulary = extractVocabularyFromFocused(focusedIndex, ontologyContext)
+    let vocabulary = extractVocabularyFromFocused(focusedIndex, ontologyContext)
     if (!vocabulary) {
-      return {
-        rdf: "",
-        entityCount: 0,
-        tripleCount: 0
-      }
+      // Focusing failed to produce a viable vocabulary; fall back to full index
+      yield* Effect.log("Focused vocabulary empty, falling back to full ontology index")
+      vocabulary = vocabularyFromIndex(knowledgeIndex)
     }
 
     // 3. Build Stage 1 prompt with focused index

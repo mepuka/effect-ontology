@@ -36,6 +36,7 @@ interface EntityWithLabel {
   readonly iri: string
   readonly label: string
   readonly normalizedLabel: string
+  readonly types: ReadonlyArray<string>
 }
 
 /**
@@ -64,6 +65,7 @@ const parseGraphToStore = (
  */
 const extractEntitiesWithLabels = (store: N3.Store): Array<EntityWithLabel> => {
   const RDFS_LABEL = "http://www.w3.org/2000/01/rdf-schema#label"
+  const RDF_TYPE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
   const labelQuads = store.getQuads(null, RDFS_LABEL, null, null)
 
   return labelQuads.map((quad) => {
@@ -71,7 +73,10 @@ const extractEntitiesWithLabels = (store: N3.Store): Array<EntityWithLabel> => {
     const label = quad.object.value
     const normalizedLabel = normalize(label)
 
-    return { iri, label, normalizedLabel }
+    const typeQuads = store.getQuads(quad.subject, RDF_TYPE, null, null)
+    const types = typeQuads.map((t) => t.object.value).sort()
+
+    return { iri, label, normalizedLabel, types }
   })
 }
 
@@ -159,12 +164,18 @@ const skolemizeBlankNodes = (
 const buildIriMapping = (
   entities: Array<EntityWithLabel>
 ): HashMap.HashMap<string, string> => {
-  // Group by normalized label
+  const makeGroupKey = (entity: EntityWithLabel): string => {
+    const typeSignature = entity.types.length > 0 ? entity.types.join("|") : "[]"
+    return `${entity.normalizedLabel}||${typeSignature}`
+  }
+
+  // Group by normalized label + type signature
   const groups = entities.reduce(
     (acc, entity) => {
-      const group = acc.get(entity.normalizedLabel) || []
+      const key = makeGroupKey(entity)
+      const group = acc.get(key) || []
       group.push(entity.iri)
-      acc.set(entity.normalizedLabel, group)
+      acc.set(key, group)
       return acc
     },
     new Map<string, Array<string>>()

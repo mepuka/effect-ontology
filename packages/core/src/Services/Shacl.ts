@@ -31,7 +31,7 @@
  * ```
  */
 
-import { Effect, HashMap, Schema } from "effect"
+import { Effect, HashMap, Option, Schema } from "effect"
 import { Parser, Store } from "n3"
 import SHACLValidator from "rdf-validate-shacl"
 import { ShaclError, type ValidationReport } from "../Extraction/Events.js"
@@ -63,22 +63,21 @@ export type RdfStore = Store
 const generatePropertyShape = (property: PropertyConstraint): string => {
   const constraints: Array<string> = []
 
-  // Property path (required)
-  constraints.push(`sh:path <${property.propertyIri}>`)
+  const escapeLiteral = (value: string): string =>
+    value
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, "\\\"")
+      .replace(/\n/g, "\\n")
+      .replace(/\r/g, "\\r")
+      .replace(/\t/g, "\\t")
 
-  // Label for better error messages (escape quotes, backslashes, and special chars)
-  if (property.label) {
-    const escapedLabel = property.label
-      .replace(/\\/g, "\\\\") // Escape backslashes first
-      .replace(/"/g, "\\\"") // Escape quotes
-      .replace(/\n/g, "\\n") // Escape newlines
-      .replace(/\r/g, "\\r") // Escape carriage returns
-      .replace(/\t/g, "\\t") // Escape tabs
-    constraints.push(`sh:name "${escapedLabel}"`)
+  const formatTerm = (value: string): string => {
+    if (value.startsWith("http://") || value.startsWith("https://")) {
+      return `<${value}>`
+    }
+    return `"${escapeLiteral(value)}"`
   }
 
-  // Range constraint (datatype or class)
-  // Use first range if available (skip invalid ranges)
   const isValidRangeIri = (iri: string): boolean => {
     const trimmed = iri.trim()
     if (trimmed.length === 0) return false
@@ -88,15 +87,47 @@ const generatePropertyShape = (property: PropertyConstraint): string => {
     return true
   }
 
-  const range = property.ranges[0]
-  if (range && isValidRangeIri(range)) {
-    // Check if range is a datatype (xsd:*) or a class IRI
+  // Property path (required)
+  constraints.push(`sh:path <${property.propertyIri}>`)
+
+  // Label for better error messages (escape quotes, backslashes, and special chars)
+  if (property.label) {
+    constraints.push(`sh:name "${escapeLiteral(property.label)}"`)
+  }
+
+  // Range constraints (support multiple ranges via sh:or)
+  const validRanges = property.ranges.filter(isValidRangeIri)
+  if (validRanges.length === 1) {
+    const range = validRanges[0]
     if (range.includes("XMLSchema#") || range.startsWith("xsd:")) {
       constraints.push(`sh:datatype <${range}>`)
     } else {
-      // Range is a class - use sh:class for object properties
       constraints.push(`sh:class <${range}>`)
     }
+  } else if (validRanges.length > 1) {
+    const orBranches = validRanges
+      .map((range) => {
+        if (range.includes("XMLSchema#") || range.startsWith("xsd:")) {
+          return `[ sh:datatype <${range}> ]`
+        }
+        return `[ sh:class <${range}> ]`
+      })
+      .join(" ")
+    constraints.push(`sh:or ( ${orBranches} )`)
+  }
+
+  // Cardinalities
+  if (property.minCardinality > 0) {
+    constraints.push(`sh:minCount ${property.minCardinality}`)
+  }
+  if (Option.isSome(property.maxCardinality)) {
+    constraints.push(`sh:maxCount ${property.maxCardinality.value}`)
+  }
+
+  // Allowed values enumeration
+  if (property.allowedValues.length > 0) {
+    const values = property.allowedValues.map(formatTerm).join(" ")
+    constraints.push(`sh:in ( ${values} )`)
   }
 
   // Join constraints with proper indentation

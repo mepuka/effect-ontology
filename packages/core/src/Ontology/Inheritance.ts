@@ -387,24 +387,29 @@ const getEffectivePropertiesImpl = (
     // This properly combines constraints from multiple inheritance paths
     const propertyMap = new Map<string, PropertyConstraint>()
 
-    // Add ancestor properties first
-    for (const prop of ancestorProperties) {
-      propertyMap.set(prop.propertyIri, prop)
-    }
-
-    // Refine with own properties using meet
-    for (const prop of ownProperties) {
+    // Helper to merge a property into the map using meet when needed
+    const mergeProperty = function*(prop: PropertyConstraint) {
       const existing = propertyMap.get(prop.propertyIri)
       if (existing) {
-        // Use meet to refine: result = existing ⊓ prop
         const refined = yield* meet(existing, prop).pipe(
           Effect.provideService(InheritanceService, service),
-          Effect.catchAll(() => Effect.succeed(prop)) // On error, use child's constraint
+          // If meet fails, prefer the stricter (child) constraint to avoid widening
+          Effect.catchAll(() => Effect.succeed(prop))
         )
         propertyMap.set(prop.propertyIri, refined)
       } else {
         propertyMap.set(prop.propertyIri, prop)
       }
+    }
+
+    // Fold ancestor properties (handles multiple inheritance intersections)
+    for (const prop of ancestorProperties) {
+      yield* mergeProperty(prop)
+    }
+
+    // Refine with own properties using meet
+    for (const prop of ownProperties) {
+      yield* mergeProperty(prop)
     }
 
     return Array.from(propertyMap.values())

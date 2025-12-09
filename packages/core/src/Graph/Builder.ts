@@ -64,9 +64,18 @@ export const parseRdfList = (
 ): Option.Option<ReadonlyArray<string>> => {
   const items: Array<string> = []
   let current: N3.Term = listHead
+  const visited = new Set<string>()
 
   // Follow the linked list until we hit rdf:nil
   while (current.value !== "http://www.w3.org/1999/02/22-rdf-syntax-ns#nil") {
+    // Cycle detection: if strictly same object term or same blank node ID
+    const nodeId = current.value
+    if (visited.has(nodeId)) {
+      // Cycle detected - malformed list
+      return Option.none()
+    }
+    visited.add(nodeId)
+
     // Get rdf:first (the element)
     const firstQuad = store.getQuads(
       current,
@@ -439,10 +448,11 @@ export const parseTurtleToGraph = (
           }
         }
 
-        // Use inherited range if no explicit range, otherwise prefer explicit
-        const finalRange = range || (inheritedRanges.size > 0
-          ? Array.from(inheritedRanges)[0]
-          : "http://www.w3.org/2001/XMLSchema#string")
+        // Keep every discovered range (do not drop on arbitrary first)
+        // Default to xsd:string only when nothing is declared anywhere
+        const finalRanges = inheritedRanges.size > 0
+          ? Array.from(inheritedRanges).sort()
+          : ["http://www.w3.org/2001/XMLSchema#string"]
 
         // Check property characteristics
         const isFunctional = store.getQuads(
@@ -476,33 +486,40 @@ export const parseTurtleToGraph = (
         const propertyData = PropertyConstraint.make({
           propertyIri: propIri,
           label,
-          ranges: Data.array([finalRange]),
+          ranges: Data.array(finalRanges),
           maxCardinality: isFunctional ? Option.some(1) : Option.none(),
           isSymmetric,
           isTransitive,
           isInverseFunctional
         })
 
-        if (inheritedDomains.size === 0) {
+        // OWL semantics: multiple rdfs:domain declarations imply intersection.
+        // We cannot represent intersection classes here, so to avoid over-attaching
+        // we only attach when the (inherited) domain set resolves to a single class.
+        const domainTargets = Array.from(inheritedDomains)
+
+        if (domainTargets.length === 0) {
           // CASE A: No Domain (even after inheritance) -> Universal Property
           universalProperties.push(propertyData)
+        } else if (domainTargets.length === 1) {
+          // CASE B: Single domain -> attach to that class
+          const domainIri = domainTargets[0]
+          classNodes = Option.match(HashMap.get(classNodes, domainIri), {
+            onNone: () => classNodes, // No change if class not found
+            onSome: (classNode) =>
+              HashMap.set(
+                classNodes,
+                domainIri,
+                ClassNode.make({
+                  ...classNode,
+                  properties: [...classNode.properties, propertyData]
+                })
+              )
+          })
         } else {
-          // CASE B: Has Domain (explicit or inherited) -> Attach to specific ClassNode(s)
-          for (const domainIri of inheritedDomains) {
-            // Use Option.match to update the node if it exists
-            classNodes = Option.match(HashMap.get(classNodes, domainIri), {
-              onNone: () => classNodes, // No change if class not found
-              onSome: (classNode) =>
-                HashMap.set(
-                  classNodes,
-                  domainIri,
-                  ClassNode.make({
-                    ...classNode,
-                    properties: [...classNode.properties, propertyData]
-                  })
-                )
-            })
-          }
+          // CASE C: Multiple domains (intersection) - skip attachment to avoid
+          // incorrectly widening applicability. These can be handled later by
+          // a reasoner once intersection types are supported.
         }
       }
     }

@@ -35,7 +35,7 @@
  * @since 1.0.0
  */
 
-import { Effect, HashMap, Layer } from "effect"
+import { Effect, HashMap, Layer, Option } from "effect"
 import * as N3 from "n3"
 import { RdfError } from "../Extraction/Events.js"
 import type { OntologyContext } from "../Graph/Types.js"
@@ -147,20 +147,34 @@ const getXsdPriority = (xsdUri: string): number => {
  */
 const inferDatatype = (
   propertyIri: string,
-  ontology?: OntologyContext
+  ontology?: OntologyContext,
+  subjectType?: string
 ): N3.NamedNode | undefined => {
   if (!ontology) return undefined
 
   // Find property constraint in ontology
   let ranges: ReadonlyArray<string> = []
 
-  // IMPORTANT: Check class properties FIRST (more specific than universal)
-  for (const node of HashMap.values(ontology.nodes)) {
-    if (isClassNode(node)) {
-      const prop = node.properties.find((p) => p.propertyIri === propertyIri)
+  // Prefer properties defined on the subject's class (avoids arbitrary matches)
+  if (subjectType) {
+    const classNode = HashMap.get(ontology.nodes, subjectType)
+    if (Option.isSome(classNode) && isClassNode(classNode.value)) {
+      const prop = classNode.value.properties.find((p) => p.propertyIri === propertyIri)
       if (prop) {
         ranges = prop.ranges
-        break
+      }
+    }
+  }
+
+  // Fallback: search all classes (legacy behavior) if nothing found yet
+  if (ranges.length === 0) {
+    for (const node of HashMap.values(ontology.nodes)) {
+      if (isClassNode(node)) {
+        const prop = node.properties.find((p) => p.propertyIri === propertyIri)
+        if (prop) {
+          ranges = prop.ranges
+          break
+        }
       }
     }
   }
@@ -304,7 +318,7 @@ export class RdfService extends Effect.Service<RdfService>()("RdfService", {
                 const normalizedValue = prop.object.trim()
 
                 // Infer datatype from ontology
-                const datatype = inferDatatype(prop.predicate, ontology)
+                const datatype = inferDatatype(prop.predicate, ontology, entity["@type"])
                 return datatype
                   ? literal(normalizedValue, datatype)
                   : literal(normalizedValue) // Default xsd:string
@@ -430,7 +444,7 @@ export class RdfService extends Effect.Service<RdfService>()("RdfService", {
               ? (() => {
                 // Literal value - infer datatype from ontology
                 const normalizedValue = triple.object.trim()
-                const datatype = inferDatatype(triple.predicate, ontology)
+                const datatype = inferDatatype(triple.predicate, ontology, triple.subject_type)
                 return datatype
                   ? literal(normalizedValue, datatype)
                   : literal(normalizedValue)
