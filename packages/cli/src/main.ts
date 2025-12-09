@@ -18,6 +18,7 @@
  */
 
 import { makeLlmProviderLayer } from "@effect-ontology/core/Services/LlmProvider"
+import { ShaclService } from "@effect-ontology/core/Services/Shacl.js"
 import { makeTracingLayer, TracingContext } from "@effect-ontology/core/Telemetry"
 import { Command } from "@effect/cli"
 import { FetchHttpClient } from "@effect/platform"

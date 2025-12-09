@@ -27,3 +27,10 @@ benchmarks/results/*.json
 !benchmarks/results/*-report.md
 benchmarks/datasets/
 benchmarks/ontologies/
+
+packages/@core-v2/extraction-runs/*
+packages/@core-v2/output/runs/*
+
+packages/@core-v2/output/
+
+output/
