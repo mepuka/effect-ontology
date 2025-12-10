@@ -1,13 +1,18 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "composite": true,
-    "declaration": true,
-    "declarationMap": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
     "noEmit": false,
     "skipLibCheck": true,
     "types": []
   },
   "include": ["src/**/*"],
-  "exclude": ["test/**/*", "**/*.test.ts"]
+  "exclude": [
+    "test/**/*",
+    "**/*.test.ts",
+    "src/Runtime/ClusterRuntime.ts",
+    "src/Cluster/**/*"
+  ]
 }

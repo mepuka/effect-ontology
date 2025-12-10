@@ -27,7 +27,7 @@ WORKDIR /app
 
 # Copy built files and dependencies
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/packages/@core-v2/dist ./dist
+COPY --from=builder /app/packages/@core-v2/dist/src ./dist
 COPY --from=builder /app/packages/@core-v2/package.json ./
 
 # Create non-root user

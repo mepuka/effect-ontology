@@ -386,7 +386,7 @@ export class RdfBuilder extends Effect.Service<RdfBuilder>()(
             conforms: true,
             report: "SHACL validation not yet implemented"
           })
-      } as const
+      } satisfies RdfBuilderShape
     }),
     dependencies: [ConfigService.Default],
     accessors: true
