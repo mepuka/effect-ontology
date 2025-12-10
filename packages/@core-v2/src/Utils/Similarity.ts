@@ -205,7 +205,12 @@ export const shouldConsiderMerge = (
     // Note: We use simple overlap ratio here for fast path unless strict hierarchy is critical early check
     // If strict hierarchy is needed, this fast path might be too strict (false negatives).
     if (typeOverlap < config.typeOverlapRatio) {
-      if (!isSubclass) return false
+      // ByPass: If embedding similarity is very high, assume type data might be noisy
+      if (embeddingSimilarity !== undefined && embeddingSimilarity > 0.95) {
+        // Continue to full similarity check
+      } else if (!isSubclass) {
+        return false
+      }
       // If we have hierarchy check, maybe second chance?
       // Re-calculate with hierarchy
       // (This logic is getting complex for a utility)

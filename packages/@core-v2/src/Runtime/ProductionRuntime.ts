@@ -20,8 +20,31 @@ import { Config, Effect, Layer, Redacted } from "effect"
 import { ConfigService } from "../Service/Config.js"
 import { EntityExtractor, MentionExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { Grounder } from "../Service/Grounder.js"
+import {
+  TokenBudgetServiceLive,
+  StageTimeoutServiceLive,
+  CentralRateLimiterServiceLive
+} from "../Service/LlmControl/index.js"
 import { makeTracingLayer } from "../Telemetry/Tracing.js"
+import { HealthCheckService } from "./HealthCheck.js"
+import { ExtractionRouter, HttpServerLive } from "./HttpServer.js"
+import { LlmSemaphoreService } from "./LlmSemaphore.js"
 import { RateLimitedLanguageModelLayer } from "./RateLimitedLanguageModel.js"
+import { makeGracefulShutdown, type GracefulShutdown, ShutdownError, DEFAULT_SHUTDOWN_CONFIG } from "./Shutdown.js"
+
+// Re-export new infrastructure components
+export { HealthCheckService }
+export { ExtractionRouter, HttpServerLive }
+export { LlmSemaphoreService }
+export { makeGracefulShutdown, type GracefulShutdown, ShutdownError, DEFAULT_SHUTDOWN_CONFIG }
+
+// Re-export LLM Control services
+export { TokenBudgetServiceLive, StageTimeoutServiceLive, CentralRateLimiterServiceLive }
+export {
+  TokenBudgetService,
+  StageTimeoutService,
+  CentralRateLimiterService
+} from "../Service/LlmControl/index.js"
 
 /**
  * Create LanguageModel layer with ConfigService
@@ -196,5 +219,56 @@ export const TracingLive = makeTracingLayer({
  */
 export const ProductionLayersWithTracing = Layer.mergeAll(
   ExtractionLayersLive,
+  TracingLive
+)
+
+/**
+ * Production infrastructure layers
+ *
+ * Complete production infrastructure including:
+ * - All extraction services with rate-limited LLM
+ * - Health check service (liveness/readiness/deep probes)
+ * - LLM semaphore for concurrency control
+ * - OpenTelemetry tracing to Jaeger
+ *
+ * Does NOT include HTTP server layer - compose separately
+ * based on your runtime (Bun, Node, etc.)
+ *
+ * @example
+ * ```typescript
+ * import { BunHttpServer, BunRuntime } from "@effect/platform-bun"
+ *
+ * const ServerLive = HttpServerLive.pipe(
+ *   Layer.provideMerge(ProductionInfrastructure),
+ *   Layer.provideMerge(BunHttpServer.layer({ port: 8080 })),
+ *   Layer.provideMerge(ConfigService.Default)
+ * )
+ *
+ * BunRuntime.runMain(Layer.launch(ServerLive))
+ * ```
+ *
+ * @since 2.0.0
+ */
+/**
+ * LLM Control layer stack
+ *
+ * Provides fine-grained control over LLM API usage:
+ * - TokenBudgetService: Per-stage token budgets
+ * - StageTimeoutService: Soft/hard timeouts per stage
+ * - CentralRateLimiterService: Rate limiting with circuit breaker
+ *
+ * @since 2.0.0
+ */
+export const LlmControlLive = Layer.mergeAll(
+  TokenBudgetServiceLive,
+  StageTimeoutServiceLive,
+  CentralRateLimiterServiceLive
+)
+
+export const ProductionInfrastructure = Layer.mergeAll(
+  ExtractionLayersLive,
+  HealthCheckService.Default,
+  LlmSemaphoreService.Default,
+  LlmControlLive,
   TracingLive
 )

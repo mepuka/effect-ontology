@@ -42,6 +42,67 @@ export interface RetryPolicyOptions {
 const DEFAULT_MAX_DELAY_MS = 30_000
 
 /**
+ * Determine if an error is retryable
+ *
+ * Retryable errors:
+ * - Network errors (ECONNREFUSED, ETIMEDOUT, ENOTFOUND)
+ * - Rate limit errors (HTTP 429)
+ * - Server errors (HTTP 5xx)
+ *
+ * Non-retryable errors:
+ * - Client errors (HTTP 4xx except 429)
+ * - Authentication errors (401, 403)
+ * - Request too large (413)
+ *
+ * @param error - The error to check
+ * @returns true if the error should be retried
+ *
+ * @since 2.0.0
+ */
+export const isRetryableError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) {
+    return true // Unknown errors default to retryable
+  }
+
+  // Check for HTTP status codes
+  const status = (error as unknown as Record<string, unknown>).status
+  if (typeof status === "number") {
+    // 429 Too Many Requests is retryable
+    if (status === 429) return true
+
+    // 5xx server errors are retryable
+    if (status >= 500 && status < 600) return true
+
+    // 4xx client errors (except 429) are NOT retryable
+    if (status >= 400 && status < 500) return false
+  }
+
+  // Check for network error codes
+  const code = (error as unknown as Record<string, unknown>).code
+  if (typeof code === "string") {
+    const retryableCodes = ["ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "ECONNRESET", "EPIPE"]
+    if (retryableCodes.includes(code)) return true
+  }
+
+  // Check error message patterns
+  const message = error.message.toLowerCase()
+  const nonRetryablePatterns = [
+    "invalid api key",
+    "unauthorized",
+    "forbidden",
+    "authentication failed",
+    "request too large"
+  ]
+
+  if (nonRetryablePatterns.some((pattern) => message.includes(pattern))) {
+    return false
+  }
+
+  // Default: retry unknown errors
+  return true
+}
+
+/**
  * Create a retry policy with exponential backoff, jitter, and logging
  *
  * Features:
@@ -77,6 +138,8 @@ export const makeRetryPolicy = (opts: RetryPolicyOptions) => {
     // Cap max delay to prevent excessively long waits (e.g. 192s → 30s)
     Schedule.delayed((d) => Duration.min(d, maxDelay)),
     Schedule.jittered,
+    // Only retry retryable errors
+    Schedule.whileInput((error: unknown) => isRetryableError(error)),
     Schedule.tapOutput((attempt) => {
       // Calculate actual delay (capped)
       const rawDelayMs = Math.pow(2, attempt[1]) * opts.initialDelayMs

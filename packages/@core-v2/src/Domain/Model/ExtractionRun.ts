@@ -66,17 +66,76 @@ export interface RunStats {
 }
 
 /**
- * Extraction Run - complete run metadata
+ * Audit event types for extraction lifecycle
+ */
+export type AuditEventType =
+  | "started"
+  | "stage_began"
+  | "stage_completed"
+  | "entity_extracted"
+  | "relation_extracted"
+  | "completed"
+  | "failed"
+
+/**
+ * Audit event for tracking extraction lifecycle
+ */
+export interface AuditEvent {
+  readonly timestamp: string
+  readonly type: AuditEventType
+  readonly data?: Record<string, unknown>
+}
+
+/**
+ * Audit error types
+ */
+export type AuditErrorType =
+  | "timeout"
+  | "llm_error"
+  | "validation_error"
+  | "cancelled"
+  | "rate_limited"
+
+/**
+ * Audit error record
+ */
+export interface AuditError {
+  readonly timestamp: string
+  readonly type: AuditErrorType
+  readonly message: string
+  readonly context?: Record<string, unknown>
+}
+
+/**
+ * Run status
+ */
+export type RunStatus =
+  | "pending"
+  | "running"
+  | "complete"
+  | "failed"
+
+/**
+ * Extraction Run - complete run metadata with embedded audit
  */
 export interface ExtractionRun {
   readonly runId: ExtractionRunId
   readonly documentId: ExtractionRunId
   readonly createdAt: string
   readonly completedAt?: string
+  readonly status: RunStatus
   readonly config: RunConfig
   readonly outputDir: string
   readonly stats?: RunStats
   readonly outputs: ReadonlyArray<OutputMetadata>
+  /** Embedded audit events for lifecycle tracking */
+  readonly events: ReadonlyArray<AuditEvent>
+  /** Embedded audit errors */
+  readonly errors: ReadonlyArray<AuditError>
+  /** Optional idempotency key for unified identity */
+  readonly idempotencyKey?: string
+  /** Ontology version (content-based hash) */
+  readonly ontologyVersion?: string
 }
 
 // =============================================================================
@@ -92,11 +151,47 @@ export const RunConfigSchema = Schema.Struct({
   ontologyPath: Schema.String
 })
 
+export const AuditEventSchema = Schema.Struct({
+  timestamp: Schema.String,
+  type: Schema.Literal(
+    "started",
+    "stage_began",
+    "stage_completed",
+    "entity_extracted",
+    "relation_extracted",
+    "completed",
+    "failed"
+  ),
+  data: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.Unknown }))
+})
+
+export const AuditErrorSchema = Schema.Struct({
+  timestamp: Schema.String,
+  type: Schema.Literal(
+    "timeout",
+    "llm_error",
+    "validation_error",
+    "cancelled",
+    "rate_limited"
+  ),
+  message: Schema.String,
+  context: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.Unknown }))
+})
+
+export const RunStatusSchema = Schema.Literal(
+  "pending",
+  "running",
+  "complete",
+  "failed",
+  "partial"
+)
+
 export const ExtractionRunSchema = Schema.Struct({
   runId: Schema.String,
   documentId: Schema.String,
   createdAt: Schema.String,
   completedAt: Schema.optional(Schema.String),
+  status: RunStatusSchema,
   config: RunConfigSchema,
   outputDir: Schema.String,
   stats: Schema.optional(Schema.Struct({
@@ -112,7 +207,11 @@ export const ExtractionRunSchema = Schema.Struct({
     hash: Schema.String,
     size: Schema.Number,
     savedAt: Schema.String
-  }))
+  })),
+  events: Schema.Array(AuditEventSchema),
+  errors: Schema.Array(AuditErrorSchema),
+  idempotencyKey: Schema.optional(Schema.String),
+  ontologyVersion: Schema.optional(Schema.String)
 })
 
 // =============================================================================

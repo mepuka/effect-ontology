@@ -32,6 +32,10 @@ export { RdfBuilder } from "./Service/Rdf.js"
 // Entity Linker Service (query helpers)
 export { getCanonicalId, getMentionsForEntity, toMermaid } from "./Service/EntityLinker.js"
 
+// New Phase 3 Services
+export { type LinkedRelation, type LinkingResult, RelationLinker } from "./Service/RelationLinker.js"
+export { type SimilarityResult, SimilarityScorer } from "./Service/SimilarityScorer.js"
+
 // Workflows (composable business logic)
 export { streamingExtraction } from "./Workflow/StreamingExtraction.js"
 export { extractToTurtle } from "./Workflow/TwoStageExtraction.js"

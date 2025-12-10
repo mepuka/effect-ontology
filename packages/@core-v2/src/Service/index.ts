@@ -7,9 +7,11 @@
 
 export * from "./Config.js"
 export * from "./EntityLinker.js"
+export * from "./EnvConfig.js"
 export * from "./Extraction.js"
 export * from "./GenerateWithFeedback.js"
 export * from "./Grounder.js"
+export * from "./LlmControl/index.js"
 export * from "./Nlp.js"
 export * from "./Ontology.js"
 export * from "./Rdf.js"

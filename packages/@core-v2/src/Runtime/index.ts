@@ -5,5 +5,11 @@
  * @module Runtime
  */
 
+export * from "./CircuitBreaker.js"
+export * from "./HealthCheck.js"
+export * from "./HttpServer.js"
+export * from "./LlmSemaphore.js"
 export * from "./ProductionRuntime.js"
+export * from "./RateLimitedLanguageModel.js"
+export * from "./Shutdown.js"
 export * from "./TestRuntime.js"

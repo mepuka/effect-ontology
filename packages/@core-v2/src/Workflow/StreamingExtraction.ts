@@ -10,7 +10,7 @@
  */
 
 import type { FileSystem } from "@effect/platform"
-import { Chunk, Effect, Stream } from "effect"
+import { Chunk, Duration, Effect, Stream } from "effect"
 import { ExtractionError } from "../Domain/Error/Extraction.js"
 import { LlmRateLimit, LlmTimeout } from "../Domain/Error/Llm.js"
 import { Entity, KnowledgeGraph } from "../Domain/Model/Entity.js"
@@ -32,19 +32,26 @@ const isSystemicError = (error: unknown): boolean => {
   // Unwrap ExtractionError if present
   const cause = error instanceof ExtractionError ? error.cause : error
 
-  return (
-    cause instanceof LlmRateLimit ||
-    cause instanceof LlmTimeout || // Timeouts might imply service degradation
-    // Database/FS errors from ExtractionRunService would usually be generic Errors or platform errors
-    // We can assume if it's NOT a content error (LlmInvalidResponse, etc), it might be systemic?
-    // For now, fail on known systemic LLM errors.
-    // Use heuristic: if it mentions "database" or "connection"
-    (cause instanceof Error && (
-      cause.message.toLowerCase().includes("connection") ||
-      cause.message.toLowerCase().includes("database") ||
-      cause.message.toLowerCase().includes("econnrefused")
-    ))
-  )
+  if (cause instanceof LlmRateLimit || cause instanceof LlmTimeout) {
+    return true
+  }
+
+  if (cause instanceof Error) {
+    // Check for standard Node.js/Bun system error codes
+    const code = (cause as any).code
+    if (code === "ECONNREFUSED" || code === "ETIMEDOUT" || code === "ENOTFOUND") {
+      return true
+    }
+
+    const message = cause.message.toLowerCase()
+    return (
+      message.includes("connection refused") ||
+      message.includes("database connection") ||
+      message.includes("too many requests")
+    )
+  }
+
+  return false
 }
 
 /**
@@ -228,6 +235,7 @@ export const streamingExtraction = (
                 .join(" ")
 
               const candidateClasses = yield* ontology.searchClassesHybrid(aggregatedQuery, 100).pipe(
+                Effect.timeout(Duration.seconds(30)),
                 Effect.withLogSpan(`chunk-${chunk.index}-hybrid-class-retrieval`),
                 Effect.tap((classes) =>
                   Effect.logDebug("Hybrid class retrieval complete", {

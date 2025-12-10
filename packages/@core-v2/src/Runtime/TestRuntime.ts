@@ -5,6 +5,12 @@
  * Uses test layers for EntityExtractor and RelationExtractor,
  * and provides a mock LanguageModel for LLM operations.
  *
+ * Includes LLM Control test layers for:
+ * - TokenBudgetService
+ * - StageTimeoutService
+ * - CentralRateLimiterService
+ * - Grounder
+ *
  * @since 2.0.0
  * @module Runtime/TestRuntime
  */
@@ -15,6 +21,12 @@ import { BunContext } from "@effect/platform-bun"
 import { Effect, Layer, ManagedRuntime, Stream } from "effect"
 import { ConfigService } from "../Service/Config.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
+import { Grounder } from "../Service/Grounder.js"
+import {
+  TokenBudgetServiceTest,
+  StageTimeoutServiceTest,
+  CentralRateLimiterServiceTest
+} from "../Service/LlmControl/index.js"
 import { NlpService } from "../Service/Nlp.js"
 import { OntologyService } from "../Service/Ontology.js"
 import { RdfBuilder } from "../Service/Rdf.js"
@@ -43,18 +55,40 @@ const MockLanguageModel = Layer.succeed(
 )
 
 /**
+ * LLM Control Test Layers
+ *
+ * Provides test implementations with high limits for testing:
+ * - TokenBudgetServiceTest: Full 4096 token budget
+ * - StageTimeoutServiceTest: Default timeouts (can be overridden)
+ * - CentralRateLimiterServiceTest: High limits for testing
+ *
+ * @since 2.0.0
+ */
+const LlmControlTestLayers = Layer.mergeAll(
+  TokenBudgetServiceTest(4096),
+  StageTimeoutServiceTest(),
+  CentralRateLimiterServiceTest({
+    requestsPerMinute: 1000,
+    tokensPerMinute: 1_000_000,
+    maxConcurrent: 100
+  })
+)
+
+/**
  * Test Layers
  *
  * Uses test/mock implementations for deterministic testing:
  * - EntityExtractor.Test: Returns deterministic fake entities
  * - RelationExtractor.Test: Returns deterministic fake relations
+ * - Grounder.Test: Returns deterministic pass for all relations
  * - MockLanguageModel: Stub LLM that returns empty responses
+ * - LLM Control: Test layers with high limits
  * - Other services use Default layers (can be mocked per test)
  *
  * @since 2.0.0
  */
 const ontologyLayer = OntologyService.Default.pipe(
-  Layer.provide(BunContext.layer)
+  Layer.provideMerge(BunContext.layer)
 )
 
 export const TestLayers = Layer.mergeAll(
@@ -65,6 +99,8 @@ export const TestLayers = Layer.mergeAll(
   MockLanguageModel,
   EntityExtractor.Test,
   RelationExtractor.Test,
+  Grounder.Test,
+  LlmControlTestLayers,
   BunContext.layer
 )
 

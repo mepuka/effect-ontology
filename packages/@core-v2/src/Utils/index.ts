@@ -6,6 +6,7 @@
  */
 
 export * from "./Entity.js"
+export * from "./IdempotencyKey.js"
 export * from "./Iri.js"
 export * from "./Rdf.js"
 export * from "./Similarity.js"

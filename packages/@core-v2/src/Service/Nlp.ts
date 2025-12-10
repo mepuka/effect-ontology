@@ -8,7 +8,7 @@
  * @module Service/Nlp
  */
 
-import { Effect } from "effect"
+import { Duration, Effect, Schedule } from "effect"
 import model from "wink-eng-lite-web-model"
 import winkNLP from "wink-nlp"
 
@@ -84,6 +84,9 @@ export interface BM25Config {
 export interface OntologyBM25Index {
   readonly _tag: "OntologyBM25Index"
   readonly documentCount: number
+  readonly _engine: ReturnType<typeof winkBM25>
+  readonly _domainModelMap: Map<string, ClassDefinition | PropertyDefinition>
+  readonly _ontology: OntologyContext
 }
 
 /**
@@ -92,6 +95,9 @@ export interface OntologyBM25Index {
 export interface OntologySemanticIndex {
   readonly _tag: "OntologySemanticIndex"
   readonly documentCount: number
+  readonly _embeddingMap: Map<string, ReadonlyArray<number>>
+  readonly _domainModelMap: Map<string, ClassDefinition | PropertyDefinition>
+  readonly _ontology: OntologyContext
 }
 
 /**
@@ -173,6 +179,20 @@ const prepareText = (text: string, nlp: ReturnType<typeof winkNLP>): Array<strin
   return [...tokens, ...bigrams]
 }
 
+/**
+ * Retry schedule for embedding calls
+ * - Exponential backoff starting at 1 second
+ * - Max 3 retries
+ * - Jittered to avoid thundering herd
+ * - 10 second timeout per attempt
+ */
+const embeddingRetrySchedule = Schedule.exponential(Duration.seconds(1)).pipe(
+  Schedule.intersect(Schedule.recurs(3)),
+  Schedule.jittered
+)
+
+const EMBEDDING_TIMEOUT_MS = 10_000
+
 export class NlpService extends Effect.Service<NlpService>()(
   "NlpService",
   {
@@ -184,25 +204,6 @@ export class NlpService extends Effect.Service<NlpService>()(
       const nlp = winkNLP(model, ["sbd", "pos"])
       const its = nlp.its
       const _as = nlp.as
-
-      // Store for BM25 engines (keyed by index reference)
-      const bm25Engines = new WeakMap<OntologyBM25Index, ReturnType<typeof winkBM25>>()
-      const bm25DomainModels = new WeakMap<
-        OntologyBM25Index,
-        Map<string, ClassDefinition | PropertyDefinition>
-      >()
-      const bm25Ontologies = new WeakMap<OntologyBM25Index, OntologyContext>()
-
-      // Store for semantic indexes (keyed by index reference)
-      const semanticEmbeddings = new WeakMap<
-        OntologySemanticIndex,
-        Map<string, ReadonlyArray<number>>
-      >()
-      const semanticDomainModels = new WeakMap<
-        OntologySemanticIndex,
-        Map<string, ClassDefinition | PropertyDefinition>
-      >()
-      const semanticOntologies = new WeakMap<OntologySemanticIndex, OntologyContext>()
 
       return {
         /**
@@ -292,13 +293,24 @@ export class NlpService extends Effect.Service<NlpService>()(
         ) =>
           Effect.gen(function*() {
             // Get query vector
-            const queryVector = yield* nomic.embed(query, "search_query")
+            const queryVector = yield* nomic.embed(query, "search_query").pipe(
+              Effect.retry(embeddingRetrySchedule),
+              Effect.timeout(Duration.millis(EMBEDDING_TIMEOUT_MS))
+            )
 
             // Compute embeddings for all docs (in parallel with concurrency limit)
             const docEmbeddings = yield* Effect.all(
               docs.map((doc, index) =>
                 nomic.embed(doc, "search_document").pipe(
+                  Effect.retry(embeddingRetrySchedule),
+                  Effect.timeout(Duration.millis(EMBEDDING_TIMEOUT_MS)),
                   Effect.map((embedding) => ({ doc, index, embedding })),
+                  Effect.tapError((error) =>
+                    Effect.logWarning("Embedding failed after retries", {
+                      docPreview: doc.slice(0, 100),
+                      error: String(error)
+                    })
+                  ),
                   Effect.catchAll(() => Effect.succeed(null))
                 )
               ),
@@ -555,13 +567,11 @@ export class NlpService extends Effect.Service<NlpService>()(
             // Create opaque index reference
             const index: OntologyBM25Index = {
               _tag: "OntologyBM25Index",
-              documentCount: documents.length
+              documentCount: documents.length,
+              _engine: engine,
+              _domainModelMap: domainModelMap,
+              _ontology: ontology
             }
-
-            // Store engine, domain model mapping, and ontology for later retrieval
-            bm25Engines.set(index, engine)
-            bm25DomainModels.set(index, domainModelMap)
-            bm25Ontologies.set(index, ontology)
 
             return index
           }),
@@ -588,13 +598,13 @@ export class NlpService extends Effect.Service<NlpService>()(
           query: string,
           limit: number = 10
         ): Effect.Effect<ReadonlyArray<OntologySearchResult>, Error> =>
-          Effect.sync(() => {
-            const engine = bm25Engines.get(index)
-            const domainModelMap = bm25DomainModels.get(index)
-            const ontology = bm25Ontologies.get(index)
+          Effect.gen(function*() {
+            const engine = index._engine
+            const domainModelMap = index._domainModelMap
+            const ontology = index._ontology
 
             if (!engine || !domainModelMap || !ontology) {
-              throw new Error("Invalid BM25 index reference")
+              return yield* Effect.fail(new Error("Invalid BM25 index reference"))
             }
 
             // Search with query
@@ -654,6 +664,8 @@ export class NlpService extends Effect.Service<NlpService>()(
             const embeddings = yield* Effect.all(
               documents.map(([iri, document]) =>
                 nomic.embed(document, "search_document").pipe(
+                  Effect.retry(embeddingRetrySchedule),
+                  Effect.timeout(Duration.millis(EMBEDDING_TIMEOUT_MS)),
                   Effect.map((embedding) => ({ iri, embedding })),
                   Effect.catchAll(() => Effect.succeed(null))
                 )
@@ -681,13 +693,11 @@ export class NlpService extends Effect.Service<NlpService>()(
             // Create opaque index reference
             const index: OntologySemanticIndex = {
               _tag: "OntologySemanticIndex",
-              documentCount: embeddingMap.size
+              documentCount: embeddingMap.size,
+              _embeddingMap: embeddingMap,
+              _domainModelMap: domainModelMap,
+              _ontology: ontology
             }
-
-            // Store embeddings, domain model mapping, and ontology for later retrieval
-            semanticEmbeddings.set(index, embeddingMap)
-            semanticDomainModels.set(index, domainModelMap)
-            semanticOntologies.set(index, ontology)
 
             return index
           }),
@@ -716,16 +726,19 @@ export class NlpService extends Effect.Service<NlpService>()(
           limit: number = 10
         ): Effect.Effect<ReadonlyArray<OntologySearchResult>, Error> =>
           Effect.gen(function*() {
-            const embeddingMap = semanticEmbeddings.get(index)
-            const domainModelMap = semanticDomainModels.get(index)
-            const ontology = semanticOntologies.get(index)
+            const embeddingMap = index._embeddingMap
+            const domainModelMap = index._domainModelMap
+            const ontology = index._ontology
 
             if (!embeddingMap || !domainModelMap || !ontology) {
-              throw new Error("Invalid semantic index reference")
+              return yield* Effect.fail(new Error("Invalid semantic index reference"))
             }
 
             // Compute query embedding
-            const queryEmbedding = yield* nomic.embed(query, "search_query")
+            const queryEmbedding = yield* nomic.embed(query, "search_query").pipe(
+              Effect.retry(embeddingRetrySchedule),
+              Effect.timeout(Duration.millis(EMBEDDING_TIMEOUT_MS))
+            )
 
             // Compute cosine similarity for each document
             const results: Array<OntologySearchResult & { score: number }> = []

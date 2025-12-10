@@ -9,7 +9,7 @@
  */
 
 import { LanguageModel } from "@effect/ai"
-import { Cause, Chunk, Duration, Effect, JSONSchema, Layer, Option, Ref, Schedule, Stream } from "effect"
+import { Cause, Chunk, Duration, Effect, JSONSchema, Layer, Option, Ref, Schedule, Sink, Stream } from "effect"
 import {
   EntityExtractionFailed,
   MentionExtractionFailed,
@@ -63,15 +63,14 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
 
     const llm = yield* LanguageModel.LanguageModel
 
+    // Create retry schedule from config
+    const retrySchedule = Schedule.exponential(Duration.millis(config.runtime.retryInitialDelayMs)).pipe(
+      Schedule.delayed((d) => Duration.min(d, Duration.millis(config.runtime.retryMaxDelayMs))),
+      Schedule.jittered
+    )
+
     // Note: generateObjectWithFeedback handles its own retry logic internally
-    // keeping this for potential future use in other operations
-    const _retryPolicy = makeRetryPolicy({
-      initialDelayMs: config.runtime.retryInitialDelayMs,
-      maxDelayMs: config.runtime.retryMaxDelayMs,
-      maxAttempts: config.runtime.retryMaxAttempts,
-      serviceName: "EntityExtractor"
-    })
-    void _retryPolicy
+    // keeping this structure aligned with other services
 
     return {
       /**
@@ -139,7 +138,8 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
             objectName: "EntityGraph",
             maxAttempts: config.runtime.retryMaxAttempts,
             serviceName: "EntityExtractor",
-            timeoutMs: config.llm.timeoutMs
+            timeoutMs: config.llm.timeoutMs,
+            retrySchedule
           }).pipe(
             Effect.tap((response) =>
               Effect.all([
@@ -198,6 +198,7 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
           // Only perform business logic transformations (ID generation, attribute filtering, IRI expansion)
           let filteredAttributeCount = 0
           let skippedEntityCount = 0
+          let droppedKeysCount = 0
           const entities = yield* Stream.fromIterable(response.value.entities)
             .pipe(
               Stream.filterMap((entityData): Option.Option<Entity> => {
@@ -228,8 +229,9 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
                         attributes[key] = value
                       }
                     } else {
-                      // Track filtered attributes for logging
+                      // Track filtered attributes for logging (specifically, keys not in validPropertyIris)
                       filteredAttributeCount++
+                      droppedKeysCount++
                     }
                   }
                 }
@@ -244,7 +246,7 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
                   })
                 )
               }),
-              Stream.runCollect
+              Stream.run(Sink.collectAllN(1000)) // Max 1000 entities per extraction
             )
 
           // Log if any entities were skipped due to invalid types
@@ -261,7 +263,7 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
             yield* Effect.logDebug("Filtered invalid attribute keys", {
               stage: "entity-extraction",
               filteredAttributeCount,
-              validPropertyCount: validPropertyIris.size
+              droppedKeysCount
             })
           }
 
@@ -286,26 +288,23 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
    *
    * @since 2.0.0
    */
-  static Test = Layer.effect(
-    EntityExtractor,
-    Effect.succeed({
-      extract: (
-        _text: string,
-        candidates: ReadonlyArray<ClassDefinition>,
-        _datatypeProperties?: ReadonlyArray<PropertyDefinition>
-      ): Effect.Effect<Chunk.Chunk<Entity>, EntityExtractionFailed, LanguageModel.LanguageModel> =>
-        Effect.succeed(
-          Chunk.fromIterable([
-            new Entity({
-              id: "test_entity",
-              mention: "Test Entity",
-              types: candidates.length > 0 ? [candidates[0].id] : [],
-              attributes: {}
-            })
-          ])
-        )
-    } as EntityExtractor)
-  )
+  static Test = Layer.succeed(EntityExtractor, {
+    extract: (
+      _text: string,
+      candidates: ReadonlyArray<ClassDefinition>,
+      _datatypeProperties?: ReadonlyArray<PropertyDefinition>
+    ): Effect.Effect<Chunk.Chunk<Entity>, EntityExtractionFailed, LanguageModel.LanguageModel> =>
+      Effect.succeed(
+        Chunk.fromIterable([
+          new Entity({
+            id: "test_entity",
+            mention: "Test Entity",
+            types: candidates.length > 0 ? [candidates[0].id] : [],
+            attributes: {}
+          })
+        ])
+      )
+  } as EntityExtractor)
 }
 
 /**
@@ -451,19 +450,16 @@ export class MentionExtractor extends Effect.Service<MentionExtractor>()("Mentio
    *
    * @since 2.0.0
    */
-  static Test = Layer.effect(
-    MentionExtractor,
-    Effect.succeed({
-      extract: (
-        _text: string
-      ): Effect.Effect<Chunk.Chunk<Mention>, MentionExtractionFailed, LanguageModel.LanguageModel> =>
-        Effect.succeed(
-          Chunk.fromIterable([
-            { id: "test_entity", mention: "Test Entity", context: "A test entity" }
-          ])
-        )
-    } as MentionExtractor)
-  )
+  static Test = Layer.succeed(MentionExtractor, {
+    extract: (
+      _text: string
+    ): Effect.Effect<Chunk.Chunk<Mention>, MentionExtractionFailed, LanguageModel.LanguageModel> =>
+      Effect.succeed(
+        Chunk.fromIterable([
+          { id: "test_entity", mention: "Test Entity", context: "A test entity" }
+        ])
+      )
+  } as MentionExtractor)
 }
 
 /**
@@ -657,7 +653,7 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
                   })
                 )
               }),
-              Stream.runCollect
+              Stream.run(Sink.collectAllN(5000)) // Max 5000 relations per extraction
             )
 
           // Log if any relations were skipped due to invalid predicates
@@ -694,29 +690,26 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
    *
    * @since 2.0.0
    */
-  static Test = Layer.effect(
-    RelationExtractor,
-    Effect.succeed({
-      extract: (
-        _text: string,
-        entities: Chunk.Chunk<Entity>,
-        _properties: ReadonlyArray<PropertyDefinition>
-      ): Effect.Effect<Chunk.Chunk<Relation>, RelationExtractionFailed, LanguageModel.LanguageModel> => {
-        const entityArray = Chunk.toReadonlyArray(entities)
-        if (entityArray.length < 2) {
-          return Effect.succeed(Chunk.empty<Relation>())
-        }
-
-        return Effect.succeed(
-          Chunk.fromIterable([
-            new Relation({
-              subjectId: entityArray[0].id,
-              predicate: _properties.length > 0 ? _properties[0].id : "http://example.org/relatedTo",
-              object: entityArray[1].id
-            })
-          ])
-        )
+  static Test = Layer.succeed(RelationExtractor, {
+    extract: (
+      _text: string,
+      entities: Chunk.Chunk<Entity>,
+      _properties: ReadonlyArray<PropertyDefinition>
+    ): Effect.Effect<Chunk.Chunk<Relation>, RelationExtractionFailed, LanguageModel.LanguageModel> => {
+      const entityArray = Chunk.toReadonlyArray(entities)
+      if (entityArray.length < 2) {
+        return Effect.succeed(Chunk.empty<Relation>())
       }
-    } as RelationExtractor)
-  )
+
+      return Effect.succeed(
+        Chunk.fromIterable([
+          new Relation({
+            subjectId: entityArray[0].id,
+            predicate: _properties.length > 0 ? _properties[0].id : "http://example.org/relatedTo",
+            object: entityArray[1].id
+          })
+        ])
+      )
+    }
+  } as RelationExtractor)
 }

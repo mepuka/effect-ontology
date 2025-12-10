@@ -173,151 +173,140 @@ export const clusterEntities = (
       }
     }
 
-    // Build node index mapping
-    const entityToIndex = new Map<string, Graph.NodeIndex>()
-    const indexToEntity = new Map<Graph.NodeIndex, Entity>()
+    // Step 2: Compute edges asynchronously (non-blocking)
+    // We compute all valid edges first, then build the graph cheaply.
 
-    // Track edges for cluster metadata
+    // Blocking Strategy Setup
+    const invertedIndex = new Map<string, Array<number>>()
+    const USE_BLOCKING_THRESHOLD = 50
+    const MAX_BLOCK_SIZE = 50
+    const STOP_WORDS = new Set([
+      "the",
+      "and",
+      "of",
+      "in",
+      "on",
+      "at",
+      "for",
+      "to",
+      "a",
+      "an",
+      "inc",
+      "incorporated",
+      "corp",
+      "corporation",
+      "llc",
+      "ltd",
+      "limited",
+      "co",
+      "company",
+      "group",
+      "association",
+      "department",
+      "university",
+      "school",
+      "college",
+      "institute"
+    ])
+
+    // Build Inverted Index if dataset is large enough
+    if (entities.length >= USE_BLOCKING_THRESHOLD) {
+      for (let i = 0; i < entities.length; i++) {
+        const entity = entities[i]
+        const tokens = simpleTokenize(entity.mention.toLowerCase())
+          .map((t) => t.replace(/[^\w]/g, ""))
+          .filter((t) => t.length > 2 && !STOP_WORDS.has(t))
+
+        for (const token of new Set(tokens)) {
+          if (!invertedIndex.has(token)) {
+            invertedIndex.set(token, [])
+          }
+          invertedIndex.get(token)!.push(i)
+        }
+      }
+    }
+
+    // Helper to generate candidate pairs for an entity index
+    const getCandidates = (i: number): Set<number> => {
+      const candidates = new Set<number>()
+      if (entities.length < USE_BLOCKING_THRESHOLD) {
+        // Small dataset: Compare with ALL subsequent entities
+        for (let j = i + 1; j < entities.length; j++) {
+          candidates.add(j)
+        }
+      } else {
+        // Large dataset: Use blocking
+        const entityA = entities[i]
+        const tokens = simpleTokenize(entityA.mention.toLowerCase())
+          .map((t) => t.replace(/[^\w]/g, ""))
+          .filter((t) => t.length > 2 && !STOP_WORDS.has(t))
+
+        if (tokens.length > 0) {
+          for (const token of tokens) {
+            const matches = invertedIndex.get(token)
+            if (matches && matches.length <= MAX_BLOCK_SIZE) {
+              for (const matchIdx of matches) {
+                if (matchIdx > i) candidates.add(matchIdx)
+              }
+            }
+          }
+        }
+      }
+      return candidates
+    }
+
+    // Compute edges using a Stream to allow yielding/concurrency
     const edgeData: Array<{ source: string; target: string; edge: SimilarityEdge }> = []
 
-    // Build undirected similarity graph
+    // We process entities in chunks to avoid blocking the event loop
+    // Using Effect.forEach with concurrency allows other fibers to run
+    yield* Effect.forEach(
+      entities.map((_, i) => i),
+      (i) =>
+        Effect.sync(() => {
+          const entityA = entities[i]
+          const candidates = getCandidates(i)
+
+          for (const j of candidates) {
+            const entityB = entities[j]
+
+            // Compute embedding similarity if available
+            const embeddingSim = embeddingMap.has(entityA.id) && embeddingMap.has(entityB.id)
+              ? nomic.cosineSimilarity(embeddingMap.get(entityA.id)!, embeddingMap.get(entityB.id)!)
+              : undefined
+
+            // Check merge condition - pure sync computation
+            if (shouldConsiderMerge(entityA, entityB, relations, config, embeddingSim)) {
+              const similarity = computeEntitySimilarity(entityA, entityB, relations, config, embeddingSim)
+              const method = detectResolutionMethod(entityA, entityB, relations)
+
+              edgeData.push({
+                source: entityA.id,
+                target: entityB.id,
+                edge: { similarity, method }
+              })
+            }
+          }
+        }),
+      { concurrency: "unbounded" } // Allow yielding between iterations
+    )
+
+    // Step 3: Build Graph synchronously (cheap now that edges are pre-computed)
+    const entityToIndex = new Map<string, Graph.NodeIndex>()
+
     const similarityGraph = Graph.undirected<Entity, SimilarityEdge>((mutable) => {
       // Add all entities as nodes
       for (const entity of entities) {
         const idx = Graph.addNode(mutable, entity)
         entityToIndex.set(entity.id, idx)
-        indexToEntity.set(idx, entity)
       }
 
-      // Blocking Strategy: Inverted Index
-      // Map robust tokens to list of entity indices
-      const invertedIndex = new Map<string, Array<number>>()
-      const USE_BLOCKING_THRESHOLD = 50
-      const MAX_BLOCK_SIZE = 50 // Skip tokens that are too common (e.g. "Agency" in a list of agencies)
-
-      // Common stop words to ignore for blocking (English + Corporate)
-      const STOP_WORDS = new Set([
-        "the",
-        "and",
-        "of",
-        "in",
-        "on",
-        "at",
-        "for",
-        "to",
-        "a",
-        "an",
-        "inc",
-        "incorporated",
-        "corp",
-        "corporation",
-        "llc",
-        "ltd",
-        "limited",
-        "co",
-        "company",
-        "group",
-        "association",
-        "department",
-        "university",
-        "school",
-        "college",
-        "institute"
-      ])
-
-      // Only build index if we have enough entities to justify the overhead
-      if (entities.length >= USE_BLOCKING_THRESHOLD) {
-        for (let i = 0; i < entities.length; i++) {
-          const entity = entities[i]
-          // Normalize: lowercase, remove non-word chars, split
-          const tokens = simpleTokenize(entity.mention.toLowerCase())
-            .map((t) => t.replace(/[^\w]/g, ""))
-            .filter((t) => t.length > 2 && !STOP_WORDS.has(t))
-
-          for (const token of new Set(tokens)) {
-            if (!invertedIndex.has(token)) {
-              invertedIndex.set(token, [])
-            }
-            invertedIndex.get(token)!.push(i)
-          }
-        }
-      }
-
-      // Track processed pairs to avoid duplicates
-      const processedPairs = new Set<string>()
-      const getPairKey = (a: number, b: number) => a < b ? `${a}-${b}` : `${b}-${a}`
-
-      // Iterate entities and compare candidates
-      for (let i = 0; i < entities.length; i++) {
-        // Cooperative multitasking: Yield every 20 entities to allow other fibers to run
-        if (i % 20 === 0) {
-          // We can't yield directly inside the synchronous graph builder callback easily...
-          // Wait, Graph.undirected callback is synchronous.
-          // We should move this logic OUTSIDE the Graph constructor if possible?
-          // Or construct edges first, then add to Graph.
-          // The loop below executes synchronous logic (shouldConsiderMerge etc).
-          // If these are expensive, we block the event loop.
-        }
-
-        const entityA = entities[i]
-        const candidates = new Set<number>()
-
-        if (entities.length < USE_BLOCKING_THRESHOLD) {
-          // Small dataset: Compare with ALL subsequent entities (O(n^2))
-          for (let j = i + 1; j < entities.length; j++) {
-            candidates.add(j)
-          }
-        } else {
-          // Large dataset: Use blocking
-          const tokens = simpleTokenize(entityA.mention.toLowerCase())
-            .map((t) => t.replace(/[^\w]/g, ""))
-            .filter((t) => t.length > 2 && !STOP_WORDS.has(t))
-
-          if (tokens.length === 0) {
-            // Fallback: limited scan? For now, skip.
-          } else {
-            for (const token of tokens) {
-              const matches = invertedIndex.get(token)
-              // Only consider blocks that are selective enough
-              if (matches && matches.length <= MAX_BLOCK_SIZE) {
-                for (const matchIdx of matches) {
-                  if (matchIdx > i) { // Only look forward
-                    candidates.add(matchIdx)
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        // Process candidates
-        for (const j of candidates) {
-          const pairKey = getPairKey(i, j)
-          if (processedPairs.has(pairKey)) continue
-          processedPairs.add(pairKey)
-
-          const entityB = entities[j]
-
-          // Compute embedding similarity if available
-          const embeddingSim = embeddingMap.has(entityA.id) && embeddingMap.has(entityB.id)
-            ? nomic.cosineSimilarity(embeddingMap.get(entityA.id)!, embeddingMap.get(entityB.id)!)
-            : undefined
-
-          // Check if entities should be considered for merging (with embedding similarity)
-          if (shouldConsiderMerge(entityA, entityB, relations, config, embeddingSim)) {
-            const similarity = computeEntitySimilarity(entityA, entityB, relations, config, embeddingSim)
-            const method = detectResolutionMethod(entityA, entityB, relations)
-
-            const edge: SimilarityEdge = { similarity, method }
-            edgeData.push({ source: entityA.id, target: entityB.id, edge })
-
-            Graph.addEdge(
-              mutable,
-              entityToIndex.get(entityA.id)!,
-              entityToIndex.get(entityB.id)!,
-              edge
-            )
-          }
+      // Add pre-computed edges
+      for (const { edge, source, target } of edgeData) {
+        const idxA = entityToIndex.get(source)
+        const idxB = entityToIndex.get(target)
+        if (idxA !== undefined && idxB !== undefined) {
+          Graph.addEdge(mutable, idxA, idxB, edge)
         }
       }
     })

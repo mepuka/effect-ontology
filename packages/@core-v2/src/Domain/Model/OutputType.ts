@@ -21,7 +21,9 @@ export const OutputTypeSchema = Schema.Union(
   Schema.Literal("entity-resolution-graph"),
   Schema.Literal("rdf-turtle"),
   Schema.Literal("mermaid-diagram"),
-  Schema.Literal("metadata")
+  Schema.Literal("metadata"),
+  Schema.Literal("entities"),
+  Schema.Literal("relations")
 )
 
 /**
@@ -56,6 +58,14 @@ export const OutputTypeRegistry = {
   "metadata": {
     filename: "metadata.json",
     description: "Output metadata with hashes, sizes, and types"
+  },
+  "entities": {
+    filename: "entities.json",
+    description: "Extracted entities in JSON format"
+  },
+  "relations": {
+    filename: "relations.json",
+    description: "Extracted relations in JSON format"
   }
 } as const
 

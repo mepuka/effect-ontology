@@ -60,6 +60,26 @@ export interface Config {
     readonly retryInitialDelayMs: number
     readonly retryMaxDelayMs: number
   }
+
+  /**
+   * Grounder verification settings
+   */
+  readonly grounder: {
+    /** Enable grounding verification (default: true) */
+    readonly enabled: boolean
+    /** Minimum confidence threshold for relation verification (default: 0.8) */
+    readonly confidenceThreshold: number
+    /** Batch size for grouped verification (default: 5) */
+    readonly batchSize: number
+  }
+
+  /**
+   * Token budget settings (total per extraction request)
+   */
+  readonly tokenBudget: {
+    /** Total tokens allowed per extraction request */
+    readonly totalTokens: number
+  }
 }
 
 /**
@@ -101,6 +121,14 @@ export const DEFAULT_CONFIG: Config = {
     retryMaxAttempts: 8, // Increased for transient network/rate limit errors
     retryInitialDelayMs: 3000, // Base delay for exponential backoff
     retryMaxDelayMs: 30_000 // Cap max delay at 30s to avoid excessively long waits
+  },
+  grounder: {
+    enabled: true,
+    confidenceThreshold: 0.8,
+    batchSize: 5
+  },
+  tokenBudget: {
+    totalTokens: 4096
   }
 }
 
