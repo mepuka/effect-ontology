@@ -17,6 +17,7 @@ import type { RunConfig } from "../Domain/Model/ExtractionRun.js"
 import { type JobStatus, JobStatusResponse, type SubmitJobRequest } from "../Domain/Schema/Api.js"
 import { computeIdempotencyKey, type ExtractionParams } from "../Utils/IdempotencyKey.js"
 import { ExtractionWorkflow } from "../Workflow/StreamingExtraction.js"
+import { ConfigService } from "./Config.js"
 import { ExecutionDeduplicator, ExecutionDeduplicatorLive } from "./ExecutionDeduplicator.js"
 import { ExtractionCache, ExtractionCacheLive } from "./ExtractionCache.js"
 
@@ -119,12 +120,13 @@ export const makeJobManager = Effect.gen(function*() {
   const cache = yield* ExtractionCache
   const deduplicator = yield* ExecutionDeduplicator
   const workflow = yield* ExtractionWorkflow
+  const appConfig = yield* ConfigService
 
-  // Default run config
+  // Default run config from environment/config
   const defaultConfig: RunConfig = {
     chunking: { maxChunkSize: 500, preserveSentences: true },
-    concurrency: 4,
-    ontologyPath: "ontologies/football/ontology.ttl" // Hardcoded for MVP
+    concurrency: appConfig.runtime.extractionConcurrency,
+    ontologyPath: appConfig.ontology.path
   }
 
   const updateJobStatus = (jobId: string, f: (job: JobState) => JobState) =>
@@ -263,9 +265,10 @@ export const makeJobManager = Effect.gen(function*() {
         yield* Ref.update(jobs, (map) => map.set(job.id, job))
 
         if (isNew) {
+          // Run extraction synchronously (Cloud Run handles concurrency via instances)
+          // This ensures LanguageModel and other services are available in context
           yield* runExtraction(job.id, request, key).pipe(
-            Effect.provide(FetchHttpClient.layer),
-            Effect.fork
+            Effect.provide(FetchHttpClient.layer)
           )
         } else {
           // Wait for existing execution
@@ -283,12 +286,13 @@ export const makeJobManager = Effect.gen(function*() {
                     relationsExtracted: result.relations.length
                   }
                 }))
-            }),
-            Effect.fork
+            })
           )
         }
 
-        return mapJobToResponse(job)
+        // Get updated job after extraction completes
+        const finalJob = yield* Ref.get(jobs).pipe(Effect.map((map) => map.get(job.id)))
+        return mapJobToResponse(finalJob ?? job)
       }).pipe(
         Effect.mapError((e) => (e as any) instanceof Error ? (e as Error) : new Error(String(e)))
       ),

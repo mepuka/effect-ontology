@@ -414,7 +414,9 @@ export class Grounder extends Effect.Service<Grounder>()("Grounder", {
         )
     }
   }),
-  dependencies: [ConfigService.Default],
+  dependencies: [
+    // ConfigService provided by parent scope (e.g., EnvConfigService.Live)
+  ],
   accessors: true
 }) {
   /**

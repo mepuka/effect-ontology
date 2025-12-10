@@ -28,12 +28,16 @@ const port = Effect.runSync(Config.number("PORT").pipe(Config.withDefault(8080))
 const ConfigFromEnv = EnvConfigService.Live
 
 // Compose production server layers (MVP - no cluster)
+// Order matters: dependencies must be provided AFTER dependents
 const ServerLive = HttpServerLive.pipe(
   Layer.provideMerge(BunHttpServer.layer({ port })),
   Layer.provideMerge(HealthCheckService.Default),
   Layer.provideMerge(JobManagerLive),
+  // ExtractionWorkflow must come after JobManagerLive (JobManager depends on it)
   Layer.provideMerge(ExtractionWorkflow.Default),
+  // RateLimitedLlmLayer provides LLM for ExtractionWorkflow
   Layer.provideMerge(RateLimitedLlmLayer),
+  // Config provides settings for all layers
   Layer.provideMerge(ConfigFromEnv),
   Layer.provide(BunContext.layer)
 )

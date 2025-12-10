@@ -2,7 +2,7 @@
 # Multi-stage build for Effect-TS entity extraction service
 
 # Stage 1: Build
-FROM oven/bun:1.2.23-alpine AS builder
+FROM oven/bun:1.2.23-debian AS builder
 
 WORKDIR /app
 
@@ -16,12 +16,15 @@ RUN bun install
 # Copy source
 COPY packages/@core-v2/ ./packages/@core-v2/
 
+# Copy ontologies
+COPY ontologies/ ./ontologies/
+
 # Build TypeScript
 WORKDIR /app/packages/@core-v2
 RUN bun run build
 
 # Stage 2: Production
-FROM oven/bun:1.2.23-alpine
+FROM oven/bun:1.2.23-debian
 
 WORKDIR /app
 
@@ -30,9 +33,16 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages/@core-v2/dist/src ./dist
 COPY --from=builder /app/packages/@core-v2/package.json ./
 
+# Copy ontologies directory
+COPY --from=builder /app/ontologies ./ontologies
+
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S effect -u 1001 -G nodejs
+RUN groupadd -g 1001 nodejs && \
+    useradd -m -u 1001 -g nodejs effect
+
+# Create writable directories for non-root user
+RUN mkdir -p /app/output/cache /app/output/runs && \
+    chown -R effect:nodejs /app/output
 
 USER effect
 
@@ -46,6 +56,7 @@ EXPOSE 8080
 # Environment defaults
 ENV NODE_ENV=production
 ENV PORT=8080
+ENV ONTOLOGY_PATH=/app/ontologies/football/ontology_skos.ttl
 
 # Start server
 CMD ["bun", "run", "dist/server.js"]

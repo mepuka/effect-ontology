@@ -695,7 +695,7 @@ export class OntologyService extends Effect.Service<OntologyService>()(
     }),
     dependencies: [
       RdfBuilder.Default,
-      ConfigService.Default,
+      // ConfigService provided by parent scope (e.g., EnvConfigService.Live)
       NlpService.Default,
       BunContext.layer
     ]

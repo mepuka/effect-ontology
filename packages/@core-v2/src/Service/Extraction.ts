@@ -280,7 +280,9 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
         })
     }
   }),
-  dependencies: [ConfigService.Default],
+  dependencies: [
+    // ConfigService provided by parent scope (e.g., EnvConfigService.Live)
+  ],
   accessors: true
 }) {
   /**
@@ -442,7 +444,9 @@ export class MentionExtractor extends Effect.Service<MentionExtractor>()("Mentio
         })
     }
   }),
-  dependencies: [ConfigService.Default],
+  dependencies: [
+    // ConfigService provided by parent scope (e.g., EnvConfigService.Live)
+  ],
   accessors: true
 }) {
   /**
@@ -682,7 +686,9 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
         })
     }
   }),
-  dependencies: [ConfigService.Default],
+  dependencies: [
+    // ConfigService provided by parent scope (e.g., EnvConfigService.Live)
+  ],
   accessors: true
 }) {
   /**

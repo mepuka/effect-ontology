@@ -105,6 +105,8 @@ export class HealthCheckService extends Effect.Service<HealthCheckService>()(
           })
       }
     }),
-    dependencies: [ConfigService.Default]
+    dependencies: [
+      // ConfigService provided by parent scope (e.g., EnvConfigService.Live)
+    ]
   }
 ) {}

@@ -13,6 +13,8 @@
     "test/**/*",
     "**/*.test.ts",
     "src/Runtime/ClusterRuntime.ts",
-    "src/Cluster/**/*"
+    "src/Runtime/TestRuntime.ts",
+    "src/Cluster/**/*",
+    "src/playground.ts"
   ]
 }

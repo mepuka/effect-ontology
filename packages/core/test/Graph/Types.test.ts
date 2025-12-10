@@ -16,7 +16,10 @@ describe("Graph Types", () => {
       id: "http://example.org/zoo#Dog",
       label: "Dog",
       properties: [],
-      classExpressions: []
+      classExpressions: [],
+      comment: Option.none(),
+      synonyms: [],
+      examples: []
     }
 
     expect(classNode._tag).toBe("Class")
@@ -42,7 +45,10 @@ describe("Graph Types", () => {
           source: "domain"
         })
       ],
-      classExpressions: []
+      classExpressions: [],
+      comment: Option.none(),
+      synonyms: [],
+      examples: []
     }
 
     expect(classNode.properties).toHaveLength(1)
@@ -56,7 +62,10 @@ describe("Graph Types", () => {
       label: "has name",
       domain: "http://example.org/zoo#Animal",
       range: "http://www.w3.org/2001/XMLSchema#string",
-      functional: false
+      functional: false,
+      comment: Option.none(),
+      synonyms: [],
+      examples: []
     }
 
     expect(propNode._tag).toBe("Property")
@@ -71,7 +80,10 @@ describe("Graph Types", () => {
       id: "http://example.org/zoo#Dog",
       label: "Dog",
       properties: [],
-      classExpressions: []
+      classExpressions: [],
+      comment: Option.none(),
+      synonyms: [],
+      examples: []
     }
 
     const propNode: OntologyNode = {
@@ -80,7 +92,10 @@ describe("Graph Types", () => {
       label: "has name",
       domain: "http://example.org/zoo#Animal",
       range: "http://www.w3.org/2001/XMLSchema#string",
-      functional: false
+      functional: false,
+      comment: Option.none(),
+      synonyms: [],
+      examples: []
     }
 
     // Type narrowing works

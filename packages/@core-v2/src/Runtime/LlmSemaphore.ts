@@ -78,6 +78,8 @@ export class LlmSemaphoreService extends Effect.Service<LlmSemaphoreService>()(
         limit: (): number => limit
       }
     }),
-    dependencies: [ConfigService.Default]
+    dependencies: [
+      // ConfigService provided by parent scope (e.g., EnvConfigService.Live)
+    ]
   }
 ) {}

@@ -388,7 +388,9 @@ export class RdfBuilder extends Effect.Service<RdfBuilder>()(
           })
       } satisfies RdfBuilderShape
     }),
-    dependencies: [ConfigService.Default],
+    dependencies: [
+      // ConfigService provided by parent scope (e.g., EnvConfigService.Live)
+    ],
     accessors: true
   }
 ) {}
