@@ -10,6 +10,7 @@
  */
 
 import { FileSystem } from "@effect/platform"
+import { BunContext } from "@effect/platform-bun"
 import { Chunk, Effect, Schema } from "effect"
 import { OntologyFileNotFound, OntologyParsingFailed } from "../Domain/Error/Ontology.js"
 import type { RdfError } from "../Domain/Error/Rdf.js"
@@ -695,7 +696,8 @@ export class OntologyService extends Effect.Service<OntologyService>()(
     dependencies: [
       RdfBuilder.Default,
       ConfigService.Default,
-      NlpService.Default
+      NlpService.Default,
+      BunContext.layer
     ]
   }
 ) {}

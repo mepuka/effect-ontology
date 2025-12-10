@@ -2,7 +2,7 @@ import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { Effect, Layer } from "effect"
 import { defaultEntityResolutionConfig } from "./Domain/Model/EntityResolution.js"
 import type { RunConfig, RunStats } from "./Domain/Model/ExtractionRun.js"
-import { ProductionLayersWithTracing } from "./Runtime/ProductionRuntime.js"
+import { ProductionLayersWithTracing, RateLimitedLlmLayer } from "./Runtime/ProductionRuntime.js"
 import { ConfigService } from "./Service/Config.js"
 import { toMermaid } from "./Service/EntityLinker.js"
 import { ExtractionRunService, ExtractionRunServiceDefault, getRunIdFromText } from "./Service/ExtractionRun.js"
@@ -10,19 +10,34 @@ import { NlpService } from "./Service/Nlp.js"
 import { NomicNlpServiceDefault } from "./Service/NomicNlp.js"
 import { OntologyService } from "./Service/Ontology.js"
 import { RdfBuilder } from "./Service/Rdf.js"
+import { refineKnowledgeGraph } from "./Utils/RefineKG.js"
 import { buildEntityResolutionGraph, type EntityResolutionGraph } from "./Workflow/EntityResolutionGraph.js"
-import { streamingExtraction } from "./Workflow/StreamingExtraction.js"
+import { ExtractionWorkflow } from "./Workflow/StreamingExtraction.js"
 
 const FootballOntologyLayer = OntologyService.Default.pipe(Layer.provideMerge(BunContext.layer))
 
+// Build layers with proper dependency order
+// ConfigService must be provided first since LLM and other services need it
+const ConfigLayer = ConfigService.Default
+
+// RateLimitedLlmLayer provides LanguageModel.LanguageModel (needs ConfigService)
+const LlmLayer = RateLimitedLlmLayer.pipe(Layer.provide(ConfigLayer))
+
+// ExtractionWorkflow.Default's internal dependencies (EntityExtractor, etc.) need LLM
+// We provide LLM at the bottom so it flows up to all dependents
 const Live = Layer.mergeAll(
-  ProductionLayersWithTracing.pipe(Layer.provideMerge(ConfigService.Default)),
+  ProductionLayersWithTracing,
   FootballOntologyLayer,
   NlpService.Default,
   RdfBuilder.Default,
   ExtractionRunServiceDefault,
-  NomicNlpServiceDefault
-).pipe(Layer.provideMerge(BunContext.layer))
+  NomicNlpServiceDefault,
+  ExtractionWorkflow.Default
+).pipe(
+  Layer.provideMerge(LlmLayer), // LLM for all extractors in workflow
+  Layer.provideMerge(ConfigLayer),
+  Layer.provideMerge(BunContext.layer)
+)
 
 /**
  * Serialize ERG to a saveable format (stats + Mermaid visualization)
@@ -45,6 +60,7 @@ const program = Effect.gen(function*() {
   const runService = yield* ExtractionRunService
   const rdf = yield* RdfBuilder
   const config = yield* ConfigService
+  const workflow = yield* ExtractionWorkflow
 
   const inputText =
     `The Dutch soccer teams of the 1960s and '70s were famous for developing Total Football, a radical system in which every player could play every position. Those tactics have died out, but their influence remains.I llustration by Michael Houtz; photographs by Getty Images
@@ -66,7 +82,7 @@ At the same time, the sight of those orange jerseys also brought pain and sadnes
   }
 
   // Extract knowledge graph (run is created internally)
-  const kg = yield* streamingExtraction(inputText, runConfig)
+  const kg = yield* workflow.extract(inputText, runConfig)
 
   // Get run ID for saving outputs (deterministic from text hash)
   const runId = getRunIdFromText(inputText)
@@ -103,6 +119,12 @@ At the same time, the sight of those orange jerseys also brought pain and sadnes
   console.log(`  Clusters: ${erg.stats.clusterCount}`)
   console.log(`  Relations: ${erg.stats.relationCount}`)
 
+  // Refine Knowledge Graph (merge entities, rewrite relations)
+  console.log("\n=== Refining Knowledge Graph ===")
+  const refinedKg = refineKnowledgeGraph(kg, erg)
+  console.log(`Original Entities: ${kg.entities.length} -> Refined: ${refinedKg.entities.length}`)
+  console.log(`Original Relations: ${kg.relations.length} -> Refined: ${refinedKg.relations.length}`)
+
   // Show canonical mappings (only clustered entities with multiple mentions)
   const canonicalGroups = new Map<string, Array<string>>()
   for (const [entityId, canonicalId] of Object.entries(erg.canonicalMap)) {
@@ -131,11 +153,16 @@ At the same time, the sight of those orange jerseys also brought pain and sadnes
   yield* runService.saveOutput(runId, "mermaid-diagram", mermaidContent)
   console.log(`Mermaid diagram saved to run outputs`)
 
-  // Convert to RDF and save Turtle
+  // Save REFINED Knowledge Graph JSON (as the primary output)
+  const refinedKgJson = JSON.stringify(refinedKg.toJSON(), null, 2)
+  yield* runService.saveOutput(runId, "knowledge-graph", refinedKgJson)
+  console.log(`\nRefined Knowledge graph saved to run outputs`)
+
+  // Convert to RDF and save Turtle (using REFINED KG)
   const turtle = yield* Effect.gen(function*() {
     const store = yield* rdf.makeStore
-    yield* rdf.addEntities(store, kg.entities)
-    yield* rdf.addRelations(store, kg.relations)
+    yield* rdf.addEntities(store, refinedKg.entities)
+    yield* rdf.addRelations(store, refinedKg.relations)
     return yield* rdf.toTurtle(store)
   }).pipe(Effect.scoped)
 
@@ -145,8 +172,8 @@ At the same time, the sight of those orange jerseys also brought pain and sadnes
   // Update run statistics
   const stats: RunStats = {
     chunkCount: chunkCounts.size,
-    entityCount: kg.entities.length,
-    relationCount: kg.relations.length,
+    entityCount: refinedKg.entities.length, // Use refined count
+    relationCount: refinedKg.relations.length, // Use refined count
     resolvedCount: erg.stats.resolvedCount,
     clusterCount: erg.stats.clusterCount
   }

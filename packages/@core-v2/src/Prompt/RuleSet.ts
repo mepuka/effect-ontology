@@ -237,19 +237,20 @@ export const ENTITY_STATIC_RULES: ReadonlyArray<ExtractionRule> = [
     id: "iri-exact-casing",
     category: "iri_casing",
     severity: "error",
-    instruction: "Copy class and property IRIs EXACTLY as shown in the schema. Do NOT reconstruct from labels.",
+    instruction:
+      "Use the short class/property names (Local Names) EXACTLY as shown in the schema. Do NOT use full IRIs.",
     example: new RuleExample({
       input: "Player class with label 'player'",
-      output: "http://ontology/Player",
-      explanation: "Use exact IRI from schema, not http://ontology/player"
+      output: "Player",
+      explanation: "Use local name from schema, not full IRI"
     }),
     counterExample: new RuleExample({
       input: "Player class with label 'player'",
-      output: "http://ontology/player",
-      explanation: "Wrong casing - derived from label instead of IRI"
+      output: "http://ontology/Player",
+      explanation: "Do not use full URL/IRI"
     }),
-    schemaDescription: "Use exact IRI from allowed list (case-sensitive)",
-    validationTemplate: "IRI '{value}' has incorrect casing - check the allowed list"
+    schemaDescription: "Use exact local name from allowed list (case-sensitive)",
+    validationTemplate: "Name '{value}' has incorrect casing or is a full IRI - check the allowed list"
   }),
 
   new ExtractionRule({

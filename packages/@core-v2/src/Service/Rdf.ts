@@ -8,7 +8,7 @@
  * @module Service/Rdf
  */
 
-import { Chunk, Effect } from "effect"
+import { Chunk, Effect, type Scope } from "effect"
 import * as N3 from "n3"
 import { ParsingFailed, RdfError, SerializationFailed } from "../Domain/Error/Rdf.js"
 import type { Entity, Relation } from "../Domain/Model/Entity.js"
@@ -113,6 +113,28 @@ const domainTermToN3Term = (term: IRI | BlankNodeType | RdfTerm | null | undefin
       : N3.DataFactory.literal(term.value)
   }
   throw new Error(`Cannot convert term to N3 term: ${term}`)
+}
+
+/**
+ * RdfBuilder service interface
+ *
+ * Explicitly typed to avoid inference issues with transitive @rdfjs/types dependency.
+ *
+ * @since 2.0.0
+ */
+export interface RdfBuilderShape {
+  readonly makeStore: Effect.Effect<RdfStore, never, Scope.Scope>
+  readonly createStore: Effect.Effect<RdfStore, never, never>
+  readonly parseTurtle: (turtle: string) => Effect.Effect<RdfStore, ParsingFailed, never>
+  readonly queryStore: (store: RdfStore, pattern: QuadPattern) => Effect.Effect<Chunk.Chunk<Quad>, RdfError, never>
+  readonly createIri: (iri: string) => IRI
+  readonly addEntities: (store: RdfStore, entities: Iterable<Entity>) => Effect.Effect<void, RdfError, never>
+  readonly addRelations: (store: RdfStore, relations: Iterable<Relation>) => Effect.Effect<void, RdfError, never>
+  readonly toTurtle: (store: RdfStore) => Effect.Effect<string, SerializationFailed, never>
+  readonly validate: (
+    store: RdfStore,
+    shapesGraph: string
+  ) => Effect.Effect<{ conforms: boolean; report: string }, never, never>
 }
 
 /**
@@ -364,7 +386,7 @@ export class RdfBuilder extends Effect.Service<RdfBuilder>()(
             conforms: true,
             report: "SHACL validation not yet implemented"
           })
-      }
+      } as const
     }),
     dependencies: [ConfigService.Default],
     accessors: true

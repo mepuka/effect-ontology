@@ -16,10 +16,11 @@
  */
 
 import { LanguageModel } from "@effect/ai"
-import { Clock, Effect, Layer, RateLimiter, Scope, Stream } from "effect"
+import { Clock, Duration, Effect, Layer, RateLimiter, Scope, Stream } from "effect"
 import { pipe } from "effect/Function"
 import { ConfigService } from "../Service/Config.js"
 import { LlmAttributes } from "../Telemetry/LlmAttributes.js"
+import { makeCircuitBreaker } from "./CircuitBreaker.js"
 
 /**
  * Rate limit configurations per provider
@@ -100,6 +101,14 @@ export const RateLimitedLanguageModelLayer = Layer.scoped(
       perMinute: rateLimitConfig.perMinute
     })
 
+    // Initialize Circuit Breaker
+    // This provides a safety valve for when the API is failing repeatedly
+    const circuitBreaker = yield* makeCircuitBreaker({
+      maxFailures: 5, // Open after 5 consecutive failures
+      resetTimeout: Duration.minutes(2), // Wait 2 minutes before testing recovery
+      successThreshold: 2 // Require 2 successful calls to close circuit
+    }).pipe(Scope.extend(scope))
+
     // Helper to wrap LLM calls with rate limiting and observability
     const withRateLimit = <A, E, R>(
       method: string,
@@ -115,23 +124,34 @@ export const RateLimitedLanguageModelLayer = Layer.scoped(
           callId
         })
 
-        // Rate limiter will block until a token is available
-        const result = yield* rateLimiter(effect)
+        // Apply protection layers:
+        // 1. Circuit Breaker (fail fast if API is down)
+        // 2. Rate Limiter (wait for token)
+        const protectedEffect = circuitBreaker.protect(
+          rateLimiter(effect)
+        ).pipe(
+          // Map CircuitOpenError to the effect's error type by dying
+          // This preserves the original error type E while still protecting the circuit
+          Effect.catchTag("CircuitOpenError", (err) =>
+            Effect.die(err)
+          )
+        )
+
+        const result = yield* protectedEffect
 
         const endTime = yield* Clock.currentTimeMillis
         const waitMs = Number(endTime - startTime)
 
-        yield* Effect.all([
-          Effect.logDebug("LLM call completed", {
-            provider: config.llm.provider,
-            method,
-            callId,
-            rateLimiterWaitMs: waitMs
-          }),
-          Effect.annotateCurrentSpan(LlmAttributes.RATE_LIMITER_WAIT_MS, waitMs),
-          Effect.annotateCurrentSpan(LlmAttributes.LLM_CALL_ID, callId),
-          Effect.annotateCurrentSpan(LlmAttributes.LLM_METHOD, method)
-        ])
+        // Log completion and annotate span (sequential since these are side effects)
+        yield* Effect.logDebug("LLM call completed", {
+          provider: config.llm.provider,
+          method,
+          callId,
+          rateLimiterWaitMs: waitMs
+        })
+        yield* Effect.annotateCurrentSpan(LlmAttributes.RATE_LIMITER_WAIT_MS, waitMs)
+        yield* Effect.annotateCurrentSpan(LlmAttributes.LLM_CALL_ID, callId)
+        yield* Effect.annotateCurrentSpan(LlmAttributes.LLM_METHOD, method)
 
         return result
       }).pipe(
@@ -150,7 +170,7 @@ export const RateLimitedLanguageModelLayer = Layer.scoped(
       // streamText returns a Stream, so we rate-limit the stream creation
       streamText: (opts) =>
         Stream.unwrap(
-          withRateLimit("streamText", Effect.succeed(baseLlm.streamText(opts)))
+          withRateLimit("streamText", Effect.sync(() => baseLlm.streamText(opts)))
         )
     })
   })

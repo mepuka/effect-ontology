@@ -21,30 +21,26 @@ import { ConfigService } from "../Service/Config.js"
 import { EntityExtractor, MentionExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { Grounder } from "../Service/Grounder.js"
 import {
-  TokenBudgetServiceLive,
+  CentralRateLimiterServiceLive,
   StageTimeoutServiceLive,
-  CentralRateLimiterServiceLive
+  TokenBudgetServiceLive
 } from "../Service/LlmControl/index.js"
 import { makeTracingLayer } from "../Telemetry/Tracing.js"
 import { HealthCheckService } from "./HealthCheck.js"
 import { ExtractionRouter, HttpServerLive } from "./HttpServer.js"
 import { LlmSemaphoreService } from "./LlmSemaphore.js"
 import { RateLimitedLanguageModelLayer } from "./RateLimitedLanguageModel.js"
-import { makeGracefulShutdown, type GracefulShutdown, ShutdownError, DEFAULT_SHUTDOWN_CONFIG } from "./Shutdown.js"
+import { DEFAULT_SHUTDOWN_CONFIG, type GracefulShutdown, makeGracefulShutdown, ShutdownError } from "./Shutdown.js"
 
 // Re-export new infrastructure components
 export { HealthCheckService }
 export { ExtractionRouter, HttpServerLive }
 export { LlmSemaphoreService }
-export { makeGracefulShutdown, type GracefulShutdown, ShutdownError, DEFAULT_SHUTDOWN_CONFIG }
+export { DEFAULT_SHUTDOWN_CONFIG, type GracefulShutdown, makeGracefulShutdown, ShutdownError }
 
 // Re-export LLM Control services
-export { TokenBudgetServiceLive, StageTimeoutServiceLive, CentralRateLimiterServiceLive }
-export {
-  TokenBudgetService,
-  StageTimeoutService,
-  CentralRateLimiterService
-} from "../Service/LlmControl/index.js"
+export { CentralRateLimiterServiceLive, StageTimeoutServiceLive, TokenBudgetServiceLive }
+export { CentralRateLimiterService, StageTimeoutService, TokenBudgetService } from "../Service/LlmControl/index.js"
 
 /**
  * Create LanguageModel layer with ConfigService

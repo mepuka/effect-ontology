@@ -37,7 +37,7 @@ export { type LinkedRelation, type LinkingResult, RelationLinker } from "./Servi
 export { type SimilarityResult, SimilarityScorer } from "./Service/SimilarityScorer.js"
 
 // Workflows (composable business logic)
-export { streamingExtraction } from "./Workflow/StreamingExtraction.js"
+export { ExtractionWorkflow } from "./Workflow/StreamingExtraction.js"
 export { extractToTurtle } from "./Workflow/TwoStageExtraction.js"
 
 // Entity Resolution Workflow

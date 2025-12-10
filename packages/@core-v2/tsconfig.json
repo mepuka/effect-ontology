@@ -9,12 +9,11 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "declaration": true,
-    "declarationMap": true,
+    "declaration": false,
     "sourceMap": true,
     "outDir": "./dist",
     "rootDir": ".",
-    "composite": true
+    "noEmit": true
   },
   "include": ["src/**/*", "test/**/*"],
   "exclude": ["node_modules", "dist"]

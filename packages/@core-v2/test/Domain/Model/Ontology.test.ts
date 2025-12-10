@@ -6,12 +6,13 @@
 
 import { describe, expect, it } from "vitest"
 import { ClassDefinition, PropertyDefinition } from "../../../src/Domain/Model/Ontology.js"
+import { iri, iris } from "../../Utils/iri.js"
 
 describe("ClassDefinition", () => {
   describe("toDocument", () => {
     it("should include primary label in document", () => {
       const cls = new ClassDefinition({
-        id: "http://example.org/Player",
+        id: iri("http://example.org/Player"),
         label: "Player",
         comment: "A football player",
         properties: []
@@ -25,7 +26,7 @@ describe("ClassDefinition", () => {
 
     it("should include SKOS altLabels in document for search", () => {
       const cls = new ClassDefinition({
-        id: "http://example.org/Stadium",
+        id: iri("http://example.org/Stadium"),
         label: "Stadium",
         comment: "A sports venue",
         properties: [],
@@ -42,7 +43,7 @@ describe("ClassDefinition", () => {
 
     it("should include SKOS prefLabels in document", () => {
       const cls = new ClassDefinition({
-        id: "http://example.org/SoccerPlayer",
+        id: iri("http://example.org/SoccerPlayer"),
         label: "SoccerPlayer",
         comment: "A soccer player",
         properties: [],
@@ -58,7 +59,7 @@ describe("ClassDefinition", () => {
 
     it("should include SKOS hiddenLabels in document for misspelling matching", () => {
       const cls = new ClassDefinition({
-        id: "http://example.org/Team",
+        id: iri("http://example.org/Team"),
         label: "Team",
         comment: "A sports team",
         properties: [],
@@ -75,7 +76,7 @@ describe("ClassDefinition", () => {
 
     it("should include all SKOS labels together", () => {
       const cls = new ClassDefinition({
-        id: "http://example.org/Stadium",
+        id: iri("http://example.org/Stadium"),
         label: "Stadium",
         comment: "A large sports venue",
         properties: [],
@@ -97,7 +98,7 @@ describe("ClassDefinition", () => {
 
     it("should include SKOS definition over rdfs:comment when available", () => {
       const cls = new ClassDefinition({
-        id: "http://example.org/Coach",
+        id: iri("http://example.org/Coach"),
         label: "Coach",
         comment: "A coach", // rdfs:comment
         properties: [],
@@ -112,7 +113,7 @@ describe("ClassDefinition", () => {
 
     it("should include SKOS scopeNote when available", () => {
       const cls = new ClassDefinition({
-        id: "http://example.org/Player",
+        id: iri("http://example.org/Player"),
         label: "Player",
         comment: "A player",
         properties: [],
@@ -126,7 +127,7 @@ describe("ClassDefinition", () => {
 
     it("should include SKOS example when available", () => {
       const cls = new ClassDefinition({
-        id: "http://example.org/Player",
+        id: iri("http://example.org/Player"),
         label: "Player",
         comment: "A player",
         properties: [],
@@ -140,13 +141,13 @@ describe("ClassDefinition", () => {
 
     it("should include SKOS broader/narrower/related concepts", () => {
       const cls = new ClassDefinition({
-        id: "http://example.org/Striker",
+        id: iri("http://example.org/Striker"),
         label: "Striker",
         comment: "A forward player",
         properties: [],
-        broader: ["http://example.org/Forward"],
-        narrower: ["http://example.org/CenterForward"],
-        related: ["http://example.org/Midfielder"]
+        broader: iris(["http://example.org/Forward"]),
+        narrower: iris(["http://example.org/CenterForward"]),
+        related: iris(["http://example.org/Midfielder"])
       })
 
       const doc = cls.toDocument()
@@ -158,13 +159,13 @@ describe("ClassDefinition", () => {
 
     it("should include properties in document", () => {
       const cls = new ClassDefinition({
-        id: "http://example.org/Player",
+        id: iri("http://example.org/Player"),
         label: "Player",
         comment: "A player",
-        properties: [
+        properties: iris([
           "http://example.org/playsFor",
           "http://example.org/hasPosition"
-        ]
+        ])
       })
 
       const doc = cls.toDocument()
@@ -176,7 +177,7 @@ describe("ClassDefinition", () => {
 
     it("should enhance camelCase labels for better search", () => {
       const cls = new ClassDefinition({
-        id: "http://example.org/SoccerPlayer",
+        id: iri("http://example.org/SoccerPlayer"),
         label: "SoccerPlayer",
         comment: "A soccer player",
         properties: []
@@ -194,16 +195,16 @@ describe("ClassDefinition", () => {
 describe("PropertyDefinition", () => {
   it("should create property with correct rangeType", () => {
     const objectProp = new PropertyDefinition({
-      id: "http://example.org/playsFor",
+      id: iri("http://example.org/playsFor"),
       label: "plays for",
       comment: "Team the player plays for",
-      domain: ["http://example.org/Player"],
-      range: ["http://example.org/Team"],
+      domain: iris(["http://example.org/Player"]),
+      range: iris(["http://example.org/Team"]),
       rangeType: "object"
     })
 
     const datatypeProp = new PropertyDefinition({
-      id: "http://example.org/hasAge",
+      id: iri("http://example.org/hasAge"),
       label: "has age",
       comment: "Age of the entity",
       domain: [],

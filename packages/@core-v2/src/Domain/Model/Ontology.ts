@@ -8,7 +8,8 @@
  */
 
 import { Schema } from "effect"
-import { extractLocalName, transformIriArrayToLocalNames } from "../../Utils/Rdf.js"
+import { extractLocalNameFromIri } from "../../Utils/Iri.js"
+import { transformIriArrayToLocalNames } from "../../Utils/Rdf.js"
 import { enhanceTextForSearch, splitCamelCase } from "../../Utils/Text.js"
 import { IriSchema } from "../Rdf/Types.js"
 
@@ -831,13 +832,13 @@ export class OntologyContext extends Schema.Class<OntologyContext>("OntologyCont
    * Traverses up the class hierarchy to find properties defined on superclasses.
    */
   getPropertiesForClass(classIri: string): Array<PropertyDefinition> {
-    const localName = extractLocalName(classIri)
+    const localName = extractLocalNameFromIri(classIri) as string
 
     // Get all superclasses to check for inherited properties
     const superClasses = this.getAllSuperClasses(classIri)
-    const validDomains = new Set([
+    const validDomains = new Set<string>([
       localName,
-      ...superClasses.map(extractLocalName)
+      ...superClasses.map((c) => extractLocalNameFromIri(c) as string)
     ])
 
     return this.properties.filter((p) => p.domain.some((d) => validDomains.has(d)))

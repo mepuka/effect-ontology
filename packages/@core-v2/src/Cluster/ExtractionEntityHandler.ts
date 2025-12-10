@@ -11,12 +11,8 @@
  * @module Cluster/ExtractionEntityHandler
  */
 
+import type { Entity } from "@effect/cluster"
 import { Chunk, Effect, Option, Ref, Stream } from "effect"
-import {
-  computeIdempotencyKey,
-  KnowledgeGraphExtractor,
-  type ExtractionParams
-} from "./ExtractionEntity.js"
 import type { ProgressEvent } from "../Contract/ProgressStreaming.js"
 import type { Relation } from "../Domain/Model/Entity.js"
 import type { ExtractionRunId } from "../Domain/Model/ExtractionRun.js"
@@ -24,15 +20,20 @@ import { ConfigService } from "../Service/Config.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { ExtractionRunService, getRunIdFromText } from "../Service/ExtractionRun.js"
 import { Grounder, type RelationVerificationInput } from "../Service/Grounder.js"
-import {
-  TokenBudgetService,
-  StageTimeoutService,
-  CentralRateLimiterService
-} from "../Service/LlmControl/index.js"
+import { CentralRateLimiterService, StageTimeoutService, TokenBudgetService } from "../Service/LlmControl/index.js"
 import { NlpService } from "../Service/Nlp.js"
 import { OntologyService } from "../Service/Ontology.js"
 import type { IdempotencyKey } from "../Utils/IdempotencyKey.js"
-import type { KnowledgeGraphResult } from "./ExtractionEntity.js"
+import {
+  computeIdempotencyKey,
+  KnowledgeGraphExtractor,
+  type CancelExtractionRpc,
+  type ExtractFromTextRpc,
+  type ExtractionParams,
+  type GetCachedResultRpc,
+  type GetExtractionStatusRpc,
+  type KnowledgeGraphResult
+} from "./ExtractionEntity.js"
 
 // =============================================================================
 // Event Factory
@@ -70,8 +71,7 @@ const makeStageStarted = (
   runId: string,
   stage: ExtractionStage,
   overallProgress: number
-): ProgressEvent =>
-  makeEvent(runId, "stage_started", overallProgress, { stage })
+): ProgressEvent => makeEvent(runId, "stage_started", overallProgress, { stage })
 
 /**
  * Make stage_progress event
@@ -115,8 +115,7 @@ const makeRateLimited = (
   overallProgress: number,
   waitMs: number,
   reason: "tokens" | "requests" | "concurrent"
-): ProgressEvent =>
-  makeEvent(runId, "rate_limited", overallProgress, { waitMs, reason })
+): ProgressEvent => makeEvent(runId, "rate_limited", overallProgress, { waitMs, reason })
 
 /**
  * Make grounding_progress event
@@ -182,7 +181,8 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
   const datatypeProperties = ontology.properties.filter((p) => p.rangeType === "datatype")
   const objectProperties = ontology.properties.filter((p) => p.rangeType === "object")
 
-  return KnowledgeGraphExtractor.of({
+  // Return handlers directly (no .of() wrapper needed)
+  return {
     /**
      * Extract knowledge graph from text with streaming progress
      *
@@ -192,13 +192,19 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
      * - Rate limiting with circuit breaker
      * - Grounding verification for relations
      */
-    ExtractFromText: (envelope) => {
-      const { text, ontologyId, ontologyVersion, params } = envelope.payload
-      const idempotencyKey = computeIdempotencyKey(text, ontologyId, ontologyVersion, (params ?? {}) as ExtractionParams)
+    ExtractFromText: (envelope: Entity.Request<typeof ExtractFromTextRpc>) => {
+      const { ontologyId, ontologyVersion, params, text } = envelope.payload
+      const idempotencyKey = computeIdempotencyKey(
+        text,
+        ontologyId,
+        ontologyVersion,
+        (params ?? {}) as ExtractionParams
+      )
       const runId = getRunIdFromText(text)
       const startTime = Date.now()
 
-      return Stream.unwrap(
+      // Use Stream.unwrapScoped for proper resource management
+      return Stream.unwrapScoped(
         Effect.gen(function*() {
           // Check cache
           const existingRun = yield* runService.getByKey(idempotencyKey)
@@ -225,8 +231,9 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
             nlpService.chunkText(text, { maxChunkSize: 500, preserveSentences: true }),
             () => Effect.logWarning("Chunking soft timeout reached")
           ).pipe(
-            Effect.catchTag("TimeoutError", () =>
-              Effect.succeed([{ index: 0, text, startOffset: 0, endOffset: text.length }])
+            Effect.catchTag(
+              "TimeoutError",
+              () => Effect.succeed([{ index: 0, text, startOffset: 0, endOffset: text.length }])
             )
           )
 
@@ -244,7 +251,7 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
           const statsRef = yield* Ref.make(emptyStats)
 
           // Events accumulator for building the complete stream
-          const events: ProgressEvent[] = []
+          const events: Array<ProgressEvent> = []
 
           // Emit extraction started
           events.push(
@@ -269,7 +276,7 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
                 Effect.gen(function*() {
                   const chunkStartTime = Date.now()
                   const chunkProgress = 10 + ((chunk.index / totalChunks) * 70)
-                  const chunkEvents: ProgressEvent[] = []
+                  const chunkEvents: Array<ProgressEvent> = []
 
                   // Emit chunk processing started
                   chunkEvents.push(
@@ -327,12 +334,17 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
                       Effect.gen(function*() {
                         yield* rateLimiter.release(estimatedEntityTokens, false)
                         return Chunk.empty()
-                      })
-                    )
+                      }))
                   )
 
                   chunkEvents.push(
-                    makeStageCompleted(runId, "entity_extraction", chunkProgress + 20, Date.now() - entityStart, Chunk.size(entities))
+                    makeStageCompleted(
+                      runId,
+                      "entity_extraction",
+                      chunkProgress + 20,
+                      Date.now() - entityStart,
+                      Chunk.size(entities)
+                    )
                   )
 
                   // Emit entity_found events
@@ -361,7 +373,9 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
                       Effect.catchTags({
                         RateLimitError: (e) =>
                           Effect.gen(function*() {
-                            chunkEvents.push(makeRateLimited(runId, chunkProgress + 30, e.retryAfterMs ?? 5000, e.reason))
+                            chunkEvents.push(
+                              makeRateLimited(runId, chunkProgress + 30, e.retryAfterMs ?? 5000, e.reason)
+                            )
                             yield* Effect.sleep(e.retryAfterMs ?? 5000)
                             yield* rateLimiter.acquire(estimatedRelationTokens)
                           }),
@@ -388,12 +402,17 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
                         Effect.gen(function*() {
                           yield* rateLimiter.release(estimatedRelationTokens, false)
                           return Chunk.empty()
-                        })
-                      )
+                        }))
                     )
 
                     chunkEvents.push(
-                      makeStageCompleted(runId, "relation_extraction", chunkProgress + 45, Date.now() - relationStart, Chunk.size(relations))
+                      makeStageCompleted(
+                        runId,
+                        "relation_extraction",
+                        chunkProgress + 45,
+                        Date.now() - relationStart,
+                        Chunk.size(relations)
+                      )
                     )
                   }
 
@@ -412,7 +431,9 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
                       Effect.catchTags({
                         RateLimitError: (e) =>
                           Effect.gen(function*() {
-                            chunkEvents.push(makeRateLimited(runId, chunkProgress + 50, e.retryAfterMs ?? 5000, e.reason))
+                            chunkEvents.push(
+                              makeRateLimited(runId, chunkProgress + 50, e.retryAfterMs ?? 5000, e.reason)
+                            )
                             yield* Effect.sleep(e.retryAfterMs ?? 5000)
                             yield* rateLimiter.acquire(estimatedGroundingTokens)
                           }),
@@ -426,7 +447,7 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
                     )
 
                     // Build verification inputs
-                    const verificationInputs: RelationVerificationInput[] = relationArray.map((relation) => {
+                    const verificationInputs: Array<RelationVerificationInput> = relationArray.map((relation) => {
                       const subject = entityArray.find((e) => e.id === relation.subjectId)
                       const objectEntity = typeof relation.object === "string"
                         ? entityArray.find((e) => e.id === relation.object)
@@ -467,8 +488,7 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
                           yield* rateLimiter.release(estimatedGroundingTokens, false)
                           // On timeout, accept all relations (unverified)
                           return relationArray.map((r) => ({ grounded: true, confidence: 0.5, relation: r }))
-                        })
-                      ),
+                        })),
                       Effect.catchAll(() =>
                         Effect.succeed(relationArray.map((r) => ({ grounded: true, confidence: 0.5, relation: r })))
                       )
@@ -481,11 +501,23 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
 
                     // Emit grounding_progress event
                     chunkEvents.push(
-                      makeGroundingProgress(runId, chunkProgress + 60, chunk.index, relationArray.length, verifiedRelations.length)
+                      makeGroundingProgress(
+                        runId,
+                        chunkProgress + 60,
+                        chunk.index,
+                        relationArray.length,
+                        verifiedRelations.length
+                      )
                     )
 
                     chunkEvents.push(
-                      makeStageCompleted(runId, "grounding", chunkProgress + 65, Date.now() - groundingStart, verifiedRelations.length)
+                      makeStageCompleted(
+                        runId,
+                        "grounding",
+                        chunkProgress + 65,
+                        Date.now() - groundingStart,
+                        verifiedRelations.length
+                      )
                     )
                   }
 
@@ -603,7 +635,7 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
       )
     },
 
-    GetCachedResult: (envelope) =>
+    GetCachedResult: (envelope: Entity.Request<typeof GetCachedResultRpc>) =>
       Effect.gen(function*() {
         const run = yield* runService.getByKey(envelope.payload.idempotencyKey as IdempotencyKey)
         if (!run || run.status !== "complete") return Option.none<KnowledgeGraphResult>()
@@ -621,17 +653,21 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
         } as KnowledgeGraphResult)
       }).pipe(Effect.mapError((e) => e.message)),
 
-    CancelExtraction: (envelope) =>
+    CancelExtraction: (envelope: Entity.Request<typeof CancelExtractionRpc>) =>
       Effect.gen(function*() {
-        const run = yield* runService.getByKey(envelope.payload.idempotencyKey as IdempotencyKey).pipe(Effect.mapError((e) => e.message))
+        const run = yield* runService.getByKey(envelope.payload.idempotencyKey as IdempotencyKey).pipe(
+          Effect.mapError((e) => e.message)
+        )
         if (!run) return yield* Effect.fail("Extraction not found")
         if (run.status === "complete" || run.status === "failed") return false
 
-        yield* runService.failRun(run.runId, "cancelled", envelope.payload.reason ?? "User cancelled").pipe(Effect.mapError((e) => e.message))
+        yield* runService.failRun(run.runId, "cancelled", envelope.payload.reason ?? "User cancelled").pipe(
+          Effect.mapError((e) => e.message)
+        )
         return true
       }),
 
-    GetExtractionStatus: (envelope) =>
+    GetExtractionStatus: (envelope: Entity.Request<typeof GetExtractionStatusRpc>) =>
       Effect.gen(function*() {
         const run = yield* runService.getByKey(envelope.payload.idempotencyKey as IdempotencyKey)
         if (!run) return { status: "pending" as const, progress: 0 }
@@ -644,7 +680,7 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
           error: run.errors.length > 0 ? run.errors[run.errors.length - 1].message : undefined
         }
       }).pipe(Effect.mapError((e) => e.message))
-  })
+  }
 })
 
 export const ExtractionEntityHandlerLayer = KnowledgeGraphExtractor.toLayer(

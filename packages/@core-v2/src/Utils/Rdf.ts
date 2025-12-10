@@ -14,6 +14,7 @@
 import { Schema } from "effect"
 import type * as N3 from "n3"
 import type { Entity, Relation } from "../Domain/Model/Entity.js"
+import { extractLocalNameFromIri } from "./Iri.js"
 
 /**
  * IRI Schema - Validates IRI format
@@ -71,12 +72,11 @@ export const buildIri = (baseNamespace: string, localName: string): Iri => {
  * // => "string"
  * ```
  */
-export const extractLocalName = (iri: string): string => {
-  const lastSlash = iri.lastIndexOf("/")
-  const lastHash = iri.lastIndexOf("#")
-  const lastIndex = Math.max(lastSlash, lastHash)
-  return lastIndex >= 0 ? iri.slice(lastIndex + 1) : iri
-}
+/**
+ * @deprecated Use extractLocalNameFromIri from Utils/Iri.ts for typed results
+ */
+export const extractLocalName = (iri: string): string =>
+  extractLocalNameFromIri(iri)
 
 /**
  * Sync transform helper: Array of IRIs to array of local names

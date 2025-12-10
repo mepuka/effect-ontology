@@ -10,8 +10,8 @@
  * @module Utils/IdempotencyKey
  */
 
-import { Effect, Schema } from "effect"
 import { createHash } from "crypto"
+import { Effect, Schema } from "effect"
 
 // =============================================================================
 // Types
@@ -163,8 +163,7 @@ export const computeIdempotencyKeyEffect = (
   ontologyId: string,
   ontologyVersion: string,
   params: ExtractionParams = {}
-): Effect.Effect<IdempotencyKey> =>
-  Effect.sync(() => computeIdempotencyKey(text, ontologyId, ontologyVersion, params))
+): Effect.Effect<IdempotencyKey> => Effect.sync(() => computeIdempotencyKey(text, ontologyId, ontologyVersion, params))
 
 // =============================================================================
 // Validation
@@ -176,8 +175,7 @@ export const computeIdempotencyKeyEffect = (
  * @param value - String to validate
  * @returns true if valid idempotency key format
  */
-export const isValidIdempotencyKey = (value: string): value is IdempotencyKey =>
-  /^[a-f0-9]{64}$/.test(value)
+export const isValidIdempotencyKey = (value: string): value is IdempotencyKey => /^[a-f0-9]{64}$/.test(value)
 
 /**
  * Parse string to IdempotencyKey with validation

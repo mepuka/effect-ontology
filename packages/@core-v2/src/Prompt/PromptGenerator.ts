@@ -11,7 +11,7 @@
 import { Doc } from "@effect/printer"
 import type { Entity } from "../Domain/Model/Entity.js"
 import type { ClassDefinition, PropertyDefinition } from "../Domain/Model/Ontology.js"
-import { extractLocalName } from "../Utils/Rdf.js"
+import { extractLocalNameFromIri } from "../Utils/Iri.js"
 import { makeEntityRuleSet, makeMentionRuleSet, makeRelationRuleSet } from "./RuleSet.js"
 import type { RuleSet } from "./RuleSet.js"
 
@@ -95,19 +95,19 @@ const buildClassSnippet = (
   cls: ClassDefinition,
   applicableProperties: ReadonlyArray<PropertyDefinition>
 ): Doc.Doc<never> => {
-  const clsLocalName = extractLocalName(cls.id)
+  const clsLocalName = extractLocalNameFromIri(cls.id)
   const props = applicableProperties.filter(
     // Fix: Ensure we are comparing local names. Property domain might store full IRIs or local names.
     // We normalize both to local names to be safe.
     (p) => {
-      const propertyDomains = p.domain.map(extractLocalName)
+      const propertyDomains = p.domain.map(extractLocalNameFromIri)
       return propertyDomains.includes(clsLocalName) || propertyDomains.length === 0
     }
   )
 
   const propLines = props.length > 0
     ? props.map((p) => {
-      const propLocalName = extractLocalName(p.id)
+      const propLocalName = extractLocalNameFromIri(p.id)
       const rangeNote = p.rangeType === "datatype" ? "literal value" : "entity reference"
       return Doc.text(`    - ${propLocalName}: ${p.comment || "No description"} [expects ${rangeNote}]`)
     })
@@ -131,7 +131,7 @@ const buildClassSnippet = (
  * Uses local names instead of full IRIs for token efficiency
  */
 const buildPropertySnippet = (prop: PropertyDefinition): Doc.Doc<never> => {
-  const propLocalName = extractLocalName(prop.id)
+  const propLocalName = extractLocalNameFromIri(prop.id)
   const rangeType = prop.rangeType === "datatype" ? "LITERAL VALUE" : "ENTITY REFERENCE"
   const domainNote = prop.domain.length > 0 ? `Domain: ${prop.domain.join(", ")}` : "Domain: any entity"
   const rangeNote = prop.range.length > 0 ? `Range: ${prop.range.join(", ")}` : `Range: ${rangeType.toLowerCase()}`
@@ -214,7 +214,7 @@ const buildQuickReferenceSection = (ruleSet: RuleSet): Doc.Doc<never> => {
 
   if (iris.classIris.length > 0) {
     // Convert to local names for compact display
-    const localNames = iris.classIris.map(extractLocalName)
+    const localNames = iris.classIris.map(extractLocalNameFromIri)
     parts.push(
       Doc.text("=== ALLOWED CLASSES ==="),
       Doc.text(localNames.join(", ")),
@@ -225,7 +225,7 @@ const buildQuickReferenceSection = (ruleSet: RuleSet): Doc.Doc<never> => {
   const allPropertyIris = [...iris.objectPropertyIris, ...iris.datatypePropertyIris]
   if (allPropertyIris.length > 0) {
     // Convert to local names for compact display
-    const localNames = allPropertyIris.map(extractLocalName)
+    const localNames = allPropertyIris.map(extractLocalNameFromIri)
     parts.push(
       Doc.text("=== ALLOWED PROPERTIES ==="),
       Doc.text(localNames.join(", ")),

@@ -8,12 +8,10 @@
  * @module Runtime/HttpServer
  */
 
-import {
-  HttpRouter,
-  HttpServer,
-  HttpServerResponse
-} from "@effect/platform"
-import { Effect } from "effect"
+import { HttpRouter, HttpServer, HttpServerRequest, HttpServerResponse } from "@effect/platform"
+import { Effect, Schema } from "effect"
+import { SubmitJobRequest } from "../Domain/Schema/Api.js"
+import { JobManager } from "../Service/JobManager.js"
 import { HealthCheckService } from "./HealthCheck.js"
 
 /**
@@ -37,10 +35,43 @@ export const ExtractionRouter = HttpRouter.empty.pipe(
           deep: "GET /health/deep"
         },
         extraction: {
-          submit: "POST /api/v1/extract (coming soon)",
-          status: "GET /api/v1/extract/:jobId (coming soon)"
+          submit: "POST /api/v1/extract",
+          status: "GET /api/v1/extract/:jobId",
+          stream: "WS /api/v1/extract/:jobId/stream"
         }
       }
+    })
+  ),
+  // Submit Job
+  HttpRouter.post(
+    "/api/v1/extract",
+    Effect.gen(function*() {
+      const manager = yield* JobManager
+      const request = yield* HttpServerRequest.schemaBodyJson(SubmitJobRequest)
+      const response = yield* manager.submit(request)
+      return yield* HttpServerResponse.json(response, { status: 202 })
+    })
+  ),
+  // Get Job Status
+  HttpRouter.get(
+    "/api/v1/extract/:jobId",
+    Effect.gen(function*() {
+      const manager = yield* JobManager
+      const { jobId } = yield* HttpRouter.schemaPathParams(Schema.Struct({ jobId: Schema.String }))
+      const response = yield* manager.get(jobId)
+
+      if (!response) {
+        return yield* HttpServerResponse.empty({ status: 404 })
+      }
+      return yield* HttpServerResponse.json(response)
+    })
+  ),
+  // Stream Job Progress (WebSocket Placeholder)
+  HttpRouter.get(
+    "/api/v1/extract/:jobId/stream",
+    Effect.gen(function*() {
+      // TODO: Implement WebSocket upgrade
+      return yield* HttpServerResponse.text("Streaming coming soon", { status: 501 })
     })
   ),
   // Liveness probe

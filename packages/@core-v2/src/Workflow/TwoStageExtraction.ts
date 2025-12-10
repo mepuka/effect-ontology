@@ -8,11 +8,11 @@
  * @module Workflow/TwoStageExtraction
  */
 
-import { Effect } from "effect"
+import { Duration, Effect } from "effect"
 import { ExtractionError } from "../Domain/Error/Extraction.js"
 import { makeRunConfig, type RunConfig } from "../Domain/Model/ExtractionRun.js"
 import { RdfBuilder } from "../Service/Rdf.js"
-import { streamingExtraction } from "./StreamingExtraction.js"
+import { ExtractionWorkflow } from "./StreamingExtraction.js"
 
 /**
  * Two-Stage Extraction Workflow
@@ -44,7 +44,8 @@ export const extractToTurtle = (text: string, config: RunConfig) =>
     })
 
     // Phase 1: Extract knowledge graph from text
-    const graph = yield* streamingExtraction(text, config).pipe(
+    const workflow = yield* ExtractionWorkflow
+    const graph = yield* workflow.extract(text, config).pipe(
       Effect.withLogSpan("extraction-phase"),
       Effect.tap((g) =>
         Effect.logInfo("Knowledge graph extracted", {
@@ -108,7 +109,9 @@ export const extractToTurtle = (text: string, config: RunConfig) =>
     })
 
     return turtle
-  })
+  }).pipe(
+    Effect.timeout(Duration.minutes(10))
+  )
 
 /**
  * Convenience function with default config

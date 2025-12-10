@@ -9,5 +9,6 @@
 
 export * from "./CostCalculator.js"
 export * from "./LlmAttributes.js"
+export * from "./Metrics.js"
 export * from "./Tracing.js"
 export * from "./TracingContext.js"

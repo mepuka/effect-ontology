@@ -4,22 +4,39 @@
  * @module test/Schema/EntityFactory
  */
 
-import { JSONSchema, Schema } from "effect"
+import { JSONSchema, Schema as S } from "effect"
 import { describe, expect, it } from "vitest"
 import { ClassDefinition } from "../../src/Domain/Model/Ontology.js"
 import { EmptyVocabularyError, makeEntitySchema } from "../../src/Schema/EntityFactory.js"
+import { iri } from "../Utils/iri.js"
+
+// Helper to decode with dynamically generated schemas
+// The complex type from makeEntitySchema doesn't perfectly match S.Schema<A, I, never>
+// so we use runtime decoding which is what we're actually testing
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const decode = (schema: any) => S.decodeUnknownSync(schema)
+
+// Type for decoded entity results (used for test assertions)
+interface DecodedEntityGraph {
+  entities: Array<{
+    id: string
+    mention: string
+    types: readonly string[]
+    attributes?: Record<string, unknown>
+  }>
+}
 
 describe("makeEntitySchema", () => {
   it("should create schema from ClassDefinition array", () => {
     const classes = [
       new ClassDefinition({
-        id: "http://schema.org/Person",
+        id: iri("http://schema.org/Person"),
         label: "Person",
         comment: "A person",
         properties: []
       }),
       new ClassDefinition({
-        id: "http://schema.org/Organization",
+        id: iri("http://schema.org/Organization"),
         label: "Organization",
         comment: "An organization",
         properties: []
@@ -44,7 +61,7 @@ describe("makeEntitySchema", () => {
   it("should create schema with correct structure matching Entity model", () => {
     const classes = [
       new ClassDefinition({
-        id: "http://schema.org/Person",
+        id: iri("http://schema.org/Person"),
         label: "Person",
         comment: "A person",
         properties: []
@@ -68,7 +85,7 @@ describe("makeEntitySchema", () => {
       ]
     }
 
-    const result = Schema.decodeUnknownSync(schema)(validEntity)
+    const result = decode(schema)(validEntity) as DecodedEntityGraph
     expect(result.entities).toHaveLength(1)
     expect(result.entities[0].id).toBe("cristiano_ronaldo")
     expect(result.entities[0].types).toEqual(["Person"]) // Returns local names, IRI expansion is post-extraction
@@ -77,7 +94,7 @@ describe("makeEntitySchema", () => {
   it("should reject entities with invalid types", () => {
     const classes = [
       new ClassDefinition({
-        id: "http://schema.org/Person",
+        id: iri("http://schema.org/Person"),
         label: "Person",
         comment: "A person",
         properties: []
@@ -96,13 +113,13 @@ describe("makeEntitySchema", () => {
       ]
     }
 
-    expect(() => Schema.decodeUnknownSync(schema)(invalidEntity)).toThrow()
+    expect(() => decode(schema)(invalidEntity)).toThrow()
   })
 
   it("should reject entities with invalid ID format", () => {
     const classes = [
       new ClassDefinition({
-        id: "http://schema.org/Person",
+        id: iri("http://schema.org/Person"),
         label: "Person",
         comment: "A person",
         properties: []
@@ -121,13 +138,13 @@ describe("makeEntitySchema", () => {
       ]
     }
 
-    expect(() => Schema.decodeUnknownSync(schema)(invalidEntity)).toThrow()
+    expect(() => decode(schema)(invalidEntity)).toThrow()
   })
 
   it("should require at least one type", () => {
     const classes = [
       new ClassDefinition({
-        id: "http://schema.org/Person",
+        id: iri("http://schema.org/Person"),
         label: "Person",
         comment: "A person",
         properties: []
@@ -146,19 +163,19 @@ describe("makeEntitySchema", () => {
       ]
     }
 
-    expect(() => Schema.decodeUnknownSync(schema)(invalidEntity)).toThrow()
+    expect(() => decode(schema)(invalidEntity)).toThrow()
   })
 
   it("should support multiple types per entity", () => {
     const classes = [
       new ClassDefinition({
-        id: "http://schema.org/Person",
+        id: iri("http://schema.org/Person"),
         label: "Person",
         comment: "A person",
         properties: []
       }),
       new ClassDefinition({
-        id: "http://schema.org/Athlete",
+        id: iri("http://schema.org/Athlete"),
         label: "Athlete",
         comment: "An athlete",
         properties: []
@@ -177,14 +194,14 @@ describe("makeEntitySchema", () => {
       ]
     }
 
-    const result = Schema.decodeUnknownSync(schema)(validEntity)
+    const result = decode(schema)(validEntity) as DecodedEntityGraph
     expect(result.entities[0].types).toHaveLength(2)
   })
 
   it("should support optional attributes", () => {
     const classes = [
       new ClassDefinition({
-        id: "http://schema.org/Person",
+        id: iri("http://schema.org/Person"),
         label: "Person",
         comment: "A person",
         properties: []
@@ -204,7 +221,7 @@ describe("makeEntitySchema", () => {
       ]
     }
 
-    const result1 = Schema.decodeUnknownSync(schema)(entityWithoutAttrs)
+    const result1 = decode(schema)(entityWithoutAttrs) as DecodedEntityGraph
     expect(result1.entities[0].attributes).toBeUndefined()
 
     // Entity with attributes
@@ -223,7 +240,7 @@ describe("makeEntitySchema", () => {
       ]
     }
 
-    const result2 = Schema.decodeUnknownSync(schema)(entityWithAttrs)
+    const result2 = decode(schema)(entityWithAttrs) as DecodedEntityGraph
     expect(result2.entities[0].attributes).toBeDefined()
     expect(result2.entities[0].attributes!["http://schema.org/age"]).toBe(39)
   })
