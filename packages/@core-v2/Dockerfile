@@ -11,7 +11,7 @@ COPY package.json bun.lock ./
 COPY packages/@core-v2/package.json ./packages/@core-v2/
 
 # Install dependencies
-RUN bun install --frozen-lockfile
+RUN bun install
 
 # Copy source
 COPY packages/@core-v2/ ./packages/@core-v2/
