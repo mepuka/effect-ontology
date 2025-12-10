@@ -3,7 +3,10 @@
   "compilerOptions": {
     "composite": true,
     "declaration": true,
-    "declarationMap": true
+    "declarationMap": true,
+    "noEmit": false,
+    "skipLibCheck": true,
+    "types": ["bun-types"]
   },
   "include": ["src/**/*"],
   "exclude": ["test/**/*", "**/*.test.ts"]
