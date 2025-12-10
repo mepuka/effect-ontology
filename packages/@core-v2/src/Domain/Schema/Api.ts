@@ -62,6 +62,7 @@ export class JobStatusResponse extends Schema.Class<JobStatusResponse>("JobStatu
   submittedAt: Schema.String,
   completedAt: Schema.optional(Schema.String),
   error: Schema.optional(Schema.String),
+  errorType: Schema.optional(Schema.Literal("expected", "defect", "interrupted", "timeout", "unknown")),
 
   /** Progress summary */
   progress: Schema.Struct({

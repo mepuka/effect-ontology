@@ -16,19 +16,19 @@ import { Effect, Layer, Option } from "effect"
 import { describe, expect, it } from "vitest"
 import { Entity, KnowledgeGraph, Relation } from "../../src/Domain/Model/Entity.js"
 import { defaultEntityResolutionConfig } from "../../src/Domain/Model/EntityResolution.js"
+import { EmbeddingService } from "../../src/Service/Embedding.js"
 import { getCanonicalId, getMentionsForEntity, toMermaid } from "../../src/Service/EntityLinker.js"
-import { NomicNlpService } from "../../src/Service/NomicNlp.js"
 import { buildEntityResolutionGraph } from "../../src/Workflow/EntityResolutionGraph.js"
 
-const MockNomicLayer = Layer.succeed(
-  NomicNlpService,
+const MockEmbeddingLayer = Layer.succeed(
+  EmbeddingService,
   {
     embed: (_text) => Effect.succeed([]),
     cosineSimilarity: (_a, _b) => 0.0
   }
 )
 
-const TestLayer = MockNomicLayer.pipe(Layer.provideMerge(BunContext.layer))
+const TestLayer = MockEmbeddingLayer.pipe(Layer.provideMerge(BunContext.layer))
 
 // =============================================================================
 // Test Fixtures: Football Extraction Scenario

@@ -37,18 +37,22 @@ export { type LinkedRelation, type LinkingResult, RelationLinker } from "./Servi
 export { type SimilarityResult, SimilarityScorer } from "./Service/SimilarityScorer.js"
 
 // Workflows (composable business logic)
-export { ExtractionWorkflow } from "./Workflow/StreamingExtraction.js"
+export { ExtractionWorkflow } from "./Service/ExtractionWorkflow.js"
+export { ExtractionWorkflowLive, makeExtractionWorkflow } from "./Workflow/StreamingExtraction.js"
 export { extractToTurtle } from "./Workflow/TwoStageExtraction.js"
 
 // Entity Resolution Workflow
-export {
-  buildEntityResolutionGraph,
-  clusterEntities,
-  type EntityCluster,
-  type EntityResolutionGraph,
-  type EntityResolutionStats,
-  type SimilarityEdge
-} from "./Workflow/EntityResolutionGraph.js"
+export { buildEntityResolutionGraph, clusterEntities } from "./Workflow/EntityResolutionGraph.js"
+
+// Entity Resolution Types (from Domain)
+export type {
+  ClusteringResult,
+  EntityCluster,
+  EntityResolutionGraph,
+  EntityResolutionInfo,
+  EntityResolutionStats,
+  SimilarityEdge
+} from "./Domain/Model/EntityResolutionGraph.js"
 
 // Runtime (pre-composed layers)
 export {

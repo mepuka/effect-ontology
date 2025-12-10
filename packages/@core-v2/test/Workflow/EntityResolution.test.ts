@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest"
 
 import { Entity, KnowledgeGraph, Relation } from "../../src/Domain/Model/Entity.js"
 import { defaultEntityResolutionConfig, ResolutionEdge } from "../../src/Domain/Model/EntityResolution.js"
-import { NomicNlpService } from "../../src/Service/NomicNlp.js"
+import { EmbeddingService } from "../../src/Service/Embedding.js"
 import { buildEntityResolutionGraph, clusterEntities } from "../../src/Workflow/EntityResolutionGraph.js"
 
 // =============================================================================
@@ -33,8 +33,8 @@ const createRelation = (subjectId: string, predicate: string, objectId: string):
     object: objectId
   })
 
-const MockNomicLayer = Layer.succeed(
-  NomicNlpService,
+const MockEmbeddingLayer = Layer.succeed(
+  EmbeddingService,
   {
     embed: (_text) => Effect.succeed([]),
     cosineSimilarity: (_a, _b) => 0.0 // Default 0 to prefer mention/neighbor similarity
@@ -61,7 +61,7 @@ describe("clusterEntities", () => {
       // Each entity should be in its own cluster (no similarity)
       expect(clusters).toHaveLength(3)
       expect(clusters.map((c) => c.entities.length)).toEqual([1, 1, 1])
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 
   it("should cluster similar entities together", () =>
     Effect.gen(function*() {
@@ -87,7 +87,7 @@ describe("clusterEntities", () => {
       const arsenalIds = arsenalCluster!.entities.map((e) => e.id)
       expect(arsenalIds).toContain("arsenal")
       expect(arsenalIds).toContain("arsenal_fc")
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 
   it("should use neighbor similarity for clustering", () =>
     Effect.gen(function*() {
@@ -111,13 +111,13 @@ describe("clusterEntities", () => {
       // (This test verifies neighbor info is used, even if it doesn't change the result)
       expect(clustersWithNeighbors).toBeDefined()
       expect(clustersWithoutNeighbors).toBeDefined()
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 
   it("should handle empty entity list", () =>
     Effect.gen(function*() {
       const { clusters } = yield* clusterEntities([], [], config)
       expect(clusters).toEqual([])
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 
   it("should handle single entity", () =>
     Effect.gen(function*() {
@@ -127,7 +127,7 @@ describe("clusterEntities", () => {
 
       expect(clusters).toHaveLength(1)
       expect(clusters[0].entities[0].id).toBe("solo")
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 
   it("should not cluster entities with different types when requireTypeOverlap is true", () =>
     Effect.gen(function*() {
@@ -142,7 +142,7 @@ describe("clusterEntities", () => {
 
       // Should remain separate due to no type overlap
       expect(clusters).toHaveLength(2)
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 
   it("should cluster entities when requireTypeOverlap is false", () =>
     Effect.gen(function*() {
@@ -164,7 +164,7 @@ describe("clusterEntities", () => {
       // With mention-only similarity and high threshold, "Arsenal" contains "Arsenal" → cluster
       // Actually they might not cluster if threshold is still 0.7
       expect(clusters).toBeDefined()
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 
   it("should provide similarity score in cluster", () =>
     Effect.gen(function*() {
@@ -182,7 +182,7 @@ describe("clusterEntities", () => {
         // Cluster should have a similarity score
         expect(arsenalCluster.minSimilarity).toBeDefined()
       }
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 
   it("should transitively cluster (A~B, B~C → A~B~C)", () =>
     Effect.gen(function*() {
@@ -200,7 +200,7 @@ describe("clusterEntities", () => {
 
       // Due to connected components, transitively similar entities should cluster
       expect(clusters).toBeDefined()
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 
   it("should perform efficiently with large entity sets using blocking", () =>
     Effect.gen(function*() {
@@ -229,7 +229,7 @@ describe("clusterEntities", () => {
       const specialCluster = clusters.find((c) => c.entities.some((e) => e.id === "special_a"))
       expect(specialCluster).toBeDefined()
       expect(specialCluster!.entities.map((e) => e.id)).toContain("special_b")
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 })
 
 // =============================================================================
@@ -255,7 +255,7 @@ describe("buildEntityResolutionGraph", () => {
 
       expect(erg.stats.mentionCount).toBe(2)
       expect(erg.stats.relationCount).toBe(1)
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 
   it("should create MentionRecords with chunkIndex provenance", () =>
     Effect.gen(function*() {
@@ -272,7 +272,7 @@ describe("buildEntityResolutionGraph", () => {
 
       // Each entity should have a MentionRecord with chunkIndex
       expect(erg.stats.mentionCount).toBe(3)
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 
   it("should create ResolvedEntities from clusters", () =>
     Effect.gen(function*() {
@@ -290,7 +290,7 @@ describe("buildEntityResolutionGraph", () => {
       // arsenal + arsenal_fc should cluster → 2 resolved entities
       expect(erg.stats.resolvedCount).toBeLessThanOrEqual(3)
       expect(erg.stats.mentionCount).toBe(3)
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 
   it("should build canonicalMap correctly", () =>
     Effect.gen(function*() {
@@ -310,7 +310,7 @@ describe("buildEntityResolutionGraph", () => {
 
       // They should map to the same canonical ID (clustered together)
       expect(erg.canonicalMap["arsenal"]).toBe(erg.canonicalMap["arsenal_fc"])
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 
   it("should build entityIndex for O(1) lookup", () =>
     Effect.gen(function*() {
@@ -327,7 +327,7 @@ describe("buildEntityResolutionGraph", () => {
       // Each original entity ID should be in the index
       expect(erg.entityIndex["entity_a"]).toBeDefined()
       expect(erg.entityIndex["entity_b"]).toBeDefined()
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 
   it("should track cluster count in stats", () =>
     Effect.gen(function*() {
@@ -345,7 +345,7 @@ describe("buildEntityResolutionGraph", () => {
       // Should have cluster count
       expect(erg.stats.clusterCount).toBeGreaterThanOrEqual(1)
       expect(erg.stats.clusterCount).toBeLessThanOrEqual(3)
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 
   it("should handle empty KnowledgeGraph", () =>
     Effect.gen(function*() {
@@ -359,7 +359,7 @@ describe("buildEntityResolutionGraph", () => {
       expect(erg.stats.mentionCount).toBe(0)
       expect(erg.stats.resolvedCount).toBe(0)
       expect(erg.stats.clusterCount).toBe(0)
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 
   it("should preserve relation count", () =>
     Effect.gen(function*() {
@@ -379,7 +379,7 @@ describe("buildEntityResolutionGraph", () => {
       const erg = yield* buildEntityResolutionGraph(kg, config)
 
       expect(erg.stats.relationCount).toBe(3)
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 })
 
 // =============================================================================
@@ -419,7 +419,7 @@ describe("buildEntityResolutionGraph - ResolutionEdge scores", () => {
       expect(edges).toHaveLength(1)
       expect(edges[0].confidence).toBe(1.0)
       expect(edges[0].method).toBe("exact")
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 
   it("should compute real similarity scores for clustered entities", () =>
     Effect.gen(function*() {
@@ -448,7 +448,7 @@ describe("buildEntityResolutionGraph - ResolutionEdge scores", () => {
       expect(containmentEdge).toBeDefined()
       expect(containmentEdge!.confidence).toBeGreaterThan(0.7) // Should be high
       expect(containmentEdge!.confidence).toBeLessThanOrEqual(1.0)
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 
   it("should not hardcode 1.0 for non-canonical entities", () =>
     Effect.gen(function*() {
@@ -478,7 +478,7 @@ describe("buildEntityResolutionGraph - ResolutionEdge scores", () => {
           expect(edge.confidence).toBeGreaterThan(0)
         }
       }
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 
   it("should use 'containment' method when one mention contains another", () =>
     Effect.gen(function*() {
@@ -501,7 +501,7 @@ describe("buildEntityResolutionGraph - ResolutionEdge scores", () => {
       // "Eze" → "Eberechi Eze" should be containment
       const containmentEdge = edges.find((e) => e.method === "containment")
       expect(containmentEdge).toBeDefined()
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 
   it("should detect 'similarity' method for similar but non-contained mentions", () =>
     Effect.gen(function*() {
@@ -525,5 +525,5 @@ describe("buildEntityResolutionGraph - ResolutionEdge scores", () => {
         // Neither contains the other, so should be similarity-based
         expect(similarityEdge).toBeDefined()
       }
-    }).pipe(Effect.provide(MockNomicLayer), Effect.runPromise))
+    }).pipe(Effect.provide(MockEmbeddingLayer), Effect.runPromise))
 })

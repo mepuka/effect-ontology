@@ -11,12 +11,12 @@
  */
 
 import { LanguageModel } from "@effect/ai"
-import { Cause, Chunk, Duration, Effect, Layer, Ref, Schedule, Schema, Stream } from "effect"
+import { Chunk, Effect, Layer, Schema, Stream } from "effect"
 import type { Relation } from "../Domain/Model/Entity.js"
 import type { PropertyDefinition } from "../Domain/Model/Ontology.js"
-import { annotateError, annotateLlmCall, annotateRetry, LlmAttributes } from "../Telemetry/LlmAttributes.js"
+import { LlmAttributes } from "../Telemetry/LlmAttributes.js"
 import { ConfigService } from "./Config.js"
-import { makeRetryPolicy } from "./Retry.js"
+import { generateObjectWithRetry } from "./LlmWithRetry.js"
 
 /**
  * Verification result schema returned by LLM (single relation)
@@ -200,14 +200,6 @@ export class Grounder extends Effect.Service<Grounder>()("Grounder", {
     const config = yield* ConfigService
     const llm = yield* LanguageModel.LanguageModel
 
-    // Retry policy with exponential backoff, max delay cap, and logging
-    const retryPolicy = makeRetryPolicy({
-      initialDelayMs: config.runtime.retryInitialDelayMs,
-      maxDelayMs: config.runtime.retryMaxDelayMs,
-      maxAttempts: config.runtime.retryMaxAttempts,
-      serviceName: "Grounder"
-    })
-
     return {
       /**
        * Verify whether a single relation triple is grounded in the context
@@ -218,65 +210,37 @@ export class Grounder extends Effect.Service<Grounder>()("Grounder", {
       verifyRelation: (input: RelationVerificationInput) =>
         Effect.gen(function*() {
           const prompt = buildGrounderPrompt(input)
-          const retryCount = yield* Ref.make(0)
-
-          const result = yield* llm.generateObject({
+          const result = yield* generateObjectWithRetry({
+            llm,
             prompt,
             schema: VerificationSchema,
-            objectName: "GroundingDecision"
+            objectName: "GroundingDecision",
+            serviceName: "Grounder",
+            model: config.llm.model,
+            provider: config.llm.provider,
+            retryConfig: {
+              initialDelayMs: config.runtime.retryInitialDelayMs,
+              maxDelayMs: config.runtime.retryMaxDelayMs,
+              maxAttempts: config.runtime.retryMaxAttempts,
+              timeoutMs: config.llm.timeoutMs * 2
+            },
+            spanAttributes: {
+              [LlmAttributes.PROMPT_LENGTH]: prompt.length,
+              [LlmAttributes.PROMPT_TEXT]: prompt.slice(0, 2000)
+            },
+            annotateSuccess: (response) => ({
+              grounded: response.value.grounded,
+              confidence: response.value.confidence
+            })
           }).pipe(
-            Effect.retry(
-              retryPolicy.pipe(
-                Schedule.tapInput(() => Ref.update(retryCount, (n) => n + 1))
-              )
-            ),
-            Effect.tapErrorCause((cause) =>
-              Effect.all([
-                Effect.logError("Grounder verification failed, will retry", {
-                  stage: "grounder",
-                  promptLength: prompt.length,
-                  cause: Cause.pretty(cause)
-                }),
-                annotateError({
-                  errorType: Cause.isFailType(cause)
-                    ? (cause.error as Error).constructor?.name ?? "UnknownError"
-                    : "UnknownCause",
-                  errorMessage: Cause.pretty(cause).slice(0, 500)
-                })
-              ])
-            ),
             Effect.tap((response) =>
-              Effect.gen(function*() {
-                const retries = yield* Ref.get(retryCount)
-                yield* Effect.all([
-                  Effect.logDebug("Grounder verification result", {
-                    stage: "grounder",
-                    grounded: response.value.grounded,
-                    confidence: response.value.confidence,
-                    retryCount: retries
-                  }),
-                  annotateLlmCall({
-                    model: config.llm.model,
-                    provider: config.llm.provider,
-                    promptLength: prompt.length,
-                    inputTokens: response.usage.inputTokens,
-                    outputTokens: response.usage.outputTokens,
-                    promptText: prompt.slice(0, 2000)
-                  }),
-                  annotateRetry({
-                    retryCount: retries,
-                    maxAttempts: config.runtime.retryMaxAttempts
-                  })
-                ])
+              Effect.logDebug("Grounder verification result", {
+                stage: "grounder",
+                grounded: response.value.grounded,
+                confidence: response.value.confidence
               })
             ),
-            Effect.withSpan("grounder-single-verification", {
-              attributes: {
-                [LlmAttributes.PROMPT_LENGTH]: prompt.length,
-                [LlmAttributes.PROMPT_TEXT]: prompt.slice(0, 2000)
-              }
-            }),
-            Effect.timeout(Duration.millis(config.llm.timeoutMs * 2))
+            Effect.withSpan("grounder-single-verification")
           )
 
           return {
@@ -306,14 +270,28 @@ export class Grounder extends Effect.Service<Grounder>()("Grounder", {
 
           // If only one input, use single verification for efficiency
           if (inputs.length === 1) {
-            const result = yield* llm.generateObject({
+            const result = yield* generateObjectWithRetry({
+              llm,
               prompt: buildGrounderPrompt(inputs[0]),
               schema: VerificationSchema,
-              objectName: "GroundingDecision"
-            }).pipe(
-              Effect.retry(retryPolicy),
-              Effect.timeout(Duration.millis(config.llm.timeoutMs * 2))
-            )
+              objectName: "GroundingDecision",
+              serviceName: "Grounder",
+              model: config.llm.model,
+              provider: config.llm.provider,
+              retryConfig: {
+                initialDelayMs: config.runtime.retryInitialDelayMs,
+                maxDelayMs: config.runtime.retryMaxDelayMs,
+                maxAttempts: config.runtime.retryMaxAttempts,
+                timeoutMs: config.llm.timeoutMs * 2
+              },
+              spanAttributes: {
+                [LlmAttributes.PROMPT_LENGTH]: buildGrounderPrompt(inputs[0]).length
+              },
+              annotateSuccess: (response) => ({
+                grounded: response.value.grounded,
+                confidence: response.value.confidence
+              })
+            })
             return [{
               grounded: result.value.grounded,
               confidence: result.value.confidence,
@@ -324,18 +302,30 @@ export class Grounder extends Effect.Service<Grounder>()("Grounder", {
           // Batch verification
           const prompt = buildBatchGrounderPrompt(context, inputs)
 
-          const response = yield* llm.generateObject({
+          const response = yield* generateObjectWithRetry({
+            llm,
             prompt,
             schema: BatchVerificationSchema,
-            objectName: "BatchGroundingDecision"
-          }).pipe(
-            Effect.retry(retryPolicy),
-            Effect.timeout(Duration.millis(config.llm.timeoutMs * 3)) // Extra time for batch
-          )
+            objectName: "BatchGroundingDecision",
+            serviceName: "Grounder",
+            model: config.llm.model,
+            provider: config.llm.provider,
+            retryConfig: {
+              initialDelayMs: config.runtime.retryInitialDelayMs,
+              maxDelayMs: config.runtime.retryMaxDelayMs,
+              maxAttempts: config.runtime.retryMaxAttempts,
+              timeoutMs: config.llm.timeoutMs * 3
+            },
+            spanAttributes: {
+              [LlmAttributes.RELATION_COUNT]: inputs.length,
+              [LlmAttributes.PROMPT_LENGTH]: prompt.length
+            }
+          })
 
           // Map results back to inputs
+          type GrounderResult = { index: number; grounded: boolean; confidence: number }
           const resultsMap = new Map(
-            response.value.results.map((r) => [r.index, r])
+            (response.value.results as ReadonlyArray<GrounderResult>).map((r: GrounderResult) => [r.index, r])
           )
 
           return inputs.map((input, index) => {
@@ -387,16 +377,30 @@ export class Grounder extends Effect.Service<Grounder>()("Grounder", {
           // Process each batch with single LLM call
           Stream.mapEffect((batch) => {
             const batchArray = Chunk.toReadonlyArray(batch)
-            return llm.generateObject({
-              prompt: buildBatchGrounderPrompt(context, batchArray),
+            const prompt = buildBatchGrounderPrompt(context, batchArray)
+            return generateObjectWithRetry({
+              llm,
+              prompt,
               schema: BatchVerificationSchema,
-              objectName: "BatchGroundingDecision"
+              objectName: "BatchGroundingDecision",
+              serviceName: "Grounder",
+              model: config.llm.model,
+              provider: config.llm.provider,
+              retryConfig: {
+                initialDelayMs: config.runtime.retryInitialDelayMs,
+                maxDelayMs: config.runtime.retryMaxDelayMs,
+                maxAttempts: config.runtime.retryMaxAttempts,
+                timeoutMs: config.llm.timeoutMs * 3
+              },
+              spanAttributes: {
+                [LlmAttributes.RELATION_COUNT]: batchArray.length,
+                [LlmAttributes.PROMPT_LENGTH]: prompt.length
+              }
             }).pipe(
-              Effect.retry(retryPolicy),
-              Effect.timeout(Duration.millis(config.llm.timeoutMs * 3)),
               Effect.map((response) => {
+                type GrounderResult = { index: number; grounded: boolean; confidence: number }
                 const resultsMap = new Map(
-                  response.value.results.map((r) => [r.index, r])
+                  (response.value.results as ReadonlyArray<GrounderResult>).map((r: GrounderResult) => [r.index, r])
                 )
                 return batchArray.map((input, index) => {
                   const result = resultsMap.get(index)

@@ -9,7 +9,7 @@
  */
 
 import { LanguageModel } from "@effect/ai"
-import { Cause, Chunk, Duration, Effect, JSONSchema, Layer, Option, Ref, Schedule, Sink, Stream } from "effect"
+import { Chunk, Duration, Effect, JSONSchema, Layer, Option, Schedule, Sink, Stream } from "effect"
 import {
   EntityExtractionFailed,
   MentionExtractionFailed,
@@ -21,18 +21,13 @@ import type { IRI } from "../Domain/Rdf/Types.js"
 import { generateEntityPrompt, generateMentionPrompt, generateRelationPrompt } from "../Prompt/index.js"
 import { makeEntitySchema } from "../Schema/EntityFactory.js"
 import { type Mention, MentionGraphSchema } from "../Schema/MentionFactory.js"
+export type { Mention }
 import { makeRelationSchema } from "../Schema/RelationFactory.js"
-import {
-  annotateError,
-  annotateExtraction,
-  annotateLlmCall,
-  annotateRetry,
-  LlmAttributes
-} from "../Telemetry/LlmAttributes.js"
+import { annotateExtraction, annotateLlmCall, LlmAttributes } from "../Telemetry/LlmAttributes.js"
 import { buildLocalNameToIriMap, expandLocalNameToIri, expandTypesToIris } from "../Utils/Iri.js"
 import { ConfigService } from "./Config.js"
 import { generateObjectWithFeedback } from "./GenerateWithFeedback.js"
-import { makeRetryPolicy } from "./Retry.js"
+import { generateObjectWithRetry } from "./LlmWithRetry.js"
 
 /**
  * Generate deterministic snake_case ID from mention
@@ -324,14 +319,6 @@ export class MentionExtractor extends Effect.Service<MentionExtractor>()("Mentio
 
     const llm = yield* LanguageModel.LanguageModel
 
-    // Retry policy for LLM calls with logging and max delay cap
-    const retryPolicy = makeRetryPolicy({
-      initialDelayMs: config.runtime.retryInitialDelayMs,
-      maxDelayMs: config.runtime.retryMaxDelayMs,
-      maxAttempts: config.runtime.retryMaxAttempts,
-      serviceName: "MentionExtractor"
-    })
-
     return {
       /**
        * Extract entity mentions from text (without types)
@@ -350,72 +337,32 @@ export class MentionExtractor extends Effect.Service<MentionExtractor>()("Mentio
             textPreview: text.slice(0, 200)
           })
 
-          // Track retry count for observability
-          const retryCount = yield* Ref.make(0)
-
-          const response = yield* llm.generateObject({
+          const response = yield* generateObjectWithRetry({
+            llm,
             prompt,
             schema: MentionGraphSchema,
-            objectName: "MentionGraph"
+            objectName: "MentionGraph",
+            serviceName: "MentionExtractor",
+            model: config.llm.model,
+            provider: config.llm.provider,
+            retryConfig: {
+              initialDelayMs: config.runtime.retryInitialDelayMs,
+              maxDelayMs: config.runtime.retryMaxDelayMs,
+              maxAttempts: config.runtime.retryMaxAttempts,
+              timeoutMs: config.llm.timeoutMs
+            },
+            spanAttributes: {
+              [LlmAttributes.CHUNK_TEXT_LENGTH]: text.length
+            },
+            annotateSuccess: (response) => ({
+              mentionCount: response.value.mentions.length
+            })
           }).pipe(
-            Effect.timeout(Duration.millis(config.llm.timeoutMs)),
-            Effect.retry(
-              retryPolicy.pipe(
-                Schedule.tapInput(() => Ref.update(retryCount, (n) => n + 1))
-              )
-            ),
-            Effect.tapErrorCause((cause) =>
-              Effect.all([
-                Effect.logError("Mention extraction LLM call failed, will retry", {
-                  stage: "mention-extraction",
-                  promptLength: prompt.length,
-                  textPreview: text.slice(0, 500),
-                  cause: Cause.pretty(cause)
-                }),
-                annotateError({
-                  errorType: Cause.isFailType(cause)
-                    ? (cause.error as Error).constructor?.name ?? "UnknownError"
-                    : "UnknownCause",
-                  errorMessage: Cause.pretty(cause).slice(0, 500)
-                })
-              ])
-            ),
             Effect.tap((response) =>
-              Effect.gen(function*() {
-                const retries = yield* Ref.get(retryCount)
-                yield* Effect.all([
-                  Effect.logInfo("Mention extraction LLM response", {
-                    stage: "mention-extraction",
-                    mentionCount: response.value.mentions.length,
-                    inputTokens: response.usage.inputTokens,
-                    outputTokens: response.usage.outputTokens,
-                    retryCount: retries
-                  }),
-                  annotateLlmCall({
-                    model: config.llm.model,
-                    provider: config.llm.provider,
-                    promptLength: prompt.length,
-                    inputTokens: response.usage.inputTokens,
-                    outputTokens: response.usage.outputTokens,
-                    promptText: prompt.slice(0, 2000)
-                  }),
-                  annotateExtraction({
-                    mentionCount: response.value.mentions.length
-                  }),
-                  annotateRetry({
-                    retryCount: retries,
-                    maxAttempts: config.runtime.retryMaxAttempts
-                  })
-                ])
+              annotateExtraction({
+                mentionCount: response.value.mentions.length
               })
             ),
-            Effect.withSpan("mention-extraction-llm", {
-              attributes: {
-                [LlmAttributes.PROMPT_LENGTH]: prompt.length,
-                [LlmAttributes.CHUNK_TEXT_LENGTH]: text.length,
-                [LlmAttributes.PROMPT_TEXT]: prompt.slice(0, 2000)
-              }
-            }),
             Effect.mapError((error) =>
               new MentionExtractionFailed({
                 message: `LLM mention extraction failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -431,13 +378,13 @@ export class MentionExtractor extends Effect.Service<MentionExtractor>()("Mentio
               ? m.id
               : generateEntityId(m.mention),
             mention: m.mention,
-            context: m.context
+            context: m.context ?? ""
           }))
 
           yield* Effect.logInfo("Mention extraction complete", {
             stage: "mention-extraction",
             extractedCount: mentions.length,
-            mentionIds: mentions.map((m) => m.id).slice(0, 10)
+            mentionIds: mentions.map((m: Mention) => m.id).slice(0, 10)
           })
 
           return Chunk.fromIterable(mentions)
@@ -479,14 +426,6 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
     const config = yield* ConfigService
 
     const llm = yield* LanguageModel.LanguageModel
-
-    // Retry policy for LLM calls with logging and max delay cap
-    const retryPolicy = makeRetryPolicy({
-      initialDelayMs: config.runtime.retryInitialDelayMs,
-      maxDelayMs: config.runtime.retryMaxDelayMs,
-      maxAttempts: config.runtime.retryMaxAttempts,
-      serviceName: "RelationExtractor"
-    })
 
     return {
       /**
@@ -551,78 +490,34 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
             allowedPropertyCount: properties.length
           })
 
-          // Track retry count for observability
-          const retryCount = yield* Ref.make(0)
-
           // Call LLM for structured output using LanguageModel.generateObject directly
-          const response = yield* llm.generateObject({
+          const response = yield* generateObjectWithRetry({
+            llm,
             prompt,
             schema,
-            objectName: "RelationGraph"
+            objectName: "RelationGraph",
+            serviceName: "RelationExtractor",
+            model: config.llm.model,
+            provider: config.llm.provider,
+            retryConfig: {
+              initialDelayMs: config.runtime.retryInitialDelayMs,
+              maxDelayMs: config.runtime.retryMaxDelayMs,
+              maxAttempts: config.runtime.retryMaxAttempts,
+              timeoutMs: config.llm.timeoutMs
+            },
+            spanAttributes: {
+              [LlmAttributes.ENTITY_COUNT]: entityArray.length
+            },
+            annotateSuccess: (response) => ({
+              relationCount: response.value.relations.length
+            })
           }).pipe(
-            Effect.timeout(Duration.millis(config.llm.timeoutMs)),
-            Effect.retry(
-              retryPolicy.pipe(
-                Schedule.tapInput(() => Ref.update(retryCount, (n) => n + 1))
-              )
-            ),
-            Effect.tapErrorCause((cause) =>
-              Effect.all([
-                Effect.logError("Relation extraction LLM call failed, will retry", {
-                  stage: "relation-extraction",
-                  promptLength: prompt.length,
-                  entityCount: entityArray.length,
-                  propertyCount: properties.length,
-                  textPreview: text.slice(0, 500),
-                  cause: Cause.pretty(cause)
-                }),
-                annotateError({
-                  errorType: Cause.isFailType(cause)
-                    ? (cause.error as Error).constructor?.name ?? "UnknownError"
-                    : "UnknownCause",
-                  errorMessage: Cause.pretty(cause).slice(0, 500)
-                })
-              ])
-            ),
             Effect.tap((response) =>
-              Effect.gen(function*() {
-                const retries = yield* Ref.get(retryCount)
-                yield* Effect.all([
-                  Effect.logInfo("Relation extraction LLM response", {
-                    stage: "relation-extraction",
-                    relationCount: response.value.relations.length,
-                    inputTokens: response.usage.inputTokens,
-                    outputTokens: response.usage.outputTokens,
-                    retryCount: retries
-                  }),
-                  annotateLlmCall({
-                    model: config.llm.model,
-                    provider: config.llm.provider,
-                    promptLength: prompt.length,
-                    inputTokens: response.usage.inputTokens,
-                    outputTokens: response.usage.outputTokens,
-                    promptText: prompt.slice(0, 2000),
-                    schemaJson
-                  }),
-                  annotateExtraction({
-                    relationCount: response.value.relations.length,
-                    entityCount: entityArray.length
-                  }),
-                  annotateRetry({
-                    retryCount: retries,
-                    maxAttempts: config.runtime.retryMaxAttempts
-                  })
-                ])
+              annotateExtraction({
+                relationCount: response.value.relations.length,
+                entityCount: entityArray.length
               })
             ),
-            Effect.withSpan("relation-extraction-llm", {
-              attributes: {
-                [LlmAttributes.PROMPT_LENGTH]: prompt.length,
-                [LlmAttributes.ENTITY_COUNT]: entityArray.length,
-                [LlmAttributes.PROMPT_TEXT]: prompt.slice(0, 2000),
-                [LlmAttributes.REQUEST_SCHEMA]: schemaJson
-              }
-            }),
             Effect.mapError((error) =>
               new RelationExtractionFailed({
                 message: `LLM relation extraction failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -639,9 +534,10 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
           const propertyIris = properties.map((p) => p.id) as unknown as ReadonlyArray<IRI>
           const localNameToIriMap = buildLocalNameToIriMap(propertyIris)
           let skippedRelationCount = 0
-          const relations = yield* Stream.fromIterable(response.value.relations)
+          type RelationData = { subjectId: string; predicate: string; object: string }
+          const relations = yield* Stream.fromIterable(response.value.relations as ReadonlyArray<RelationData>)
             .pipe(
-              Stream.filterMap((relationData): Option.Option<Relation> => {
+              Stream.filterMap((relationData: RelationData): Option.Option<Relation> => {
                 // Expand predicate local name to full IRI
                 const expandedPredicate = expandLocalNameToIri(relationData.predicate, localNameToIriMap)
                 if (!expandedPredicate) {

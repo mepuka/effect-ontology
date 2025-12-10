@@ -53,7 +53,7 @@ import { RdfBuilder, type RdfStore } from "./Rdf.js"
  * Uses RdfService's queryStore to extract classes and properties.
  * Works with domain types (IRI, Quad) instead of N3 types.
  */
-const parseOntologyFromStore = (
+export const parseOntologyFromStore = (
   rdf: {
     readonly queryStore: (
       store: RdfStore,

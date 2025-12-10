@@ -30,13 +30,13 @@ import { HealthCheckService } from "./HealthCheck.js"
 import { ExtractionRouter, HttpServerLive } from "./HttpServer.js"
 import { LlmSemaphoreService } from "./LlmSemaphore.js"
 import { RateLimitedLanguageModelLayer } from "./RateLimitedLanguageModel.js"
-import { DEFAULT_SHUTDOWN_CONFIG, type GracefulShutdown, makeGracefulShutdown, ShutdownError } from "./Shutdown.js"
+import { DEFAULT_SHUTDOWN_CONFIG, ShutdownError, ShutdownService } from "./Shutdown.js"
 
 // Re-export new infrastructure components
 export { HealthCheckService }
 export { ExtractionRouter, HttpServerLive }
 export { LlmSemaphoreService }
-export { DEFAULT_SHUTDOWN_CONFIG, type GracefulShutdown, makeGracefulShutdown, ShutdownError }
+export { DEFAULT_SHUTDOWN_CONFIG, ShutdownError, ShutdownService }
 
 // Re-export LLM Control services
 export { CentralRateLimiterServiceLive, StageTimeoutServiceLive, TokenBudgetServiceLive }
@@ -142,6 +142,23 @@ export const makeLanguageModelLayer = Layer.unwrapEffect(
             GoogleClient.layer({ apiKey: Redacted.make(apiKey) }).pipe(Layer.provide(FetchHttpClient.layer))
           ),
           Layer.provide(configLayer)
+        )
+      }
+
+      default: {
+        // Default to Anthropic
+        const apiKeyRedacted = yield* Config.redacted("ANTHROPIC_API_KEY").pipe(
+          Config.orElse(() => Config.redacted("VITE_LLM_ANTHROPIC_API_KEY")),
+          Config.orElse(() => Config.succeed(Redacted.make(config.llm.anthropicApiKey)))
+        )
+        const apiKey = Redacted.value(apiKeyRedacted)
+
+        return AnthropicLanguageModel.layer({ model: config.llm.model }).pipe(
+          Layer.provide(
+            AnthropicClient.layer({ apiKey: Redacted.make(apiKey) }).pipe(
+              Layer.provide(FetchHttpClient.layer)
+            )
+          )
         )
       }
     }

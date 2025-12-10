@@ -11,16 +11,18 @@
  */
 
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "@effect/platform"
-import { Cause, Deferred, Effect, Ref } from "effect"
+import { Cause, Chunk, Data, Deferred, Duration, Effect, Option, Ref } from "effect"
 import { v4 as uuidv4 } from "uuid"
 import type { RunConfig } from "../Domain/Model/ExtractionRun.js"
-import { type JobStatus, JobStatusResponse, type SubmitJobRequest } from "../Domain/Schema/Api.js"
-import { computeIdempotencyKey, type ExtractionParams } from "../Utils/IdempotencyKey.js"
-import { ExtractionWorkflow } from "../Workflow/StreamingExtraction.js"
+import type { JobStatus, SubmitJobRequest } from "../Domain/Schema/Api.js"
+import { JobStatusResponse } from "../Domain/Schema/Api.js"
+import { ExtractionWorkflow } from "../Service/ExtractionWorkflow.js"
+import type { ExtractionParams } from "../Utils/IdempotencyKey.js"
+import { computeIdempotencyKey } from "../Utils/IdempotencyKey.js"
 import { ConfigService } from "./Config.js"
 import { ExecutionDeduplicator, ExecutionDeduplicatorLive } from "./ExecutionDeduplicator.js"
 import { ExtractionCache, ExtractionCacheLive } from "./ExtractionCache.js"
-
+import { StorageService, StorageServiceLive } from "./Storage.js"
 /**
  * Internal Job State representation
  */
@@ -31,6 +33,7 @@ export interface JobState {
   submittedAt: string
   completedAt?: string
   error?: string
+  errorType?: "expected" | "defect" | "interrupted" | "timeout" | "unknown"
   progress: {
     chunksTotal: number
     chunksProcessed: number
@@ -121,6 +124,7 @@ export const makeJobManager = Effect.gen(function*() {
   const deduplicator = yield* ExecutionDeduplicator
   const workflow = yield* ExtractionWorkflow
   const appConfig = yield* ConfigService
+  const storage = yield* StorageService
 
   // Default run config from environment/config
   const defaultConfig: RunConfig = {
@@ -135,11 +139,23 @@ export const makeJobManager = Effect.gen(function*() {
       return job ? map.set(jobId, f(job)) : map
     })
 
+  // Define specific timeout error
+  class ExtractionTimeoutError extends Data.TaggedError("ExtractionTimeoutError")<{
+    readonly jobId: string
+    readonly timeoutMs: number
+    readonly partialProgress?: {
+      chunksProcessed: number
+      chunksTotal: number
+    }
+  }> {}
+
+  const CLOUD_RUN_TIMEOUT_MS = 270_000 // 270s (30s buffer before Cloud Run's 300s limit)
+
   const runExtraction = (
     jobId: string,
     request: SubmitJobRequest,
     key: string
-  ): Effect.Effect<void, Error, HttpClient.HttpClient> =>
+  ) =>
     Effect.gen(function*() {
       // 1. Resolve content
       const text = yield* Effect.fromNullable(request.text).pipe(
@@ -157,10 +173,22 @@ export const makeJobManager = Effect.gen(function*() {
       // 3. Update Job to Running
       yield* updateJobStatus(jobId, (job) => ({ ...job, status: "running" }))
 
-      // 4. Run Extraction
+      // 4. Run Extraction with Timeout
       yield* workflow.extract(text, config).pipe(
+        Effect.timeoutFail({
+          duration: Duration.millis(CLOUD_RUN_TIMEOUT_MS),
+          onTimeout: () =>
+            new ExtractionTimeoutError({
+              jobId,
+              timeoutMs: CLOUD_RUN_TIMEOUT_MS,
+              partialProgress: undefined // Could track this with Ref in future
+            })
+        }),
         Effect.tap((result) =>
           Effect.gen(function*() {
+            // Persist Result to Storage
+            yield* storage.set(`jobs/${jobId}/result.json`, JSON.stringify(result, null, 2))
+
             // Cache Result
             yield* cache.set(key, {
               entities: result.entities,
@@ -189,18 +217,65 @@ export const makeJobManager = Effect.gen(function*() {
             }))
           })
         ),
+        Effect.catchAll((error) => {
+          if (error instanceof ExtractionTimeoutError) {
+            return Effect.gen(function*() {
+              yield* Effect.logWarning("Extraction timed out", {
+                jobId: error.jobId,
+                timeoutMs: error.timeoutMs
+              })
+
+              yield* updateJobStatus(error.jobId, (job) => ({
+                ...job,
+                status: "failed",
+                error: `Timed out after ${error.timeoutMs / 1000}s`,
+                errorType: "timeout"
+              }))
+
+              return yield* Effect.fail(error)
+            })
+          }
+          return Effect.fail(error)
+        }),
         Effect.catchAllCause((cause) =>
           Effect.gen(function*() {
-            const error = Cause.squash(cause)
-            const message = (error as any) instanceof Error ? (error as any).message : String(error)
-            yield* Effect.logError(`Extraction failed for job ${jobId}: ${message}`)
+            // Classify the cause
+            const isDefect = Cause.isDie(cause)
+            const isInterrupted = Cause.isInterrupted(cause)
+            const failures = Cause.failures(cause)
+            const defects = Cause.defects(cause)
 
+            // Build informative message
+            let message: string
+            let errorType: "expected" | "defect" | "interrupted" | "timeout" | "unknown"
+
+            if (isDefect) {
+              errorType = "defect"
+              const defect = Chunk.head(defects).pipe(Option.getOrElse(() => "unknown"))
+              message = `Unexpected defect: ${defect instanceof Error ? defect.stack : String(defect)}`
+            } else if (isInterrupted) {
+              errorType = "interrupted"
+              message = "Extraction was interrupted (timeout or cancellation)"
+            } else {
+              errorType = "expected"
+              const firstError = Chunk.head(failures).pipe(Option.getOrElse(() => "unknown"))
+              message = firstError instanceof Error ? firstError.message : String(firstError)
+            }
+
+            yield* Effect.logError(`Extraction failed for job ${jobId}`, {
+              errorType,
+              message,
+              cause: Cause.pretty(cause)
+            })
+
+            // Mark job as failed and notify dedup
             return yield* Effect.all([
               deduplicator.fail(key, new Error(message)),
               updateJobStatus(jobId, (job) => ({
                 ...job,
                 status: "failed",
-                error: message
+                error: message,
+                errorType
               }))
             ], { concurrency: "unbounded" })
           })
@@ -233,6 +308,7 @@ export const makeJobManager = Effect.gen(function*() {
       submittedAt: job.submittedAt,
       completedAt: job.completedAt,
       error: job.error,
+      errorType: job.errorType,
       progress: job.progress
     })
   }
@@ -324,6 +400,7 @@ export class JobManager extends Effect.Service<JobManager>()(
     dependencies: [
       ExtractionCacheLive,
       ExecutionDeduplicatorLive,
+      StorageServiceLive,
       FetchHttpClient.layer
     ],
     accessors: true

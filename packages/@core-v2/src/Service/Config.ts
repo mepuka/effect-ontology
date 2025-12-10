@@ -2,29 +2,28 @@
  * Service: Configuration Service
  *
  * Centralized configuration for LLM, RDF, Ontology, and Runtime settings.
- * Avoids ad-hoc constants scattered throughout codebase.
+ * Uses Effect.Config for environment-based configuration.
  *
  * @since 2.0.0
  * @module Service/Config
  */
 
-import { Effect } from "effect"
+import { Config, Effect, Option, Redacted } from "effect"
 
 /**
  * Configuration interface
  *
  * All settings for the application in one place.
- * Override via Layer.succeed for custom configs.
  *
  * @since 2.0.0
  * @category Config
  */
-export interface Config {
+export interface AppConfig {
   /**
    * LLM provider settings
    */
   readonly llm: {
-    readonly provider: "anthropic" | "openai" | "google"
+    readonly provider: string
     readonly model: string
     readonly timeoutMs: number
     readonly maxTokens: number
@@ -59,17 +58,15 @@ export interface Config {
     readonly retryMaxAttempts: number
     readonly retryInitialDelayMs: number
     readonly retryMaxDelayMs: number
+    readonly llmConcurrencyLimit: number
   }
 
   /**
    * Grounder verification settings
    */
   readonly grounder: {
-    /** Enable grounding verification (default: true) */
     readonly enabled: boolean
-    /** Minimum confidence threshold for relation verification (default: 0.8) */
     readonly confidenceThreshold: number
-    /** Batch size for grouped verification (default: 5) */
     readonly batchSize: number
   }
 
@@ -77,97 +74,113 @@ export interface Config {
    * Token budget settings (total per extraction request)
    */
   readonly tokenBudget: {
-    /** Total tokens allowed per extraction request */
     readonly totalTokens: number
+  }
+
+  /**
+   * Storage settings (GCS)
+   */
+  readonly storage: {
+    readonly bucketName: string
+    readonly pathPrefix?: string
   }
 }
 
 /**
- * Default configuration values
- *
- * Production-ready defaults for all settings.
- *
- * @since 2.0.0
+ * Define configuration from environment variables
  */
-export const DEFAULT_CONFIG: Config = {
-  llm: {
-    provider: "anthropic",
-    model: "claude-haiku-4-5",
-    timeoutMs: 60_000,
-    maxTokens: 4096,
-    temperature: 0.1,
-    anthropicApiKey: "",
-    openaiApiKey: "",
-    googleApiKey: ""
-  },
-  rdf: {
-    baseNamespace: "http://example.org/kg/",
-    prefixes: {
-      "": "http://example.org/kg/",
-      rdf: "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-      rdfs: "http://www.w3.org/2000/01/rdf-schema#",
-      owl: "http://www.w3.org/2002/07/owl#",
-      xsd: "http://www.w3.org/2001/XMLSchema#",
-      schema: "http://schema.org/"
+const LlmConfig = Config.all({
+  provider: Config.string("LLM_PROVIDER").pipe(Config.withDefault("anthropic")),
+  model: Config.string("LLM_MODEL").pipe(Config.withDefault("claude-3-5-sonnet-latest")),
+  timeoutMs: Config.integer("LLM_TIMEOUT_MS").pipe(Config.withDefault(60_000)),
+  maxTokens: Config.integer("LLM_MAX_TOKENS").pipe(Config.withDefault(4096)),
+  temperature: Config.number("LLM_TEMPERATURE").pipe(Config.withDefault(0.1)),
+  anthropicApiKey: Config.redacted("ANTHROPIC_API_KEY"),
+  openaiApiKey: Config.redacted("OPENAI_API_KEY").pipe(Config.withDefault(Redacted.make(""))),
+  googleApiKey: Config.redacted("GOOGLE_API_KEY").pipe(Config.withDefault(Redacted.make("")))
+})
+
+const RdfConfig = Config.all({
+  baseNamespace: Config.string("RDF_BASE_NAMESPACE").pipe(Config.withDefault("http://example.org/kg/")),
+  outputFormat: Config.string("RDF_OUTPUT_FORMAT").pipe(Config.withDefault("Turtle")) as Config.Config<
+    "Turtle" | "N-Triples" | "JSON-LD"
+  >
+})
+
+// Ontology path MUST be provided in production
+const OntologyConfig = Config.all({
+  path: Config.string("ONTOLOGY_PATH"),
+  cacheTtlSeconds: Config.integer("ONTOLOGY_CACHE_TTL").pipe(Config.withDefault(3600))
+})
+
+const RuntimeConfig = Config.all({
+  extractionConcurrency: Config.integer("EXTRACTION_CONCURRENCY").pipe(Config.withDefault(8)),
+  retryMaxAttempts: Config.integer("RETRY_MAX_ATTEMPTS").pipe(Config.withDefault(8)),
+  retryInitialDelayMs: Config.integer("RETRY_INITIAL_DELAY_MS").pipe(Config.withDefault(3000)),
+  retryMaxDelayMs: Config.integer("RETRY_MAX_DELAY_MS").pipe(Config.withDefault(30_000)),
+  llmConcurrencyLimit: Config.integer("LLM_CONCURRENCY_LIMIT").pipe(Config.withDefault(2))
+})
+
+const GrounderConfig = Config.all({
+  enabled: Config.boolean("GROUNDER_ENABLED").pipe(Config.withDefault(true)),
+  confidenceThreshold: Config.number("GROUNDER_THRESHOLD").pipe(Config.withDefault(0.8)),
+  batchSize: Config.integer("GROUNDER_BATCH_SIZE").pipe(Config.withDefault(5))
+})
+
+const StorageConfig = Config.all({
+  bucketName: Config.string("STORAGE_BUCKET").pipe(Config.withDefault("effect-ontology-bucket")),
+  pathPrefix: Config.string("STORAGE_PREFIX").pipe(Config.option)
+})
+
+const makeConfig = Effect.gen(function*() {
+  const llm = yield* LlmConfig
+  const rdf = yield* RdfConfig
+  const ontology = yield* OntologyConfig
+  const runtime = yield* RuntimeConfig
+  const grounder = yield* GrounderConfig
+  const storage = yield* StorageConfig
+
+  return {
+    llm: {
+      ...llm,
+      anthropicApiKey: Redacted.value(llm.anthropicApiKey),
+      openaiApiKey: Redacted.value(llm.openaiApiKey),
+      googleApiKey: Redacted.value(llm.googleApiKey)
     },
-    outputFormat: "Turtle"
-  },
-  ontology: {
-    path: "/Users/pooks/Dev/effect-ontology/ontologies/football/ontology_skos.ttl",
-    cacheTtlSeconds: 3600
-  },
-  runtime: {
-    extractionConcurrency: 8, // Reduced from 4 to avoid API rate limits
-    retryMaxAttempts: 8, // Increased for transient network/rate limit errors
-    retryInitialDelayMs: 3000, // Base delay for exponential backoff
-    retryMaxDelayMs: 30_000 // Cap max delay at 30s to avoid excessively long waits
-  },
-  grounder: {
-    enabled: true,
-    confidenceThreshold: 0.8,
-    batchSize: 5
-  },
-  tokenBudget: {
-    totalTokens: 4096
-  }
-}
+    rdf: {
+      ...rdf,
+      prefixes: {
+        "": rdf.baseNamespace,
+        rdf: "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+        rdfs: "http://www.w3.org/2000/01/rdf-schema#",
+        owl: "http://www.w3.org/2002/07/owl#",
+        xsd: "http://www.w3.org/2001/XMLSchema#",
+        schema: "http://schema.org/"
+      }
+    },
+    ontology,
+    runtime,
+    grounder,
+    tokenBudget: {
+      totalTokens: 4096
+    },
+    storage: {
+      bucketName: storage.bucketName,
+      pathPrefix: Option.getOrUndefined(storage.pathPrefix)
+    }
+  } as AppConfig
+})
 
 /**
  * ConfigService - Application configuration provider
- *
- * Provides typed access to all configuration settings.
- * Use accessors for clean API: `yield* ConfigService.llm`
- *
- * @example
- * ```typescript
- * // In a service
- * const config = yield* ConfigService
- * const timeout = config.llm.timeoutMs
- *
- * // With accessor
- * const llmConfig = yield* ConfigService.llm
- * ```
- *
- * @example
- * ```typescript
- * // Custom config override
- * const CustomConfig = Layer.succeed(ConfigService, {
- *   ...DEFAULT_CONFIG,
- *   llm: { ...DEFAULT_CONFIG.llm, model: "gpt-4" }
- * })
- *
- * const runtime = ManagedRuntime.make(
- *   ProductionLayers.pipe(Layer.provide(CustomConfig))
- * )
- * ```
  *
  * @since 2.0.0
  * @category Services
  */
 export class ConfigService extends Effect.Service<ConfigService>()(
-  "ConfigService",
+  "@core-v2/Service/ConfigService",
   {
-    succeed: DEFAULT_CONFIG,
+    effect: makeConfig,
     accessors: true
   }
 ) {}

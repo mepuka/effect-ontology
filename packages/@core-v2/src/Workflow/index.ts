@@ -8,4 +8,4 @@
 export * from "./EntityResolutionGraph.js"
 export * from "./Merge.js"
 export * from "./StreamingExtraction.js"
-export * from "./TwoStageExtraction.js"
+// export * from "./TwoStageExtraction.js" // Excluded from build - needs refactoring

@@ -19,77 +19,16 @@ import {
   ResolutionEdge,
   ResolvedEntity
 } from "../Domain/Model/EntityResolution.js"
-import { NomicNlpService } from "../Service/NomicNlp.js"
+import type {
+  ClusteringResult,
+  EntityCluster,
+  EntityResolutionGraph,
+  EntityResolutionInfo,
+  SimilarityEdge
+} from "../Domain/Model/EntityResolutionGraph.js"
+import { EmbeddingService } from "../Service/Embedding.js"
 import { computeEntitySimilarity, detectResolutionMethod, shouldConsiderMerge } from "../Utils/Similarity.js"
 import { simpleTokenize } from "../Utils/String.js"
-
-// =============================================================================
-// Types
-// =============================================================================
-
-/**
- * Resolution method type
- *
- * @since 2.0.0
- * @category Types
- */
-export type ResolutionMethod = "exact" | "similarity" | "containment" | "neighbor"
-
-/**
- * Similarity edge in the clustering graph
- *
- * @since 2.0.0
- * @category Types
- */
-export interface SimilarityEdge {
-  /** Similarity score between entities */
-  readonly similarity: number
-  /** Method used to determine similarity */
-  readonly method: ResolutionMethod
-}
-
-/**
- * Per-entity resolution info (how a mention resolved to canonical)
- *
- * @since 2.0.0
- * @category Types
- */
-export interface EntityResolutionInfo {
-  /** Original entity ID */
-  readonly entityId: string
-  /** Similarity score to the canonical entity */
-  readonly similarity: number
-  /** Method used to resolve this entity */
-  readonly method: ResolutionMethod
-}
-
-/**
- * Result of entity clustering
- *
- * @since 2.0.0
- * @category Types
- */
-export interface EntityCluster {
-  /** Entities in this cluster */
-  readonly entities: ReadonlyArray<Entity>
-  /** Minimum similarity within the cluster */
-  readonly minSimilarity: number
-  /** How entities were clustered */
-  readonly methods: ReadonlyArray<ResolutionMethod>
-}
-
-/**
- * Result of clustering with embeddings
- *
- * @since 2.0.0
- * @category Types
- */
-export interface ClusteringResult {
-  /** Entity clusters */
-  readonly clusters: ReadonlyArray<EntityCluster>
-  /** Embedding map: entity ID → embedding vector */
-  readonly embeddingMap: ReadonlyMap<string, ReadonlyArray<number>>
-}
 
 // =============================================================================
 // Graph-Based Clustering
@@ -127,9 +66,9 @@ export const clusterEntities = (
   entities: ReadonlyArray<Entity>,
   relations: ReadonlyArray<Relation>,
   config: EntityResolutionConfig
-): Effect.Effect<ClusteringResult, never, NomicNlpService> =>
+): Effect.Effect<ClusteringResult, never, EmbeddingService> =>
   Effect.gen(function*() {
-    const nomic = yield* NomicNlpService
+    const embeddingService = yield* EmbeddingService
 
     // Handle edge cases
     if (entities.length === 0) {
@@ -157,7 +96,7 @@ export const clusterEntities = (
     if (config.embeddingWeight > 0) {
       const entityEmbeddings = yield* Effect.all(
         entities.map((entity) =>
-          nomic.embed(entity.mention, "clustering").pipe(
+          embeddingService.embed(entity.mention, "clustering").pipe(
             Effect.map((embedding) => ({ entityId: entity.id, embedding })),
             Effect.catchAll(() => Effect.succeed(null)) // Gracefully handle embedding failures
           )
@@ -272,7 +211,7 @@ export const clusterEntities = (
 
             // Compute embedding similarity if available
             const embeddingSim = embeddingMap.has(entityA.id) && embeddingMap.has(entityB.id)
-              ? nomic.cosineSimilarity(embeddingMap.get(entityA.id)!, embeddingMap.get(entityB.id)!)
+              ? embeddingService.cosineSimilarity(embeddingMap.get(entityA.id)!, embeddingMap.get(entityB.id)!)
               : undefined
 
             // Check merge condition - pure sync computation
@@ -348,41 +287,6 @@ export const clusterEntities = (
 // =============================================================================
 
 /**
- * Statistics for the Entity Resolution Graph
- *
- * @since 2.0.0
- * @category Types
- */
-export interface EntityResolutionStats {
-  readonly mentionCount: number
-  readonly resolvedCount: number
-  readonly relationCount: number
-  readonly clusterCount: number
-}
-
-/**
- * Complete Entity Resolution Graph with indexes
- *
- * Contains the two-tier graph (MentionRecords → ResolvedEntities)
- * plus O(1) lookup indexes.
- *
- * @since 2.0.0
- * @category Types
- */
-export interface EntityResolutionGraph {
-  /** The Effect Graph structure */
-  readonly graph: Graph.DirectedGraph<ERNode, EREdge>
-  /** O(1) lookup: entity ID → NodeIndex */
-  readonly entityIndex: Record<string, Graph.NodeIndex>
-  /** O(1) lookup: entity ID → canonical ID */
-  readonly canonicalMap: Record<string, string>
-  /** Creation timestamp */
-  readonly createdAt: DateTime.Utc
-  /** Statistics */
-  readonly stats: EntityResolutionStats
-}
-
-/**
  * Merge a cluster of entities into a ResolvedEntity
  *
  * @internal
@@ -452,9 +356,9 @@ const mergeClusterToResolved = (
 export const buildEntityResolutionGraph = (
   kg: KnowledgeGraph,
   config: EntityResolutionConfig
-): Effect.Effect<EntityResolutionGraph, never, NomicNlpService> =>
+): Effect.Effect<EntityResolutionGraph, never, EmbeddingService> =>
   Effect.gen(function*() {
-    const nomic = yield* NomicNlpService
+    const embeddingService = yield* EmbeddingService
     // Phase 1: Create MentionRecord nodes from entities (preserve provenance)
     const mentionRecords = kg.entities.map((e, idx) =>
       new MentionRecord({
@@ -504,7 +408,7 @@ export const buildEntityResolutionGraph = (
         } else if (canonicalEntity) {
           // Compute embedding similarity if available
           const embeddingSim = embeddingMap.has(entity.id) && embeddingMap.has(canonicalId)
-            ? nomic.cosineSimilarity(embeddingMap.get(entity.id)!, embeddingMap.get(canonicalId)!)
+            ? embeddingService.cosineSimilarity(embeddingMap.get(entity.id)!, embeddingMap.get(canonicalId)!)
             : undefined
 
           // Compute similarity between this entity and canonical (with embedding)

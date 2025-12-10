@@ -12,7 +12,7 @@
 
 import { Graph, Option } from "effect"
 import type { ERNode, MentionRecord } from "../Domain/Model/EntityResolution.js"
-import type { EntityResolutionGraph } from "../Workflow/EntityResolutionGraph.js"
+import type { EntityResolutionGraph } from "../Domain/Model/EntityResolutionGraph.js"
 
 /**
  * Get canonical ID for an entity

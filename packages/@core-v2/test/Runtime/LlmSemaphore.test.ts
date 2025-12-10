@@ -4,27 +4,36 @@
  * @module test/Runtime/LlmSemaphore
  */
 
-import { describe, expect, it } from "@effect/vitest"
-import { Effect, Layer, Ref } from "effect"
+import { ConfigProvider, Effect, Layer, Ref } from "effect"
+import { describe, expect, it } from "vitest"
 import { LlmSemaphoreService } from "../../src/Runtime/LlmSemaphore.js"
 import { ConfigService } from "../../src/Service/Config.js"
 
 describe("LlmSemaphoreService", () => {
   const TestLayers = LlmSemaphoreService.Default.pipe(
-    Layer.provide(ConfigService.Default)
+    Layer.provide(ConfigService.Default),
+    Layer.provide(
+      Layer.setConfigProvider(
+        ConfigProvider.fromMap(
+          new Map([
+            ["ONTOLOGY_PATH", "/tmp/test.ttl"],
+            ["ANTHROPIC_API_KEY", "sk-test"]
+          ])
+        )
+      )
+    )
   )
 
-  it.effect("provides concurrency control", () =>
+  it("provides concurrency control", () =>
     Effect.gen(function*() {
       const semaphore = yield* LlmSemaphoreService
 
       // Simple test that withPermit works
       const result = yield* semaphore.withPermit(Effect.succeed("done"))
       expect(result).toBe("done")
-    }).pipe(Effect.provide(TestLayers))
-  )
+    }).pipe(Effect.provide(TestLayers), Effect.runPromise))
 
-  it.effect("reports limit based on provider", () =>
+  it("reports limit based on provider", () =>
     Effect.gen(function*() {
       const semaphore = yield* LlmSemaphoreService
       const limit = semaphore.limit()
@@ -32,19 +41,17 @@ describe("LlmSemaphoreService", () => {
       // Default config is anthropic, which has limit 2
       expect(limit).toBeGreaterThanOrEqual(1)
       expect(limit).toBeLessThanOrEqual(10)
-    }).pipe(Effect.provide(TestLayers))
-  )
+    }).pipe(Effect.provide(TestLayers), Effect.runPromise))
 
-  it.effect("availablePermits returns limit", () =>
+  it("availablePermits returns limit", () =>
     Effect.gen(function*() {
       const semaphore = yield* LlmSemaphoreService
       const available = yield* semaphore.availablePermits()
 
       expect(available).toBeGreaterThanOrEqual(1)
-    }).pipe(Effect.provide(TestLayers))
-  )
+    }).pipe(Effect.provide(TestLayers), Effect.runPromise))
 
-  it.effect("respects concurrency limit", () =>
+  it("respects concurrency limit", () =>
     Effect.gen(function*() {
       const semaphore = yield* LlmSemaphoreService
       const maxConcurrent = yield* Ref.make(0)
@@ -61,8 +68,7 @@ describe("LlmSemaphoreService", () => {
             yield* Ref.update(currentConcurrent, (c) => c - 1)
             return i
           })
-        )
-      )
+        ))
 
       yield* Effect.all(operations, { concurrency: 10 })
 
@@ -71,6 +77,5 @@ describe("LlmSemaphoreService", () => {
 
       // Max concurrent should not exceed the limit
       expect(max).toBeLessThanOrEqual(limit)
-    }).pipe(Effect.provide(TestLayers))
-  )
+    }).pipe(Effect.provide(TestLayers), Effect.runPromise))
 })

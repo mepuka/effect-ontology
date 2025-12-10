@@ -61,27 +61,31 @@ export class ShutdownError extends Data.TaggedError("ShutdownError")<{
  * @since 2.0.0
  * @category Constructors
  */
-export const makeGracefulShutdown = (
-  config: ShutdownConfig = DEFAULT_SHUTDOWN_CONFIG
-) =>
-  Effect.gen(function*() {
+/**
+ * Shutdown Service
+ *
+ * @since 2.0.0
+ * @category Services
+ */
+export class ShutdownService extends Effect.Service<ShutdownService>()("@core-v2/Runtime/Shutdown", {
+  effect: Effect.gen(function*() {
     const inFlightRef = yield* Ref.make(0)
     const shuttingDownRef = yield* Ref.make(false)
+    const config = DEFAULT_SHUTDOWN_CONFIG // could be injected
 
     return {
       /**
        * Track a request for graceful shutdown
-       *
-       * Increments in-flight counter before execution and decrements after.
-       * If shutting down, rejects new requests.
        */
       trackRequest: <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E | ShutdownError, R> =>
         Effect.gen(function*() {
           const isShuttingDown = yield* Ref.get(shuttingDownRef)
           if (isShuttingDown) {
-            return yield* Effect.fail(new ShutdownError({
-              message: "Service is shutting down, not accepting new requests"
-            }))
+            return yield* Effect.fail(
+              new ShutdownError({
+                message: "Service is shutting down, not accepting new requests"
+              })
+            )
           }
 
           yield* Ref.update(inFlightRef, (n) => n + 1)
@@ -112,8 +116,6 @@ export const makeGracefulShutdown = (
 
       /**
        * Drain in-flight requests with timeout
-       *
-       * Waits for all tracked requests to complete, up to drain timeout.
        */
       drain: (): Effect.Effect<void> =>
         Effect.gen(function*() {
@@ -143,11 +145,4 @@ export const makeGracefulShutdown = (
         })
     }
   })
-
-/**
- * Type for the shutdown handler
- *
- * @since 2.0.0
- * @category Types
- */
-export type GracefulShutdown = Effect.Effect.Success<ReturnType<typeof makeGracefulShutdown>>
+}) {}
