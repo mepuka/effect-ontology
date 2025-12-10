@@ -78,10 +78,12 @@ export interface AppConfig {
   }
 
   /**
-   * Storage settings (GCS)
+   * Storage settings
    */
   readonly storage: {
+    readonly type: "local" | "gcs" | "memory"
     readonly bucketName: string
+    readonly localPath?: string
     readonly pathPrefix?: string
   }
 }
@@ -128,7 +130,9 @@ const GrounderConfig = Config.all({
 })
 
 const StorageConfig = Config.all({
+  type: Config.string("STORAGE_TYPE").pipe(Config.withDefault("gcs")),
   bucketName: Config.string("STORAGE_BUCKET").pipe(Config.withDefault("effect-ontology-bucket")),
+  localPath: Config.string("STORAGE_LOCAL_PATH").pipe(Config.option),
   pathPrefix: Config.string("STORAGE_PREFIX").pipe(Config.option)
 })
 
@@ -165,7 +169,9 @@ const makeConfig = Effect.gen(function*() {
       totalTokens: 4096
     },
     storage: {
+      type: storage.type as "local" | "gcs" | "memory",
       bucketName: storage.bucketName,
+      localPath: Option.getOrUndefined(storage.localPath),
       pathPrefix: Option.getOrUndefined(storage.pathPrefix)
     }
   } as AppConfig

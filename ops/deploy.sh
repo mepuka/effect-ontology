@@ -1,52 +1,42 @@
 #!/bin/bash
 set -e
 
-# Configuration
+# Usage: ./ops/deploy.sh [env]
+# env: dev or prod (default: prod)
+
+ENV=${1:-prod}
 PROJECT_ID=$(gcloud config get-value project)
 REGION="us-central1"
-SERVICE_NAME="effect-ontology-core"
-IMAGE_NAME="gcr.io/$PROJECT_ID/$SERVICE_NAME"
-TAG="latest"
+SERVICE_NAME="effect-ontology-core-${ENV}"
+IMAGE_NAME="gcr.io/$PROJECT_ID/effect-ontology-core"
+TAG="${ENV}"
 
-echo "🚀 Deploying $SERVICE_NAME to Cloud Run ($REGION)..."
+echo "🚀 Deploying to $ENV environment..."
 echo "   Project: $PROJECT_ID"
+echo "   Service: $SERVICE_NAME"
+echo "   Image:   $IMAGE_NAME:$TAG"
 
 # Build Container (multi-platform for Cloud Run)
+echo ""
 echo "🏗️  Building container for linux/amd64..."
 docker build --platform linux/amd64 -t $IMAGE_NAME:$TAG -f packages/@core-v2/Dockerfile .
 
 # Configure Docker for GCR
+echo ""
 echo "🔐 Configuring Docker for GCR..."
 gcloud auth configure-docker --quiet
 
 # Push to GCR
+echo ""
 echo "⬆️  Pushing to GCR..."
 docker push $IMAGE_NAME:$TAG
 
-# Deploy with required environment variables
-echo "🚀 Deploying to Cloud Run..."
-gcloud run deploy $SERVICE_NAME \
+# Update Cloud Run service (Terraform manages the service config)
+echo ""
+echo "🔄 Updating Cloud Run service..."
+gcloud run services update $SERVICE_NAME \
   --image $IMAGE_NAME:$TAG \
-  --region $REGION \
-  --platform managed \
-  --allow-unauthenticated \
-  --memory 1Gi \
-  --cpu 1 \
-  --timeout 300 \
-  --concurrency 2 \
-  --min-instances 0 \
-  --max-instances 10 \
-  --set-env-vars "NODE_ENV=production,\
-LLM_PROVIDER=anthropic,\
-LLM_MODEL=claude-3-5-sonnet-latest,\
-LLM_TIMEOUT_MS=60000,\
-LLM_MAX_TOKENS=4096,\
-LLM_TEMPERATURE=0.1,\
-EXTRACTION_CONCURRENCY=4,\
-LLM_CONCURRENCY_LIMIT=2,\
-ONTOLOGY_PATH=ontologies/football/ontology_skos.ttl,\
-STORAGE_BUCKET=effect-ontology-data" \
-  --set-secrets "ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest"
+  --region $REGION
 
 echo ""
 echo "✅ Deployment complete!"

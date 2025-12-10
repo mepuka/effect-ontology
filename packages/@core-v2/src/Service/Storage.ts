@@ -1,4 +1,4 @@
-import { KeyValueStore } from "@effect/platform"
+import { FileSystem, KeyValueStore, Path } from "@effect/platform"
 import { SystemError } from "@effect/platform/Error"
 import { Storage } from "@google-cloud/storage"
 import { Context, Effect, Layer, Option } from "effect"
@@ -14,13 +14,21 @@ export interface StorageService extends KeyValueStore.KeyValueStore {
 export const StorageService = Context.GenericTag<StorageService>("@core-v2/StorageService")
 
 export interface StorageConfig {
-  readonly bucketName: string
+  readonly type: "local" | "gcs" | "memory"
+  readonly bucketName?: string // Required for GCS
+  readonly localPath?: string // Required for Local
   readonly pathPrefix?: string
 }
 
 export const StorageConfig = Context.GenericTag<StorageConfig>("@core-v2/StorageConfig")
 
+// --- GCS Implementation ---
+
 const makeGcsStore = (config: StorageConfig): StorageService => {
+  if (!config.bucketName) {
+    throw new Error("bucketName is required for GCS storage")
+  }
+
   const storage = new Storage()
   const bucket = storage.bucket(config.bucketName)
   const prefix = config.pathPrefix ?? ""
@@ -33,8 +41,6 @@ const makeGcsStore = (config: StorageConfig): StorageService => {
 
     if (cause instanceof Error) {
       message = cause.message
-
-      // Map GCS/HTTP error codes to SystemError reasons
       const code = (cause as any).code
       if (typeof code === "number") {
         switch (code) {
@@ -68,7 +74,6 @@ const makeGcsStore = (config: StorageConfig): StorageService => {
     })
   }
 
-  // Core KeyValueStore implementation
   const impl = KeyValueStore.make({
     get: (key) =>
       Effect.tryPromise({
@@ -81,7 +86,6 @@ const makeGcsStore = (config: StorageConfig): StorageService => {
         },
         catch: (e) => handleError("get", key, e)
       }),
-
     getUint8Array: (key) =>
       Effect.tryPromise({
         try: async () => {
@@ -93,7 +97,6 @@ const makeGcsStore = (config: StorageConfig): StorageService => {
         },
         catch: (e) => handleError("getUint8Array", key, e)
       }),
-
     set: (key, value) =>
       Effect.tryPromise({
         try: async () => {
@@ -102,26 +105,19 @@ const makeGcsStore = (config: StorageConfig): StorageService => {
         },
         catch: (e) => handleError("set", key, e)
       }),
-
     remove: (key) =>
       Effect.tryPromise({
         try: async () => {
           const file = bucket.file(toPath(key))
           const [exists] = await file.exists()
-          if (exists) {
-            await file.delete()
-          }
+          if (exists) await file.delete()
         },
         catch: (e) => handleError("remove", key, e)
       }),
-
     clear: Effect.tryPromise({
-      try: async () => {
-        await bucket.deleteFiles({ prefix: prefix || undefined })
-      },
+      try: async () => await bucket.deleteFiles({ prefix: prefix || undefined }),
       catch: (e) => handleError("clear", prefix, e)
     }),
-
     size: Effect.tryPromise({
       try: async () => {
         const [files] = await bucket.getFiles({ prefix: prefix || undefined })
@@ -131,7 +127,6 @@ const makeGcsStore = (config: StorageConfig): StorageService => {
     })
   })
 
-  // Extended capabilities
   return {
     ...impl,
     list: (listPrefix) =>
@@ -146,42 +141,143 @@ const makeGcsStore = (config: StorageConfig): StorageService => {
   }
 }
 
-export const StorageServiceLive = Layer.effect(
-  StorageService,
-  Effect.map(StorageConfig, makeGcsStore)
-)
+// --- Local Filesystem Implementation ---
 
-export const StorageServiceTest = Layer.succeed(
-  StorageService,
-  (() => {
-    const store = new Map<string, string>()
+const makeLocalStore = (config: StorageConfig) =>
+  Effect.gen(function*() {
+    const fs = yield* FileSystem.FileSystem
+    const path = yield* Path.Path
 
-    // Base KeyValueStore from memory
-    const kv = KeyValueStore.make({
-      get: (key) => Effect.sync(() => Option.fromNullable(store.get(key))),
+    const basePath = config.localPath ?? "./output"
+    const globalPrefix = config.pathPrefix ?? ""
+
+    const resolvePath = (key: string) => path.join(basePath, globalPrefix, key)
+
+    const ensureDir = (filePath: string) => fs.makeDirectory(path.dirname(filePath), { recursive: true })
+
+    const impl = KeyValueStore.make({
+      get: (key) =>
+        Effect.gen(function*() {
+          const p = resolvePath(key)
+          const exists = yield* fs.exists(p)
+          if (!exists) return Option.none()
+          return Option.some(yield* fs.readFileString(p))
+        }),
       getUint8Array: (key) =>
-        Effect.sync(() => {
-          const val = store.get(key)
-          return val ? Option.some(new TextEncoder().encode(val)) : Option.none()
+        Effect.gen(function*() {
+          const p = resolvePath(key)
+          const exists = yield* fs.exists(p)
+          if (!exists) return Option.none()
+          return Option.some(yield* fs.readFile(p))
         }),
       set: (key, value) =>
-        Effect.sync(() => {
-          const str = typeof value === "string" ? value : new TextDecoder().decode(value)
-          store.set(key, str)
+        Effect.gen(function*() {
+          const p = resolvePath(key)
+          yield* ensureDir(p)
+          if (typeof value === "string") {
+            yield* fs.writeFileString(p, value)
+          } else {
+            yield* fs.writeFile(p, value)
+          }
         }),
       remove: (key) =>
-        Effect.sync(() => {
-          store.delete(key)
+        Effect.gen(function*() {
+          const p = resolvePath(key)
+          if (yield* fs.exists(p)) {
+            yield* fs.remove(p)
+          }
         }),
-      clear: Effect.sync(() => {
-        store.clear()
+      clear: Effect.gen(function*() {
+        const p = path.join(basePath, globalPrefix)
+        if (yield* fs.exists(p)) {
+          yield* fs.remove(p, { recursive: true })
+          yield* fs.makeDirectory(p, { recursive: true })
+        }
       }),
-      size: Effect.sync(() => store.size)
+      size: Effect.gen(function*() {
+        const p = path.join(basePath, globalPrefix)
+        if (!(yield* fs.exists(p))) return 0
+        return 0
+      })
     })
 
     return {
-      ...kv,
-      list: (prefix) => Effect.sync(() => Array.from(store.keys()).filter((k) => k.startsWith(prefix)))
-    }
-  })()
+      ...impl,
+      list: (prefix) =>
+        Effect.gen(function*() {
+          const dir = path.join(basePath, globalPrefix, prefix)
+          if (!(yield* fs.exists(dir))) return []
+          const files = yield* fs.readDirectory(dir)
+          return files
+        })
+    } as StorageService
+  })
+
+// --- In-Memory Implementation ---
+
+const makeMemoryStore = Effect.sync(() => {
+  const store = new Map<string, string | Uint8Array>()
+
+  const kv = KeyValueStore.make({
+    get: (key) =>
+      Effect.sync(() => {
+        const val = store.get(key)
+        if (!val) return Option.none()
+        return typeof val === "string" ? Option.some(val) : Option.some(new TextDecoder().decode(val))
+      }),
+    getUint8Array: (key) =>
+      Effect.sync(() => {
+        const val = store.get(key)
+        if (!val) return Option.none()
+        return typeof val === "string" ? Option.some(new TextEncoder().encode(val)) : Option.some(val)
+      }),
+    set: (key, value) =>
+      Effect.sync(() => {
+        store.set(key, value)
+      }),
+    remove: (key) =>
+      Effect.sync(() => {
+        store.delete(key)
+      }),
+    clear: Effect.sync(() => {
+      store.clear()
+    }),
+    size: Effect.sync(() => store.size)
+  })
+
+  return {
+    ...kv,
+    list: (prefix) => Effect.sync(() => Array.from(store.keys()).filter((k) => k.startsWith(prefix)))
+  } as StorageService
+})
+
+// --- Factory Layer ---
+
+export const makeStorageLayer = (
+  config: StorageConfig
+): Layer.Layer<StorageService, SystemError, FileSystem.FileSystem | Path.Path> => {
+  const ConfigLayer = Layer.succeed(StorageConfig, config)
+
+  switch (config.type) {
+    case "local":
+      return Layer.effect(StorageService, makeLocalStore(config)).pipe(
+        Layer.provide(ConfigLayer)
+      )
+    case "gcs":
+      return Layer.succeed(StorageService, makeGcsStore(config)).pipe(
+        Layer.provide(ConfigLayer)
+      )
+    case "memory":
+      return Layer.effect(StorageService, makeMemoryStore).pipe(
+        Layer.provide(ConfigLayer)
+      )
+    default:
+      return Layer.die(new Error(`Unknown storage type: ${(config as any).type}`))
+  }
+}
+
+// Deprecated: Legacy layer for backward compat (defaults to GCS if used)
+export const StorageServiceLive = Layer.effect(
+  StorageService,
+  Effect.map(StorageConfig, (config) => makeGcsStore(config))
 )

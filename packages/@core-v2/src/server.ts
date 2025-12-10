@@ -26,27 +26,22 @@ import { NlpService } from "./Service/Nlp.js"
 import { OntologyService } from "./Service/Ontology.js"
 import { OntologyLoader } from "./Service/OntologyLoader.js"
 import { RdfBuilder } from "./Service/Rdf.js"
-import { StorageConfig, StorageServiceLive } from "./Service/Storage.js"
+import { makeStorageLayer } from "./Service/Storage.js"
 import { ExtractionWorkflowLive } from "./Workflow/StreamingExtraction.js"
 
 // Load port from environment
 const port = Effect.runSync(Config.number("PORT").pipe(Config.withDefault(8080)))
 
-// Provide StorageConfig from ConfigService
-const StorageConfigLive = Layer.effect(
-  StorageConfig,
-  Effect.gen(function*() {
-    const config = yield* ConfigService
-    return {
-      bucketName: config.storage.bucketName,
-      pathPrefix: config.storage.pathPrefix
-    }
-  })
+// Compose Storage Layer dynamically based on Config
+const StorageLayer = Layer.unwrapEffect(
+  Effect.map(ConfigService, (config) => makeStorageLayer(config.storage))
 )
 
-// ...
+// Base platform layer (provides FileSystem, Path, etc.)
+const PlatformLayer = BunContext.layer
 
 // Compose production server layers
+// Note: Layer order matters - dependencies must come after dependents in provideMerge chain
 const ServerLive = HttpServerLive.pipe(
   Layer.provideMerge(BunHttpServer.layer({ port })),
   Layer.provideMerge(HealthCheckService.Default),
@@ -61,12 +56,11 @@ const ServerLive = HttpServerLive.pipe(
   Layer.provideMerge(OntologyLoader.Default),
   Layer.provideMerge(NlpService.Default),
   Layer.provideMerge(RdfBuilder.Default),
-  Layer.provideMerge(StorageServiceLive),
-  Layer.provideMerge(StorageConfigLive),
+  Layer.provideMerge(StorageLayer),
   Layer.provideMerge(RateLimitedLlmLayer),
+  Layer.provideMerge(ShutdownService.Default),
   Layer.provideMerge(ConfigService.Default),
-  Layer.provideMerge(ShutdownService.Default), // Provide ShutdownService
-  Layer.provide(BunContext.layer)
+  Layer.provide(PlatformLayer)
 )
 
 // Server program with graceful shutdown

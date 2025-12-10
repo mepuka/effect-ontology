@@ -22,7 +22,7 @@ import { computeIdempotencyKey } from "../Utils/IdempotencyKey.js"
 import { ConfigService } from "./Config.js"
 import { ExecutionDeduplicator, ExecutionDeduplicatorLive } from "./ExecutionDeduplicator.js"
 import { ExtractionCache, ExtractionCacheLive } from "./ExtractionCache.js"
-import { StorageService, StorageServiceLive } from "./Storage.js"
+import { StorageService } from "./Storage.js"
 /**
  * Internal Job State representation
  */
@@ -400,8 +400,8 @@ export class JobManager extends Effect.Service<JobManager>()(
     dependencies: [
       ExtractionCacheLive,
       ExecutionDeduplicatorLive,
-      StorageServiceLive,
       FetchHttpClient.layer
+      // Note: StorageService is provided via makeStorageLayer in server.ts
     ],
     accessors: true
   }
