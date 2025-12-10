@@ -73,11 +73,6 @@ const ServerLive = HttpServerLive.pipe(
 const server = Effect.gen(function*() {
   const shutdown = yield* ShutdownService
 
-  // Apply shutdown middleware (if not already in HttpServerLive, strictly speaking middleware should be applied to the router/app construction site)
-  // Assuming HttpServerLive builds the app and middleware needs to be injected there.
-  // If HttpServerLive doesn't take middleware, we might miss tracking.
-  // But let's assume we just need the shutdown logic here first.
-
   // Register SIGTERM handler for Cloud Run
   process.on("SIGTERM", () => {
     console.log("Received SIGTERM, initiating graceful shutdown")
@@ -87,7 +82,6 @@ const server = Effect.gen(function*() {
         yield* shutdown.drain()
       })
     ).then((exit) => {
-      // Handle the exit of the shutdown process
       if (exit._tag === "Success") {
         console.log("Graceful shutdown complete")
         process.exit(0)
@@ -101,6 +95,7 @@ const server = Effect.gen(function*() {
   yield* Effect.logInfo(`Server starting on port ${port}`)
   yield* Layer.launch(ServerLive)
 }).pipe(
+  Effect.provide(ShutdownService.Default),
   Effect.catchAllCause(Effect.logError)
 ) as Effect.Effect<void, never, never>
 
