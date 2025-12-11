@@ -29,10 +29,11 @@ FROM oven/bun:1.2.23-debian
 WORKDIR /app
 
 # Copy built files and dependencies
-# Copy built files and dependencies
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages/@core-v2/dist/src ./dist
 COPY --from=builder /app/packages/@core-v2/package.json ./
+# Copy ontologies directory
+COPY --from=builder /app/ontologies ./ontologies
 
 # Create non-root user
 RUN groupadd -g 1001 nodejs && \
