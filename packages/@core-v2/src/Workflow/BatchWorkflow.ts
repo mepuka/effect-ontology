@@ -8,28 +8,16 @@
  */
 
 import { Workflow } from "@effect/workflow"
-import { DateTime, Effect, Option, Schema } from "effect"
-import { BatchId, GcsUri, OntologyVersion } from "../Domain/Identity.js"
+import { Context, DateTime, Effect, Hash, Option, Schedule, Schema } from "effect"
 import { BatchState } from "../Domain/Model/BatchWorkflow.js"
-import { BatchManifest } from "../Domain/Schema/Batch.js"
+import { BatchManifest, BatchWorkflowPayload } from "../Domain/Schema/Batch.js"
 import { StorageService } from "../Service/Storage.js"
 import {
   makeExtractionActivity,
   makeIngestionActivity,
   makeResolutionActivity,
   makeValidationActivity
-} from "./Activities.js"
-
-// -----------------------------------------------------------------------------
-// Payload schema
-// -----------------------------------------------------------------------------
-
-export const BatchWorkflowPayload = Schema.Struct({
-  batchId: BatchId,
-  manifestUri: GcsUri,
-  ontologyVersion: OntologyVersion
-})
-export type BatchWorkflowPayload = typeof BatchWorkflowPayload.Type
+} from "./DurableActivities.js"
 
 // -----------------------------------------------------------------------------
 // Helpers
@@ -51,12 +39,31 @@ const toStringError = (e: unknown): string => e instanceof Error ? e.message : S
 // Workflow definition + layer
 // -----------------------------------------------------------------------------
 
+const makeIdempotencyKey = (payload: typeof BatchWorkflowPayload.Type) => {
+  const hash = Hash.string(JSON.stringify({
+    ontologyVersion: payload.ontologyVersion,
+    ontologyUri: payload.ontologyUri,
+    targetNamespace: payload.targetNamespace,
+    shaclUri: payload.shaclUri,
+    documentIds: [...payload.documentIds].sort()
+  }))
+
+  return `${payload.batchId}-${Math.abs(hash).toString(16).slice(0, 8)}`
+}
+
 export const BatchWorkflow = Workflow.make({
   name: "batch-extraction",
   payload: BatchWorkflowPayload,
   success: BatchState,
   error: Schema.String,
-  idempotencyKey: (p) => p.batchId
+  idempotencyKey: makeIdempotencyKey,
+  annotations: Context.make(Workflow.SuspendOnFailure, true).pipe(
+    Context.add(Workflow.CaptureDefects, true)
+  ),
+  suspendedRetrySchedule: Schedule.exponential("1 second").pipe(
+    Schedule.compose(Schedule.recurs(5)),
+    Schedule.jittered
+  )
 })
 
 export const BatchWorkflowLayer = BatchWorkflow.toLayer(({ batchId, manifestUri, ontologyVersion }) =>

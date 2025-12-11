@@ -16,8 +16,9 @@
  */
 
 import { Activity } from "@effect/workflow"
-import { DateTime, Effect, Option, Schedule, Schema } from "effect"
+import { Chunk, DateTime, Effect, Option, Schedule, Schema } from "effect"
 import { DocumentId, GcsUri, toGcsUri } from "../Domain/Identity.js"
+import { KnowledgeGraph } from "../Domain/Model/Entity.js"
 import { PathLayout } from "../Domain/PathLayout.js"
 import type {
   ExtractionActivityInput,
@@ -26,6 +27,8 @@ import type {
   ValidationActivityInput
 } from "../Domain/Schema/Batch.js"
 import { ConfigService } from "../Service/Config.js"
+import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
+import { OntologyService } from "../Service/Ontology.js"
 import { RdfBuilder } from "../Service/Rdf.js"
 import { StorageService } from "../Service/Storage.js"
 
@@ -96,6 +99,18 @@ const parseTurtleStats = (turtle: string) =>
     }
   })
 
+/**
+ * Serialize a KnowledgeGraph to Turtle using RdfBuilder
+ */
+const graphToTurtle = (graph: KnowledgeGraph) =>
+  Effect.gen(function*() {
+    const rdf = yield* RdfBuilder
+    const store = yield* rdf.createStore
+    yield* rdf.addEntities(store, graph.entities)
+    yield* rdf.addRelations(store, graph.relations)
+    return yield* rdf.toTurtle(store)
+  })
+
 // -----------------------------------------------------------------------------
 // Retry Policy for Activities
 // -----------------------------------------------------------------------------
@@ -120,6 +135,15 @@ const activityRetryPolicy = Schedule.exponential("1 second").pipe(
  *
  * Extracts entities and relations from a source document using the ontology.
  * Journaled by WorkflowEngine - will replay from last checkpoint on crash.
+ *
+ * Pipeline:
+ * 1. Read source document from storage
+ * 2. Search ontology for candidate classes using hybrid search
+ * 3. Extract entities using LLM (EntityExtractor)
+ * 4. Get properties for extracted entity types
+ * 5. Extract relations using LLM (RelationExtractor)
+ * 6. Build KnowledgeGraph and serialize to Turtle
+ * 7. Save graph to storage
  */
 export const makeExtractionActivity = (input: typeof ExtractionActivityInput.Type) =>
   Activity.make({
@@ -130,24 +154,120 @@ export const makeExtractionActivity = (input: typeof ExtractionActivityInput.Typ
       const start = yield* DateTime.now
       const storage = yield* StorageService
       const config = yield* ConfigService
+      const entityExtractor = yield* EntityExtractor
+      const relationExtractor = yield* RelationExtractor
+      const ontologyService = yield* OntologyService
 
       const bucket = resolveBucket(config)
+
+      yield* Effect.logInfo("Extraction activity starting", {
+        batchId: input.batchId,
+        documentId: input.documentId,
+        sourceUri: input.sourceUri,
+        ontologyUri: input.ontologyUri
+      })
+
+      // 1. Read source document
       const sourceKey = stripGsPrefix(input.sourceUri)
       const sourceContent = yield* storage.get(sourceKey).pipe(
         Effect.flatMap((opt) => requireContent(opt, sourceKey))
       )
 
+      yield* Effect.logInfo("Source document loaded", {
+        documentId: input.documentId,
+        contentLength: sourceContent.length
+      })
+
+      // 2. Load ontology candidate classes via hybrid search
+      const candidateClasses = yield* ontologyService.searchClassesHybrid(
+        sourceContent.slice(0, 2000),
+        100
+      ).pipe(
+        Effect.tap((classes) =>
+          Effect.logInfo("Candidate classes loaded", {
+            documentId: input.documentId,
+            candidateCount: Chunk.size(classes)
+          })
+        )
+      )
+
+      // 3. Extract entities from LLM
+      const entities = yield* entityExtractor.extract(
+        sourceContent,
+        Chunk.toReadonlyArray(candidateClasses)
+      ).pipe(
+        Effect.tap((extracted) =>
+          Effect.logInfo("Entities extracted", {
+            documentId: input.documentId,
+            entityCount: Chunk.size(extracted)
+          })
+        )
+      )
+
+      // 4. Get properties for extracted entity types
+      const entityTypes = Chunk.toReadonlyArray(entities).flatMap((e) => e.types)
+      const uniqueEntityTypes = Array.from(new Set(entityTypes))
+      const properties = yield* ontologyService.getPropertiesFor(uniqueEntityTypes).pipe(
+        Effect.tap((props) =>
+          Effect.logInfo("Properties loaded for entity types", {
+            documentId: input.documentId,
+            entityTypeCount: uniqueEntityTypes.length,
+            propertyCount: Chunk.size(props)
+          })
+        )
+      )
+
+      // 5. Extract relations from LLM (only if we have 2+ entities and properties)
+      const relations = Chunk.size(entities) >= 2 && Chunk.size(properties) > 0
+        ? yield* relationExtractor.extract(
+          sourceContent,
+          entities,
+          Chunk.toReadonlyArray(properties)
+        ).pipe(
+          Effect.tap((rels) =>
+            Effect.logInfo("Relations extracted", {
+              documentId: input.documentId,
+              relationCount: Chunk.size(rels)
+            })
+          )
+        )
+        : Chunk.empty()
+
+      // 6. Create KnowledgeGraph and serialize to Turtle
+      const graph = new KnowledgeGraph({
+        entities: Chunk.toReadonlyArray(entities),
+        relations: Chunk.toReadonlyArray(relations),
+        sourceText: sourceContent
+      })
+
+      const turtleContent = yield* graphToTurtle(graph).pipe(
+        Effect.tap((turtle) =>
+          Effect.logInfo("Graph serialized to Turtle", {
+            documentId: input.documentId,
+            turtleLength: turtle.length
+          })
+        )
+      )
+
+      // 7. Save Turtle graph to storage
       const graphPath = PathLayout.document.graph(input.documentId)
-      const graphBody = `# extracted graph for ${input.documentId}\n# ontology: ${input.ontologyUri}\n${sourceContent}`
-      yield* storage.set(graphPath, graphBody)
+      yield* storage.set(graphPath, turtleContent)
 
       const end = yield* DateTime.now
+
+      yield* Effect.logInfo("Extraction activity complete", {
+        batchId: input.batchId,
+        documentId: input.documentId,
+        entityCount: Chunk.size(entities),
+        relationCount: Chunk.size(relations),
+        durationMs: DateTime.distance(start, end)
+      })
 
       return {
         documentId: input.documentId,
         graphUri: toGcsUri(bucket, graphPath),
-        entityCount: 0,
-        relationCount: 0,
+        entityCount: Chunk.size(entities),
+        relationCount: Chunk.size(relations),
         durationMs: DateTime.distance(start, end)
       }
     }).pipe(Effect.mapError((e) => e instanceof Error ? e.message : String(e))),
