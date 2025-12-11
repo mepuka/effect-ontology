@@ -30,3 +30,9 @@ variable "allow_unauthenticated" {
   type    = bool
   default = false
 }
+
+variable "ontology_path" {
+  type        = string
+  description = "Path to ontology file inside the container (absolute path)"
+  default     = "/app/ontologies/football/ontology_skos.ttl"
+}

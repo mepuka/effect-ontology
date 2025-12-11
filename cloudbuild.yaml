@@ -1,21 +1,21 @@
 steps:
-  # Build the Docker image
+  # Build the Docker image (effect-ontology-core for Terraform-managed Cloud Run)
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/effect-ontology:$BUILD_ID', '-f', 'packages/@core-v2/Dockerfile', '.']
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/effect-ontology-core:$BUILD_ID', '-f', 'packages/@core-v2/Dockerfile', '.']
 
   # Push to Container Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/effect-ontology:$BUILD_ID']
+    args: ['push', 'gcr.io/$PROJECT_ID/effect-ontology-core:$BUILD_ID']
 
   # Tag as latest
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['tag', 'gcr.io/$PROJECT_ID/effect-ontology:$BUILD_ID', 'gcr.io/$PROJECT_ID/effect-ontology:latest']
+    args: ['tag', 'gcr.io/$PROJECT_ID/effect-ontology-core:$BUILD_ID', 'gcr.io/$PROJECT_ID/effect-ontology-core:latest']
 
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/effect-ontology:latest']
+    args: ['push', 'gcr.io/$PROJECT_ID/effect-ontology-core:latest']
 
 images:
-  - 'gcr.io/$PROJECT_ID/effect-ontology:$BUILD_ID'
-  - 'gcr.io/$PROJECT_ID/effect-ontology:latest'
+  - 'gcr.io/$PROJECT_ID/effect-ontology-core:$BUILD_ID'
+  - 'gcr.io/$PROJECT_ID/effect-ontology-core:latest'
 
 timeout: '1200s'
