@@ -30,9 +30,22 @@ module "storage" {
 }
 
 module "secrets" {
-  source       = "./modules/secrets"
-  project_id   = var.project_id
-  cloud_run_sa = data.google_compute_default_service_account.default.email
+  source          = "./modules/secrets"
+  project_id      = var.project_id
+  cloud_run_sa    = data.google_compute_default_service_account.default.email
+  enable_postgres = var.enable_postgres
+}
+
+# PostgreSQL on free-tier Compute Engine for workflow persistence
+module "postgres" {
+  count  = var.enable_postgres ? 1 : 0
+  source = "./modules/postgres"
+
+  project_id                  = var.project_id
+  region                      = var.region
+  environment                 = var.environment
+  postgres_password_secret_id = module.secrets.postgres_password_secret_id
+  service_account_email       = data.google_compute_default_service_account.default.email
 }
 
 module "cloud_run" {

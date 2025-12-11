@@ -1,5 +1,4 @@
-import { FetchHttpClient } from "@effect/platform"
-import { FileSystem } from "@effect/platform"
+import { FetchHttpClient, FileSystem } from "@effect/platform"
 import { describe, expect, it } from "@effect/vitest"
 import { ConfigProvider, Effect, Layer, Sink, Stream } from "effect"
 import { ExecutionDeduplicatorLive } from "../../src/Service/ExecutionDeduplicator.js"

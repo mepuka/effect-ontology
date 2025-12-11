@@ -9,7 +9,7 @@
  */
 
 import { Schema } from "effect"
-import { ContentHash, DocumentId, Namespace, OntologyName } from "./Identity.js"
+import { BatchId, ContentHash, DocumentId, Namespace, OntologyName } from "./Identity.js"
 
 // =============================================================================
 // Ontology Paths
@@ -44,6 +44,33 @@ export const OntologyManifestPath = Schema.TemplateLiteralParser(
 
 export type OntologyFilePathTuple = typeof OntologyFilePath.Type
 export type OntologyFilePathEncoded = typeof OntologyFilePath.Encoded
+
+// =============================================================================
+// Batch Paths (using string functions - Schema.TemplateLiteral doesn't support branded types)
+// =============================================================================
+
+/**
+ * Batch path helpers - generate paths from branded IDs
+ *
+ * Note: We use plain string functions instead of Schema.TemplateLiteral
+ * because TemplateLiteral doesn't support branded refinement types.
+ */
+const makeBatchPath = (batchId: BatchId, suffix: string): string =>
+  `batches/${batchId}/${suffix}`
+
+const makeDocumentPath = (documentId: DocumentId, suffix: string): string =>
+  `documents/${documentId}/${suffix}`
+
+// Type aliases for documentation (the actual types are just strings)
+export type BatchStatusPath = string
+export type BatchManifestPath = string
+export type BatchResolutionPath = string
+export type BatchValidationGraphPath = string
+export type BatchValidationReportPath = string
+export type BatchCanonicalPath = string
+export type DocumentMetadataPath = string
+export type DocumentInputPath = string
+export type DocumentGraphPath = string
 
 // =============================================================================
 // Run Paths
@@ -119,6 +146,13 @@ export const RunOutputPath = Schema.TemplateLiteralParser(
 )
 
 // =============================================================================
+// Canonical Namespace Paths
+// =============================================================================
+
+// Type alias for canonical paths (Schema.TemplateLiteral doesn't support branded types)
+export type CanonicalNamespacePath = string
+
+// =============================================================================
 // PathLayout Service
 // =============================================================================
 
@@ -137,6 +171,26 @@ export const PathLayout = {
     },
 
     manifest: (ns: Namespace, name: OntologyName) => `ontologies/${ns}/${name}/manifest.json`
+  },
+
+  // BATCH
+  batch: {
+    status: (batchId: BatchId): BatchStatusPath => makeBatchPath(batchId, "status.json"),
+    manifest: (batchId: BatchId): BatchManifestPath => makeBatchPath(batchId, "manifest.json"),
+    resolution: (batchId: BatchId): BatchResolutionPath => makeBatchPath(batchId, "resolution/merged.ttl"),
+    validationGraph: (batchId: BatchId): BatchValidationGraphPath => makeBatchPath(batchId, "validation/validated.ttl"),
+    validationReport: (batchId: BatchId): BatchValidationReportPath => makeBatchPath(batchId, "validation/report.json"),
+    canonical: (batchId: BatchId): BatchCanonicalPath => makeBatchPath(batchId, "canonical/final.ttl"),
+    // Additional batch paths for ingestion
+    ingestManifest: (batchId: BatchId): string => makeBatchPath(batchId, "ingest/manifest.json"),
+    finalOutput: (batchId: BatchId): string => makeBatchPath(batchId, "ingest/output.ttl")
+  },
+
+  // DOCUMENT
+  document: {
+    metadata: (docId: DocumentId): DocumentMetadataPath => makeDocumentPath(docId, "metadata.json"),
+    input: (docId: DocumentId): DocumentInputPath => makeDocumentPath(docId, "input/content.txt"),
+    graph: (docId: DocumentId): DocumentGraphPath => makeDocumentPath(docId, "extraction/graph.ttl")
   },
 
   // RUN
@@ -164,5 +218,10 @@ export const PathLayout = {
       const tuple = Schema.decodeUnknownSync(RunOutputPath)(path)
       return [tuple[1], tuple[3]] as const // [docId, filename]
     }
-  }
+  },
+
+  // CANONICAL
+  canonical: (ns: Namespace) => ({
+    entities: `canonical/${ns}/entities.ttl` as CanonicalNamespacePath
+  })
 } as const

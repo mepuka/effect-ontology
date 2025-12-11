@@ -1,7 +1,7 @@
 # Batch Workflow Architecture Design
 
 **Date**: 2025-12-10
-**Status**: Draft (v3 - Tightened per review: Match, TemplateLiteral, unified types)
+**Status**: Draft (v4 - Added @effect/workflow research: persistence layers, engine architecture)
 **Author**: Claude + pooks
 
 ## Overview
@@ -115,16 +115,19 @@ We provide a thin GCS-backed `KeyValueStore` layer to satisfy persistence, and C
 │                           GOOGLE CLOUD INFRASTRUCTURE LAYER                              │
 │                                                                                          │
 │   ┌─────────────────────────────────────────────────────────────────────────────────┐   │
-│   │                              Cloud Run Jobs                                      │   │
+│   │                              Cloud Run Job (Single Dispatcher)                  │   │
 │   │                                                                                  │   │
-│   │  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐ │   │
-│   │  │ extraction-    │  │ resolution-    │  │ validation-    │  │ ingestion-     │ │   │
-│   │  │ worker         │  │ worker         │  │ worker         │  │ worker         │ │   │
-│   │  │                │  │                │  │                │  │                │ │   │
-│   │  │ Timeout: 30min │  │ Timeout: 60min │  │ Timeout: 30min │  │ Timeout: 60min │ │   │
-│   │  │ Memory: 2Gi    │  │ Memory: 4Gi    │  │ Memory: 2Gi    │  │ Memory: 2Gi    │ │   │
-│   │  │ CPU: 2         │  │ CPU: 2         │  │ CPU: 1         │  │ CPU: 1         │ │   │
-│   │  └────────────────┘  └────────────────┘  └────────────────┘  └────────────────┘ │   │
+│   │  ┌──────────────────────────────────────────────────────────────────────────┐   │   │
+│   │  │                        activity-runner                                    │   │   │
+│   │  │                                                                           │   │   │
+│   │  │  ACTIVITY_NAME env var routes to:                                         │   │   │
+│   │  │  • extraction  → ExtractionActivity   (LLM extraction)                    │   │   │
+│   │  │  • resolution  → ResolutionActivity   (entity clustering)                 │   │   │
+│   │  │  • validation  → ValidationActivity   (SHACL check)                       │   │   │
+│   │  │  • ingestion   → IngestionActivity    (canonical write)                   │   │   │
+│   │  │                                                                           │   │   │
+│   │  │  Timeout: 30min  |  Memory: 4Gi  |  CPU: 2                                │   │   │
+│   │  └──────────────────────────────────────────────────────────────────────────┘   │   │
 │   └─────────────────────────────────────────────────────────────────────────────────┘   │
 │                                          ▲                                              │
 │                                          │ Triggers (HTTP POST)                         │
@@ -249,7 +252,7 @@ import { Schema, Brand } from "effect"
 
 // GCS bucket URI: gs://bucket-name/path/to/object
 export const GcsUri = Schema.String.pipe(
-  Schema.pattern(/^gs:\/\/[a-z0-9][-a-z0-9._]*[a-z0-9]\/.*$/),
+  Schema.pattern(/^gs:\/\/[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]\/.+$/),
   Schema.brand("GcsUri")
 )
 export type GcsUri = Schema.Schema.Type<typeof GcsUri>
@@ -269,9 +272,9 @@ export const DocumentId = Schema.String.pipe(
 export type DocumentId = Schema.Schema.Type<typeof DocumentId>
 
 // OntologyVersion: namespace/name@hash (full semantic version)
-// Example: "football/ontology@a1b2c3d4e5f6"
+// Example: "football/ontology@a1b2c3d4e5f6a7b8"
 export const OntologyVersion = Schema.String.pipe(
-  Schema.pattern(/^[a-z][a-z0-9-]*\/[a-z][a-z0-9-]*@[a-f0-9]{12}$/),
+  Schema.pattern(/^[a-z][a-z0-9-]*\/[a-z][a-z0-9_-]*@[a-f0-9]{16}$/),
   Schema.brand("OntologyVersion")
 )
 export type OntologyVersion = Schema.Schema.Type<typeof OntologyVersion>
@@ -283,9 +286,9 @@ export const Namespace = Schema.String.pipe(
 )
 export type Namespace = Schema.Schema.Type<typeof Namespace>
 
-// ContentHash: SHA-256 hex (64 chars)
+// ContentHash: SHA-256 prefix (16 hex)
 export const ContentHash = Schema.String.pipe(
-  Schema.pattern(/^[a-f0-9]{64}$/),
+  Schema.pattern(/^[a-f0-9]{16}$/),
   Schema.brand("ContentHash")
 )
 export type ContentHash = Schema.Schema.Type<typeof ContentHash>
@@ -379,17 +382,15 @@ export const toGcsUri = (bucket: string, path: string): GcsUri =>
 
 ### Batch Workflow States (Single Union + Match)
 
+Implemented as a single `Schema.Union` of `Schema.TaggedStruct` variants (tags: `"Pending" | "Extracting" | "Resolving" | "Validating" | "Ingesting" | "Complete" | "Failed"`). Dates use `Schema.DateTimeUtc`; helpers (`stageDisplayName`, `isTerminal`, `progressPercent`, `getError`) are implemented with `Match.type` for exhaustiveness.
+
 ```typescript
 // packages/@core-v2/src/Domain/Model/BatchWorkflow.ts
 
-import { Schema, Match, pipe } from "effect"
-import { BatchId, GcsUri, OntologyVersion, DocumentId, BatchResolutionPath } from "../Identity"
+import { Match, Schema } from "effect"
+import { BatchId, DocumentId, GcsUri, OntologyVersion } from "../Identity"
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Shared Base Fields (used via spread, not separate Schema.extend)
-// ─────────────────────────────────────────────────────────────────────────────
-
-const BatchWorkflowBase = {
+const BatchBase = {
   batchId: BatchId,
   manifestUri: GcsUri,
   ontologyVersion: OntologyVersion,
@@ -397,80 +398,66 @@ const BatchWorkflowBase = {
   updatedAt: Schema.DateTimeUtc
 }
 
-// Stats schema reused across states
-const BatchStats = Schema.Struct({
-  documentsProcessed: Schema.Number,
-  entitiesExtracted: Schema.Number,
-  relationsExtracted: Schema.Number,
-  clustersResolved: Schema.Number,
-  triplesIngested: Schema.Number,
-  totalDurationMs: Schema.Number
-})
-
-// Error schema reused
-const BatchError = Schema.Struct({
-  code: Schema.String,
-  message: Schema.String,
-  cause: Schema.optional(Schema.Unknown)
-})
-
-// ─────────────────────────────────────────────────────────────────────────────
-// State Variants (TaggedClass for _tag discriminator)
-// ─────────────────────────────────────────────────────────────────────────────
-
-export class BatchPending extends Schema.TaggedClass<BatchPending>()("BatchPending", {
-  ...BatchWorkflowBase,
+export const BatchPending = Schema.TaggedStruct("Pending", {
+  ...BatchBase,
   documentCount: Schema.Number
-}) {}
+})
 
-export class BatchExtracting extends Schema.TaggedClass<BatchExtracting>()("BatchExtracting", {
-  ...BatchWorkflowBase,
+export const BatchExtracting = Schema.TaggedStruct("Extracting", {
+  ...BatchBase,
   documentsTotal: Schema.Number,
   documentsCompleted: Schema.Number,
   documentsFailed: Schema.Number,
   currentDocumentId: Schema.optional(DocumentId)
-}) {}
+})
 
-export class BatchResolving extends Schema.TaggedClass<BatchResolving>()("BatchResolving", {
-  ...BatchWorkflowBase,
+export const BatchResolving = Schema.TaggedStruct("Resolving", {
+  ...BatchBase,
   extractionOutputUri: GcsUri,
   entitiesTotal: Schema.Number,
   clustersFormed: Schema.Number
-}) {}
+})
 
-export class BatchValidating extends Schema.TaggedClass<BatchValidating>()("BatchValidating", {
-  ...BatchWorkflowBase,
+export const BatchValidating = Schema.TaggedStruct("Validating", {
+  ...BatchBase,
   resolvedGraphUri: GcsUri,
   validationStartedAt: Schema.DateTimeUtc
-}) {}
+})
 
-export class BatchIngesting extends Schema.TaggedClass<BatchIngesting>()("BatchIngesting", {
-  ...BatchWorkflowBase,
+export const BatchIngesting = Schema.TaggedStruct("Ingesting", {
+  ...BatchBase,
   validatedGraphUri: GcsUri,
   triplesTotal: Schema.Number,
   triplesIngested: Schema.Number
-}) {}
+})
 
-export class BatchComplete extends Schema.TaggedClass<BatchComplete>()("BatchComplete", {
-  ...BatchWorkflowBase,
+export const BatchComplete = Schema.TaggedStruct("Complete", {
+  ...BatchBase,
   canonicalGraphUri: GcsUri,
-  stats: BatchStats,
+  stats: Schema.Struct({
+    documentsProcessed: Schema.Number,
+    entitiesExtracted: Schema.Number,
+    relationsExtracted: Schema.Number,
+    clustersResolved: Schema.Number,
+    triplesIngested: Schema.Number,
+    totalDurationMs: Schema.Number
+  }),
   completedAt: Schema.DateTimeUtc
-}) {}
+})
 
-export class BatchFailed extends Schema.TaggedClass<BatchFailed>()("BatchFailed", {
-  ...BatchWorkflowBase,
+export const BatchFailed = Schema.TaggedStruct("Failed", {
+  ...BatchBase,
   failedAt: Schema.DateTimeUtc,
   failedInStage: Schema.Literal("pending", "extracting", "resolving", "validating", "ingesting"),
-  error: BatchError,
+  error: Schema.Struct({
+    code: Schema.String,
+    message: Schema.String,
+    cause: Schema.optional(Schema.Unknown)
+  }),
   lastSuccessfulStage: Schema.optional(Schema.Literal("pending", "extracting", "resolving", "validating", "ingesting"))
-}) {}
+})
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Single Discriminated Union (no separate stage enum)
-// ─────────────────────────────────────────────────────────────────────────────
-
-export const BatchWorkflowState = Schema.Union(
+export const BatchState = Schema.Union(
   BatchPending,
   BatchExtracting,
   BatchResolving,
@@ -480,53 +467,43 @@ export const BatchWorkflowState = Schema.Union(
   BatchFailed
 )
 
-export type BatchWorkflowState = Schema.Schema.Type<typeof BatchWorkflowState>
+export type BatchState = Schema.Schema.Type<typeof BatchState>
+export const BatchStateJson = Schema.parseJson(BatchState)
 
-// JSON roundtrip schema (typed JSON parse/stringify)
-export const BatchWorkflowStateJson = Schema.parseJson(BatchWorkflowState)
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Exhaustive Pattern Matching with Match.type
-// ─────────────────────────────────────────────────────────────────────────────
-
-// State display name (exhaustive)
-export const stageDisplayName = Match.type<BatchWorkflowState>().pipe(
-  Match.tag("BatchPending", () => "Pending"),
-  Match.tag("BatchExtracting", () => "Extracting"),
-  Match.tag("BatchResolving", () => "Resolving"),
-  Match.tag("BatchValidating", () => "Validating"),
-  Match.tag("BatchIngesting", () => "Ingesting"),
-  Match.tag("BatchComplete", () => "Complete"),
-  Match.tag("BatchFailed", () => "Failed"),
+export const stageDisplayName = Match.type<BatchState>().pipe(
+  Match.tag("Pending", () => "Pending"),
+  Match.tag("Extracting", () => "Extracting"),
+  Match.tag("Resolving", () => "Resolving"),
+  Match.tag("Validating", () => "Validating"),
+  Match.tag("Ingesting", () => "Ingesting"),
+  Match.tag("Complete", () => "Complete"),
+  Match.tag("Failed", () => "Failed"),
   Match.exhaustive
 )
 
-// Check if terminal state (exhaustive)
-export const isTerminal = Match.type<BatchWorkflowState>().pipe(
-  Match.tag("BatchComplete", "BatchFailed", () => true),
-  Match.tag("BatchPending", "BatchExtracting", "BatchResolving", "BatchValidating", "BatchIngesting", () => false),
+export const isTerminal = Match.type<BatchState>().pipe(
+  Match.tag("Complete", "Failed", () => true),
+  Match.tag("Pending", "Extracting", "Resolving", "Validating", "Ingesting", () => false),
   Match.exhaustive
 )
 
-// Get progress percentage (exhaustive)
-export const progressPercent = Match.type<BatchWorkflowState>().pipe(
-  Match.tag("BatchPending", () => 0),
-  Match.tag("BatchExtracting", (s) =>
+export const progressPercent = Match.type<BatchState>().pipe(
+  Match.tag("Pending", () => 0),
+  Match.tag("Extracting", (s) =>
     s.documentsTotal > 0 ? Math.round((s.documentsCompleted / s.documentsTotal) * 25) : 0
   ),
-  Match.tag("BatchResolving", () => 50),
-  Match.tag("BatchValidating", () => 75),
-  Match.tag("BatchIngesting", (s) =>
+  Match.tag("Resolving", () => 50),
+  Match.tag("Validating", () => 75),
+  Match.tag("Ingesting", (s) =>
     s.triplesTotal > 0 ? 75 + Math.round((s.triplesIngested / s.triplesTotal) * 25) : 90
   ),
-  Match.tag("BatchComplete", () => 100),
-  Match.tag("BatchFailed", () => -1),
+  Match.tag("Complete", () => 100),
+  Match.tag("Failed", () => -1),
   Match.exhaustive
 )
 
-// Extract error if present (with orElse for non-error states)
-export const getError = Match.type<BatchWorkflowState>().pipe(
-  Match.tag("BatchFailed", (s) => s.error),
+export const getError = Match.type<BatchState>().pipe(
+  Match.tag("Failed", (s) => s.error),
   Match.orElse(() => undefined)
 )
 ```
@@ -580,6 +557,14 @@ export class Document extends Schema.TaggedClass<Document>()("Document", {
 // JSON roundtrip
 export const DocumentJson = Schema.parseJson(Document)
 ```
+
+---
+
+### Core workflow tasks (unchanged and required)
+- Extraction: input `documentId`, `sourceUri`, `ontologyVersion`; output `graph.ttl` + stats under `documents/{docId}/extraction/`.
+- Resolution: input all extraction `graph.ttl` paths; output `batches/{batchId}/resolution/merged.ttl` and cluster stats.
+- Validation: input `resolvedGraphUri` + `shaclUri`; outputs `validated.ttl` and `report.json` under `batches/{batchId}/validation/`.
+- Ingestion: input `validatedGraphUri` + `targetNamespace`; outputs canonical graph `batches/{batchId}/canonical/final.ttl` (and optional mirror under `canonical/{ns}/`).
 
 ---
 
@@ -1318,15 +1303,15 @@ describe("BatchWorkflow", () => {
       const persistence = yield* Persistence.ResultPersistence
 
       const result = yield* workflow.execute({
-        batchId: "batch-12345678" as BatchId,
+        batchId: "batch-123456789abc" as BatchId,
         manifestUri: "gs://test-bucket/manifest.json" as GcsUri,
-        ontologyVersion: "abcd1234abcd1234" as OntologyVersion
+        ontologyVersion: "football/ontology@abcd1234abcd1234" as OntologyVersion
       })
 
       expect(result._tag).toBe("BatchComplete")
 
       // Verify state was persisted
-      const stored = yield* persistence.get("batch-12345678")
+      const stored = yield* persistence.get("batch-123456789abc")
       expect(stored).toBeDefined()
     })
   )
@@ -1484,7 +1469,7 @@ resource "google_service_account" "cloud_tasks" {
 
 ### Phase 1: Domain Models & @effect/workflow Integration
 - [ ] Implement branded types (`GcsUri`, `BatchId`, `DocumentId`, etc.)
-- [ ] Implement BatchWorkflowState with Schema.extend pattern
+- [ ] Implement BatchWorkflowState with spread pattern (Schema.TaggedClass + ...BatchWorkflowBase)
 - [ ] Implement GcsKeyValueStore for Persistence
 - [ ] Implement BatchWorkflow using Workflow.make
 - [ ] Unit tests with Persistence.layerMemory
@@ -1529,11 +1514,234 @@ resource "google_service_account" "cloud_tasks" {
 | Finding | Severity | v2 Resolution |
 |---------|----------|---------------|
 | Custom workflow duplicates @effect/workflow | High | Use Workflow.make, Activity.make, Persistence.layerKeyValueStore |
-| Batch states repeat base fields | Medium | Use Schema.extend with BatchWorkflowBase.fields |
+| Batch states repeat base fields | Medium | Share base fields via spread (`...BatchWorkflowBase`) |
 | Raw strings for URIs/versions | Medium | Branded types: GcsUri, BatchId, DocumentId, OntologyVersion |
 | Manual JSON encode/decode | Medium | Use Schema.parseJson combinator |
 | Queue has unnecessary acknowledge API | Medium | Simplified to enqueue-only (Cloud Tasks handles delivery) |
 | Manual layer wiring in tests | Low | Use @effect/vitest layer() and TestContext |
+
+---
+
+## Research Findings (v4 - @effect/workflow Deep Dive)
+
+### Key Discoveries from @effect/workflow Analysis
+
+Based on comprehensive research of the `@effect/workflow` package and real-world usage patterns from the Cap codebase:
+
+#### 1. Workflow Engine Architecture
+
+The workflow system requires a **multi-layer architecture**:
+
+```
+┌─────────────────────────────────────────────────┐
+│  Workflow Definitions Layer                      │
+│  (BatchWorkflow.toLayer)                         │
+└──────────────────┬──────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────┐
+│  ClusterWorkflowEngine Layer                     │
+│  (Orchestrates workflow execution)               │
+└──────────────────┬──────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────┐
+│  NodeClusterRunnerSocket Layer                   │
+│  ({ storage: "sql" | "memory" })                 │
+└──────────────────┬──────────────────────────────┘
+                   │
+┌──────────────────▼──────────────────────────────┐
+│  Persistence Backend                             │
+│  (PostgreSQL via @effect/sql-pg for production)  │
+└─────────────────────────────────────────────────┘
+```
+
+#### 2. Persistence Backend Options
+
+| Backend | Package | Use Case | Our Choice |
+|---------|---------|----------|------------|
+| **GCS (existing)** | `StorageService` | Production + Local | **Primary - reuse existing!** |
+| In-memory | `WorkflowEngine.layerMemory` | Testing | **Unit tests** |
+| PostgreSQL | `@effect/sql-pg` | Future (if needed) | Optional upgrade path |
+
+**Decision**: **Reuse existing GCS-backed StorageService** for workflow persistence. Our `StorageService` already extends `KeyValueStore.KeyValueStore` from `@effect/platform`, which is exactly what `Persistence.layerKeyValueStore` expects. Zero new infrastructure needed!
+
+**Key insight**: The `Persistence.layerKeyValueStore` adapter converts any `KeyValueStore` → `BackingPersistence`. Since our `StorageService` already implements `KeyValueStore`, we just compose the layers directly.
+
+#### 3. Activity Definition Pattern (from Cap)
+
+```typescript
+yield* Activity.make({
+  name: "ExtractionActivity",
+  error: Schema.Union(DatabaseError, ExternalServiceError),
+  success: ExtractionOutput,
+  execute: Effect.gen(function* () {
+    // Implementation with retry logic
+  }).pipe(
+    Effect.retry({
+      schedule: Schedule.exponential("200 millis"),
+      times: 3,
+      while: (e) => e._tag !== "PermanentError",
+    }),
+  ),
+})
+```
+
+**Key patterns**:
+- Typed `error` schema declares all failure modes upfront
+- Conditional retries: only retry transient failures
+- `Effect.catchTag` for typed error handling
+- `Effect.scoped` for resource cleanup
+
+#### 4. Idempotency Key Design
+
+From Cap's real-world usage:
+```typescript
+idempotencyKey: (p) =>
+  `${p.context.userId}-${p.context.orgId}-${p.batchData.id}-${p.attempt ?? 0}`
+```
+
+**Our pattern**:
+```typescript
+idempotencyKey: (p) => p.batchId  // BatchId already includes hash
+```
+
+#### 5. Compensation (Saga) Pattern
+
+```typescript
+yield* BatchWorkflow.withCompensation(
+  Activity.make({ name: "WriteToCanonical", execute: writeEffect }),
+  (result, cause) => Effect.gen(function* () {
+    // Rollback on workflow failure
+    yield* storage.remove(result.canonicalUri)
+  })
+)
+```
+
+#### 6. DurableClock for Long-Running Waits
+
+```typescript
+// Efficient waiting - no resources consumed while sleeping
+yield* DurableClock.sleep(Duration.minutes(5))
+```
+
+### Updated Architecture Decisions
+
+| Component | Previous Plan | Updated Based on Research |
+|-----------|---------------|---------------------------|
+| Persistence | GCS KeyValueStore | **Cloud SQL (PostgreSQL)** via `@effect/sql-pg` |
+| Local Dev | In-memory | **SQLite** via `@effect/sql-sqlite-bun` |
+| Engine | Custom | **ClusterWorkflowEngine** from `@effect/cluster` |
+| Socket Layer | N/A | **NodeClusterRunnerSocket** with `storage: "sql"` |
+| Activity Retries | Manual | **Activity.retry with Schedule.exponential** |
+| Compensation | N/A | **Workflow.withCompensation** for rollback |
+
+### Required Data Structures
+
+#### DurableExecutionJournal Schema (PostgreSQL)
+
+```sql
+-- Workflow executions
+CREATE TABLE workflow_executions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workflow_name VARCHAR(255) NOT NULL,
+  idempotency_key VARCHAR(255) NOT NULL,
+  status VARCHAR(50) NOT NULL DEFAULT 'running',
+  payload JSONB NOT NULL,
+  result JSONB,
+  error JSONB,
+  started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  completed_at TIMESTAMP,
+
+  UNIQUE(workflow_name, idempotency_key)
+);
+
+-- Activity journal (for replay)
+CREATE TABLE activity_journal (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  execution_id UUID NOT NULL REFERENCES workflow_executions(id),
+  activity_name VARCHAR(255) NOT NULL,
+  activity_index INT NOT NULL,
+  status VARCHAR(50) NOT NULL,
+  result JSONB,
+  error JSONB,
+  attempt_count INT DEFAULT 0,
+  completed_at TIMESTAMP,
+
+  UNIQUE(execution_id, activity_index)
+);
+
+-- Compensation log
+CREATE TABLE compensation_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  execution_id UUID NOT NULL REFERENCES workflow_executions(id),
+  compensation_name VARCHAR(255) NOT NULL,
+  status VARCHAR(50) NOT NULL,
+  completed_at TIMESTAMP
+);
+```
+
+### Updated Terraform Resources
+
+Add to existing Terraform:
+
+```hcl
+# Cloud SQL for workflow persistence
+resource "google_sql_database_instance" "workflow_db" {
+  name             = "workflow-postgres"
+  database_version = "POSTGRES_16"
+  region           = var.region
+
+  settings {
+    tier = "db-f1-micro"  # Upgrade for production
+
+    backup_configuration {
+      enabled = true
+      start_time = "03:00"
+    }
+  }
+}
+
+resource "google_sql_database" "workflows" {
+  name     = "workflows"
+  instance = google_sql_database_instance.workflow_db.name
+}
+
+resource "google_sql_user" "workflow_app" {
+  name     = "workflow_app"
+  instance = google_sql_database_instance.workflow_db.name
+  password = random_password.db_password.result
+}
+```
+
+### Revised Implementation Phases
+
+#### Phase 1: Foundation (Current)
+- [x] Domain models (Identity, BatchWorkflow, PathLayout) ✓
+- [x] Activity schemas ✓
+- [x] StorageService (GCS, local, memory) ✓
+- [ ] **Add SQLite persistence layer for local dev**
+- [ ] **Add PostgreSQL persistence layer for production**
+
+#### Phase 2: Workflow Engine
+- [ ] Wire `ClusterWorkflowEngine.layer`
+- [ ] Configure `NodeClusterRunnerSocket.layer({ storage: "sql" })`
+- [ ] Implement `BatchWorkflow.toLayer()` with real activities
+- [ ] Add `Workflow.withCompensation` for rollback
+
+#### Phase 3: Activities with Real Logic
+- [ ] **ExtractionActivity**: Wire existing `StreamingExtraction` pipeline
+- [ ] **ResolutionActivity**: Wire existing `EntityResolution` module
+- [ ] **ValidationActivity**: Integrate SHACL validation (or stub with conforms=true)
+- [ ] **IngestionActivity**: Wire RDF triple counting + canonical write
+
+#### Phase 4: Testing
+- [ ] Unit tests with `WorkflowEngine.layerMemory`
+- [ ] Integration tests with SQLite
+- [ ] E2E tests with Cloud SQL
+
+#### Phase 5: Production
+- [ ] Terraform Cloud SQL + migrations
+- [ ] Deploy workflow engine to Cloud Run
+- [ ] Monitor with structured logging
 
 ---
 
@@ -1545,3 +1753,7 @@ resource "google_service_account" "cloud_tasks" {
 - [Effect Schema parseJson](https://effect.website/docs/schema/parsejson/)
 - [Cloud Tasks Documentation](https://cloud.google.com/tasks/docs)
 - [Cloud Run Jobs Documentation](https://cloud.google.com/run/docs/create-jobs)
+- [@effect/cluster-workflow](https://www.npmjs.com/package/@effect/cluster-workflow)
+- [@effect/sql-pg](https://www.npmjs.com/package/@effect/sql-pg)
+- [@effect/sql-sqlite-bun](https://www.npmjs.com/package/@effect/sql-sqlite-bun)
+- [Cap Codebase (real-world workflow patterns)](docs/Cap/)

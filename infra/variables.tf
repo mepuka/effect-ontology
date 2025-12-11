@@ -24,3 +24,9 @@ variable "allow_unauthenticated" {
   type        = bool
   default     = false
 }
+
+variable "enable_postgres" {
+  description = "Enable PostgreSQL for workflow persistence"
+  type        = bool
+  default     = false
+}

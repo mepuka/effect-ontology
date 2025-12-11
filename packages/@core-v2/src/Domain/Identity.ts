@@ -54,6 +54,19 @@ export const GcsBucket = Schema.String.pipe(
 export type GcsBucket = typeof GcsBucket.Type
 
 /**
+ * GCS URI: gs://bucket/object
+ */
+export const GcsUri = Schema.String.pipe(
+  Schema.pattern(/^gs:\/\/[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]\/.+$/),
+  Schema.brand("GcsUri"),
+  Schema.annotations({
+    title: "GCS URI",
+    description: "Fully-qualified gs:// URI"
+  })
+)
+export type GcsUri = typeof GcsUri.Type
+
+/**
  * GCS object path (no // or leading/trailing /)
  */
 export const GcsObject = Schema.String.pipe(
@@ -94,6 +107,19 @@ export const OntologyName = Schema.String.pipe(
   })
 )
 export type OntologyName = typeof OntologyName.Type
+
+/**
+ * Ontology version string: {namespace}/{name}@{hash}
+ */
+export const OntologyVersion = Schema.String.pipe(
+  Schema.pattern(/^[a-z][a-z0-9-]*\/[a-z][a-z0-9_-]*@[a-f0-9]{16}$/),
+  Schema.brand("OntologyVersion"),
+  Schema.annotations({
+    title: "Ontology Version",
+    description: "Namespace/name with content hash, e.g. ns/name@deadbeefdeadbeef"
+  })
+)
+export type OntologyVersion = typeof OntologyVersion.Type
 
 // =============================================================================
 // Document & Run Identity
@@ -137,3 +163,22 @@ export type ChunkId = typeof ChunkId.Type
  */
 export type ExtractionRunId = DocumentId
 export const ExtractionRunId = DocumentId
+
+/**
+ * Batch ID: batch-{12 hex}
+ */
+export const BatchId = Schema.String.pipe(
+  Schema.pattern(/^batch-[a-f0-9]{12}$/),
+  Schema.brand("BatchId"),
+  Schema.annotations({
+    title: "Batch ID",
+    description: "Deterministic batch identifier (12 hex chars)"
+  })
+)
+export type BatchId = typeof BatchId.Type
+
+/**
+ * Build a gs:// URI from bucket + object path
+ */
+export const toGcsUri = (bucket: string, objectPath: string): GcsUri =>
+  `gs://${bucket}/${objectPath.replace(/^\/+/, "")}` as GcsUri
