@@ -151,6 +151,29 @@ export class SafetyError extends Schema.TaggedError<SafetyError>()(
 }
 
 // =============================================================================
+// Health Check Errors
+// =============================================================================
+
+/**
+ * HealthCheckError - service health check failed
+ */
+export class HealthCheckError extends Schema.TaggedError<HealthCheckError>()(
+  "HealthCheckError",
+  {
+    message: Schema.String,
+    url: Schema.String,
+    expectedStatus: Schema.Number,
+    actualStatus: Schema.optional(Schema.Number),
+    responseBody: Schema.optional(Schema.String),
+    logsUrl: Schema.optional(Schema.String)
+  }
+) {
+  get [Symbol.toStringTag]() {
+    return "HealthCheckError"
+  }
+}
+
+// =============================================================================
 // Aggregate Error Type
 // =============================================================================
 
@@ -165,3 +188,4 @@ export type DeployError =
   | GcloudError
   | StateError
   | SafetyError
+  | HealthCheckError

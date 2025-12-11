@@ -10,14 +10,17 @@
  */
 
 import { Command, Options } from "@effect/cli"
+import { FetchHttpClient } from "@effect/platform"
 import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { Console, Effect, Layer } from "effect"
 import { withErrorHandler } from "./Cli/ErrorHandler.js"
+import { HealthCheckError } from "./Domain/Error.js"
 import type { Environment } from "./Domain/Identity.js"
 import { formatTfOutputs } from "./Domain/Schema/TfOutputs.js"
 import { ConfigLoader } from "./Service/ConfigLoader.js"
 import { DockerRunner } from "./Service/DockerRunner.js"
 import { GcloudRunner } from "./Service/GcloudRunner.js"
+import { HealthChecker } from "./Service/HealthChecker.js"
 import { TerraformRunner } from "./Service/TerraformRunner.js"
 
 // =============================================================================
@@ -40,6 +43,11 @@ const verboseOption = Options.boolean("verbose").pipe(
   Options.withAlias("v"),
   Options.withDefault(false),
   Options.withDescription("Show full command output (verbose mode)")
+)
+
+const skipVerifyOption = Options.boolean("skip-verify").pipe(
+  Options.withDefault(false),
+  Options.withDescription("Skip post-deploy health verification")
 )
 
 // =============================================================================
@@ -262,8 +270,8 @@ const destroyCommand = Command.make(
  */
 const fullDeployCommand = Command.make(
   "full-deploy",
-  { env: envOption, autoApprove: autoApproveOption, verbose: verboseOption },
-  ({ autoApprove, env, verbose }) =>
+  { env: envOption, autoApprove: autoApproveOption, verbose: verboseOption, skipVerify: skipVerifyOption },
+  ({ autoApprove, env, skipVerify, verbose }) =>
     Effect.gen(function*() {
       yield* Console.log(`Starting full deployment for ${env} environment...`)
       yield* Console.log("─".repeat(50))
@@ -320,6 +328,16 @@ const fullDeployCommand = Command.make(
       // Step 7: Get and display outputs
       yield* Console.log("\n📊 Step 7: Deployment outputs")
       const outputs = yield* tf.output({ cwd: config.infraDir })
+
+      // Step 8: Health verification
+      if (!skipVerify && outputs.service_url) {
+        yield* Console.log("\n🏥 Step 8: Health verification")
+        const health = yield* HealthChecker
+        yield* health.waitForHealthy(outputs.service_url, "/health/live")
+        yield* Console.log(`✓ Service healthy at ${outputs.service_url}`)
+      } else if (skipVerify) {
+        yield* Console.log("\n⏭️  Skipping health verification (--skip-verify)")
+      }
 
       yield* Console.log("─".repeat(50))
       yield* Console.log("\n✓ Deployment complete!")
@@ -411,6 +429,58 @@ const statusCommand = Command.make(
     }).pipe(withErrorHandler)
 ).pipe(Command.withDescription("Show current infrastructure status"))
 
+/**
+ * verify - Verify deployment health
+ */
+const verifyCommand = Command.make(
+  "verify",
+  { env: envOption },
+  ({ env }) =>
+    Effect.gen(function*() {
+      yield* Console.log(`Verifying deployment health for ${env} environment...`)
+
+      const configLoader = yield* ConfigLoader
+      const config = yield* configLoader.load(env as Environment)
+      const tf = yield* TerraformRunner
+      const health = yield* HealthChecker
+
+      // Get service URL from terraform outputs
+      yield* tf.workspaceEnsure({ cwd: config.infraDir }, env)
+      const outputs = yield* tf.output({ cwd: config.infraDir })
+
+      if (!outputs.service_url) {
+        return yield* Effect.fail(
+          new HealthCheckError({
+            message: "No service URL found in terraform outputs",
+            url: "unknown",
+            expectedStatus: 200
+          })
+        )
+      }
+
+      yield* Console.log(`\nService URL: ${outputs.service_url}`)
+      yield* Console.log("\nChecking health endpoints...")
+
+      // Check liveness
+      yield* Console.log("  /health/live ... ")
+      const liveResult = yield* health.check(outputs.service_url, "/health/live")
+      yield* Console.log(`  ✓ Live (${liveResult.latencyMs}ms)`)
+
+      // Check readiness
+      yield* Console.log("  /health/ready ... ")
+      const readyResult = yield* health.check(outputs.service_url, "/health/ready").pipe(
+        Effect.orElseSucceed(() => ({ url: outputs.service_url!, status: -1, latencyMs: 0 }))
+      )
+      if (readyResult.status === 200) {
+        yield* Console.log(`  ✓ Ready (${readyResult.latencyMs}ms)`)
+      } else {
+        yield* Console.log(`  ⚠️  Ready endpoint not available`)
+      }
+
+      yield* Console.log(`\n✓ Service at ${outputs.service_url} is healthy`)
+    }).pipe(withErrorHandler)
+).pipe(Command.withDescription("Verify deployment health"))
+
 // =============================================================================
 // Root Command
 // =============================================================================
@@ -426,7 +496,8 @@ const rootCommand = Command.make("effect-deploy").pipe(
     fullDeployCommand,
     fmtCommand,
     workspaceCommand,
-    statusCommand
+    statusCommand,
+    verifyCommand
   ]),
   Command.withDescription(
     "Effect-based Terraform deploy CLI for effect-ontology infrastructure"
@@ -436,17 +507,22 @@ const rootCommand = Command.make("effect-deploy").pipe(
 // =============================================================================
 // Layer Composition
 // =============================================================================
-
 /**
  * Live layer providing all required services
  * BunContext provides CommandExecutor, FileSystem, Path, Terminal
- * DeployLive provides ConfigLoader, TerraformRunner, DockerRunner, GcloudRunner
+ * FetchHttpClient provides HttpClient using Bun's native fetch
+ * DeployLive provides ConfigLoader, TerraformRunner, DockerRunner, GcloudRunner, HealthChecker
  */
+const HealthCheckerLive = HealthChecker.Default.pipe(
+  Layer.provide(FetchHttpClient.layer)
+)
+
 const DeployLive = Layer.mergeAll(
   ConfigLoader.Default,
   TerraformRunner.Default,
   DockerRunner.Default,
-  GcloudRunner.Default
+  GcloudRunner.Default,
+  HealthCheckerLive
 ).pipe(Layer.provideMerge(BunContext.layer))
 
 // =============================================================================

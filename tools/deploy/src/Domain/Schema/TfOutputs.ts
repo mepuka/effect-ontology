@@ -26,21 +26,11 @@ import { TerraformError } from "../Error.js"
  * - vpc_connector_name: VPC connector name (optional)
  */
 export class TfOutputs extends Schema.Class<TfOutputs>("TfOutputs")({
-  service_url: Schema.String.pipe(
-    Schema.annotations({ description: "Cloud Run service URL" })
-  ),
-  bucket_name: Schema.String.pipe(
-    Schema.annotations({ description: "GCS bucket name" })
-  ),
-  postgres_connection_string: Schema.NullOr(Schema.String).pipe(
-    Schema.annotations({ description: "PostgreSQL connection string (sensitive)" })
-  ),
-  postgres_internal_ip: Schema.NullOr(Schema.String).pipe(
-    Schema.annotations({ description: "Internal IP of PostgreSQL instance" })
-  ),
-  vpc_connector_name: Schema.NullOr(Schema.String).pipe(
-    Schema.annotations({ description: "VPC connector for Cloud Run to PostgreSQL" })
-  )
+  service_url: Schema.optional(Schema.String),
+  bucket_name: Schema.optional(Schema.String),
+  postgres_connection_string: Schema.optional(Schema.NullOr(Schema.String)),
+  postgres_internal_ip: Schema.optional(Schema.NullOr(Schema.String)),
+  vpc_connector_name: Schema.optional(Schema.NullOr(Schema.String))
 }) {}
 
 // =============================================================================

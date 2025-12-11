@@ -8,4 +8,5 @@
 export * from "./ConfigLoader.js"
 export * from "./DockerRunner.js"
 export * from "./GcloudRunner.js"
+export * from "./HealthChecker.js"
 export * from "./TerraformRunner.js"
