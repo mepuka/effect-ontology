@@ -14,6 +14,7 @@
  * @since 2.0.0
  */
 
+import { BunContext } from "@effect/platform-bun"
 import { Layer } from "effect"
 import { ConfigService, ConfigServiceDefault } from "../Service/Config.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
@@ -73,13 +74,22 @@ const OntologyBundle = Layer.mergeAll(
 )
 
 /**
+ * Platform layer: FileSystem, Path from BunContext
+ *
+ * Required by StorageServiceLive when using local storage.
+ */
+const PlatformBundle = BunContext.layer
+
+/**
  * Storage bundle: StorageService for document and graph persistence
  *
  * Dependencies:
  * - ConfigService (for storage type, bucket, path settings)
+ * - FileSystem, Path (from BunContext, needed for local storage)
  */
 const StorageBundle = StorageServiceLive.pipe(
-  Layer.provideMerge(CoreDependenciesLayer)
+  Layer.provideMerge(CoreDependenciesLayer),
+  Layer.provideMerge(PlatformBundle)
 )
 
 // =============================================================================
