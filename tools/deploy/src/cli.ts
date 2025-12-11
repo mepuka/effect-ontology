@@ -12,6 +12,7 @@
 import { Command, Options } from "@effect/cli"
 import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { Console, Effect, Layer } from "effect"
+import { withErrorHandler } from "./Cli/ErrorHandler.js"
 import type { Environment } from "./Domain/Identity.js"
 import { formatTfOutputs } from "./Domain/Schema/TfOutputs.js"
 import { ConfigLoader } from "./Service/ConfigLoader.js"
@@ -35,6 +36,12 @@ const autoApproveOption = Options.boolean("auto-approve").pipe(
   Options.withDescription("Skip interactive approval prompts")
 )
 
+const verboseOption = Options.boolean("verbose").pipe(
+  Options.withAlias("v"),
+  Options.withDefault(false),
+  Options.withDescription("Show full command output (verbose mode)")
+)
+
 // =============================================================================
 // Subcommands
 // =============================================================================
@@ -54,9 +61,10 @@ const initCommand = Command.make(
       const tf = yield* TerraformRunner
 
       yield* tf.init({ cwd: config.infraDir })
+      yield* tf.workspaceEnsure({ cwd: config.infraDir }, env)
 
-      yield* Console.log(`✓ Terraform initialized for ${env}`)
-    })
+      yield* Console.log(`✓ Terraform initialized for ${env} (workspace: ${env})`)
+    }).pipe(withErrorHandler)
 ).pipe(Command.withDescription("Initialize Terraform working directory"))
 
 /**
@@ -74,10 +82,11 @@ const validateCommand = Command.make(
       const tf = yield* TerraformRunner
 
       yield* tf.init({ cwd: config.infraDir })
+      yield* tf.workspaceEnsure({ cwd: config.infraDir }, env)
       yield* tf.validate({ cwd: config.infraDir })
 
       yield* Console.log(`✓ Terraform configuration is valid`)
-    })
+    }).pipe(withErrorHandler)
 ).pipe(Command.withDescription("Validate Terraform configuration"))
 
 /**
@@ -85,8 +94,8 @@ const validateCommand = Command.make(
  */
 const planCommand = Command.make(
   "plan",
-  { env: envOption },
-  ({ env }) =>
+  { env: envOption, verbose: verboseOption },
+  ({ env, verbose }) =>
     Effect.gen(function*() {
       yield* Console.log(`Creating Terraform plan for ${env} environment...`)
 
@@ -95,13 +104,38 @@ const planCommand = Command.make(
       const tf = yield* TerraformRunner
 
       yield* tf.init({ cwd: config.infraDir })
-      yield* tf.plan({
-        cwd: config.infraDir,
-        varFile: config.varsFilePath
-      })
+      yield* tf.workspaceEnsure({ cwd: config.infraDir }, env)
+
+      if (verbose) {
+        // Show full terraform output in real-time
+        yield* tf.planInteractive({
+          cwd: config.infraDir,
+          varFile: config.varsFilePath
+        })
+      } else {
+        // Capture and summarize
+        const result = yield* tf.plan({
+          cwd: config.infraDir,
+          varFile: config.varsFilePath
+        })
+
+        // Extract plan summary
+        const hasChanges = result.stdout.includes("Plan:")
+        const noChanges = result.stdout.includes("No changes")
+
+        if (noChanges) {
+          yield* Console.log("  No changes. Infrastructure is up-to-date.")
+        } else if (hasChanges) {
+          // Extract the plan summary line
+          const match = result.stdout.match(/Plan: (\d+) to add, (\d+) to change, (\d+) to destroy/)
+          if (match) {
+            yield* Console.log(`  Plan: ${match[1]} to add, ${match[2]} to change, ${match[3]} to destroy`)
+          }
+        }
+      }
 
       yield* Console.log(`✓ Plan created for ${env}`)
-    })
+    }).pipe(withErrorHandler)
 ).pipe(Command.withDescription("Generate Terraform execution plan"))
 
 /**
@@ -109,8 +143,8 @@ const planCommand = Command.make(
  */
 const applyCommand = Command.make(
   "apply",
-  { env: envOption, autoApprove: autoApproveOption },
-  ({ autoApprove, env }) =>
+  { env: envOption, autoApprove: autoApproveOption, verbose: verboseOption },
+  ({ autoApprove, env, verbose }) =>
     Effect.gen(function*() {
       yield* Console.log(`Applying Terraform changes for ${env} environment...`)
 
@@ -118,14 +152,22 @@ const applyCommand = Command.make(
       const config = yield* configLoader.load(env as Environment)
       const tf = yield* TerraformRunner
 
-      // Initialize
+      // Initialize and select workspace
       yield* tf.init({ cwd: config.infraDir })
+      yield* tf.workspaceEnsure({ cwd: config.infraDir }, env)
 
-      // Plan
-      yield* tf.plan({
-        cwd: config.infraDir,
-        varFile: config.varsFilePath
-      })
+      // Plan (verbose shows full output)
+      if (verbose) {
+        yield* tf.planInteractive({
+          cwd: config.infraDir,
+          varFile: config.varsFilePath
+        })
+      } else {
+        yield* tf.plan({
+          cwd: config.infraDir,
+          varFile: config.varsFilePath
+        })
+      }
 
       // Apply
       if (autoApprove) {
@@ -140,7 +182,7 @@ const applyCommand = Command.make(
       yield* Console.log("\n✓ Apply complete!")
       yield* Console.log("\nOutputs:")
       yield* Console.log(formatTfOutputs(outputs))
-    })
+    }).pipe(withErrorHandler)
 ).pipe(Command.withDescription("Apply Terraform changes"))
 
 /**
@@ -155,10 +197,11 @@ const outputCommand = Command.make(
       const config = yield* configLoader.load(env as Environment)
       const tf = yield* TerraformRunner
 
+      yield* tf.workspaceEnsure({ cwd: config.infraDir }, env)
       const outputs = yield* tf.output({ cwd: config.infraDir })
 
       yield* Console.log(JSON.stringify(outputs, null, 2))
-    })
+    }).pipe(withErrorHandler)
 ).pipe(Command.withDescription("Show Terraform outputs"))
 
 /**
@@ -177,8 +220,13 @@ const destroyCommand = Command.make(
         yield* Console.error(
           "   This is a safety measure to prevent accidental destruction."
         )
+        const { SafetyError } = yield* Effect.promise(() => import("./Domain/Error.js"))
         return yield* Effect.fail(
-          new Error("Refusing to destroy prod without explicit approval")
+          new SafetyError({
+            message: "Refusing to destroy production without explicit approval",
+            operation: "destroy",
+            environment: env
+          })
         )
       }
 
@@ -189,6 +237,7 @@ const destroyCommand = Command.make(
       const tf = yield* TerraformRunner
 
       yield* tf.init({ cwd: config.infraDir })
+      yield* tf.workspaceEnsure({ cwd: config.infraDir }, env)
 
       if (autoApprove) {
         yield* tf.destroy({
@@ -205,7 +254,7 @@ const destroyCommand = Command.make(
       }
 
       yield* Console.log(`✓ Infrastructure destroyed for ${env}`)
-    })
+    }).pipe(withErrorHandler)
 ).pipe(Command.withDescription("Destroy Terraform-managed infrastructure"))
 
 /**
@@ -213,8 +262,8 @@ const destroyCommand = Command.make(
  */
 const fullDeployCommand = Command.make(
   "full-deploy",
-  { env: envOption, autoApprove: autoApproveOption },
-  ({ autoApprove, env }) =>
+  { env: envOption, autoApprove: autoApproveOption, verbose: verboseOption },
+  ({ autoApprove, env, verbose }) =>
     Effect.gen(function*() {
       yield* Console.log(`Starting full deployment for ${env} environment...`)
       yield* Console.log("─".repeat(50))
@@ -241,16 +290,24 @@ const fullDeployCommand = Command.make(
       yield* Console.log("\n🚀 Step 3: Push Docker image")
       yield* docker.push(config.tfVars.image)
 
-      // Step 4: Initialize Terraform
+      // Step 4: Initialize Terraform and select workspace
       yield* Console.log("\n🔧 Step 4: Initialize Terraform")
       yield* tf.init({ cwd: config.infraDir })
+      yield* tf.workspaceEnsure({ cwd: config.infraDir }, env)
 
       // Step 5: Plan Terraform changes
       yield* Console.log("\n📋 Step 5: Plan Terraform changes")
-      yield* tf.plan({
-        cwd: config.infraDir,
-        varFile: config.varsFilePath
-      })
+      if (verbose) {
+        yield* tf.planInteractive({
+          cwd: config.infraDir,
+          varFile: config.varsFilePath
+        })
+      } else {
+        yield* tf.plan({
+          cwd: config.infraDir,
+          varFile: config.varsFilePath
+        })
+      }
 
       // Step 6: Apply Terraform changes
       yield* Console.log("\n⚡ Step 6: Apply Terraform changes")
@@ -268,7 +325,7 @@ const fullDeployCommand = Command.make(
       yield* Console.log("\n✓ Deployment complete!")
       yield* Console.log("\nOutputs:")
       yield* Console.log(formatTfOutputs(outputs))
-    })
+    }).pipe(withErrorHandler)
 ).pipe(Command.withDescription("Full deployment: build, push, and apply Terraform"))
 
 /**
@@ -285,7 +342,41 @@ const fmtCommand = Command.make("fmt", {}, () =>
     yield* tf.fmt({ cwd: infraDir })
 
     yield* Console.log("✓ Terraform files formatted")
-  })).pipe(Command.withDescription("Format Terraform files"))
+  }).pipe(withErrorHandler)).pipe(Command.withDescription("Format Terraform files"))
+
+/**
+ * workspace - List and show workspace info
+ */
+const workspaceCommand = Command.make(
+  "workspace",
+  { env: envOption },
+  ({ env }) =>
+    Effect.gen(function*() {
+      const configLoader = yield* ConfigLoader
+      const infraDir = configLoader.getInfraDir()
+      const tf = yield* TerraformRunner
+
+      yield* tf.init({ cwd: infraDir })
+
+      const currentWorkspace = yield* tf.workspaceShow({ cwd: infraDir })
+      const workspaces = yield* tf.workspaceList({ cwd: infraDir })
+
+      yield* Console.log("\nTerraform Workspaces:")
+      yield* Console.log("─".repeat(30))
+      for (const ws of workspaces) {
+        const marker = ws === currentWorkspace ? " *" : "  "
+        yield* Console.log(`${marker} ${ws}`)
+      }
+      yield* Console.log("─".repeat(30))
+      yield* Console.log(`\nCurrent: ${currentWorkspace}`)
+      yield* Console.log(`Target (--env): ${env}`)
+
+      if (currentWorkspace !== env) {
+        yield* Console.log(`\n⚠️  Note: Current workspace doesn't match --env`)
+        yield* Console.log(`   Run any command with --env ${env} to switch`)
+      }
+    }).pipe(withErrorHandler)
+).pipe(Command.withDescription("List Terraform workspaces and current state"))
 
 /**
  * status - Show current infrastructure status
@@ -317,7 +408,7 @@ const statusCommand = Command.make(
         Effect.orElseSucceed(() => "  <none or error fetching>")
       )
       yield* Console.log(services)
-    })
+    }).pipe(withErrorHandler)
 ).pipe(Command.withDescription("Show current infrastructure status"))
 
 // =============================================================================
@@ -334,6 +425,7 @@ const rootCommand = Command.make("effect-deploy").pipe(
     destroyCommand,
     fullDeployCommand,
     fmtCommand,
+    workspaceCommand,
     statusCommand
   ]),
   Command.withDescription(
@@ -363,7 +455,7 @@ const DeployLive = Layer.mergeAll(
 
 const cli = Command.run(rootCommand, {
   name: "effect-deploy",
-  version: "0.0.1"
+  version: "0.1.0"
 })
 
 cli(Bun.argv).pipe(Effect.provide(DeployLive), BunRuntime.runMain)

@@ -131,6 +131,26 @@ export class StateError extends Schema.TaggedError<StateError>()(
 }
 
 // =============================================================================
+// Safety Errors
+// =============================================================================
+
+/**
+ * SafetyError - operation blocked for safety reasons
+ */
+export class SafetyError extends Schema.TaggedError<SafetyError>()(
+  "SafetyError",
+  {
+    message: Schema.String,
+    operation: Schema.String,
+    environment: Schema.String
+  }
+) {
+  get [Symbol.toStringTag]() {
+    return "SafetyError"
+  }
+}
+
+// =============================================================================
 // Aggregate Error Type
 // =============================================================================
 
@@ -144,3 +164,4 @@ export type DeployError =
   | DockerError
   | GcloudError
   | StateError
+  | SafetyError

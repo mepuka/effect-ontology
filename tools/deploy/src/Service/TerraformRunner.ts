@@ -268,6 +268,14 @@ export class TerraformRunner extends Effect.Service<TerraformRunner>()(
           )
         },
 
+        /**
+         * Run terraform plan with inherited stdout/stderr for verbose output
+         */
+        planInteractive: (opts: TerraformOptions) => {
+          const args = buildArgs(opts, ["-input=false", "-out=tfplan"])
+          return runCommandInherited("plan", args, opts)
+        },
+
         apply: (opts: TerraformOptions) => {
           const args = opts.autoApprove ? ["-auto-approve", "tfplan"] : ["tfplan"]
           return runCommand("apply", args, opts).pipe(
@@ -298,6 +306,55 @@ export class TerraformRunner extends Effect.Service<TerraformRunner>()(
         showState: (opts: TerraformOptions) => runCommand("show", ["-json"], opts),
 
         fmt: (opts: TerraformOptions) => runCommand("fmt", ["-recursive"], opts),
+
+        // Workspace management
+        workspaceList: (opts: TerraformOptions) =>
+          runCommand("workspace", ["list"], opts).pipe(
+            Effect.map(({ stdout }) =>
+              stdout
+                .split("\n")
+                .map((line) => line.replace(/^\*?\s*/, "").trim())
+                .filter((name) => name.length > 0)
+            )
+          ),
+
+        workspaceSelect: (opts: TerraformOptions, workspace: string) =>
+          runCommand("workspace", ["select", workspace], opts).pipe(
+            Effect.tap(() => Effect.logInfo(`Selected workspace: ${workspace}`))
+          ),
+
+        workspaceNew: (opts: TerraformOptions, workspace: string) =>
+          runCommand("workspace", ["new", workspace], opts).pipe(
+            Effect.tap(() => Effect.logInfo(`Created workspace: ${workspace}`))
+          ),
+
+        workspaceShow: (opts: TerraformOptions) =>
+          runCommand("workspace", ["show"], opts).pipe(
+            Effect.map(({ stdout }) => stdout.trim())
+          ),
+
+        /**
+         * Ensure workspace exists and select it
+         */
+        workspaceEnsure: (opts: TerraformOptions, workspace: string) =>
+          Effect.gen(function*() {
+            const workspaces = yield* runCommand("workspace", ["list"], opts).pipe(
+              Effect.map(({ stdout }) =>
+                stdout
+                  .split("\n")
+                  .map((line) => line.replace(/^\*?\s*/, "").trim())
+                  .filter((name) => name.length > 0)
+              )
+            )
+
+            if (workspaces.includes(workspace)) {
+              yield* runCommand("workspace", ["select", workspace], opts)
+              yield* Effect.logInfo(`Selected existing workspace: ${workspace}`)
+            } else {
+              yield* runCommand("workspace", ["new", workspace], opts)
+              yield* Effect.logInfo(`Created and selected workspace: ${workspace}`)
+            }
+          }),
 
         raw: runCommand
       }
