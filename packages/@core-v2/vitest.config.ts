@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     include: ["test/**/*.test.ts"],
     globals: true,
+    setupFiles: ["./test/setup.ts"],
 
     // Process pool configuration to prevent orphaned processes
     // Use threads with Bun for better performance and cleanup

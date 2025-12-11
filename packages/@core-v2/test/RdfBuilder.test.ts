@@ -9,11 +9,13 @@
 import { Effect, Layer } from "effect"
 import { describe, expect, it } from "vitest"
 import { Entity, Relation } from "../src/Domain/Model/Entity.js"
-import { ConfigService, RdfBuilder } from "../src/index.js"
+import { ConfigServiceDefault, RdfBuilder } from "../src/index.js"
+import { TestConfigProvider } from "./setup.js"
 
 describe("RdfBuilder", () => {
   const testLayer = RdfBuilder.Default.pipe(
-    Layer.provide(ConfigService.Default)
+    Layer.provideMerge(ConfigServiceDefault),
+    Layer.provideMerge(Layer.setConfigProvider(TestConfigProvider))
   )
 
   describe("Entity to RDF conversion", () => {

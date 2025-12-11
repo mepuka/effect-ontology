@@ -566,11 +566,11 @@ export const ExtractionWorkflowLive = Layer.effect(
   ExtractionWorkflow,
   makeExtractionWorkflow
 ).pipe(
-  Layer.provide(NlpService.Default),
-  Layer.provide(OntologyService.Default),
-  Layer.provide(MentionExtractor.Default),
-  Layer.provide(EntityExtractor.Default),
-  Layer.provide(RelationExtractor.Default),
-  Layer.provide(Grounder.Default),
-  Layer.provide(ExtractionRunServiceDefault)
+  Layer.provideMerge(NlpService.Default),
+  Layer.provideMerge(OntologyService.Default),
+  Layer.provideMerge(MentionExtractor.Default),
+  Layer.provideMerge(EntityExtractor.Default),
+  Layer.provideMerge(RelationExtractor.Default),
+  Layer.provideMerge(Grounder.Default),
+  Layer.provideMerge(ExtractionRunServiceDefault)
 )

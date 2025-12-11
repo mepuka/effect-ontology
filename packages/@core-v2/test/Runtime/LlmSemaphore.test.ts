@@ -7,18 +7,19 @@
 import { ConfigProvider, Effect, Layer, Ref } from "effect"
 import { describe, expect, it } from "vitest"
 import { LlmSemaphoreService } from "../../src/Runtime/LlmSemaphore.js"
-import { ConfigService } from "../../src/Service/Config.js"
+import { ConfigServiceDefault } from "../../src/Service/Config.js"
 
 describe("LlmSemaphoreService", () => {
   const TestLayers = LlmSemaphoreService.Default.pipe(
-    Layer.provide(ConfigService.Default),
-    Layer.provide(
+    Layer.provideMerge(ConfigServiceDefault),
+    Layer.provideMerge(
       Layer.setConfigProvider(
         ConfigProvider.fromMap(
           new Map([
             ["ONTOLOGY_PATH", "/tmp/test.ttl"],
-            ["ANTHROPIC_API_KEY", "sk-test"]
-          ])
+            ["LLM_API_KEY", "sk-test"]
+          ]),
+          { pathDelim: "_" }
         )
       )
     )

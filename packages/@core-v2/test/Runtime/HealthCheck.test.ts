@@ -5,13 +5,22 @@
  */
 
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Layer } from "effect"
+import { ConfigProvider, Effect, Layer } from "effect"
 import { HealthCheckService } from "../../src/Runtime/HealthCheck.js"
-import { ConfigService } from "../../src/Service/Config.js"
+import { ConfigServiceDefault } from "../../src/Service/Config.js"
 
 describe("HealthCheckService", () => {
+  const TestConfigProvider = ConfigProvider.fromMap(
+    new Map([
+      ["ONTOLOGY_PATH", "/tmp/test.ttl"],
+      ["LLM_API_KEY", "test-key"]
+    ]),
+    { pathDelim: "_" }
+  )
+
   const TestLayers = HealthCheckService.Default.pipe(
-    Layer.provide(ConfigService.Default)
+    Layer.provideMerge(ConfigServiceDefault),
+    Layer.provideMerge(Layer.setConfigProvider(TestConfigProvider))
   )
 
   it.effect("liveness returns ok", () =>

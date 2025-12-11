@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { ConfigProvider, Effect, Layer } from "effect"
-import { ConfigService } from "../../src/Service/Config.js"
+import { ConfigService, ConfigServiceDefault } from "../../src/Service/Config.js"
 
 describe("ConfigService", () => {
   const TestConfigProvider = ConfigProvider.fromMap(
@@ -30,7 +30,7 @@ describe("ConfigService", () => {
       expect(config.llm.model).toBe("claude-3-5-sonnet-20241022")
       expect(config.runtime.concurrency).toBe(4)
     }).pipe(
-      Effect.provide(ConfigService.Default),
+      Effect.provide(ConfigServiceDefault),
       Effect.provide(Layer.setConfigProvider(TestConfigProvider))
     ))
 
@@ -42,7 +42,7 @@ describe("ConfigService", () => {
       expect(config.llm.timeoutMs).toBe(60_000)
       expect(config.llm.maxTokens).toBe(4096)
     }).pipe(
-      Effect.provide(ConfigService.Default),
+      Effect.provide(ConfigServiceDefault),
       Effect.provide(Layer.setConfigProvider(ConfigProvider.fromMap(
         new Map([
           // Required fields with no defaults

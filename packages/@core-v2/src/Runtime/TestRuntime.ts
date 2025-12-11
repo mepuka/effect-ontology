@@ -19,8 +19,8 @@
 import type { Response } from "@effect/ai"
 import { LanguageModel } from "@effect/ai"
 import { BunContext } from "@effect/platform-bun"
-import { Effect, Layer, ManagedRuntime, Stream } from "effect"
-import { ConfigService } from "../Service/Config.js"
+import { ConfigProvider, Effect, Layer, ManagedRuntime, Stream } from "effect"
+import { ConfigServiceDefault } from "../Service/Config.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { Grounder } from "../Service/Grounder.js"
 import {
@@ -76,6 +76,26 @@ const LlmControlTestLayers = Layer.mergeAll(
 )
 
 /**
+ * Test ConfigProvider with required values
+ *
+ * Provides default config values for all tests so they don't need
+ * environment variables to be set.
+ */
+export const TestConfigProvider = ConfigProvider.fromMap(
+  new Map([
+    ["ONTOLOGY_PATH", "/tmp/test-ontology.ttl"],
+    ["LLM_API_KEY", "test-key-for-testing"],
+    ["LLM_PROVIDER", "anthropic"],
+    ["LLM_MODEL", "claude-3-haiku-20240307"],
+    ["STORAGE_TYPE", "memory"],
+    ["RUNTIME_CONCURRENCY", "4"],
+    ["RUNTIME_LLM_CONCURRENCY", "2"],
+    ["RUNTIME_ENABLE_TRACING", "false"]
+  ]),
+  { pathDelim: "_" }
+)
+
+/**
  * Test Layers
  *
  * Uses test/mock implementations for deterministic testing:
@@ -102,7 +122,10 @@ export const TestLayers = Layer.mergeAll(
   Grounder.Test,
   LlmControlTestLayers,
   BunContext.layer
-).pipe(Layer.provide(ConfigService.Default))
+).pipe(
+  Layer.provideMerge(ConfigServiceDefault),
+  Layer.provideMerge(Layer.setConfigProvider(TestConfigProvider))
+)
 
 /**
  * Test Runtime

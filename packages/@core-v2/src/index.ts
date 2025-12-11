@@ -23,7 +23,7 @@ export {
 } from "./Domain/Model/EntityResolution.js"
 
 // Services (Effect.Service classes with .Default layers)
-export { ConfigService } from "./Service/Config.js"
+export { ConfigService, ConfigServiceDefault } from "./Service/Config.js"
 export { EntityExtractor, RelationExtractor } from "./Service/Extraction.js"
 export { NlpService } from "./Service/Nlp.js"
 export { OntologyService } from "./Service/Ontology.js"
