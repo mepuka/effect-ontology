@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "bun@1.2.23",
   "workspaces": [
-    "packages/*"
+    "packages/@core-v2"
   ],
   "license": "MIT",
   "description": "Effect-based ontology framework monorepo",
@@ -14,23 +14,14 @@
     "url": "https://github.com/mepuka/effect-ontology.git"
   },
   "scripts": {
-    "dev": "cd packages/ui && bun run dev",
-    "build": "bun run build:core && bun run build:cli && bun run build:ui",
-    "build:core": "cd packages/core && bun run build",
-    "build:cli": "cd packages/cli && bun run build",
-    "build:ui": "cd packages/ui && bun run build",
-    "check": "bun run check:core && bun run check:cli && bun run check:ui",
-    "check:core": "cd packages/core && bun run check",
-    "check:cli": "cd packages/cli && bun run check",
-    "check:ui": "cd packages/ui && bun run check",
-    "cli": "bunx tsx packages/cli/src/main.ts",
+    "build": "cd packages/@core-v2 && bun run build",
+    "check": "cd packages/@core-v2 && bun run check",
+    "test": "cd packages/@core-v2 && bun run test",
+    "test:watch": "cd packages/@core-v2 && bun run test:watch",
+    "coverage": "cd packages/@core-v2 && vitest run --coverage",
     "lint": "eslint \"**/{src,test,examples,scripts,dtslint}/**/*.{ts,mjs}\"",
     "lint-fix": "bun run lint --fix",
-    "test": "bun run test:core",
-    "test:core": "cd packages/core && bun run test",
-    "test:watch": "cd packages/core && bun run test:watch",
-    "coverage": "cd packages/core && vitest run --coverage",
-    "clean": "rm -rf packages/core/dist packages/cli/dist packages/ui/dist",
+    "clean": "rm -rf packages/@core-v2/dist",
     "clean:processes": "pkill -f vitest || true",
     "benchmark:smoke": "bun --env-file=.env run benchmarks/src/cli.ts --samples 10",
     "benchmark:quick": "bun --env-file=.env run benchmarks/src/cli.ts --samples 100",

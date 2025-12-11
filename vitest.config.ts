@@ -5,9 +5,9 @@ import { defineConfig } from "vitest/config"
  * Root-level vitest config (currently unused - tests run in packages)
  * 
  * Note: This config is kept for reference but not actively used.
- * Tests should be run from within packages/core using its vitest.config.ts
+ * Tests should be run from within packages/@core-v2 using its vitest.config.ts
  * 
- * To run tests: cd packages/core && bun run test
+ * To run tests: cd packages/@core-v2 && bun run test
  */
 export default defineConfig({
   plugins: [],
@@ -40,8 +40,6 @@ export default defineConfig({
     mockReset: true
   },
   resolve: {
-    alias: {
-      "@effect-ontology/core": path.join(__dirname, "packages/core/src")
-    }
+    alias: {}
   }
 })

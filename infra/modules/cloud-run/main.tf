@@ -34,7 +34,7 @@ resource "google_cloud_run_v2_service" "main" {
       }
       env {
         name  = "LLM_MODEL"
-        value = "claude-3-5-sonnet-latest"
+        value = "claude-sonnet-4-20250514"
       }
       env {
         name  = "ONTOLOGY_PATH"

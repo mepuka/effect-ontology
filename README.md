@@ -73,43 +73,30 @@ ValidationReport + Turtle
 ### Basic Extraction
 
 ```typescript
-import { ExtractionPipeline } from "@effect-ontology/core/Services/Extraction"
-import { parseTurtleToGraph } from "@effect-ontology/core/Graph/Builder"
-import { Effect, Stream } from "effect"
-import { LanguageModel } from "@effect/ai"
+import { ExtractionWorkflow, ExtractionWorkflowLive } from "@effect-ontology/core-v2"
+import type { RunConfig } from "@effect-ontology/core-v2/Domain/Model/ExtractionRun"
+import { Effect } from "effect"
+
+const text = "Alice is a person who knows Bob. Bob works for Acme Corp."
+const config: RunConfig = {
+  ontologyPath: "./ontologies/foaf.ttl",
+  concurrency: 4,
+  chunking: {
+    maxChunkSize: 800,
+    preserveSentences: true
+  }
+}
 
 const program = Effect.gen(function* () {
-  // Parse ontology
-  const { graph, context } = yield* parseTurtleToGraph(turtleContent)
-
-  // Get extraction pipeline
-  const pipeline = yield* ExtractionPipeline
-
-  // Subscribe to events
-  const subscription = yield* pipeline.subscribe
-
-  // Run extraction
-  const result = yield* pipeline.extract({
-    text: "Alice is a person who knows Bob.",
-    graph,
-    ontology: context
-  })
-
-  // Consume events
-  yield* Stream.fromQueue(subscription).pipe(
-    Stream.tap((event) => Effect.log(`Event: ${event._tag}`)),
-    Stream.runDrain
-  )
-
-  return result
+  const workflow = yield* ExtractionWorkflow
+  return yield* workflow.extract(text, config)
 }).pipe(
-  Effect.provide(ExtractionPipeline.Default),
-  Effect.provide(LanguageModel.Default),
+  Effect.provide(ExtractionWorkflowLive),
   Effect.scoped
 )
 
-const result = await Effect.runPromise(program)
-console.log(result.turtle)
+const graph = await Effect.runPromise(program)
+console.log(graph)
 ```
 
 ### Expected Output
@@ -195,26 +182,15 @@ The prompt is constructed from the `KnowledgeIndex`, which can be pruned using f
 ## Project Structure
 
 ```
-packages/core/src/
-  Graph/
-    Builder.ts      # RDF parsing to Effect.Graph
-    Types.ts        # ClassNode, PropertyNode, OntologyContext
-  Prompt/
-    Solver.ts       # Topological catamorphism solver
-    Algebra.ts      # knowledgeIndexAlgebra (fold function)
-    KnowledgeIndex.ts # HashMap-based monoid
-    Enrichment.ts   # Inherited property population
-    Render.ts       # KnowledgeIndex → StructuredPrompt
-    PromptDoc.ts    # StructuredPrompt → String (via @effect/printer)
-  Services/
-    Extraction.ts   # End-to-end pipeline orchestration
-    Llm.ts          # LLM integration with structured output
-    Rdf.ts          # JSON → RDF conversion
-    Shacl.ts        # RDF validation
-  Ontology/
-    Inheritance.ts  # Property inheritance resolution
-  Schema/
-    Factory.ts      # Dynamic schema generation
+packages/@core-v2/src/
+  Domain/      # Schemas, models, and error types
+  Service/     # LLM, RDF, NLP, extraction, entity resolution services
+  Workflow/    # StreamingExtraction, TwoStageExtraction, EntityResolutionGraph
+  Runtime/     # Production layer composition (tracing, rate limits, caches)
+  Telemetry/   # OpenTelemetry attributes/exporters
+  Prompt/      # Prompt helpers and renderers
+  Schema/      # Shared schema definitions
+  Utils/       # Common utilities
 ```
 
 ## Testing

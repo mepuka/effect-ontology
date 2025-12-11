@@ -30,7 +30,7 @@ Contains:
 
 **Usage**:
 ```typescript
-import { ProgressEvent, ExtractionStartedEvent, BackpressureConfig } from "@effect-ontology/core/Contract/ProgressStreaming"
+import { ProgressEvent, ExtractionStartedEvent, BackpressureConfig } from "@effect-ontology/core-v2/Contract/ProgressStreaming"
 ```
 
 ### 2. Implementation Utilities
