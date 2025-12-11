@@ -833,20 +833,25 @@ describe("ConfigLoader", () => {
 3. Implement `TerraformRunner` service with Command APIs
 4. Add unit tests for command construction
 
-### Phase 2: Configuration
-1. Implement `ConfigLoader` service
-2. Add tfvars parsing with Schema validation
-3. Implement `GcloudRunner` and `DockerRunner` services
-4. Add integration tests against real tfvars files
-
-### Phase 3: CLI Interface
-1. Build CLI with `@effect/cli` Command definitions
-2. Wire up subcommands (init, plan, apply, deploy, destroy)
-3. Add progress logging and error formatting
-4. Test full workflows in dev environment
-
-### Phase 4: Polish
-1. Add `--target` option for partial applies
+### Phase 2: Refinements (Polishing & Production Readiness)
+- [x] **Phase 2.1: Enhance Error Handling**
+  - Implement `Domain/Error.ts` with branded errors (TerraformError, GcloudError, etc.).
+  - Integrate error handling into all runners.
+  - Add `Cli/ErrorHandler.ts` for user-friendly error display (colors, suggestions).
+- [x] **Phase 2.2: Add Health Checks**
+  - Create `Service/HealthChecker.ts` using `@effect/platform` HttpClient.
+  - Implement `waitForHealthy` loop to verify service after deployment.
+  - Add `verify` command to manually check health endpoints.
+- [x] **Phase 2.3: Add Operational Commands**
+  - Implement `logs` command (stream logs from Cloud Run).
+  - Implement `prereqs` command (verify terraform, gcloud, docker, auth).
+- [x] **Phase 2.4: Wizard Mode & Completions**
+  - Enable built-in wizard (`--wizard`) and completions (`--completions`).
+  - Ensure interactive experience is polished.
+- [x] **Phase 2.5: Final Polish**
+  - Review all messages and prompts.
+  - Ensure clear headers and success messages.
+  - Verify `init` checks prerequisites.
 2. Add state inspection commands
 3. Improve error messages and recovery hints
 4. Document usage in README
