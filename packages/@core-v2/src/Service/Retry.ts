@@ -48,6 +48,7 @@ const DEFAULT_MAX_DELAY_MS = 30_000
  * - Network errors (ECONNREFUSED, ETIMEDOUT, ENOTFOUND)
  * - Rate limit errors (HTTP 429)
  * - Server errors (HTTP 5xx)
+ * - Circuit breaker open (CircuitBreakerOpenError)
  *
  * Non-retryable errors:
  * - Client errors (HTTP 4xx except 429)
@@ -62,6 +63,16 @@ const DEFAULT_MAX_DELAY_MS = 30_000
 export const isRetryableError = (error: unknown): boolean => {
   if (!(error instanceof Error)) {
     return true // Unknown errors default to retryable
+  }
+
+  // Circuit breaker errors are always retryable
+  if (
+    error &&
+    typeof error === "object" &&
+    "_tag" in error &&
+    error._tag === "CircuitBreakerOpenError"
+  ) {
+    return true
   }
 
   // Check for HTTP status codes

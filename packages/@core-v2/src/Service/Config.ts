@@ -93,7 +93,7 @@ export interface AppConfig {
  */
 const LlmConfig = Config.all({
   provider: Config.string("LLM_PROVIDER").pipe(Config.withDefault("anthropic")),
-  model: Config.string("LLM_MODEL").pipe(Config.withDefault("claude-3-5-sonnet-latest")),
+  model: Config.string("LLM_MODEL").pipe(Config.withDefault("claude-3-haiku-20240307")),
   timeoutMs: Config.integer("LLM_TIMEOUT_MS").pipe(Config.withDefault(60_000)),
   maxTokens: Config.integer("LLM_MAX_TOKENS").pipe(Config.withDefault(4096)),
   temperature: Config.number("LLM_TEMPERATURE").pipe(Config.withDefault(0.1)),

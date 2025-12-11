@@ -13,7 +13,7 @@
  * @module Runtime/CircuitBreaker
  */
 
-import { Clock, Duration, Effect, Ref } from "effect"
+import { Clock, Data, Duration, Effect, Ref } from "effect"
 
 /**
  * Circuit breaker state
@@ -168,33 +168,32 @@ export const makeCircuitBreaker = (
     return {
       /**
        * Protect an effect with circuit breaker
+       *
+       * Returns an effect with CircuitOpenError added to the error channel.
+       * Use catchTag("CircuitOpenError") to handle circuit open scenarios.
        */
       protect: <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E | CircuitOpenError, R> =>
-        Effect.gen(function*() {
-          const allowed = yield* canAttempt
-          if (!allowed) {
-            const current = yield* getState
-            return yield* Effect.fail(
-              new CircuitOpenError({
-                resetTimeoutMs: Duration.toMillis(config.resetTimeout),
-                lastFailureTime: current.lastFailureTime
-              })
-            )
-          }
-
-          const result = yield* effect.pipe(
-            Effect.tapBoth({
-              onSuccess: () => recordSuccess,
-              onFailure: () => recordFailure
-            }),
-            Effect.either
+        canAttempt.pipe(
+          Effect.flatMap((allowed): Effect.Effect<A, E | CircuitOpenError, R> =>
+            allowed
+              ? effect.pipe(
+                Effect.tapBoth({
+                  onSuccess: () => recordSuccess,
+                  onFailure: () => recordFailure
+                })
+              )
+              : getState.pipe(
+                Effect.flatMap((current): Effect.Effect<A, CircuitOpenError, never> =>
+                  Effect.fail(
+                    new CircuitOpenError({
+                      resetTimeoutMs: Duration.toMillis(config.resetTimeout),
+                      lastFailureTime: current.lastFailureTime
+                    })
+                  )
+                )
+              )
           )
-
-          if (result._tag === "Left") {
-            return yield* Effect.fail(result.left)
-          }
-          return result.right
-        }),
+        ),
 
       /**
        * Get current circuit state
@@ -216,16 +215,18 @@ export const makeCircuitBreaker = (
 
 /**
  * Error thrown when circuit breaker is open
+ *
+ * Uses Data.TaggedError for proper Effect error handling.
+ * This allows catchTag to work correctly.
+ *
+ * @since 2.0.0
  */
-export class CircuitOpenError extends Error {
-  readonly _tag = "CircuitOpenError" as const
+export class CircuitOpenError extends Data.TaggedError("CircuitOpenError")<{
   readonly resetTimeoutMs: number
   readonly lastFailureTime: number
-
-  constructor(params: { resetTimeoutMs: number; lastFailureTime: number }) {
-    super(`Circuit breaker is open. Will retry in ${params.resetTimeoutMs}ms`)
-    this.resetTimeoutMs = params.resetTimeoutMs
-    this.lastFailureTime = params.lastFailureTime
+}> {
+  get message(): string {
+    return `Circuit breaker is open. Will retry in ${this.resetTimeoutMs}ms`
   }
 }
 
