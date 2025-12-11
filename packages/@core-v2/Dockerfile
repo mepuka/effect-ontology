@@ -55,8 +55,8 @@ EXPOSE 8080
 # Environment defaults
 ENV NODE_ENV=production
 ENV PORT=8080
-# Ontology path in GCS (bucket relative)
-ENV ONTOLOGY_PATH=ontologies/football/ontology_skos.ttl
+# Ontology path - absolute path to bundled ontology file
+ENV ONTOLOGY_PATH=/app/ontologies/football/ontology_skos.ttl
 
 # Start server
 CMD ["bun", "run", "dist/server.js"]

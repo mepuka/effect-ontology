@@ -151,7 +151,9 @@ const makeLocalStore = (config: StorageConfig) =>
     const basePath = config.localPath ?? "./output"
     const globalPrefix = config.pathPrefix ?? ""
 
-    const resolvePath = (key: string) => path.join(basePath, globalPrefix, key)
+    // If key is absolute path, use it directly; otherwise join with basePath
+    const resolvePath = (key: string) =>
+      key.startsWith("/") ? key : path.join(basePath, globalPrefix, key)
 
     const ensureDir = (filePath: string) => fs.makeDirectory(path.dirname(filePath), { recursive: true })
 
