@@ -196,6 +196,43 @@ export class GcloudRunner extends Effect.Service<GcloudRunner>()(
           runInherited(
             ["auth", "activate-service-account", "--key-file", keyFile],
             "Activating service account"
+          ),
+
+        /**
+         * Get Cloud Run logs
+         * @param serviceName - Cloud Run service name
+         * @param region - GCP region
+         * @param limit - Number of log entries to fetch (default 100)
+         */
+        getLogs: (serviceName: string, region: string, limit = 100) =>
+          runAndCapture(
+            [
+              "logging",
+              "read",
+              `resource.type="cloud_run_revision" AND resource.labels.service_name="${serviceName}" AND resource.labels.location="${region}"`,
+              "--limit",
+              String(limit),
+              "--format",
+              "value(textPayload)"
+            ],
+            `Getting logs for ${serviceName}`
+          ),
+
+        /**
+         * Stream Cloud Run logs (follow mode with inherited output)
+         * @param serviceName - Cloud Run service name
+         * @param region - GCP region
+         */
+        streamLogs: (serviceName: string, region: string) =>
+          runInherited(
+            [
+              "logging",
+              "tail",
+              `resource.type="cloud_run_revision" AND resource.labels.service_name="${serviceName}" AND resource.labels.location="${region}"`,
+              "--format",
+              "value(textPayload)"
+            ],
+            `Streaming logs for ${serviceName}`
           )
       }
     }),

@@ -21,6 +21,7 @@ import { ConfigLoader } from "./Service/ConfigLoader.js"
 import { DockerRunner } from "./Service/DockerRunner.js"
 import { GcloudRunner } from "./Service/GcloudRunner.js"
 import { HealthChecker } from "./Service/HealthChecker.js"
+import { PrereqChecker } from "./Service/PrereqChecker.js"
 import { TerraformRunner } from "./Service/TerraformRunner.js"
 
 // =============================================================================
@@ -62,7 +63,12 @@ const initCommand = Command.make(
   { env: envOption },
   ({ env }) =>
     Effect.gen(function*() {
-      yield* Console.log(`Initializing Terraform for ${env} environment...`)
+      // Check prerequisites first
+      yield* Console.log("Checking prerequisites...")
+      const prereqs = yield* PrereqChecker
+      yield* prereqs.checkAll
+
+      yield* Console.log(`\nInitializing Terraform for ${env} environment...`)
 
       const configLoader = yield* ConfigLoader
       const config = yield* configLoader.load(env as Environment)
@@ -71,7 +77,7 @@ const initCommand = Command.make(
       yield* tf.init({ cwd: config.infraDir })
       yield* tf.workspaceEnsure({ cwd: config.infraDir }, env)
 
-      yield* Console.log(`✓ Terraform initialized for ${env} (workspace: ${env})`)
+      yield* Console.log(`✓ Terraform initialized for ${env}`)
     }).pipe(withErrorHandler)
 ).pipe(Command.withDescription("Initialize Terraform working directory"))
 
@@ -481,6 +487,51 @@ const verifyCommand = Command.make(
     }).pipe(withErrorHandler)
 ).pipe(Command.withDescription("Verify deployment health"))
 
+/**
+ * logs - Stream logs for the service
+ */
+const logsCommand = Command.make(
+  "logs",
+  {
+    env: envOption,
+    lines: Options.integer("lines").pipe(Options.withDefault(100)),
+    follow: Options.boolean("follow").pipe(Options.withDefault(false))
+  },
+  ({ env, follow, lines }) =>
+    Effect.gen(function*() {
+      yield* Console.log(`Fetching logs for ${env} environment...`)
+
+      const configLoader = yield* ConfigLoader
+      const config = yield* configLoader.load(env as Environment)
+      const gcloud = yield* GcloudRunner
+
+      // Get service name from terraform outputs (or assume standard naming)
+      // Usually output by terraform but can be derived from env
+      const serviceName = `effect-ontology-core-${env}`
+
+      yield* Console.log(`Service: ${serviceName} (Region: ${config.region})`)
+      yield* Console.log("─".repeat(50))
+
+      if (follow) {
+        yield* gcloud.streamLogs(serviceName, config.region)
+      } else {
+        const logs = yield* gcloud.getLogs(serviceName, config.region, lines)
+        yield* Console.log(logs)
+      }
+    }).pipe(withErrorHandler)
+).pipe(Command.withDescription("View or stream Cloud Run logs"))
+
+/**
+ * prereqs - Check prerequisites
+ */
+const prereqsCommand = Command.make("prereqs", {}, () =>
+  Effect.gen(function*() {
+    yield* Console.log("Checking prerequisites...")
+    const prereqs = yield* PrereqChecker
+    yield* prereqs.checkAll
+    yield* Console.log("✓ All prerequisites met!")
+  }).pipe(withErrorHandler)).pipe(Command.withDescription("Check if required tools are installed"))
+
 // =============================================================================
 // Root Command
 // =============================================================================
@@ -497,7 +548,9 @@ const rootCommand = Command.make("effect-deploy").pipe(
     fmtCommand,
     workspaceCommand,
     statusCommand,
-    verifyCommand
+    verifyCommand,
+    logsCommand,
+    prereqsCommand
   ]),
   Command.withDescription(
     "Effect-based Terraform deploy CLI for effect-ontology infrastructure"
@@ -522,7 +575,8 @@ const DeployLive = Layer.mergeAll(
   TerraformRunner.Default,
   DockerRunner.Default,
   GcloudRunner.Default,
-  HealthCheckerLive
+  HealthCheckerLive,
+  PrereqChecker.Default
 ).pipe(Layer.provideMerge(BunContext.layer))
 
 // =============================================================================
