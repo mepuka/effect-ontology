@@ -5,7 +5,8 @@
   "type": "module",
   "packageManager": "bun@1.2.23",
   "workspaces": [
-    "packages/@core-v2"
+    "packages/@core-v2",
+    "tools/deploy"
   ],
   "license": "MIT",
   "description": "Effect-based ontology framework monorepo",
@@ -27,7 +28,8 @@
     "benchmark:quick": "bun --env-file=.env run benchmarks/src/cli.ts --samples 100",
     "benchmark:full": "bun --env-file=.env run benchmarks/src/cli.ts --samples all",
     "benchmark:all-providers": "bash benchmarks/scripts/run-all-providers.sh",
-    "benchmark:download": "bash benchmarks/scripts/download-datasets.sh"
+    "benchmark:download": "bash benchmarks/scripts/download-datasets.sh",
+    "deploy": "bun run tools/deploy/src/cli.ts"
   },
   "dependencies": {
     "@anthropic-ai/tokenizer": "^0.0.4",
