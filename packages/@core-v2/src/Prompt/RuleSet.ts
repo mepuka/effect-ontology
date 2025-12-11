@@ -417,19 +417,19 @@ export const RELATION_STATIC_RULES: ReadonlyArray<ExtractionRule> = [
     id: "relation-predicate-valid",
     category: "property_usage",
     severity: "error",
-    instruction: "Predicate MUST be one of the allowed property URIs",
+    instruction: "Predicate MUST be the local name of an allowed property (e.g., 'playsFor', NOT the full URI)",
     example: new RuleExample({
       input: "uses playsFor property",
-      output: "http://ontology/PlaysFor",
-      explanation: "Use exact property IRI from allowed list"
+      output: "playsFor",
+      explanation: "Use property local name from allowed list"
     }),
     counterExample: new RuleExample({
       input: "uses playsFor property",
-      output: "playsFor",
-      explanation: "Must use full IRI, not local name"
+      output: "http://ontology/playsFor",
+      explanation: "Must use local name only, NOT the full URI"
     }),
-    schemaDescription: "Property IRI - MUST be from allowed properties list",
-    validationTemplate: "Predicate '{value}' is not a valid property IRI"
+    schemaDescription: "Property local name - MUST be from allowed properties list",
+    validationTemplate: "Predicate '{value}' is not a valid property name"
   }),
 
   new ExtractionRule({
@@ -453,22 +453,22 @@ export const RELATION_STATIC_RULES: ReadonlyArray<ExtractionRule> = [
   }),
 
   new ExtractionRule({
-    id: "relation-iri-casing",
+    id: "relation-property-casing",
     category: "iri_casing",
-    severity: "error",
-    instruction: "Copy property IRIs EXACTLY as shown. Do NOT reconstruct from labels.",
+    severity: "warning",
+    instruction: "Use property local names as shown in the allowed list. Casing is normalized automatically.",
     example: new RuleExample({
       input: "teamRanking property",
-      output: "http://ontology/TeamRanking",
-      explanation: "Use exact IRI, not http://ontology/teamRanking"
+      output: "teamRanking",
+      explanation: "Use local name as shown (case will be normalized)"
     }),
     counterExample: new RuleExample({
       input: "teamRanking property",
-      output: "http://ontology/teamRanking",
-      explanation: "Wrong casing - derived from label"
+      output: "TeamRanking",
+      explanation: "Prefer exact casing from list, though it will be normalized"
     }),
-    schemaDescription: "Use exact property IRI from allowed list (case-sensitive)",
-    validationTemplate: "Property IRI '{value}' has incorrect casing"
+    schemaDescription: "Property local name from allowed list (case-insensitive matching)",
+    validationTemplate: "Property '{value}' not found in allowed list"
   }),
 
   new ExtractionRule({
