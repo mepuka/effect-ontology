@@ -13,7 +13,10 @@
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "@effect/platform"
 import { Cause, Chunk, Data, Deferred, Duration, Effect, Option, Ref } from "effect"
 import { v4 as uuidv4 } from "uuid"
+import type { ContentHash, Namespace, OntologyName } from "../Domain/Identity.js"
 import type { RunConfig } from "../Domain/Model/ExtractionRun.js"
+import { OntologyRef } from "../Domain/Model/Ontology.js"
+import { PathLayout } from "../Domain/PathLayout.js"
 import type { JobStatus, SubmitJobRequest } from "../Domain/Schema/Api.js"
 import { JobStatusResponse } from "../Domain/Schema/Api.js"
 import { ExtractionWorkflow } from "../Service/ExtractionWorkflow.js"
@@ -127,10 +130,32 @@ export const makeJobManager = Effect.gen(function*() {
   const storage = yield* StorageService
 
   // Default run config from environment/config
+  // Check if we can parse the default ontology path, otherwise use fallback
+  let defaultRef: OntologyRef
+  try {
+    const [ns, name, hash] = PathLayout.ontology.decode(appConfig.ontology.path)
+    defaultRef = new OntologyRef({ namespace: ns, name, contentHash: hash })
+  } catch {
+    defaultRef = new OntologyRef({
+      namespace: "unknown" as Namespace,
+      name: "current" as OntologyName,
+      contentHash: "0000000000000000" as ContentHash // 16 hex chars required
+    })
+  }
+
+  // Default run config from environment/config
   const defaultConfig: RunConfig = {
-    chunking: { maxChunkSize: 500, preserveSentences: true },
-    concurrency: appConfig.runtime.extractionConcurrency,
-    ontologyPath: appConfig.ontology.path
+    chunking: { maxChunkSize: 500, preserveSentences: true, overlapTokens: 50 },
+    concurrency: appConfig.runtime.concurrency,
+    ontology: defaultRef,
+    enableGrounding: true,
+    // Default LLM config setup if needed, usually passed in request or defaults used in schema
+    llm: {
+      model: appConfig.llm.model,
+      temperature: appConfig.llm.temperature,
+      maxTokens: appConfig.llm.maxTokens,
+      timeoutMs: appConfig.llm.timeoutMs
+    }
   }
 
   const updateJobStatus = (jobId: string, f: (job: JobState) => JobState) =>
@@ -319,8 +344,8 @@ export const makeJobManager = Effect.gen(function*() {
         // Compute idempotency key using Utils
         const text = request.text || request.url || ""
         const params: ExtractionParams = {
-          temperature: (request.config as any)?.temperature,
-          maxTokens: (request.config as any)?.maxTokens
+          temperature: (request.config?.llm as any)?.temperature,
+          maxTokens: (request.config?.llm as any)?.maxTokens
         }
         const key = computeIdempotencyKey(text, "default", "v1", params)
 

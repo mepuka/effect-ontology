@@ -1,6 +1,13 @@
 import { Chunk, Effect } from "effect"
 import { OntologyFileNotFound, OntologyParsingFailed } from "../Domain/Error/Ontology.js"
-import { type ClassDefinition, OntologyContext, type PropertyDefinition } from "../Domain/Model/Ontology.js"
+import type { ContentHash, Namespace, OntologyName } from "../Domain/Identity.js"
+import {
+  type ClassDefinition,
+  OntologyContext,
+  OntologyRef,
+  type PropertyDefinition
+} from "../Domain/Model/Ontology.js"
+import { PathLayout } from "../Domain/PathLayout.js"
 import { extractLocalNameFromIri } from "../Utils/Iri.js"
 import { ConfigService } from "./Config.js"
 import { NlpService } from "./Nlp.js"
@@ -55,37 +62,52 @@ const makeOntologyLoader = Effect.gen(function*() {
         ontologyPath
       )
 
-      return new OntologyContext({
-        classes: Chunk.toReadonlyArray(classes),
-        hierarchy,
-        propertyHierarchy,
-        properties: Chunk.toReadonlyArray(properties)
-      })
+      const ref = yield* Effect.try(() => PathLayout.ontology.decode(ontologyPath)).pipe(
+        Effect.map(([ns, name, hash]) => new OntologyRef({ namespace: ns, name, contentHash: hash })),
+        Effect.orElseSucceed(() =>
+          new OntologyRef({
+            namespace: "unknown" as Namespace,
+            name: "current" as OntologyName,
+            contentHash: "00000000" as ContentHash
+          })
+        )
+      )
+
+      return {
+        context: new OntologyContext({
+          classes: Chunk.toReadonlyArray(classes),
+          hierarchy,
+          propertyHierarchy,
+          properties: Chunk.toReadonlyArray(properties)
+        }),
+        ref
+      }
     })
   )
 
   // Cache BM25 index
   const getBm25Index = yield* Effect.cached(
     Effect.gen(function*() {
-      const ontology = yield* getOntology
-      return yield* nlp.createOntologyIndex(ontology)
+      const { context } = yield* getOntology
+      return yield* nlp.createOntologyIndex(context)
     })
   )
 
   // Cache Semantic index
   const getSemanticIndex = yield* Effect.cached(
     Effect.gen(function*() {
-      const ontology = yield* getOntology
-      return yield* nlp.createOntologySemanticIndex(ontology)
+      const { context } = yield* getOntology
+      return yield* nlp.createOntologySemanticIndex(context)
     })
   )
 
   return {
-    ontology: getOntology,
+    ontology: Effect.map(getOntology, (o) => o.context),
+    ontologyRef: Effect.map(getOntology, (o) => o.ref),
 
     searchClasses: (query: string, limit: number = 10) =>
       Effect.gen(function*() {
-        const ontology = yield* getOntology
+        const { context } = yield* getOntology
         const index = yield* getBm25Index
         const results = yield* nlp.searchOntologyIndex(index, query, limit)
 
@@ -98,7 +120,7 @@ const makeOntologyLoader = Effect.gen(function*() {
           }
           if (result.property) {
             for (const domainLocalName of result.property.domain) {
-              const domainClass = ontology.classes.find(
+              const domainClass = context.classes.find(
                 (c) => extractLocalNameFromIri(c.id) === domainLocalName
               )
               if (domainClass) {
@@ -124,11 +146,11 @@ const makeOntologyLoader = Effect.gen(function*() {
 
     getPropertiesFor: (classIris: ReadonlyArray<string>) =>
       Effect.gen(function*() {
-        const ontology = yield* getOntology
+        const { context } = yield* getOntology
         const props: Array<PropertyDefinition> = []
 
         for (const classIri of classIris) {
-          const classProps = ontology.getPropertiesForClass(classIri)
+          const classProps = context.getPropertiesForClass(classIri)
           for (const prop of classProps) {
             props.push(prop)
           }
@@ -144,7 +166,7 @@ const makeOntologyLoader = Effect.gen(function*() {
 
     searchClassesSemantic: (query: string, limit: number = 10) =>
       Effect.gen(function*() {
-        const ontology = yield* getOntology
+        const { context } = yield* getOntology
         const index = yield* getSemanticIndex
         const results = yield* nlp.searchOntologySemanticIndex(
           index,
@@ -158,7 +180,7 @@ const makeOntologyLoader = Effect.gen(function*() {
           }
           if (result.property) {
             for (const domainLocalName of result.property.domain) {
-              const domainClass = ontology.classes.find(
+              const domainClass = context.classes.find(
                 (c) => extractLocalNameFromIri(c.id) === domainLocalName
               )
               if (domainClass) {
@@ -187,7 +209,7 @@ const makeOntologyLoader = Effect.gen(function*() {
 
     searchClassesHybrid: (query: string, limit: number = 100) =>
       Effect.gen(function*() {
-        const ontology = yield* getOntology
+        const { context } = yield* getOntology
 
         const searchLimit = Math.ceil(limit * 0.7)
         const [semanticResults, bm25Results] = yield* Effect.all([
@@ -205,7 +227,7 @@ const makeOntologyLoader = Effect.gen(function*() {
               }
               if (result.property) {
                 for (const domainLocalName of result.property.domain) {
-                  const domainClass = ontology.classes.find(
+                  const domainClass = context.classes.find(
                     (c) => extractLocalNameFromIri(c.id) === domainLocalName
                   )
                   if (domainClass) {
@@ -226,7 +248,7 @@ const makeOntologyLoader = Effect.gen(function*() {
               }
               if (result.property) {
                 for (const domainLocalName of result.property.domain) {
-                  const domainClass = ontology.classes.find(
+                  const domainClass = context.classes.find(
                     (c) => extractLocalNameFromIri(c.id) === domainLocalName
                   )
                   if (domainClass) {
@@ -245,8 +267,8 @@ const makeOntologyLoader = Effect.gen(function*() {
           if (!merged.has(cls.id)) merged.set(cls.id, cls)
         }
 
-        if (merged.size < limit && ontology.classes.length <= limit) {
-          for (const cls of ontology.classes) merged.set(cls.id, cls)
+        if (merged.size < limit && context.classes.length <= limit) {
+          for (const cls of context.classes) merged.set(cls.id, cls)
         }
 
         return Chunk.fromIterable(Array.from(merged.values()).slice(0, limit))

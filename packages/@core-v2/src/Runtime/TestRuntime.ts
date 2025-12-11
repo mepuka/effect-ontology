@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-empty-object-type */
 /**
  * Runtime: Test Runtime
  *
@@ -23,9 +24,9 @@ import { ConfigService } from "../Service/Config.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { Grounder } from "../Service/Grounder.js"
 import {
-  TokenBudgetServiceTest,
+  CentralRateLimiterServiceTest,
   StageTimeoutServiceTest,
-  CentralRateLimiterServiceTest
+  TokenBudgetServiceTest
 } from "../Service/LlmControl/index.js"
 import { NlpService } from "../Service/Nlp.js"
 import { OntologyService } from "../Service/Ontology.js"
@@ -92,7 +93,6 @@ const ontologyLayer = OntologyService.Default.pipe(
 )
 
 export const TestLayers = Layer.mergeAll(
-  ConfigService.Default,
   NlpService.Default,
   RdfBuilder.Default,
   ontologyLayer,
@@ -102,7 +102,7 @@ export const TestLayers = Layer.mergeAll(
   Grounder.Test,
   LlmControlTestLayers,
   BunContext.layer
-)
+).pipe(Layer.provide(ConfigService.Default))
 
 /**
  * Test Runtime

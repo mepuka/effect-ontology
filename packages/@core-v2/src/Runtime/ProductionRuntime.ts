@@ -16,7 +16,7 @@ import { AnthropicClient, AnthropicLanguageModel } from "@effect/ai-anthropic"
 import { GoogleClient, GoogleLanguageModel } from "@effect/ai-google"
 import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai"
 import { FetchHttpClient } from "@effect/platform"
-import { Config, Effect, Layer, Redacted } from "effect"
+import { Effect, Layer } from "effect"
 import { ConfigService } from "../Service/Config.js"
 import { EntityExtractor, MentionExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { Grounder } from "../Service/Grounder.js"
@@ -68,94 +68,41 @@ export const makeLanguageModelLayer = Layer.unwrapEffect(
 
     switch (config.llm.provider) {
       case "anthropic": {
-        // Only load Anthropic API key from environment
-        const apiKeyRedacted = yield* Config.redacted("ANTHROPIC_API_KEY").pipe(
-          Config.orElse(() => Config.redacted("VITE_LLM_ANTHROPIC_API_KEY")),
-          Config.orElse(() => Config.succeed(Redacted.make(config.llm.anthropicApiKey)))
-        )
-        const apiKey = Redacted.value(apiKeyRedacted)
-
-        // Build ConfigService with updated API key
-        const configLayer = Layer.succeed(ConfigService, {
-          ...config,
-          llm: {
-            ...config.llm,
-            model: "claude-haiku-4-5",
-            anthropicApiKey: apiKey
-          }
-        })
-
         return AnthropicLanguageModel.layer({ model: config.llm.model }).pipe(
           Layer.provide(
-            AnthropicClient.layer({ apiKey: Redacted.make(apiKey) }).pipe(
+            AnthropicClient.layer({ apiKey: config.llm.apiKey }).pipe(
               Layer.provide(FetchHttpClient.layer)
             )
-          ),
-          Layer.provide(configLayer)
+          )
         )
       }
 
       case "openai": {
-        // Only load OpenAI API key from environment
-        const apiKeyRedacted = yield* Config.redacted("OPENAI_API_KEY").pipe(
-          Config.orElse(() => Config.redacted("VITE_LLM_OPENAI_API_KEY")),
-          Config.orElse(() => Config.succeed(Redacted.make(config.llm.openaiApiKey)))
-        )
-        const apiKey = Redacted.value(apiKeyRedacted)
-
-        // Build ConfigService with updated API key
-        const configLayer = Layer.succeed(ConfigService, {
-          ...config,
-          llm: {
-            ...config.llm,
-            openaiApiKey: apiKey
-          }
-        })
-
         return OpenAiLanguageModel.layer({ model: config.llm.model }).pipe(
           Layer.provide(
-            OpenAiClient.layer({ apiKey: Redacted.make(apiKey) }).pipe(Layer.provide(FetchHttpClient.layer))
-          ),
-          Layer.provide(configLayer)
+            OpenAiClient.layer({ apiKey: config.llm.apiKey }).pipe(
+              Layer.provide(FetchHttpClient.layer)
+            )
+          )
         )
       }
 
       case "google": {
-        // Only load Google API key from environment
-        const apiKeyRedacted = yield* Config.redacted("GEMINI_API_KEY").pipe(
-          Config.orElse(() => Config.redacted("VITE_LLM_GEMINI_API_KEY")),
-          Config.orElse(() => Config.succeed(Redacted.make(config.llm.googleApiKey)))
-        )
-        const apiKey = Redacted.value(apiKeyRedacted)
-
-        // Build ConfigService with updated API key
-        const configLayer = Layer.succeed(ConfigService, {
-          ...config,
-          llm: {
-            ...config.llm,
-            googleApiKey: apiKey
-          }
-        })
-
+        // Placeholder for Google implementation or error if not available
         return GoogleLanguageModel.layer({ model: config.llm.model }).pipe(
           Layer.provide(
-            GoogleClient.layer({ apiKey: Redacted.make(apiKey) }).pipe(Layer.provide(FetchHttpClient.layer))
-          ),
-          Layer.provide(configLayer)
+            GoogleClient.layer({ apiKey: config.llm.apiKey }).pipe(
+              Layer.provide(FetchHttpClient.layer)
+            )
+          )
         )
       }
 
       default: {
         // Default to Anthropic
-        const apiKeyRedacted = yield* Config.redacted("ANTHROPIC_API_KEY").pipe(
-          Config.orElse(() => Config.redacted("VITE_LLM_ANTHROPIC_API_KEY")),
-          Config.orElse(() => Config.succeed(Redacted.make(config.llm.anthropicApiKey)))
-        )
-        const apiKey = Redacted.value(apiKeyRedacted)
-
         return AnthropicLanguageModel.layer({ model: config.llm.model }).pipe(
           Layer.provide(
-            AnthropicClient.layer({ apiKey: Redacted.make(apiKey) }).pipe(
+            AnthropicClient.layer({ apiKey: config.llm.apiKey }).pipe(
               Layer.provide(FetchHttpClient.layer)
             )
           )

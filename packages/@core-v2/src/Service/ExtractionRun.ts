@@ -9,23 +9,19 @@
 
 import { FileSystem, Path } from "@effect/platform"
 import { Context, Effect, Hash, Layer } from "effect"
+import type { ChunkId, ExtractionRunId, IdempotencyKey } from "../Domain/Identity.js"
 import type {
   AuditError,
   AuditErrorType,
   AuditEvent,
   AuditEventType,
-  ChunkId,
-  ExtractionRun,
-  ExtractionRunId,
   OutputMetadata,
   RunConfig,
-  RunStats,
-  RunStatus
+  RunStats
 } from "../Domain/Model/ExtractionRun.js"
-import { getChunkId } from "../Domain/Model/ExtractionRun.js"
+import { ExtractionRun, getChunkId } from "../Domain/Model/ExtractionRun.js"
 import type { OutputType } from "../Domain/Model/OutputType.js"
 import { getOutputFilename } from "../Domain/Model/OutputType.js"
-import type { IdempotencyKey } from "../Utils/IdempotencyKey.js"
 
 // =============================================================================
 // Helpers
@@ -148,7 +144,7 @@ export interface ExtractionRunService {
    */
   setStatus(
     runId: ExtractionRunId,
-    status: RunStatus
+    status: ExtractionRun["status"]
   ): Effect.Effect<void, Error>
 
   /**
@@ -190,10 +186,11 @@ const makeExtractionRunService = Effect.gen(function*() {
     Effect.gen(function*() {
       const metadataPath = path.resolve(baseDir, runId, "metadata.json")
       const run = yield* fs.readFileString(metadataPath).pipe(
-        Effect.map((json) => JSON.parse(json) as ExtractionRun),
+        Effect.map((json) => new ExtractionRun(JSON.parse(json))),
         Effect.mapError((error) => new Error(`Failed to read run metadata: ${error}`))
       )
       const updatedRun = updater(run)
+      // updatedRun is a Class instance, JSON.stringify should serialize its fields.
       yield* fs.writeFileString(metadataPath, JSON.stringify(updatedRun, null, 2))
       return updatedRun
     })
@@ -240,10 +237,10 @@ const makeExtractionRunService = Effect.gen(function*() {
         yield* fs.writeFileString(path.resolve(inputDir, "document.txt"), text)
 
         const now = new Date().toISOString()
-        const run: ExtractionRun = {
-          runId,
-          documentId,
+        const run = new ExtractionRun({
+          id: documentId,
           createdAt: now,
+          updatedAt: now,
           status: "pending",
           config,
           outputDir: runDir,
@@ -252,7 +249,7 @@ const makeExtractionRunService = Effect.gen(function*() {
           errors: [],
           idempotencyKey: options?.idempotencyKey,
           ontologyVersion: options?.ontologyVersion
-        }
+        })
 
         yield* fs.writeFileString(
           path.resolve(runDir, "metadata.json"),
@@ -269,7 +266,7 @@ const makeExtractionRunService = Effect.gen(function*() {
 
     saveChunk: (runId: ExtractionRunId, chunkIndex: number, chunkText: string) =>
       Effect.gen(function*() {
-        const chunkId = getChunkId(runId, chunkIndex)
+        const chunkId = getChunkId(runId, chunkIndex) as unknown as ChunkId
         const chunkPath = path.resolve(
           baseDir,
           runId,
@@ -302,26 +299,27 @@ const makeExtractionRunService = Effect.gen(function*() {
           savedAt
         }
 
-        yield* updateMetadata(runId, (run) => ({
-          ...run,
-          outputs: [...run.outputs, metadata]
-        }))
+        yield* updateMetadata(runId, (run) =>
+          new ExtractionRun({
+            ...run,
+            outputs: [...run.outputs, metadata]
+          }))
 
         return metadata
       }),
 
     updateStats: (runId: ExtractionRunId, stats: RunStats) =>
-      updateMetadata(runId, (run) => ({ ...run, stats })).pipe(Effect.asVoid),
+      updateMetadata(runId, (run) => new ExtractionRun({ ...run, stats })).pipe(Effect.asVoid),
 
     completeRun: (runId: ExtractionRunId) =>
       updateMetadata(runId, (run) => {
         const now = new Date().toISOString()
-        return {
+        return new ExtractionRun({
           ...run,
-          status: "complete" as const,
+          status: "complete",
           completedAt: now,
-          events: [...run.events, { timestamp: now, type: "completed" as const }]
-        }
+          events: [...run.events, { timestamp: now, type: "completed" }]
+        })
       }),
 
     getRun: (runId: ExtractionRunId) =>
@@ -330,7 +328,7 @@ const makeExtractionRunService = Effect.gen(function*() {
         const json = yield* fs.readFileString(metadataPath).pipe(
           Effect.mapError((error) => new Error(`Run not found: ${runId} - ${error}`))
         )
-        return JSON.parse(json) as ExtractionRun
+        return new ExtractionRun(JSON.parse(json))
       }),
 
     listRuns: () =>
@@ -344,7 +342,7 @@ const makeExtractionRunService = Effect.gen(function*() {
           if (entry.startsWith("doc-")) {
             const metadataPath = path.resolve(baseDir, entry, "metadata.json")
             const run = yield* fs.readFileString(metadataPath).pipe(
-              Effect.map((json) => JSON.parse(json) as ExtractionRun),
+              Effect.map((json) => new ExtractionRun(JSON.parse(json))),
               Effect.orElseSucceed(() => null as ExtractionRun | null)
             )
             if (run) runs.push(run)
@@ -377,7 +375,7 @@ const makeExtractionRunService = Effect.gen(function*() {
         if (!exists) return null
 
         const json = yield* fs.readFileString(metadataPath)
-        return JSON.parse(json) as ExtractionRun
+        return new ExtractionRun(JSON.parse(json))
       }),
 
     emitEvent: (
@@ -389,12 +387,12 @@ const makeExtractionRunService = Effect.gen(function*() {
         const event: AuditEvent = {
           timestamp: new Date().toISOString(),
           type,
-          ...(data ? { data } : {})
+          data
         }
-        return {
+        return new ExtractionRun({
           ...run,
           events: [...run.events, event]
-        }
+        })
       }).pipe(Effect.asVoid),
 
     recordError: (
@@ -408,16 +406,16 @@ const makeExtractionRunService = Effect.gen(function*() {
           timestamp: new Date().toISOString(),
           type,
           message,
-          ...(context ? { context } : {})
+          context
         }
-        return {
+        return new ExtractionRun({
           ...run,
           errors: [...run.errors, error]
-        }
+        })
       }).pipe(Effect.asVoid),
 
-    setStatus: (runId: ExtractionRunId, status: RunStatus) =>
-      updateMetadata(runId, (run) => ({ ...run, status })).pipe(Effect.asVoid),
+    setStatus: (runId: ExtractionRunId, status: ExtractionRun["status"]) =>
+      updateMetadata(runId, (run) => new ExtractionRun({ ...run, status })).pipe(Effect.asVoid),
 
     failRun: (
       runId: ExtractionRunId,
@@ -431,15 +429,15 @@ const makeExtractionRunService = Effect.gen(function*() {
           timestamp: now,
           type: errorType,
           message,
-          ...(context ? { context } : {})
+          context
         }
-        return {
+        return new ExtractionRun({
           ...run,
-          status: "failed" as const,
+          status: "failed",
           completedAt: now,
-          events: [...run.events, { timestamp: now, type: "failed" as const }],
+          events: [...run.events, { timestamp: now, type: "failed" }],
           errors: [...run.errors, error]
-        }
+        })
       }).pipe(Effect.asVoid)
   } satisfies ExtractionRunService
 })

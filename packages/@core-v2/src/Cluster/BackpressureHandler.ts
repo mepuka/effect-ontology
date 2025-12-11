@@ -10,7 +10,7 @@
  * @module Cluster/BackpressureHandler
  */
 
-import { Effect, Queue, Stream, Fiber } from "effect"
+import { Effect, Fiber, Queue, Stream } from "effect"
 import type { ProgressEvent } from "../Contract/ProgressStreaming.js"
 
 /**
@@ -70,8 +70,7 @@ const CRITICAL_EVENT_TAGS = new Set([
 /**
  * Check if an event is critical and should never be sampled
  */
-const isCriticalEvent = (event: ExtractionProgressEvent): boolean =>
-  CRITICAL_EVENT_TAGS.has(event._tag)
+const isCriticalEvent = (event: ExtractionProgressEvent): boolean => CRITICAL_EVENT_TAGS.has(event._tag)
 
 // =============================================================================
 // Backpressure Stream Operator
@@ -103,7 +102,7 @@ export const withBackpressure = <E>(
   config: BackpressureConfig = DEFAULT_BACKPRESSURE_CONFIG
 ): Stream.Stream<ExtractionProgressEvent, E> =>
   Stream.unwrapScoped(
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       // Create bounded queue for backpressure
       const queue = yield* Queue.bounded<ExtractionProgressEvent>(
         config.maxQueuedEvents
@@ -115,7 +114,7 @@ export const withBackpressure = <E>(
       // Producer: read from source and apply sampling
       const producer = source.pipe(
         Stream.tap((event) =>
-          Effect.gen(function* () {
+          Effect.gen(function*() {
             const size = yield* Queue.size(queue)
             const loadFactor = size / config.maxQueuedEvents
 
@@ -192,7 +191,7 @@ export const withBackpressureMetered = <E>(
   onMetrics?: (metrics: BackpressureMetrics) => Effect.Effect<void>
 ): Stream.Stream<ExtractionProgressEvent, E> =>
   Stream.unwrapScoped(
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const queue = yield* Queue.bounded<ExtractionProgressEvent>(
         config.maxQueuedEvents
       )
@@ -216,7 +215,7 @@ export const withBackpressureMetered = <E>(
 
       const producer = source.pipe(
         Stream.tap((event) =>
-          Effect.gen(function* () {
+          Effect.gen(function*() {
             eventsReceived++
             const size = yield* Queue.size(queue)
             peakQueueSize = Math.max(peakQueueSize, size)

@@ -26,16 +26,14 @@ import { NlpService } from "./Service/Nlp.js"
 import { OntologyService } from "./Service/Ontology.js"
 import { OntologyLoader } from "./Service/OntologyLoader.js"
 import { RdfBuilder } from "./Service/Rdf.js"
-import { makeStorageLayer } from "./Service/Storage.js"
+import { StorageServiceLive } from "./Service/Storage.js"
 import { ExtractionWorkflowLive } from "./Workflow/StreamingExtraction.js"
 
 // Load port from environment
 const port = Effect.runSync(Config.number("PORT").pipe(Config.withDefault(8080)))
 
 // Compose Storage Layer dynamically based on Config
-const StorageLayer = Layer.unwrapEffect(
-  Effect.map(ConfigService, (config) => makeStorageLayer(config.storage))
-)
+const StorageLayer = StorageServiceLive
 
 // Base platform layer (provides FileSystem, Path, etc.)
 const PlatformLayer = BunContext.layer

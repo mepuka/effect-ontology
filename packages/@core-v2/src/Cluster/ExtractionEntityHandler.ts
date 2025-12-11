@@ -14,8 +14,9 @@
 import type { Entity } from "@effect/cluster"
 import { Chunk, Effect, Option, Ref, Stream } from "effect"
 import type { ProgressEvent } from "../Contract/ProgressStreaming.js"
+import type { ContentHash, ExtractionRunId, Namespace, OntologyName } from "../Domain/Identity.js"
 import type { Relation } from "../Domain/Model/Entity.js"
-import type { ExtractionRunId } from "../Domain/Model/ExtractionRun.js"
+import { OntologyRef } from "../Domain/Model/Ontology.js"
 import { ConfigService } from "../Service/Config.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { ExtractionRunService, getRunIdFromText } from "../Service/ExtractionRun.js"
@@ -25,13 +26,13 @@ import { NlpService } from "../Service/Nlp.js"
 import { OntologyService } from "../Service/Ontology.js"
 import type { IdempotencyKey } from "../Utils/IdempotencyKey.js"
 import {
-  computeIdempotencyKey,
-  KnowledgeGraphExtractor,
   type CancelExtractionRpc,
+  computeIdempotencyKey,
   type ExtractFromTextRpc,
   type ExtractionParams,
   type GetCachedResultRpc,
   type GetExtractionStatusRpc,
+  KnowledgeGraphExtractor,
   type KnowledgeGraphResult
 } from "./ExtractionEntity.js"
 
@@ -76,7 +77,7 @@ const makeStageStarted = (
 /**
  * Make stage_progress event
  */
-const makeStageProgress = (
+const _makeStageProgress = (
   runId: string,
   stage: ExtractionStage,
   overallProgress: number,
@@ -222,7 +223,7 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
           }
 
           // Reset token budget for new request
-          yield* tokenBudget.reset(config.tokenBudget.totalTokens)
+          yield* tokenBudget.reset(config.llm.maxTokens)
 
           // Chunk text with timeout
           const chunkingStart = Date.now()
@@ -238,11 +239,33 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
           )
 
           const totalChunks = chunks.length
-          const concurrency = config.runtime.extractionConcurrency
+          const concurrency = config.runtime.concurrency
+
+          // Parse ontologyId to create OntologyRef
+          // ontologyId format: "namespace/name" or just "name"
+          const ontologyParts = ontologyId.includes("/")
+            ? ontologyId.split("/")
+            : ["default", ontologyId]
+          const ontologyRef = new OntologyRef({
+            namespace: ontologyParts[0] as Namespace,
+            name: (ontologyParts[1] ?? ontologyParts[0]) as OntologyName,
+            contentHash: ontologyVersion.slice(0, 16) as ContentHash
+          })
 
           yield* runService.createRun(
             text,
-            { chunking: { maxChunkSize: 500, preserveSentences: true }, concurrency, ontologyPath: ontologyId },
+            {
+              chunking: { maxChunkSize: 500, preserveSentences: true, overlapTokens: 0 },
+              llm: {
+                model: config.llm.model,
+                temperature: config.llm.temperature,
+                maxTokens: config.llm.maxTokens,
+                timeoutMs: config.llm.timeoutMs
+              },
+              concurrency,
+              ontology: ontologyRef,
+              enableGrounding: config.grounder.enabled
+            },
             { idempotencyKey, ontologyVersion }
           )
           yield* runService.setStatus(runId as ExtractionRunId, "running")
@@ -598,7 +621,9 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
                 entityCount: stats.totalEntities,
                 relationCount: stats.verifiedRelations,
                 resolvedCount: 0,
-                clusterCount: 0
+                clusterCount: 0,
+                tokensUsed: stats.tokensUsed,
+                durationMs: Date.now() - startTime
               })
               yield* runService.completeRun(runId as ExtractionRunId)
 
@@ -645,10 +670,10 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
           relations: [],
           metadata: {
             idempotencyKey: envelope.payload.idempotencyKey,
-            ontologyId: run.config.ontologyPath,
+            ontologyId: `${run.config.ontology.namespace}/${run.config.ontology.name}`,
             ontologyVersion: run.ontologyVersion ?? "",
             extractedAt: run.completedAt ?? run.createdAt,
-            durationMs: run.stats?.entityCount ?? 0
+            durationMs: run.stats?.durationMs ?? 0
           }
         } as KnowledgeGraphResult)
       }).pipe(Effect.mapError((e) => e.message)),
@@ -661,7 +686,7 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
         if (!run) return yield* Effect.fail("Extraction not found")
         if (run.status === "complete" || run.status === "failed") return false
 
-        yield* runService.failRun(run.runId, "cancelled", envelope.payload.reason ?? "User cancelled").pipe(
+        yield* runService.failRun(run.id, "cancelled", envelope.payload.reason ?? "User cancelled").pipe(
           Effect.mapError((e) => e.message)
         )
         return true

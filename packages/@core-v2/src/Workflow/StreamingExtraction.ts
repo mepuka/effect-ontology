@@ -13,7 +13,7 @@ import { Cause, Chunk, Duration, Effect, Exit, Layer, Option, Stream } from "eff
 import { ExtractionError } from "../Domain/Error/Extraction.js"
 import { LlmRateLimit, LlmTimeout } from "../Domain/Error/Llm.js"
 import { Entity, KnowledgeGraph } from "../Domain/Model/Entity.js"
-import { getChunkId, type RunConfig } from "../Domain/Model/ExtractionRun.js"
+import { type RunConfig } from "../Domain/Model/ExtractionRun.js"
 import { EntityExtractor, type Mention, MentionExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { ExtractionRunService, ExtractionRunServiceDefault } from "../Service/ExtractionRun.js"
 import { ExtractionWorkflow } from "../Service/ExtractionWorkflow.js"
@@ -53,6 +53,8 @@ const isSystemicError = (error: unknown): boolean => {
 
   return false
 }
+
+const getChunkId = (runId: string, index: number) => `${runId}_chunk_${index}`
 
 export const makeExtractionWorkflow = Effect.gen(function*() {
   const nlp = yield* NlpService
@@ -96,7 +98,7 @@ export const makeExtractionWorkflow = Effect.gen(function*() {
           stage: "streaming-extraction",
           textLength: text.length,
           concurrency: effectiveConcurrency,
-          runId: run.runId
+          runId: run.id
         })
 
         // Phase 1: Chunk text
@@ -119,7 +121,7 @@ export const makeExtractionWorkflow = Effect.gen(function*() {
         // Save chunks to run folder
         yield* Effect.all(
           chunks.map((chunk) =>
-            runService.saveChunk(run.runId, chunk.index, chunk.text).pipe(
+            runService.saveChunk(run.id, chunk.index, chunk.text).pipe(
               Effect.tapError((error) =>
                 Effect.logWarning("Failed to save chunk", {
                   stage: "chunking",
@@ -281,7 +283,7 @@ export const makeExtractionWorkflow = Effect.gen(function*() {
                     )
 
                   // Add chunk index and chunk ID to each entity for provenance tracking
-                  const chunkId = getChunkId(run.runId, chunk.index)
+                  const chunkId = getChunkId(run.id, chunk.index)
                   const entities = Chunk.map(rawEntities, (entity) =>
                     new Entity({
                       id: entity.id,

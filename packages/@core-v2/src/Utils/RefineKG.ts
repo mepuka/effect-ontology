@@ -8,7 +8,7 @@
  */
 
 import { Entity, KnowledgeGraph, Relation } from "../Domain/Model/Entity.js"
-import type { EntityResolutionGraph } from "../Workflow/EntityResolutionGraph.js"
+import type { EntityResolutionGraph } from "../Domain/Model/EntityResolutionGraph.js"
 
 /**
  * Refine a KnowledgeGraph using the canonical mappings from an EntityResolutionGraph.

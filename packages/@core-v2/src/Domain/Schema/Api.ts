@@ -8,7 +8,7 @@
  */
 
 import { Schema } from "effect"
-import { RunConfigSchema } from "../Model/ExtractionRun.js"
+import { RunConfig } from "../Model/ExtractionRun.js"
 
 /**
  * Request to submit a new extraction job
@@ -30,7 +30,7 @@ export class SubmitJobRequest extends Schema.Class<SubmitJobRequest>("SubmitJobR
    * Custom run configuration override.
    * If omitted, defaults from server config/env are used.
    */
-  config: Schema.optional(RunConfigSchema)
+  config: Schema.optional(RunConfig)
 }) {
   /** Ensure at least one input source is provided */
   static validate(input: unknown) {

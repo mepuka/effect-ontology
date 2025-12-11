@@ -11,7 +11,7 @@
  * @module Service/LlmControl/RateLimiter
  */
 
-import { Effect, Ref, Layer, Context, Data } from "effect"
+import { Context, Data, Effect, Layer, Ref } from "effect"
 
 // =============================================================================
 // Types
@@ -186,7 +186,7 @@ export class CentralRateLimiterService extends Context.Tag(
  * Create rate limiter with configuration
  */
 const make = (config: RateLimiterConfig = DEFAULT_CONFIG) =>
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     const state = yield* Ref.make<RateLimiterState>({
       requestsThisMinute: 0,
       tokensThisMinute: 0,
@@ -205,12 +205,11 @@ const make = (config: RateLimiterConfig = DEFAULT_CONFIG) =>
       Ref.update(state, (s) =>
         now - s.lastReset > 60_000
           ? { ...s, requestsThisMinute: 0, tokensThisMinute: 0, lastReset: now }
-          : s
-      )
+          : s)
 
     return {
       acquire: (estimatedTokens: number) =>
-        Effect.gen(function* () {
+        Effect.gen(function*() {
           const now = Date.now()
           const current = yield* Ref.get(state)
 
@@ -251,7 +250,7 @@ const make = (config: RateLimiterConfig = DEFAULT_CONFIG) =>
           // Check token limit
           if (
             updated.tokensThisMinute + estimatedTokens >
-            config.tokensPerMinute
+              config.tokensPerMinute
           ) {
             const msUntilReset = 60_000 - (now - updated.lastReset)
             return yield* Effect.fail(
@@ -281,11 +280,10 @@ const make = (config: RateLimiterConfig = DEFAULT_CONFIG) =>
               ...s,
               successCount: newSuccessCount,
               failureCount: 0,
-              circuitState:
-                s.circuitState === "half_open" &&
-                newSuccessCount >= config.successThreshold
-                  ? ("closed" as const)
-                  : s.circuitState
+              circuitState: s.circuitState === "half_open" &&
+                  newSuccessCount >= config.successThreshold
+                ? ("closed" as const)
+                : s.circuitState
             }
           } else {
             const newFailureCount = s.failureCount + 1

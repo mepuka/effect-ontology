@@ -7,11 +7,59 @@
  * @module Domain/Model/Ontology
  */
 
-import { Schema } from "effect"
+import { PrimaryKey, Schema } from "effect"
 import { extractLocalNameFromIri } from "../../Utils/Iri.js"
 import { transformIriArrayToLocalNames } from "../../Utils/Rdf.js"
 import { enhanceTextForSearch, splitCamelCase } from "../../Utils/Text.js"
+import { ContentHash, Namespace, OntologyName } from "../Identity.js"
+import { PathLayout } from "../PathLayout.js"
 import { IriSchema } from "../Rdf/Types.js"
+
+/**
+ * OntologyRef - Reference to a specific version of an ontology
+ *
+ * Content-addressed reference using namespace, name, and hash.
+ * Used for tracking which ontology was used for an extraction run.
+ *
+ * @since 2.0.0
+ * @category Domain
+ */
+export class OntologyRef extends Schema.Class<OntologyRef>("OntologyRef")({
+  namespace: Namespace,
+  name: OntologyName,
+  contentHash: ContentHash
+}) {
+  /**
+   * Effect PrimaryKey for deduplication
+   */
+  [PrimaryKey.symbol]() {
+    return `${this.namespace}:${this.name}@${this.contentHash}`
+  }
+
+  /**
+   * Derived: storage path
+   * @example "ontologies/football/premier-league/abc.../ontology.ttl"
+   */
+  get storagePath(): string {
+    return PathLayout.ontology.encode(this.namespace, this.name, this.contentHash)
+  }
+
+  /**
+   * Derived: short ID for display
+   * @example "football/premier-league"
+   */
+  get shortId(): string {
+    return `${this.namespace}/${this.name}`
+  }
+
+  /**
+   * Factory: from storage path (bidirectional)
+   */
+  static fromPath(path: string): OntologyRef {
+    const [namespace, name, contentHash] = PathLayout.ontology.decode(path)
+    return new OntologyRef({ namespace, name, contentHash })
+  }
+}
 
 /**
  * ClassDefinition - OWL/RDFS Class metadata

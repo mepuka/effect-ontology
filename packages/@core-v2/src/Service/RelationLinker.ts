@@ -10,7 +10,7 @@
 
 import { Chunk, Effect, Option } from "effect"
 import { Relation } from "../Domain/Model/Entity.js"
-import type { EntityResolutionGraph } from "../Workflow/EntityResolutionGraph.js"
+import type { EntityResolutionGraph } from "../Domain/Model/EntityResolutionGraph.js"
 import { getCanonicalId } from "./EntityLinker.js"
 
 /**

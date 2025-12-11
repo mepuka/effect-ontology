@@ -2,6 +2,7 @@ import { FileSystem, KeyValueStore, Path } from "@effect/platform"
 import { SystemError } from "@effect/platform/Error"
 import { Storage } from "@google-cloud/storage"
 import { Context, Effect, Layer, Option } from "effect"
+import { ConfigService } from "./Config.js"
 
 /**
  * StorageService interface extending KeyValueStore
@@ -152,8 +153,7 @@ const makeLocalStore = (config: StorageConfig) =>
     const globalPrefix = config.pathPrefix ?? ""
 
     // If key is absolute path, use it directly; otherwise join with basePath
-    const resolvePath = (key: string) =>
-      key.startsWith("/") ? key : path.join(basePath, globalPrefix, key)
+    const resolvePath = (key: string) => key.startsWith("/") ? key : path.join(basePath, globalPrefix, key)
 
     const ensureDir = (filePath: string) => fs.makeDirectory(path.dirname(filePath), { recursive: true })
 
@@ -253,33 +253,34 @@ const makeMemoryStore = Effect.sync(() => {
   } as StorageService
 })
 
-// --- Factory Layer ---
+// --- Layer Definition ---
 
-export const makeStorageLayer = (
-  config: StorageConfig
-): Layer.Layer<StorageService, SystemError, FileSystem.FileSystem | Path.Path> => {
-  const ConfigLayer = Layer.succeed(StorageConfig, config)
-
-  switch (config.type) {
-    case "local":
-      return Layer.effect(StorageService, makeLocalStore(config)).pipe(
-        Layer.provide(ConfigLayer)
-      )
-    case "gcs":
-      return Layer.succeed(StorageService, makeGcsStore(config)).pipe(
-        Layer.provide(ConfigLayer)
-      )
-    case "memory":
-      return Layer.effect(StorageService, makeMemoryStore).pipe(
-        Layer.provide(ConfigLayer)
-      )
-    default:
-      return Layer.die(new Error(`Unknown storage type: ${(config as any).type}`))
-  }
-}
-
-// Deprecated: Legacy layer for backward compat (defaults to GCS if used)
 export const StorageServiceLive = Layer.effect(
   StorageService,
-  Effect.map(StorageConfig, (config) => makeGcsStore(config))
+  Effect.gen(function*() {
+    const config = yield* ConfigService
+    const { bucket, localPath, prefix, type } = config.storage
+
+    // Adapter for internal storage config
+    const storageConfig: StorageConfig = {
+      type,
+      bucketName: Option.getOrUndefined(bucket),
+      localPath: Option.getOrUndefined(localPath),
+      pathPrefix: prefix
+    }
+
+    if (type === "gcs") {
+      return makeGcsStore(storageConfig)
+    } else if (type === "local") {
+      return yield* makeLocalStore(storageConfig)
+    } else {
+      return yield* makeMemoryStore
+    }
+  })
 )
+
+/**
+ * In-memory storage layer for testing
+ * Does not require ConfigService
+ */
+export const StorageServiceTest = Layer.effect(StorageService, makeMemoryStore)

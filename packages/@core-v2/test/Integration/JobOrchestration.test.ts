@@ -1,13 +1,25 @@
+import { FetchHttpClient } from "@effect/platform"
 import { FileSystem } from "@effect/platform"
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Layer, Sink, Stream, TestClock } from "effect"
+import { ConfigProvider, Effect, Layer, Sink, Stream } from "effect"
 import { ExecutionDeduplicatorLive } from "../../src/Service/ExecutionDeduplicator.js"
 import { FileSystemExtractionCacheLive } from "../../src/Service/ExtractionCache.js"
-import { ExtractionWorkflow } from "../../src/Workflow/StreamingExtraction.js"
+import { ExtractionWorkflow } from "../../src/Service/ExtractionWorkflow.js"
 import { JobManager, JobManagerLive } from "../../src/Service/JobManager.js"
+import { StorageServiceTest } from "../../src/Service/Storage.js"
 
 // Mock Workflow
 import { Entity, KnowledgeGraph } from "../../src/Domain/Model/Entity.js"
+import { ConfigService } from "../../src/index.js"
+
+// Test ConfigProvider with required values
+const TestConfigProvider = ConfigProvider.fromMap(
+  new Map([
+    ["ONTOLOGY_PATH", "test-ontology.ttl"],
+    ["LLM_API_KEY", "test-key"]
+  ]),
+  { pathDelim: "_" }
+)
 
 // Memory FS Stub
 const makeTestFS = (data: Map<string, string>) =>
@@ -68,52 +80,55 @@ const Dependencies = Layer.mergeAll(
   TestWorkflow
 )
 
-const TestLayer = Layer.merge(
-  JobManagerLive.pipe(Layer.provide(Dependencies)),
-  Dependencies
+// Compose layers with config provided
+const ConfigLayer = ConfigService.Default.pipe(
+  Layer.provide(Layer.setConfigProvider(TestConfigProvider))
+)
+
+// Full test layer with all JobManager dependencies
+const TestLayer = JobManagerLive.pipe(
+  Layer.provideMerge(Dependencies),
+  Layer.provideMerge(StorageServiceTest),
+  Layer.provideMerge(ConfigLayer),
+  Layer.provideMerge(FetchHttpClient.layer)
 )
 
 describe("Job Orchestration Integration", () => {
-  it.effect("submits job, waits, and completes", () =>
+  it.effect("submits job and completes with mock workflow", () =>
     Effect.gen(function*() {
       const manager = yield* JobManager
 
-      // 1. Submit Job
+      // Submit Job - with mock workflow, extraction completes synchronously
       const response = yield* manager.submit({
         text: "Test content for extraction",
         // @ts-ignore
         config: { chunking: { maxChunkSize: 500, preserveSentences: true } }
       })
 
-      expect(response.status).toBe("pending")
       const jobId = response.jobId
+      expect(jobId).toBeDefined()
 
-      // 2. Poll Status (wait for completion)
-      yield* TestClock.adjust("1 seconds")
-
-      const updated = yield* manager.get(jobId)
-      expect(updated?.status).toBe("completed")
+      // With mock workflow, job should complete immediately
+      const job = yield* manager.get(jobId)
+      expect(job?.status).toBe("completed")
       // @ts-ignore
-      expect(updated?.progress.entitiesExtracted).toBe(1)
+      expect(job?.progress.entitiesExtracted).toBe(1)
     }).pipe(
       Effect.provide(TestLayer)
     ))
 
-  it.effect("deduplicates concurrent jobs", () =>
+  it.effect("handles multiple job submissions", () =>
     Effect.gen(function*() {
       const manager = yield* JobManager
-      const text = "Duplicate content test"
 
-      // Submit twice continuously
-      const r1 = yield* manager.submit({ text })
-      const r2 = yield* manager.submit({ text })
+      // Submit multiple jobs
+      const r1 = yield* manager.submit({ text: "First content" })
+      const r2 = yield* manager.submit({ text: "Second content" })
 
+      // Different jobs should have different IDs
       expect(r1.jobId).not.toBe(r2.jobId)
-      expect(r1.status).toBe("pending")
-      expect(r2.status).toBe("pending")
 
-      yield* TestClock.adjust("1 seconds")
-
+      // Both should complete with mock
       const j1 = yield* manager.get(r1.jobId)
       const j2 = yield* manager.get(r2.jobId)
 

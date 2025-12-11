@@ -16,7 +16,7 @@
  * @module Service/LlmControl/StageTimeout
  */
 
-import { Effect, Duration, Layer, Context, Fiber, Data } from "effect"
+import { Context, Data, Duration, Effect, Fiber, Layer } from "effect"
 
 // =============================================================================
 // Types
@@ -152,7 +152,7 @@ const make = Effect.succeed({
   ): Effect.Effect<A, E | TimeoutError, R> => {
     const config = STAGE_TIMEOUTS[stage as TimedStage] ?? DEFAULT_TIMEOUT
 
-    return Effect.gen(function* () {
+    return Effect.gen(function*() {
       // Start soft timeout watcher in background
       const softTimeoutFiber = yield* Effect.sleep(Duration.millis(config.softMs)).pipe(
         Effect.flatMap(() => onSoftTimeout?.() ?? Effect.void),
@@ -174,8 +174,7 @@ const make = Effect.succeed({
     })
   },
 
-  getConfig: (stage: string) =>
-    Effect.succeed(STAGE_TIMEOUTS[stage as TimedStage] ?? DEFAULT_TIMEOUT),
+  getConfig: (stage: string) => Effect.succeed(STAGE_TIMEOUTS[stage as TimedStage] ?? DEFAULT_TIMEOUT),
 
   wouldTimeout: (stage: string, durationMs: number) => {
     const config = STAGE_TIMEOUTS[stage as TimedStage] ?? DEFAULT_TIMEOUT
@@ -204,7 +203,7 @@ export const StageTimeoutServiceTest = (
     ): Effect.Effect<A, E | TimeoutError, R> => {
       const config = testTimeouts[stage as TimedStage] ?? DEFAULT_TIMEOUT
 
-      return Effect.gen(function* () {
+      return Effect.gen(function*() {
         const softTimeoutFiber = yield* Effect.sleep(Duration.millis(config.softMs)).pipe(
           Effect.flatMap(() => onSoftTimeout?.() ?? Effect.void),
           Effect.fork
@@ -222,8 +221,7 @@ export const StageTimeoutServiceTest = (
       })
     },
 
-    getConfig: (stage: string) =>
-      Effect.succeed(testTimeouts[stage as TimedStage] ?? DEFAULT_TIMEOUT),
+    getConfig: (stage: string) => Effect.succeed(testTimeouts[stage as TimedStage] ?? DEFAULT_TIMEOUT),
 
     wouldTimeout: (stage: string, durationMs: number) => {
       const config = testTimeouts[stage as TimedStage] ?? DEFAULT_TIMEOUT

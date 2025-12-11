@@ -21,12 +21,15 @@ describe("OntologyService - Football Ontology", () => {
     }
   } as ConfigService)
 
-  const TestLayer = Layer.mergeAll(
-    OntologyService.Default,
-    NlpService.Default,
-    RdfBuilder.Default,
-    TestConfig
-  ).pipe(Layer.provideMerge(BunContext.layer))
+  // Chain layers to satisfy dependencies:
+  // Ontology -> (Nlp, Rdf)
+  // Nlp, Rdf -> Config
+  const TestLayer = OntologyService.Default.pipe(
+    Layer.provide(NlpService.Default),
+    Layer.provide(RdfBuilder.Default),
+    Layer.provide(TestConfig),
+    Layer.provideMerge(BunContext.layer)
+  )
 
   describe("Entity-First Semantic Search", () => {
     it("should load football ontology and find Player class", () =>

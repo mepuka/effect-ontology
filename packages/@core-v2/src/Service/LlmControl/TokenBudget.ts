@@ -15,7 +15,7 @@
  * @module Service/LlmControl/TokenBudget
  */
 
-import { Effect, Ref, Layer, Context } from "effect"
+import { Context, Effect, Layer, Ref } from "effect"
 
 // =============================================================================
 // Types
@@ -160,7 +160,7 @@ const getStageBudget = (stage: string, total: number): number => {
 /**
  * Default implementation using Effect Ref for state
  */
-const make = Effect.gen(function* () {
+const make = Effect.gen(function*() {
   const state = yield* Ref.make<TokenBudgetState>({
     total: 4096,
     used: 0,
@@ -187,8 +187,7 @@ const make = Effect.gen(function* () {
         }
       })),
 
-    getRemaining: () =>
-      Ref.get(state).pipe(Effect.map((s) => s.total - s.used)),
+    getRemaining: () => Ref.get(state).pipe(Effect.map((s) => s.total - s.used)),
 
     getStageRemaining: (stage: string) =>
       Ref.get(state).pipe(
@@ -201,8 +200,7 @@ const make = Effect.gen(function* () {
 
     getState: () => Ref.get(state),
 
-    reset: (total: number = 4096) =>
-      Ref.set(state, { total, used: 0, byStage: {} })
+    reset: (total: number = 4096) => Ref.set(state, { total, used: 0, byStage: {} })
   }
 })
 
@@ -219,7 +217,7 @@ export const TokenBudgetServiceTest = (
 ): Layer.Layer<TokenBudgetService> =>
   Layer.effect(
     TokenBudgetService,
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const state = yield* Ref.make<TokenBudgetState>({
         total: initialTotal,
         used: 0,
@@ -246,8 +244,7 @@ export const TokenBudgetServiceTest = (
             }
           })),
 
-        getRemaining: () =>
-          Ref.get(state).pipe(Effect.map((s) => s.total - s.used)),
+        getRemaining: () => Ref.get(state).pipe(Effect.map((s) => s.total - s.used)),
 
         getStageRemaining: (stage: string) =>
           Ref.get(state).pipe(
@@ -260,8 +257,7 @@ export const TokenBudgetServiceTest = (
 
         getState: () => Ref.get(state),
 
-        reset: (total: number = 4096) =>
-          Ref.set(state, { total, used: 0, byStage: {} })
+        reset: (total: number = 4096) => Ref.set(state, { total, used: 0, byStage: {} })
       }
     })
   )

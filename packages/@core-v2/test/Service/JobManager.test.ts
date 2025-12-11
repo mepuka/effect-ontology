@@ -1,12 +1,14 @@
-import { FileSystem } from "@effect/platform"
+import { FileSystem, KeyValueStore } from "@effect/platform"
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Layer } from "effect"
-import { SubmitJobRequest } from "../../src/Domain/Schema/Api.js"
+import { Effect, Layer, Option, Secret } from "effect"
 import { Entity, KnowledgeGraph } from "../../src/Domain/Model/Entity.js"
-import { JobManager, JobManagerLive } from "../../src/Service/JobManager.js"
+import { SubmitJobRequest } from "../../src/Domain/Schema/Api.js"
+import { ConfigService } from "../../src/Service/Config.js"
 import { ExecutionDeduplicatorLive } from "../../src/Service/ExecutionDeduplicator.js"
 import { FileSystemExtractionCacheLive } from "../../src/Service/ExtractionCache.js"
-import { ExtractionWorkflow } from "../../src/Workflow/StreamingExtraction.js"
+import { ExtractionWorkflow } from "../../src/Service/ExtractionWorkflow.js"
+import { JobManager, JobManagerLive } from "../../src/Service/JobManager.js"
+import { StorageService } from "../../src/Service/Storage.js"
 
 const makeTestFS = (data: Map<string, string>) =>
   FileSystem.FileSystem.of({
@@ -59,7 +61,65 @@ const TestDeps = Layer.mergeAll(
   FileSystemExtractionCacheLive("/tmp/job-manager-test").pipe(
     Layer.provideMerge(Layer.succeed(FileSystem.FileSystem, makeTestFS(new Map())))
   ),
-  MockWorkflow
+  MockWorkflow,
+  Layer.succeed(
+    ConfigService,
+    {
+      llm: {
+        provider: "anthropic",
+        model: "test-model",
+        apiKey: Secret.fromString("test-key"),
+        temperature: 0,
+        maxTokens: 100,
+        timeoutMs: 1000
+      },
+      rdf: {
+        baseNamespace: "http://example.org/",
+        outputFormat: "Turtle"
+      },
+      ontology: {
+        path: "ontologies/test/test/0000/ontology.ttl",
+        cacheTtlSeconds: 3600
+      },
+      runtime: {
+        concurrency: 1,
+        llmConcurrencyLimit: 1,
+        retryMaxAttempts: 3,
+        retryInitialDelayMs: 10,
+        retryMaxDelayMs: 100,
+        enableTracing: false
+      },
+      grounder: {
+        enabled: false,
+        confidenceThreshold: 0.8,
+        batchSize: 5
+      },
+      storage: {
+        type: "memory",
+        bucket: Option.none(),
+        localPath: Option.none(),
+        prefix: "test-prefix"
+      }
+    } as unknown as ConfigService
+  ),
+  Layer.succeed(
+    StorageService,
+    {
+      ...KeyValueStore.make({
+        get: () => Effect.succeed(Option.none()),
+        getUint8Array: () => Effect.succeed(Option.none()),
+        set: () => Effect.void,
+        remove: () => Effect.void,
+        clear: Effect.void,
+        size: Effect.succeed(0),
+        modify: (key, f) => Effect.succeed(Option.none()),
+        modifyUint8Array: (key, f) => Effect.succeed(Option.none()),
+        has: (key) => Effect.succeed(false),
+        isEmpty: Effect.succeed(true)
+      }),
+      list: () => Effect.succeed([])
+    }
+  )
 )
 
 // Mock server environment without actual network binding if possible,

@@ -10,9 +10,8 @@ import { RdfBuilder } from "./Service/Rdf.js"
 const liveLayer = Layer.mergeAll(
   OntologyService.Default,
   NlpService.Default,
-  RdfBuilder.Default,
-  ConfigService.Default
-).pipe(Layer.provideMerge(BunContext.layer))
+  RdfBuilder.Default
+).pipe(Layer.provideMerge(BunContext.layer), Layer.provide(ConfigService.Default))
 
 const BASE_NS = "http://visualdataweb.org/newOntology/"
 

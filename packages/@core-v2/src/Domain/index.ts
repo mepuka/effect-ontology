@@ -9,5 +9,7 @@
  */
 
 export * as Error from "./Error/index.js"
+export * as Identity from "./Identity.js"
 export * as Model from "./Model/index.js"
+export * as PathLayout from "./PathLayout.js"
 export * as Rdf from "./Rdf/index.js"

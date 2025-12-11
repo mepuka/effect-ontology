@@ -1,7 +1,26 @@
 import { BunContext } from "@effect/platform-bun"
 import { Effect, Layer, Option } from "effect"
 import { describe, expect, it } from "vitest"
-import { makeStorageLayer, StorageService } from "../../src/Service/Storage.js"
+import { ConfigService, DEFAULT_CONFIG } from "../../src/Service/Config.js"
+import { StorageService, StorageServiceLive } from "../../src/Service/Storage.js"
+
+const makeTestLayer = (storageConfig: Partial<typeof DEFAULT_CONFIG.storage>) => {
+  const TestConfig = Layer.succeed(
+    ConfigService,
+    ConfigService.of({
+      ...DEFAULT_CONFIG,
+      storage: {
+        ...DEFAULT_CONFIG.storage,
+        ...storageConfig
+      }
+    } as unknown as ConfigService)
+  ) // Cast for mock
+
+  return StorageServiceLive.pipe(
+    Layer.provide(TestConfig),
+    Layer.provideMerge(BunContext.layer)
+  )
+}
 
 describe("StorageService", () => {
   it("local storage writes and reads", () =>
@@ -25,15 +44,11 @@ describe("StorageService", () => {
       const afterRemove = yield* storage.get(key)
       expect(Option.isNone(afterRemove)).toBe(true)
     }).pipe(
-      Effect.provide(
-        makeStorageLayer({
-          type: "local",
-          bucketName: "ignore",
-          localPath: "./test-output",
-          pathPrefix: "unit-test"
-        })
-      ),
-      Effect.provide(BunContext.layer),
+      Effect.provide(makeTestLayer({
+        type: "local",
+        localPath: Option.some("./test-output"),
+        prefix: "unit-test"
+      })),
       Effect.runPromise
     ))
 
@@ -47,13 +62,9 @@ describe("StorageService", () => {
         expect(res.value).toBe("bar")
       }
     }).pipe(
-      Effect.provide(
-        makeStorageLayer({
-          type: "memory",
-          bucketName: "na"
-        })
-      ),
-      Effect.provide(BunContext.layer),
+      Effect.provide(makeTestLayer({
+        type: "memory"
+      })),
       Effect.runPromise
     ))
 })

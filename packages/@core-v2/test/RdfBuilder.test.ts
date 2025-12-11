@@ -12,9 +12,8 @@ import { Entity, Relation } from "../src/Domain/Model/Entity.js"
 import { ConfigService, RdfBuilder } from "../src/index.js"
 
 describe("RdfBuilder", () => {
-  const testLayer = Layer.mergeAll(
-    ConfigService.Default,
-    RdfBuilder.Default
+  const testLayer = RdfBuilder.Default.pipe(
+    Layer.provide(ConfigService.Default)
   )
 
   describe("Entity to RDF conversion", () => {
