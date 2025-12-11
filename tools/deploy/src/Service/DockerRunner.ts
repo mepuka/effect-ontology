@@ -155,7 +155,23 @@ export class DockerRunner extends Effect.Service<DockerRunner>()(
           return run(args, `Building image ${opts.tag}`)
         },
 
-        push: (tag: string) => run(["push", tag], `Pushing image ${tag}`),
+        push: (image: string) =>
+          run(
+            ["push", image],
+            `Pushing Docker image ${image}`
+          ),
+
+        /**
+         * Check if Docker daemon is running
+         */
+        ping: () =>
+          run(
+            ["info", "--format", "{{.ServerVersion}}"],
+            "Checking Docker daemon"
+          ).pipe(
+            Effect.as(true),
+            Effect.catchAll(() => Effect.succeed(false))
+          ),
 
         configureGcr: () =>
           runGcloud(

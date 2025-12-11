@@ -566,18 +566,24 @@ const rootCommand = Command.make("effect-deploy").pipe(
  * FetchHttpClient provides HttpClient using Bun's native fetch
  * DeployLive provides ConfigLoader, TerraformRunner, DockerRunner, GcloudRunner, HealthChecker
  */
-const HealthCheckerLive = HealthChecker.Default.pipe(
-  Layer.provide(FetchHttpClient.layer)
-)
-
-const DeployLive = Layer.mergeAll(
+const BaseServices = Layer.mergeAll(
   ConfigLoader.Default,
   TerraformRunner.Default,
   DockerRunner.Default,
   GcloudRunner.Default,
-  HealthCheckerLive,
+  FetchHttpClient.layer
+)
+
+const DependentServices = Layer.mergeAll(
+  HealthChecker.Default,
   PrereqChecker.Default
-).pipe(Layer.provideMerge(BunContext.layer))
+)
+
+const DeployLive = DependentServices.pipe(
+  Layer.provide(BaseServices),
+  Layer.merge(BaseServices),
+  Layer.provideMerge(BunContext.layer)
+)
 
 // =============================================================================
 // Main
