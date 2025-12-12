@@ -43,8 +43,23 @@ docs/
 analysis/
 benchmarks/
 
-# Terraform
+# Terraform and infrastructure
 ops/
+infra/
+infra/tfplan
+*.tfplan
+*.tfstate
+*.tfstate.*
+
+# Output directories (cache, runs, generated files)
+output/
+test-output/
+**/output/
+**/test-output/
+
+# Scratchpad and experimental code
+scratchpad/
+**/scratchpad/
 
 # Misc
 *.log
