@@ -5,7 +5,16 @@ resource "google_cloud_run_v2_service" "main" {
 
   template {
     service_account = var.cloud_run_sa
-    
+
+    # VPC access for PostgreSQL connectivity (when enabled)
+    dynamic "vpc_access" {
+      for_each = var.vpc_connector_id != null ? [1] : []
+      content {
+        connector = var.vpc_connector_id
+        egress    = "PRIVATE_RANGES_ONLY"
+      }
+    }
+
     containers {
       image = var.image
 
@@ -34,18 +43,60 @@ resource "google_cloud_run_v2_service" "main" {
       }
       env {
         name  = "LLM_MODEL"
-        value = "claude-sonnet-4-20250514"
+        value = "claude-haiku-4-5"
       }
       env {
         name  = "ONTOLOGY_PATH"
         value = var.ontology_path
       }
       env {
-        name = "ANTHROPIC_API_KEY"
+        name = "LLM_API_KEY"
         value_source {
           secret_key_ref {
             secret  = var.anthropic_secret_id
             version = "latest"
+          }
+        }
+      }
+
+      # PostgreSQL environment variables (when enabled)
+      dynamic "env" {
+        for_each = var.enable_postgres ? [1] : []
+        content {
+          name  = "POSTGRES_HOST"
+          value = var.postgres_host
+        }
+      }
+      dynamic "env" {
+        for_each = var.enable_postgres ? [1] : []
+        content {
+          name  = "POSTGRES_PORT"
+          value = "5432"
+        }
+      }
+      dynamic "env" {
+        for_each = var.enable_postgres ? [1] : []
+        content {
+          name  = "POSTGRES_DATABASE"
+          value = "workflow"
+        }
+      }
+      dynamic "env" {
+        for_each = var.enable_postgres ? [1] : []
+        content {
+          name  = "POSTGRES_USER"
+          value = "workflow"
+        }
+      }
+      dynamic "env" {
+        for_each = var.enable_postgres ? [1] : []
+        content {
+          name = "POSTGRES_PASSWORD"
+          value_source {
+            secret_key_ref {
+              secret  = var.postgres_password_secret_id
+              version = "latest"
+            }
           }
         }
       }

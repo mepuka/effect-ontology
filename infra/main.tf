@@ -58,4 +58,10 @@ module "cloud_run" {
   anthropic_secret_id   = module.secrets.anthropic_secret_id
   cloud_run_sa          = data.google_compute_default_service_account.default.email
   allow_unauthenticated = var.allow_unauthenticated
+
+  # PostgreSQL configuration (when enabled)
+  enable_postgres             = var.enable_postgres
+  vpc_connector_id            = var.enable_postgres ? module.postgres[0].vpc_connector_id : null
+  postgres_host               = var.enable_postgres ? module.postgres[0].postgres_internal_ip : null
+  postgres_password_secret_id = var.enable_postgres ? module.secrets.postgres_password_secret_id : null
 }

@@ -5,6 +5,7 @@
  * @module Service
  */
 
+export * from "./BatchState.js"
 export * from "./Config.js"
 export * from "./EntityLinker.js"
 export * from "./Extraction.js"

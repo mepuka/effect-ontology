@@ -1,8 +1,8 @@
 # Effect-Ontology @core-v2 System Architecture
 
-> **Version:** 2.0.0
+> **Version:** 2.1.0
 > **Last Updated:** December 2024
-> **Status:** Implementation Complete
+> **Status:** Implementation Complete - Unified Batch Workflow API
 
 ## Table of Contents
 
@@ -26,6 +26,7 @@ Effect-Ontology is a knowledge graph extraction system that transforms unstructu
 
 - **Ontology-Guided Extraction**: Uses SKOS/OWL ontologies to constrain entity types and relation predicates
 - **Durable Workflows**: @effect/workflow-based pipelines with PostgreSQL persistence for crash recovery
+- **SSE Streaming**: Real-time batch state streaming via Server-Sent Events
 - **Batch Processing**: 4-stage pipeline (Extract → Resolve → Validate → Ingest)
 - **Entity Resolution**: Graph-based clustering for entity deduplication
 - **SHACL Validation**: Optional shape-based constraint checking
@@ -46,8 +47,8 @@ C4Context
     System_Ext(gcs, "Google Cloud Storage", "Document and graph storage")
     System_Ext(postgres, "PostgreSQL", "Workflow state persistence")
 
-    Rel(user, core, "POST /api/v1/extract", "HTTPS")
-    Rel(user, core, "POST /api/v1/batch", "HTTPS")
+    Rel(user, core, "POST /v1/extract/batch → SSE", "HTTPS")
+    Rel(user, core, "GET /v1/batch/:id", "HTTPS")
     Rel(core, llm, "Generate entities/relations", "HTTPS")
     Rel(core, gcs, "Read/write documents and graphs", "HTTPS")
     Rel(core, postgres, "Persist workflow state", "TCP")
@@ -68,8 +69,8 @@ graph TB
     subgraph "Service Layer"
         subgraph "Orchestration"
             WO[WorkflowOrchestrator]
-            JM[JobManager]
-            ER[ExtractionRun]
+            BSH[BatchStateHub<br/>PubSub]
+            BSP[BatchStatePersistence]
         end
 
         subgraph "Extraction"
@@ -115,9 +116,11 @@ graph TB
 
     API --> MW
     MW --> WO
-    MW --> JM
+    MW --> BSH
 
     WO --> WE
+    WO --> BSH
+    BSH --> BSP
     WE --> BW
     BW --> DA
 
@@ -245,12 +248,12 @@ sequenceDiagram
 graph LR
     subgraph "Entry Points"
         WO[WorkflowOrchestrator]
-        JM[JobManager]
+        SSE[SSE Streaming]
     end
 
-    subgraph "Workflow Services"
-        ER[ExtractionRun]
-        WP[WorkflowPersistence]
+    subgraph "State Management"
+        BSH[BatchStateHub]
+        BSP[BatchStatePersistence]
     end
 
     subgraph "Extraction Services"
@@ -282,11 +285,11 @@ graph LR
 
     WO --> WE[WorkflowEngine]
     WO --> SS
+    WO --> BSH
 
-    JM --> ER
-    ER --> EE
-    ER --> RE
-    ER --> GR
+    SSE --> BSH
+    BSH --> BSP
+    BSP --> SS
 
     EE --> LR
     RE --> LR
@@ -320,9 +323,9 @@ graph LR
 
 | Service | Purpose | Layer | Dependencies |
 |---------|---------|-------|--------------|
-| `WorkflowOrchestrator` | High-level batch workflow API | Service | WorkflowEngine |
-| `JobManager` | Async job submission/polling | Service | ExtractionRun |
-| `ExtractionRun` | Single extraction state machine | Service | EntityExtractor, RelationExtractor, Grounder |
+| `WorkflowOrchestrator` | High-level batch workflow API | Service | WorkflowEngine, BatchStateHub |
+| `BatchStateHub` | PubSub for real-time state changes | Service | PubSub |
+| `BatchStatePersistence` | State snapshots in storage | Service | StorageService, KeyValueStore |
 | `EntityExtractor` | LLM-based named entity recognition | Service | LanguageModel, OntologyService |
 | `RelationExtractor` | LLM-based relation extraction | Service | LanguageModel, OntologyService |
 | `Grounder` | Entity grounding/linking | Service | NlpService, OntologyService |
@@ -547,7 +550,7 @@ graph TD
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `LLM_PROVIDER` | LLM backend (anthropic/openai/google) | anthropic |
-| `LLM_MODEL` | Model identifier | claude-3-haiku-20240307 |
+| `LLM_MODEL` | Model identifier | claude-haiku-4-5 |
 | `LLM_API_KEY` | API key (from Secret Manager) | required |
 | `STORAGE_TYPE` | Storage backend (gcs/local/memory) | local |
 | `STORAGE_BUCKET` | GCS bucket name | - |
@@ -679,22 +682,58 @@ graph LR
 ```mermaid
 graph LR
     subgraph "Health"
-        H1[GET /health]
-        H2[GET /ready]
+        H1[GET /health/live]
+        H2[GET /health/ready]
+        H3[GET /health/deep]
     end
 
-    subgraph "Extraction"
-        E1[POST /api/v1/extract]
-        E2[GET /api/v1/jobs/:id]
+    subgraph "Extraction (SSE)"
+        E1[POST /v1/extract/batch<br/>→ SSE Stream]
+        E2[POST /v1/extract<br/>→ SSE Stream]
     end
 
-    subgraph "Batch Workflow"
-        B1[POST /api/v1/batch/start]
-        B2[GET /api/v1/batch/:id]
-        B3[POST /api/v1/batch/:id/interrupt]
-        B4[POST /api/v1/batch/:id/resume]
+    subgraph "Batch Status"
+        B1[GET /v1/batch/:id]
+        B2[POST /v1/batch/:id/resume]
     end
 ```
+
+### SSE Streaming
+
+The extraction endpoints return Server-Sent Events streaming `BatchState` transitions:
+
+```
+POST /v1/extract/batch
+Content-Type: application/json
+Accept: text/event-stream
+
+← HTTP/1.1 200 OK
+← Content-Type: text/event-stream
+
+← event: state
+← id: batch-abc123-Pending-1702300000000
+← data: {"_tag":"Pending","batchId":"batch-abc123",...}
+
+← event: state
+← id: batch-abc123-Extracting-1702300001000
+← data: {"_tag":"Extracting","documentsCompleted":1,"documentsTotal":3,...}
+
+← retry: 15000
+
+← event: state
+← id: batch-abc123-Complete-1702300010000
+← data: {"_tag":"Complete","stats":{...},...}
+```
+
+### BatchStatusResponse Union
+
+The `GET /v1/batch/:id` endpoint returns a discriminated union:
+
+| Variant | Description | HTTP Status |
+|---------|-------------|-------------|
+| `Active` | Workflow running or completed | 200 |
+| `Suspended` | Workflow suspended (can resume) | 200 |
+| `NotFound` | Batch ID not found | 404 |
 
 ### WorkflowOrchestrator Interface
 
@@ -717,13 +756,38 @@ interface WorkflowOrchestrator {
 }
 ```
 
-### BatchWorkflowPayload Schema
+### BatchRequest Schema (API Input)
 
 ```typescript
+// Request body for POST /v1/extract/batch
+// Server generates batchId and createdAt
+const BatchRequest = Schema.Struct({
+  ontologyUri: GcsUri,
+  ontologyVersion: OntologyVersion,
+  shaclUri: Schema.optional(GcsUri),
+  targetNamespace: Namespace,
+  documents: Schema.NonEmptyArray(Schema.Struct({
+    documentId: Schema.optional(DocumentId),  // Server generates if omitted
+    sourceUri: GcsUri,
+    contentType: Schema.String,
+    sizeBytes: Schema.optional(Schema.Number)
+  }))
+})
+```
+
+### BatchWorkflowPayload Schema (Internal)
+
+```typescript
+// Used internally for workflow execution
+// Includes all fields for idempotency key derivation
 const BatchWorkflowPayload = Schema.Struct({
-  batchId: BatchId,           // batch-xxxxxxxxxxxx
-  manifestUri: GcsUri,        // gs://bucket/manifests/batch-xxx.json
-  ontologyVersion: OntologyVersion  // namespace/name@hash
+  batchId: BatchId,
+  manifestUri: GcsUri,
+  ontologyVersion: OntologyVersion,
+  ontologyUri: GcsUri,
+  targetNamespace: Namespace,
+  shaclUri: Schema.optional(GcsUri),
+  documentIds: Schema.Array(DocumentId)
 })
 ```
 
@@ -752,21 +816,54 @@ const BatchManifest = Schema.Struct({
 
 | Path | Purpose |
 |------|---------|
-| `src/Service/WorkflowOrchestrator.ts` | High-level workflow API |
+| `src/Service/WorkflowOrchestrator.ts` | High-level workflow API with Result handling |
+| `src/Service/BatchState.ts` | BatchStateHub (PubSub) + persistence |
 | `src/Service/Config.ts` | Centralized configuration |
-| `src/Service/Storage.ts` | Storage abstraction |
+| `src/Service/Storage.ts` | Storage abstraction (GCS/Local/Memory) |
 | `src/Service/Extraction.ts` | Entity/Relation extractors |
 | `src/Service/Grounder.ts` | Entity grounding |
-| `src/Service/JobManager.ts` | Async job management |
-| `src/Workflow/DurableActivities.ts` | @effect/workflow activities |
+| `src/Workflow/Activities.ts` | @effect/workflow durable activities |
 | `src/Workflow/StreamingExtraction.ts` | 2-stage extraction pipeline |
 | `src/Workflow/EntityResolution.ts` | Graph-based entity resolution |
+| `src/Runtime/HttpServer.ts` | HTTP routes + SSE streaming |
 | `src/Runtime/ProductionRuntime.ts` | Production layer stack |
 | `src/Runtime/TestRuntime.ts` | Test layer stack |
-| `src/Runtime/Persistence/PostgresLayer.ts` | PostgreSQL persistence |
+| `src/Runtime/ActivityRunner.ts` | Cloud Run Jobs activity dispatcher |
 | `src/Domain/Identity.ts` | Branded ID types |
 | `src/Domain/PathLayout.ts` | Type-safe storage paths |
 | `src/Domain/Model/BatchWorkflow.ts` | BatchState union type |
-| `src/Domain/Schema/Batch.ts` | Activity input/output schemas |
+| `src/Domain/Schema/Batch.ts` | BatchManifest, BatchWorkflowPayload |
+| `src/Domain/Schema/BatchRequest.ts` | API request schema |
+| `src/Domain/Schema/BatchStatusResponse.ts` | Active/Suspended/NotFound union |
+| `src/Domain/Error/Workflow.ts` | WorkflowError, WorkflowSuspendedError |
 | `infra/modules/postgres/` | Terraform for PostgreSQL |
-| `infra/modules/cloud_run/` | Terraform for Cloud Run |
+| `infra/modules/cloud-run/` | Terraform for Cloud Run |
+
+---
+
+## Workflow Annotations
+
+The `BatchExtractionWorkflow` uses @effect/workflow annotations for resilience:
+
+| Annotation | Value | Purpose |
+|------------|-------|---------|
+| `SuspendOnFailure` | `true` | Suspend workflow on any error (can be resumed) |
+| `CaptureDefects` | `true` | Capture unexpected errors in Result |
+| `suspendedRetrySchedule` | Exponential backoff (5 retries) | Auto-retry suspended workflows |
+
+```typescript
+export const BatchExtractionWorkflow = Workflow.make({
+  name: "batch-extraction",
+  payload: BatchWorkflowPayload,
+  success: BatchState,
+  error: Schema.String,
+  idempotencyKey: (p) => `${p.batchId}-${hashSemanticInputs(p)}`,
+  annotations: Context.make(Workflow.SuspendOnFailure, true).pipe(
+    Context.add(Workflow.CaptureDefects, true)
+  ),
+  suspendedRetrySchedule: Schedule.exponential("1 second").pipe(
+    Schedule.compose(Schedule.recurs(5)),
+    Schedule.jittered
+  )
+})
+```

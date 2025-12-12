@@ -9,6 +9,7 @@ WORKDIR /app
 # Copy workspace files
 COPY package.json bun.lock ./
 COPY packages/@core-v2/package.json ./packages/@core-v2/
+COPY tools/deploy/package.json ./tools/deploy/
 
 # Install dependencies
 RUN bun install

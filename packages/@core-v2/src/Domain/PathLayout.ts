@@ -9,7 +9,8 @@
  */
 
 import { Schema } from "effect"
-import { BatchId, ContentHash, DocumentId, Namespace, OntologyName } from "./Identity.js"
+import type { BatchId } from "./Identity.js"
+import { ContentHash, DocumentId, Namespace, OntologyName } from "./Identity.js"
 
 // =============================================================================
 // Ontology Paths
@@ -55,11 +56,9 @@ export type OntologyFilePathEncoded = typeof OntologyFilePath.Encoded
  * Note: We use plain string functions instead of Schema.TemplateLiteral
  * because TemplateLiteral doesn't support branded refinement types.
  */
-const makeBatchPath = (batchId: BatchId, suffix: string): string =>
-  `batches/${batchId}/${suffix}`
+const makeBatchPath = (batchId: BatchId, suffix: string): string => `batches/${batchId}/${suffix}`
 
-const makeDocumentPath = (documentId: DocumentId, suffix: string): string =>
-  `documents/${documentId}/${suffix}`
+const makeDocumentPath = (documentId: DocumentId, suffix: string): string => `documents/${documentId}/${suffix}`
 
 // Type aliases for documentation (the actual types are just strings)
 export type BatchStatusPath = string

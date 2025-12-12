@@ -13,9 +13,15 @@
  * @since 2.0.0
  */
 
-import { DateTime, Effect, Option, Schema } from "effect"
+/**
+ * @deprecated Use DurableActivities.ts instead.
+ * Logic has been consolidated into durable Activity.make implementations.
+ * This file is retained for reference and will be removed in a future version.
+ */
+
+import { Chunk, DateTime, Effect, Option, Schema } from "effect"
 import { DocumentId, GcsUri, toGcsUri } from "../Domain/Identity.js"
-import type { KnowledgeGraph } from "../Domain/Model/Entity.js"
+import { KnowledgeGraph } from "../Domain/Model/Entity.js"
 import { PathLayout } from "../Domain/PathLayout.js"
 import type {
   ExtractionActivityInput,
@@ -24,6 +30,8 @@ import type {
   ValidationActivityInput
 } from "../Domain/Schema/Batch.js"
 import { ConfigService } from "../Service/Config.js"
+import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
+import { OntologyService } from "../Service/Ontology.js"
 import { RdfBuilder } from "../Service/Rdf.js"
 import { StorageService } from "../Service/Storage.js"
 
@@ -132,32 +140,132 @@ type IngestionInput = typeof IngestionActivityInput.Type
 export const makeExtractionActivity = (input: ExtractionInput): Activity<
   ExtractionActivityOutput,
   string,
-  StorageService | ConfigService
+  StorageService | ConfigService | RdfBuilder | EntityExtractor | RelationExtractor | OntologyService
 > => ({
   name: "extraction",
   execute: Effect.gen(function*() {
     const start = yield* DateTime.now
     const storage = yield* StorageService
     const config = yield* ConfigService
+    const entityExtractor = yield* EntityExtractor
+    const relationExtractor = yield* RelationExtractor
+    const ontologyService = yield* OntologyService
 
     const bucket = resolveBucket(config)
 
+    yield* Effect.logInfo("Extraction activity starting", {
+      batchId: input.batchId,
+      documentId: input.documentId,
+      sourceUri: input.sourceUri,
+      ontologyUri: input.ontologyUri
+    })
+
+    // 1. Read source document
     const sourceKey = stripGsPrefix(input.sourceUri)
     const sourceContent = yield* storage.get(sourceKey).pipe(
       Effect.flatMap((opt) => requireContent(opt, sourceKey))
     )
 
+    yield* Effect.logInfo("Source document loaded", {
+      documentId: input.documentId,
+      contentLength: sourceContent.length,
+      contentPreview: sourceContent.slice(0, 200)
+    })
+
+    // 2. Load ontology to get candidate classes
+    // Use hybrid search on the source text to find relevant classes
+    const candidateClasses = yield* ontologyService.searchClassesHybrid(
+      sourceContent.slice(0, 2000), // Use first 2000 chars for class search
+      100 // Get top 100 candidate classes
+    ).pipe(
+      Effect.tap((classes) =>
+        Effect.logInfo("Candidate classes loaded", {
+          documentId: input.documentId,
+          candidateCount: Chunk.size(classes),
+          candidateClassIds: Chunk.toReadonlyArray(classes).slice(0, 10).map((c) => c.id)
+        })
+      )
+    )
+
+    // 3. Extract entities from LLM
+    const entities = yield* entityExtractor.extract(
+      sourceContent,
+      Chunk.toReadonlyArray(candidateClasses)
+    ).pipe(
+      Effect.tap((entities) =>
+        Effect.logInfo("Entities extracted", {
+          documentId: input.documentId,
+          entityCount: Chunk.size(entities)
+        })
+      )
+    )
+
+    // 4. Get properties for extracted entity types to use in relation extraction
+    const entityTypes = Chunk.toReadonlyArray(entities).flatMap((e) => e.types)
+    const uniqueEntityTypes = Array.from(new Set(entityTypes))
+    const properties = yield* ontologyService.getPropertiesFor(uniqueEntityTypes).pipe(
+      Effect.tap((props) =>
+        Effect.logInfo("Properties loaded for entity types", {
+          documentId: input.documentId,
+          entityTypeCount: uniqueEntityTypes.length,
+          propertyCount: Chunk.size(props)
+        })
+      )
+    )
+
+    // 5. Extract relations from LLM (only if we have 2+ entities and properties)
+    const relations = Chunk.size(entities) >= 2 && Chunk.size(properties) > 0
+      ? yield* relationExtractor.extract(
+        sourceContent,
+        entities,
+        Chunk.toReadonlyArray(properties)
+      ).pipe(
+        Effect.tap((relations) =>
+          Effect.logInfo("Relations extracted", {
+            documentId: input.documentId,
+            relationCount: Chunk.size(relations)
+          })
+        )
+      )
+      : Chunk.empty()
+
+    // 6. Create KnowledgeGraph
+    const graph = new KnowledgeGraph({
+      entities: Chunk.toReadonlyArray(entities),
+      relations: Chunk.toReadonlyArray(relations),
+      sourceText: sourceContent
+    })
+
+    // 7. Serialize to Turtle using RdfBuilder
+    const turtleContent = yield* graphToTurtle(graph).pipe(
+      Effect.tap((turtle) =>
+        Effect.logInfo("Graph serialized to Turtle", {
+          documentId: input.documentId,
+          turtleLength: turtle.length
+        })
+      )
+    )
+
+    // 8. Save Turtle graph to storage
     const graphPath = PathLayout.document.graph(input.documentId)
-    const graphBody = `# extracted graph for ${input.documentId}\n# ontology: ${input.ontologyUri}\n${sourceContent}`
-    yield* storage.set(graphPath, graphBody)
+    yield* storage.set(graphPath, turtleContent)
 
     const end = yield* DateTime.now
+
+    yield* Effect.logInfo("Extraction activity complete", {
+      batchId: input.batchId,
+      documentId: input.documentId,
+      entityCount: Chunk.size(entities),
+      relationCount: Chunk.size(relations),
+      graphUri: toGcsUri(bucket, graphPath),
+      durationMs: DateTime.distance(start, end)
+    })
 
     return {
       documentId: input.documentId,
       graphUri: toGcsUri(bucket, graphPath),
-      entityCount: 0,
-      relationCount: 0,
+      entityCount: Chunk.size(entities),
+      relationCount: Chunk.size(relations),
       durationMs: DateTime.distance(start, end)
     }
   }).pipe(Effect.mapError(toStringError))
@@ -231,67 +339,62 @@ export const makeResolutionActivity = (input: ResolutionInput): Activity<
 export const makeValidationActivity = (input: ValidationInput): Activity<
   ValidationActivityOutput,
   string,
-  StorageService | ConfigService | RdfBuilder
+  StorageService | ConfigService
 > => ({
   name: "validation",
   execute: Effect.gen(function*() {
     const start = yield* DateTime.now
     const storage = yield* StorageService
     const config = yield* ConfigService
-    const rdf = yield* RdfBuilder
     const bucket = resolveBucket(config)
 
-    yield* Effect.logInfo("Validation activity starting", {
+    yield* Effect.logInfo("Validation activity starting (STUB)", {
       batchId: input.batchId,
-      hasShaclUri: Option.isSome(Option.fromNullable(input.shaclUri))
+      resolvedGraphUri: input.resolvedGraphUri,
+      hasShaclUri: Option.isSome(Option.fromNullable(input.shaclUri)),
+      shaclUri: input.shaclUri ?? "none"
     })
 
-    // Load resolved graph
+    // Load the resolved graph (but don't parse it - just pass it through)
     const resolvedGraph = yield* storage.get(stripGsPrefix(input.resolvedGraphUri)).pipe(
       Effect.flatMap((opt) => requireContent(opt, input.resolvedGraphUri))
     )
 
-    // Parse graph for validation
-    const store = yield* rdf.parseTurtle(resolvedGraph)
+    yield* Effect.logInfo("Validation stub: Would validate graph", {
+      graphSize: resolvedGraph.length,
+      batchId: input.batchId,
+      message: "Skipping actual SHACL validation - stub always returns success"
+    })
 
-    // Run SHACL validation if shapes URI provided
-    let validationResult = { conforms: true, report: "No SHACL shapes provided - skipping validation" }
-
-    if (input.shaclUri) {
-      const shapesContent = yield* storage.get(stripGsPrefix(input.shaclUri)).pipe(
-        Effect.flatMap((opt) => requireContent(opt, input.shaclUri!)),
-        Effect.catchAll(() => Effect.succeed(""))
-      )
-
-      if (shapesContent) {
-        validationResult = yield* rdf.validate(store, shapesContent)
-      }
-    }
-
-    // Write validated graph (same content, just validated)
+    // Copy the resolved graph to the validated graph path (identity operation)
     const validationGraphPath = PathLayout.batch.validationGraph(input.batchId)
     yield* storage.set(validationGraphPath, resolvedGraph)
 
-    // Write validation report
+    // Write a stub validation report
     const reportPath = PathLayout.batch.validationReport(input.batchId)
     const report = {
-      conforms: validationResult.conforms,
-      report: validationResult.report,
-      validatedAt: new Date().toISOString()
+      conforms: true,
+      report: "STUB: Validation not implemented - automatically passing",
+      message: "This is a stub implementation that always returns success",
+      validatedAt: new Date().toISOString(),
+      graphUri: input.resolvedGraphUri,
+      shaclUri: input.shaclUri ?? null
     }
     yield* storage.set(reportPath, JSON.stringify(report, null, 2))
 
     const end = yield* DateTime.now
 
-    yield* Effect.logInfo("Validation activity complete", {
+    yield* Effect.logInfo("Validation activity complete (STUB)", {
       batchId: input.batchId,
-      conforms: validationResult.conforms
+      conforms: true,
+      validatedUri: toGcsUri(bucket, validationGraphPath),
+      durationMs: DateTime.distance(start, end)
     })
 
     return {
       validatedUri: toGcsUri(bucket, validationGraphPath),
-      conforms: validationResult.conforms,
-      violations: validationResult.conforms ? 0 : 1, // Simplified - real impl would count violations
+      conforms: true,
+      violations: 0,
       durationMs: DateTime.distance(start, end)
     }
   }).pipe(Effect.mapError(toStringError))

@@ -9,7 +9,7 @@ import {
 } from "../Domain/Model/Ontology.js"
 import { PathLayout } from "../Domain/PathLayout.js"
 import { extractLocalNameFromIri } from "../Utils/Iri.js"
-import { ConfigService } from "./Config.js"
+import { ConfigService, ConfigServiceDefault } from "./Config.js"
 import { NlpService } from "./Nlp.js"
 import { parseOntologyFromStore } from "./Ontology.js"
 import { RdfBuilder } from "./Rdf.js"
@@ -279,7 +279,7 @@ const makeOntologyLoader = Effect.gen(function*() {
 export class OntologyLoader extends Effect.Service<OntologyLoader>()("@core-v2/OntologyLoader", {
   effect: makeOntologyLoader,
   dependencies: [
-    ConfigService.Default,
+    ConfigServiceDefault,
     RdfBuilder.Default,
     NlpService.Default
   ]

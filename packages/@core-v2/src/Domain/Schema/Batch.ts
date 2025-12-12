@@ -51,3 +51,14 @@ export const IngestionActivityInput = Schema.Struct({
   validatedGraphUri: GcsUri,
   targetNamespace: Namespace
 })
+
+export const BatchWorkflowPayload = Schema.Struct({
+  batchId: BatchId,
+  manifestUri: GcsUri,
+  ontologyVersion: OntologyVersion,
+  ontologyUri: GcsUri,
+  targetNamespace: Namespace,
+  shaclUri: Schema.optional(GcsUri),
+  documentIds: Schema.Array(DocumentId)
+})
+export type BatchWorkflowPayload = typeof BatchWorkflowPayload.Type

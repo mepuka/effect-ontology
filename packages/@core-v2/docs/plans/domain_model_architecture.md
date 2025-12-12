@@ -407,7 +407,7 @@ provider: Config.literal("anthropic", "openai", "google")("PROVIDER").pipe(
 Config.withDefault("anthropic")
 ),
 model: Config.string("MODEL").pipe(
-Config.withDefault("claude-3-haiku-20240307")
+Config.withDefault("claude-haiku-4-5")
 ),
 apiKey: Config.redacted("API_KEY"),
 timeoutMs: Config.integer("TIMEOUT_MS").pipe(Config.withDefault(60_000)),

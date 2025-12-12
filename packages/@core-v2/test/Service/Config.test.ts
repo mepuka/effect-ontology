@@ -13,7 +13,7 @@ describe("ConfigService", () => {
     new Map([
       ["ONTOLOGY_PATH", "/data/test-ontology.ttl"],
       ["LLM_PROVIDER", "anthropic"],
-      ["LLM_MODEL", "claude-3-5-sonnet-20241022"],
+      ["LLM_MODEL", "claude-haiku-4-5"],
       ["LLM_API_KEY", "test-key-for-testing"],
       ["RUNTIME_CONCURRENCY", "4"],
       ["RUNTIME_ENABLE_TRACING", "false"]
@@ -27,7 +27,7 @@ describe("ConfigService", () => {
 
       expect(config.ontology.path).toBe("/data/test-ontology.ttl")
       expect(config.llm.provider).toBe("anthropic")
-      expect(config.llm.model).toBe("claude-3-5-sonnet-20241022")
+      expect(config.llm.model).toBe("claude-haiku-4-5")
       expect(config.runtime.concurrency).toBe(4)
     }).pipe(
       Effect.provide(ConfigServiceDefault),

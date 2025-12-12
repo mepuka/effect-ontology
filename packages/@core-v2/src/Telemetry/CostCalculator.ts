@@ -7,13 +7,16 @@
  * @since 2.0.0
  */
 
-/** Pricing per 1M tokens (as of Nov 2024) */
+/** Pricing per 1M tokens (as of Dec 2025) */
 const PRICING: Record<string, { input: number; output: number }> = {
-  // Anthropic
-  "claude-3-5-sonnet-20241022": { input: 3.0, output: 15.0 },
+  // Anthropic - Current models
+  "claude-haiku-4-5": { input: 1.0, output: 5.0 },
+  "claude-sonnet-4-5": { input: 3.0, output: 15.0 },
+  "claude-opus-4-5": { input: 5.0, output: 25.0 },
+  // Anthropic - Legacy models
+  "claude-sonnet-4-20250514": { input: 3.0, output: 15.0 },
   "claude-3-5-haiku-20241022": { input: 0.8, output: 4.0 },
-  "claude-haiku-4-5": { input: 0.8, output: 4.0 },
-  "claude-3-opus-20240229": { input: 15.0, output: 75.0 },
+  "claude-3-haiku-20240307": { input: 0.25, output: 1.25 },
 
   // OpenAI
   "gpt-4o": { input: 2.5, output: 10.0 },

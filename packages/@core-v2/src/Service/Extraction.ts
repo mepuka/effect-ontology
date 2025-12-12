@@ -21,13 +21,14 @@ import type { IRI } from "../Domain/Rdf/Types.js"
 import { generateEntityPrompt, generateMentionPrompt, generateRelationPrompt } from "../Prompt/index.js"
 import { makeEntitySchema } from "../Schema/EntityFactory.js"
 import { type Mention, MentionGraphSchema } from "../Schema/MentionFactory.js"
-export type { Mention }
 import { makeRelationSchema } from "../Schema/RelationFactory.js"
 import { annotateExtraction, annotateLlmCall, LlmAttributes } from "../Telemetry/LlmAttributes.js"
 import { buildLocalNameToIriMap, expandLocalNameToIri, expandTypesToIris } from "../Utils/Iri.js"
 import { ConfigService } from "./Config.js"
 import { generateObjectWithFeedback } from "./GenerateWithFeedback.js"
 import { generateObjectWithRetry } from "./LlmWithRetry.js"
+
+export type { Mention }
 
 /**
  * Generate deterministic snake_case ID from mention

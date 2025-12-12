@@ -8,8 +8,7 @@
  * @module Service/Config
  */
 
-// Export default config for tests
-import { Config, Effect, Option, Secret } from "effect"
+import { Config, Context, Effect, Layer, Option, Secret } from "effect"
 
 // =============================================================================
 // Config Groups
@@ -20,7 +19,7 @@ const LlmConfig = Config.nested("LLM")(Config.all({
     Config.withDefault("anthropic")
   ),
   model: Config.string("MODEL").pipe(
-    Config.withDefault("claude-3-haiku-20240307")
+    Config.withDefault("claude-haiku-4-5")
   ),
   apiKey: Config.redacted("API_KEY"),
   timeoutMs: Config.integer("TIMEOUT_MS").pipe(Config.withDefault(60_000)),
@@ -87,7 +86,7 @@ export interface AppConfig {
 export const DEFAULT_CONFIG: AppConfig = {
   llm: {
     provider: "anthropic",
-    model: "claude-3-haiku-20240307",
+    model: "claude-haiku-4-5",
     apiKey: Secret.fromString(""),
     timeoutMs: 60_000,
     maxTokens: 4096,
@@ -133,25 +132,30 @@ export const DEFAULT_CONFIG: AppConfig = {
 // Service Definition
 // =============================================================================
 
-export class ConfigService extends Effect.Service<ConfigService>()("@core-v2/Service/ConfigService", {
-  effect: Effect.gen(function*() {
-    const [llm, storage, ontology, runtime, grounder, rdf] = yield* Effect.all([
-      LlmConfig,
-      StorageConfig,
-      OntologyConfig,
-      RuntimeConfig,
-      GrounderConfig,
-      RdfConfig
-    ])
+const makeConfigService = Effect.gen(function*() {
+  const [llm, storage, ontology, runtime, grounder, rdf] = yield* Effect.all([
+    LlmConfig,
+    StorageConfig,
+    OntologyConfig,
+    RuntimeConfig,
+    GrounderConfig,
+    RdfConfig
+  ])
 
-    return {
-      llm,
-      storage,
-      ontology,
-      runtime,
-      grounder,
-      rdf
-    } satisfies AppConfig
-  }),
-  accessors: true
-}) {}
+  return {
+    llm,
+    storage,
+    ontology,
+    runtime,
+    grounder,
+    rdf
+  } satisfies AppConfig
+})
+
+export type ConfigService = AppConfig
+export const ConfigService = Context.GenericTag<ConfigService>("@core-v2/Service/ConfigService")
+
+/**
+ * Default ConfigService layer reading from environment variables with defaults.
+ */
+export const ConfigServiceDefault = Layer.effect(ConfigService, makeConfigService)

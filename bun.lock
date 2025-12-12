@@ -11,14 +11,16 @@
         "@effect/ai-google": "^0.11.0",
         "@effect/ai-openai": "^0.35.0",
         "@effect/cli": "^0.72.1",
+        "@effect/cluster": "^0.55.0",
         "@effect/experimental": "^0.57.4",
         "@effect/platform": "^0.93.3",
         "@effect/platform-bun": "^0.84.0",
         "@effect/schema": "^0.75.5",
-        "@effect/sql": "^0.48.0",
+        "@effect/sql": "^0.48.6",
+        "@effect/sql-pg": "^0.49.7",
         "@effect/sql-sqlite-bun": "^0.49.0",
         "@effect/typeclass": "^0.38.0",
-        "@effect/workflow": "^0.13.0",
+        "@effect/workflow": "^0.15.2",
         "@opentelemetry/exporter-trace-otlp-http": "^0.208.0",
         "@zazuko/env": "^3.0.1",
         "effect": "^3.19.6",
@@ -239,7 +241,7 @@
 
     "@effect/vitest": ["@effect/vitest@0.25.1", "", { "peerDependencies": { "effect": "^3.17.7", "vitest": "^3.2.0" } }, "sha512-OMYvOU8iGed8GZXxgVBXlYtjG+jwWj5cJxFk0hOHOfTbCHXtdCMEWlXNba5zxbE7dBnW4srbnSYrP/NGGTC3qQ=="],
 
-    "@effect/workflow": ["@effect/workflow@0.13.1", "", { "peerDependencies": { "@effect/experimental": "^0.57.7", "@effect/platform": "^0.93.5", "@effect/rpc": "^0.72.2", "effect": "^3.19.8" } }, "sha512-Rl+PaUnEZvIvJQ9S9x9E2qL7UsLJLttEWZxHG4uptvveMo45wQtPv1pL6zlySzQKvDpLSg+HSov+xwI19zTlww=="],
+    "@effect/workflow": ["@effect/workflow@0.15.2", "", { "peerDependencies": { "@effect/experimental": "^0.57.11", "@effect/platform": "^0.93.6", "@effect/rpc": "^0.72.2", "effect": "^3.19.10" } }, "sha512-UAo5QWEvyyKsnf4EQ7WL3zwiuZS4Wd5fmAxdpcpZSIxNOvsABp3DOuyRCiidD8l3sQhdPwES/UsVK4QOCQ7wew=="],
 
     "@emnapi/core": ["@emnapi/core@1.7.1", "", { "dependencies": { "@emnapi/wasi-threads": "1.1.0", "tslib": "^2.4.0" } }, "sha512-o1uhUASyo921r2XtHYOHy7gdkGLge8ghBEQHMWmyJFoXlpU58kIrhhN3w26lpQb6dspetweapMn2CSNwQ8I4wg=="],
 
@@ -1800,8 +1802,6 @@
     "@anthropic-ai/tokenizer/@types/node": ["@types/node@18.19.130", "", { "dependencies": { "undici-types": "~5.26.4" } }, "sha512-GRaXQx6jGfL8sKfaIDD6OupbIHBr9jv7Jnaml9tB7l4v068PAOXqfcujMMo5PhbIs6ggR1XODELqahT2R8v0fg=="],
 
     "@babel/cli/glob": ["glob@7.2.3", "", { "dependencies": { "fs.realpath": "^1.0.0", "inflight": "^1.0.4", "inherits": "2", "minimatch": "^3.1.1", "once": "^1.3.0", "path-is-absolute": "^1.0.0" } }, "sha512-nFR0zLpU2YCaRxwoCJvL6UvCH2JFyFVIvwTLsIf21AuHlMskA1hhTdk+LlYJtOlYt9v6dvszD2BGRqBL+iQK9Q=="],
-
-    "@effect-ontology/core-v2/@effect/workflow": ["@effect/workflow@0.15.2", "", { "peerDependencies": { "@effect/experimental": "^0.57.11", "@effect/platform": "^0.93.6", "@effect/rpc": "^0.72.2", "effect": "^3.19.10" } }, "sha512-UAo5QWEvyyKsnf4EQ7WL3zwiuZS4Wd5fmAxdpcpZSIxNOvsABp3DOuyRCiidD8l3sQhdPwES/UsVK4QOCQ7wew=="],
 
     "@effect/experimental/uuid": ["uuid@11.1.0", "", { "bin": { "uuid": "dist/esm/bin/uuid" } }, "sha512-0/A9rDy9P7cJ+8w1c9WD9V//9Wj15Ce2MPz8Ri6032usz+NfePxx5AcN3bN+r6ZL6jEo066/yNYB3tn4pQEx+A=="],
 

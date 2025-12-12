@@ -20,7 +20,10 @@ import {
   ResolutionActivityInput,
   ValidationActivityInput
 } from "../Domain/Schema/Batch.js"
-import { ConfigService } from "../Service/Config.js"
+import { ConfigServiceDefault } from "../Service/Config.js"
+import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
+import { NlpService } from "../Service/Nlp.js"
+import { OntologyService } from "../Service/Ontology.js"
 import { RdfBuilder } from "../Service/Rdf.js"
 import { StorageServiceLive } from "../Service/Storage.js"
 import {
@@ -29,6 +32,7 @@ import {
   makeResolutionActivity,
   makeValidationActivity
 } from "../Workflow/Activities.js"
+import { makeLanguageModelLayer } from "./ProductionRuntime.js"
 
 // -----------------------------------------------------------------------------
 // Activity Name Schema
@@ -107,7 +111,7 @@ const program = Effect.gen(function*() {
 
   // Parse and validate activity name
   const activityName = yield* Schema.decodeUnknown(ActivityName)(activityNameRaw).pipe(
-    Effect.mapError((e) =>
+    Effect.mapError((_e) =>
       new Error(`Invalid ACTIVITY_NAME: ${activityNameRaw}. Expected: extraction, resolution, validation, or ingestion`)
     )
   )
@@ -139,15 +143,24 @@ const program = Effect.gen(function*() {
  *
  * Layer composition order matters:
  * 1. BunContext provides FileSystem and Path (platform layer)
- * 2. ConfigService.Default provides ConfigService
- * 3. StorageServiceLive requires ConfigService + FileSystem/Path
- * 4. RdfBuilder.Default requires ConfigService
+ * 2. ConfigServiceDefault provides ConfigService
+ * 3. makeLanguageModelLayer provides LanguageModel (requires ConfigService)
+ * 4. EntityExtractor/RelationExtractor require LanguageModel + ConfigService
+ * 5. NlpService requires ConfigService
+ * 6. OntologyService requires RdfBuilder + NlpService + BunContext
+ * 7. StorageServiceLive requires ConfigService + FileSystem/Path
+ * 8. RdfBuilder.Default requires ConfigService
  */
 const ActivityRunnerLive = Layer.mergeAll(
   StorageServiceLive,
-  RdfBuilder.Default
+  RdfBuilder.Default,
+  EntityExtractor.Default,
+  RelationExtractor.Default,
+  OntologyService.Default,
+  NlpService.Default
 ).pipe(
-  Layer.provideMerge(ConfigService.Default),
+  Layer.provideMerge(makeLanguageModelLayer),
+  Layer.provideMerge(ConfigServiceDefault),
   Layer.provideMerge(BunContext.layer)
 )
 

@@ -36,3 +36,28 @@ variable "ontology_path" {
   description = "Path to ontology file inside the container (absolute path)"
   default     = "/app/ontologies/football/ontology_skos.ttl"
 }
+
+# PostgreSQL configuration for @effect/workflow persistence
+variable "enable_postgres" {
+  type        = bool
+  description = "Enable PostgreSQL environment variables for workflow persistence"
+  default     = false
+}
+
+variable "vpc_connector_id" {
+  type        = string
+  description = "VPC Connector ID for Cloud Run to access private network"
+  default     = null
+}
+
+variable "postgres_host" {
+  type        = string
+  description = "PostgreSQL host IP address"
+  default     = null
+}
+
+variable "postgres_password_secret_id" {
+  type        = string
+  description = "Secret Manager secret ID for PostgreSQL password"
+  default     = null
+}

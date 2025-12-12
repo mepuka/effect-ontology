@@ -5,9 +5,9 @@
  * @module Workflow
  */
 
+export * from "./Activities.js"
+export * from "./BatchWorkflow.js"
 export * from "./EntityResolutionGraph.js"
 export * from "./Merge.js"
 export * from "./StreamingExtraction.js"
-export * from "./Activities.js"
-export * from "./BatchWorkflow.js"
 // export * from "./TwoStageExtraction.js" // Excluded from build - needs refactoring

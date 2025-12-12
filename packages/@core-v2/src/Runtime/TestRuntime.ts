@@ -86,7 +86,7 @@ export const TestConfigProvider = ConfigProvider.fromMap(
     ["ONTOLOGY_PATH", "/tmp/test-ontology.ttl"],
     ["LLM_API_KEY", "test-key-for-testing"],
     ["LLM_PROVIDER", "anthropic"],
-    ["LLM_MODEL", "claude-3-haiku-20240307"],
+    ["LLM_MODEL", "claude-haiku-4-5"],
     ["STORAGE_TYPE", "memory"],
     ["RUNTIME_CONCURRENCY", "4"],
     ["RUNTIME_LLM_CONCURRENCY", "2"],
