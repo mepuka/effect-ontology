@@ -15,12 +15,13 @@
 import { ClusterWorkflowEngine, SingleRunner } from "@effect/cluster"
 import { BunContext, BunHttpServer, BunRuntime } from "@effect/platform-bun"
 import { PgClient } from "@effect/sql-pg"
+import { SqlClient } from "@effect/sql/SqlClient"
 import { WorkflowEngine } from "@effect/workflow"
-import { Cause, Config, Effect, Layer, Option } from "effect"
+import { Cause, Config, Effect, Layer, Option, Schedule } from "effect"
 import { HealthCheckService } from "./Runtime/HealthCheck.js"
 import { HttpServerLive } from "./Runtime/HttpServer.js"
 import { ShutdownService } from "./Runtime/Shutdown.js"
-import { WorkflowOrchestratorFullLayer, ActivityDependenciesLayer } from "./Runtime/WorkflowLayers.js"
+import { ActivityDependenciesLayer, WorkflowOrchestratorFullLayer } from "./Runtime/WorkflowLayers.js"
 import { BatchStateHubLayer, BatchStatePersistenceLayer } from "./Service/BatchState.js"
 
 // Load port from environment
@@ -45,22 +46,52 @@ const PgClientLive = PgClient.layerConfig({
 })
 
 // Durable WorkflowEngine backed by PostgreSQL via @effect/cluster
+// SingleRunner with SQL storage enables durable execution with crash recovery
 const ClusterWorkflowEngineLive = ClusterWorkflowEngine.layer.pipe(
-  Layer.provideMerge(SingleRunner.layer()),
+  Layer.provideMerge(
+    SingleRunner.layer({
+      runnerStorage: "sql" // Use SQL-backed runner storage for durability
+    })
+  ),
   Layer.provideMerge(PgClientLive)
 )
 
 // Select workflow engine based on PostgreSQL availability
-// TODO: Debug PostgreSQL-backed ClusterWorkflowEngine setup
-// For now, use in-memory engine to unblock testing
-const WorkflowEngineLive = WorkflowEngine.layerMemory
+// - With POSTGRES_HOST: Use ClusterWorkflowEngine for durable workflows
+// - Without: Use in-memory engine (development only, no crash recovery)
+const WorkflowEngineLive = usePostgres
+  ? ClusterWorkflowEngineLive
+  : WorkflowEngine.layerMemory
 
 // Log which engine is in use
 if (usePostgres) {
-  console.log(`PostgreSQL configured but using in-memory engine (TODO: fix cluster setup)`)
+  console.log(`PostgreSQL workflow engine enabled (durable workflows)`)
 } else {
   console.log("Using in-memory workflow engine (no POSTGRES_HOST configured)")
 }
+
+// Database readiness check - verifies PostgreSQL is accessible before starting
+// Retries with exponential backoff to handle slow database startup
+const checkDatabaseReady = Effect.gen(function*() {
+  const sql = yield* SqlClient
+  yield* sql`SELECT 1`
+  yield* Effect.logInfo("PostgreSQL connection verified")
+}).pipe(
+  Effect.retry(
+    Schedule.exponential("500 millis").pipe(
+      Schedule.compose(Schedule.recurs(5)),
+      Schedule.jittered
+    )
+  ),
+  Effect.timeout("30 seconds"),
+  Effect.catchAll((e) =>
+    Effect.gen(function*() {
+      yield* Effect.logError("PostgreSQL connection failed", { error: String(e) })
+      return yield* Effect.fail(new Error(`Database not ready after retries: ${e}`))
+    })
+  ),
+  Effect.provide(PgClientLive)
+)
 
 // Pre-compose WorkflowOrchestrator with all its dependencies
 // Workflow layer has dependencies provided before construction (see WorkflowLayers)
@@ -90,6 +121,11 @@ const ServerLive = HttpServerLive.pipe(
 // Server program with graceful shutdown
 const server = Effect.gen(function*() {
   const shutdown = yield* ShutdownService
+
+  // Verify database connectivity before starting (if PostgreSQL is configured)
+  if (usePostgres) {
+    yield* checkDatabaseReady
+  }
 
   // Register SIGTERM handler for Cloud Run
   process.on("SIGTERM", () => {

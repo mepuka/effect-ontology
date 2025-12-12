@@ -19,7 +19,8 @@
 import type { Response } from "@effect/ai"
 import { LanguageModel } from "@effect/ai"
 import { BunContext } from "@effect/platform-bun"
-import { ConfigProvider, Effect, Layer, ManagedRuntime, Stream } from "effect"
+import { ConfigProvider, DateTime, Effect, Layer, ManagedRuntime, Stream } from "effect"
+import * as N3 from "n3"
 import { ConfigServiceDefault } from "../Service/Config.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { Grounder } from "../Service/Grounder.js"
@@ -31,6 +32,8 @@ import {
 import { NlpService } from "../Service/Nlp.js"
 import { OntologyService } from "../Service/Ontology.js"
 import { RdfBuilder } from "../Service/Rdf.js"
+import { ShaclService } from "../Service/Shacl.js"
+import { StorageServiceTest } from "../Service/Storage.js"
 
 /**
  * Mock LanguageModel for testing
@@ -96,6 +99,53 @@ export const TestConfigProvider = ConfigProvider.fromMap(
 )
 
 /**
+ * Mock SHACL Service for testing
+ *
+ * Provides deterministic SHACL validation behaviour for unit/integration tests.
+ */
+export const MockShaclService = (options?: {
+  readonly conforms?: boolean
+  readonly violations?: ReadonlyArray<{
+    readonly severity: "Violation" | "Warning" | "Info"
+    readonly message: string
+    readonly focusNode?: string
+    readonly path?: string
+    readonly value?: string
+    readonly sourceShape?: string
+  }>
+}) =>
+  Layer.succeed(
+    ShaclService,
+    {
+      validate: (dataStore: N3.Store, shapesStore: N3.Store) =>
+        Effect.succeed({
+          conforms: options?.conforms ?? true,
+          violations: (options?.violations ?? []).map((v) => ({
+            focusNode: v.focusNode ?? "test:node",
+            path: v.path,
+            value: v.value,
+            message: v.message,
+            severity: v.severity,
+            sourceShape: v.sourceShape
+          })),
+          validatedAt: DateTime.unsafeNow(),
+          dataGraphTripleCount: dataStore.size,
+          shapesGraphTripleCount: shapesStore.size,
+          durationMs: 0
+        }),
+      loadShapes: (turtle: string) =>
+        Effect.gen(function*() {
+          const parser = new N3.Parser()
+          const store = new N3.Store()
+          parser.parse(turtle).forEach((quad) => store.addQuad(quad))
+          return store
+        }),
+      loadShapesFromUri: () => Effect.succeed(new N3.Store()),
+      generateShapesFromOntology: () => Effect.succeed(new N3.Store())
+    }
+  )
+
+/**
  * Test Layers
  *
  * Uses test/mock implementations for deterministic testing:
@@ -116,6 +166,8 @@ export const TestLayers = Layer.mergeAll(
   NlpService.Default,
   RdfBuilder.Default,
   ontologyLayer,
+  StorageServiceTest,
+  MockShaclService(),
   MockLanguageModel,
   EntityExtractor.Test,
   RelationExtractor.Test,

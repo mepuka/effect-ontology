@@ -26,10 +26,13 @@ import type {
   ResolutionActivityInput,
   ValidationActivityInput
 } from "../Domain/Schema/Batch.js"
+import { ValidationActivityOutput } from "../Domain/Schema/Batch.js"
 import { ConfigService } from "../Service/Config.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { OntologyService } from "../Service/Ontology.js"
 import { RdfBuilder } from "../Service/Rdf.js"
+import { ShaclService } from "../Service/Shacl.js"
+import type { ShaclViolation } from "../Service/Shacl.js"
 import { StorageService } from "../Service/Storage.js"
 
 // -----------------------------------------------------------------------------
@@ -51,12 +54,7 @@ export const ResolutionOutput = Schema.Struct({
   durationMs: Schema.Number
 })
 
-export const ValidationOutput = Schema.Struct({
-  validatedUri: GcsUri,
-  conforms: Schema.Boolean,
-  violations: Schema.Number,
-  durationMs: Schema.Number
-})
+export const ValidationOutput = ValidationActivityOutput
 
 export const IngestionOutput = Schema.Struct({
   canonicalUri: GcsUri,
@@ -78,6 +76,27 @@ const requireContent = (opt: Option.Option<string>, key: string) =>
     onNone: () => Effect.fail(`Missing object at ${key}`),
     onSome: (value) => Effect.succeed(value)
   })
+
+const toStringError = (e: unknown) => e instanceof Error ? e.message : String(e)
+
+const summarizeViolations = (violations: ReadonlyArray<ShaclViolation>) => {
+  const grouped = new Map<string, { count: number; sampleMessages: Array<string> }>()
+
+  for (const violation of violations) {
+    const entry = grouped.get(violation.severity) ?? { count: 0, sampleMessages: [] }
+    entry.count += 1
+    if (entry.sampleMessages.length < 3 && violation.message) {
+      entry.sampleMessages.push(violation.message)
+    }
+    grouped.set(violation.severity, entry)
+  }
+
+  return Array.from(grouped.entries()).map(([severity, info]) => ({
+    severity,
+    count: info.count,
+    sampleMessages: info.sampleMessages
+  }))
+}
 
 const resolveBucket = (config: { storage: { bucket: Option.Option<string> } }) =>
   Option.getOrElse(config.storage.bucket, () => "local-bucket")
@@ -350,6 +369,7 @@ export const makeValidationActivity = (input: typeof ValidationActivityInput.Typ
       const storage = yield* StorageService
       const config = yield* ConfigService
       const rdf = yield* RdfBuilder
+      const shacl = yield* ShaclService
       const bucket = resolveBucket(config)
 
       yield* Effect.logInfo("Validation activity starting", {
@@ -361,41 +381,38 @@ export const makeValidationActivity = (input: typeof ValidationActivityInput.Typ
         Effect.flatMap((opt) => requireContent(opt, input.resolvedGraphUri))
       )
 
-      const store = yield* rdf.parseTurtle(resolvedGraph)
+      const dataStore = yield* rdf.parseTurtle(resolvedGraph)
 
-      let validationResult = { conforms: true, report: "No SHACL shapes provided" }
+      const shapesStore = input.shaclUri
+        ? yield* shacl.loadShapesFromUri(input.shaclUri)
+        : yield* shacl.generateShapesFromOntology(dataStore._store)
 
-      if (input.shaclUri) {
-        const shapesContent = yield* storage.get(stripGsPrefix(input.shaclUri)).pipe(
-          Effect.flatMap((opt) => requireContent(opt, input.shaclUri!)),
-          Effect.catchAll(() => Effect.succeed(""))
-        )
-
-        if (shapesContent) {
-          validationResult = yield* rdf.validate(store, shapesContent)
-        }
-      }
+      const report = yield* shacl.validate(dataStore._store, shapesStore)
 
       const validationGraphPath = PathLayout.batch.validationGraph(input.batchId)
       yield* storage.set(validationGraphPath, resolvedGraph)
 
       const reportPath = PathLayout.batch.validationReport(input.batchId)
-      const report = {
-        conforms: validationResult.conforms,
-        report: validationResult.report,
-        validatedAt: new Date().toISOString()
-      }
       yield* storage.set(reportPath, JSON.stringify(report, null, 2))
 
       const end = yield* DateTime.now
 
+      yield* Effect.logInfo("Validation activity complete", {
+        batchId: input.batchId,
+        conforms: report.conforms,
+        violations: report.violations.length,
+        durationMs: DateTime.distance(start, end)
+      })
+
       return {
         validatedUri: toGcsUri(bucket, validationGraphPath),
-        conforms: validationResult.conforms,
-        violations: validationResult.conforms ? 0 : 1,
+        conforms: report.conforms,
+        violations: report.violations.length,
+        violationSummary: report.violations.length ? summarizeViolations(report.violations) : undefined,
+        reportUri: toGcsUri(bucket, reportPath),
         durationMs: DateTime.distance(start, end)
       }
-    }).pipe(Effect.mapError((e) => e instanceof Error ? e.message : String(e))),
+    }).pipe(Effect.mapError(toStringError)),
     interruptRetryPolicy: activityRetryPolicy
   })
 

@@ -45,6 +45,19 @@ export const ValidationActivityInput = Schema.Struct({
   resolvedGraphUri: GcsUri,
   shaclUri: Schema.optional(GcsUri)
 })
+export const ValidationActivityViolationSummary = Schema.Struct({
+  severity: Schema.String,
+  count: Schema.Number,
+  sampleMessages: Schema.Array(Schema.String)
+})
+export const ValidationActivityOutput = Schema.Struct({
+  validatedUri: GcsUri,
+  conforms: Schema.Boolean,
+  violations: Schema.Number,
+  violationSummary: Schema.optional(Schema.Array(ValidationActivityViolationSummary)),
+  reportUri: GcsUri,
+  durationMs: Schema.Number
+})
 
 export const IngestionActivityInput = Schema.Struct({
   batchId: BatchId,

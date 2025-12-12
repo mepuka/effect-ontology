@@ -21,6 +21,7 @@ import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { NlpService } from "../Service/Nlp.js"
 import { OntologyService } from "../Service/Ontology.js"
 import { RdfBuilder } from "../Service/Rdf.js"
+import { ShaclService } from "../Service/Shacl.js"
 import { StorageServiceLive } from "../Service/Storage.js"
 import { BatchExtractionWorkflowLayer, WorkflowOrchestratorLive } from "../Service/WorkflowOrchestrator.js"
 import { makeLanguageModelLayer } from "./ProductionRuntime.js"
@@ -57,19 +58,38 @@ const LlmExtractionBundle = Layer.mergeAll(
 )
 
 /**
+ * NLP services with ConfigService dependency satisfied
+ *
+ * NlpService.Default requires ConfigService, so we provide it first.
+ */
+const NlpBundle = NlpService.Default.pipe(
+  Layer.provideMerge(CoreDependenciesLayer)
+)
+
+/**
+ * RdfBuilder with ConfigService dependency satisfied
+ *
+ * RdfBuilder.Default requires ConfigService, so we provide it first.
+ */
+const RdfBuilderBundle = RdfBuilder.Default.pipe(
+  Layer.provideMerge(CoreDependenciesLayer)
+)
+
+/**
  * Ontology services: OntologyService + RdfBuilder
  *
  * Dependencies:
  * - NlpService (for text processing)
  * - ConfigService (for RDF namespace settings)
  *
- * Uses Layer.provideMerge for order-independent composition.
+ * CRITICAL: Each service that requires ConfigService must have it provided
+ * before being merged. Layer.provideMerge provides to the LEFT operand.
  */
 const OntologyBundle = Layer.mergeAll(
   OntologyService.Default,
-  RdfBuilder.Default
+  RdfBuilderBundle
 ).pipe(
-  Layer.provideMerge(NlpService.Default),
+  Layer.provideMerge(NlpBundle),
   Layer.provideMerge(CoreDependenciesLayer)
 )
 
@@ -90,6 +110,19 @@ const PlatformBundle = BunContext.layer
 const StorageBundle = StorageServiceLive.pipe(
   Layer.provideMerge(CoreDependenciesLayer),
   Layer.provideMerge(PlatformBundle)
+)
+
+/**
+ * SHACL validation services
+ *
+ * Dependencies:
+ * - RdfBuilder (graph parsing)
+ * - StorageService (shape loading)
+ * - ConfigService (provided via CoreDependenciesLayer)
+ */
+const ShaclBundle = ShaclService.Default.pipe(
+  Layer.provideMerge(RdfBuilderBundle),
+  Layer.provideMerge(StorageBundle)
 )
 
 // =============================================================================
@@ -113,7 +146,8 @@ export const ActivityDependenciesLayer = Layer.mergeAll(
   StorageBundle,
   CoreDependenciesLayer,
   LlmExtractionBundle,
-  OntologyBundle
+  OntologyBundle,
+  ShaclBundle
 )
 
 // =============================================================================

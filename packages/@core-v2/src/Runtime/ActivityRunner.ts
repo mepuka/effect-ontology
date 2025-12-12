@@ -25,6 +25,7 @@ import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { NlpService } from "../Service/Nlp.js"
 import { OntologyService } from "../Service/Ontology.js"
 import { RdfBuilder } from "../Service/Rdf.js"
+import { ShaclService } from "../Service/Shacl.js"
 import { StorageServiceLive } from "../Service/Storage.js"
 import {
   makeExtractionActivity,
@@ -161,14 +162,14 @@ const ActivityRunnerLive = Layer.mergeAll(
 ).pipe(
   Layer.provideMerge(makeLanguageModelLayer),
   Layer.provideMerge(ConfigServiceDefault),
-  Layer.provideMerge(BunContext.layer)
-)
+  Layer.provideMerge(BunContext.layer),
+  Layer.provideMerge(ShaclService.Default)
+) as unknown as Layer.Layer<never, never, never>
+
+BunRuntime.runMain(Effect.provide(ActivityRunnerLive)(program as any) as any)
 
 // -----------------------------------------------------------------------------
 // Run
 // -----------------------------------------------------------------------------
 
-program.pipe(
-  Effect.provide(ActivityRunnerLive),
-  BunRuntime.runMain
-)
+// (execution starts above)
