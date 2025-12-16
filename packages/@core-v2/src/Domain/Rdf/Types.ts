@@ -243,3 +243,6 @@ export class Quad extends Schema.Class<Quad>("Quad")({
     }
   }
 }
+
+// Export RDF vocabulary constants
+export * from "./Constants.js"

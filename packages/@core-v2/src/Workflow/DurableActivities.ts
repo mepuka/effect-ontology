@@ -20,6 +20,7 @@ import { Chunk, DateTime, Effect, Option, Schedule, Schema } from "effect"
 import { DocumentId, GcsUri, toGcsUri } from "../Domain/Identity.js"
 import { KnowledgeGraph } from "../Domain/Model/Entity.js"
 import { PathLayout } from "../Domain/PathLayout.js"
+import { RDF } from "../Domain/Rdf/Types.js"
 import type {
   ExtractionActivityInput,
   IngestionActivityInput,
@@ -110,7 +111,7 @@ const parseTurtleStats = (turtle: string) =>
     const rdf = yield* RdfBuilder
     const store = yield* rdf.parseTurtle(turtle)
     const typeQuads = yield* rdf.queryStore(store, {
-      predicate: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" as any
+      predicate: RDF.type
     })
     const allQuads = yield* rdf.queryStore(store, {})
     return {
