@@ -5,6 +5,7 @@
  * @module Domain/Error
  */
 
+export * from "./Activity.js"
 export * from "./Base.js"
 export * from "./Circuit.js"
 export * from "./Extraction.js"

@@ -27,6 +27,12 @@ import type {
   ValidationActivityInput
 } from "../Domain/Schema/Batch.js"
 import { ValidationActivityOutput } from "../Domain/Schema/Batch.js"
+import {
+  ActivityError,
+  toActivityError,
+  serviceError,
+  notFoundError
+} from "../Domain/Error/Activity.js"
 import { ConfigService } from "../Service/Config.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { OntologyService } from "../Service/Ontology.js"
@@ -62,9 +68,6 @@ export const IngestionOutput = Schema.Struct({
   durationMs: Schema.Number
 })
 
-// Error schema for all activities
-export const ActivityError = Schema.String
-
 // -----------------------------------------------------------------------------
 // Shared helpers
 // -----------------------------------------------------------------------------
@@ -73,11 +76,9 @@ const stripGsPrefix = (uri: string): string => uri.startsWith("gs://") ? uri.rep
 
 const requireContent = (opt: Option.Option<string>, key: string) =>
   Option.match(opt, {
-    onNone: () => Effect.fail(`Missing object at ${key}`),
+    onNone: () => Effect.fail(notFoundError("StorageObject", key)),
     onSome: (value) => Effect.succeed(value)
   })
-
-const toStringError = (e: unknown) => e instanceof Error ? e.message : String(e)
 
 const summarizeViolations = (violations: ReadonlyArray<ShaclViolation>) => {
   const grouped = new Map<string, { count: number; sampleMessages: Array<string> }>()
@@ -297,7 +298,7 @@ export const makeExtractionActivity = (input: typeof ExtractionActivityInput.Typ
         relationCount: Chunk.size(relations),
         durationMs: DateTime.distance(start, end)
       }
-    }).pipe(Effect.mapError((e) => e instanceof Error ? e.message : String(e))),
+    }).pipe(Effect.mapError(toActivityError)),
     interruptRetryPolicy: activityRetryPolicy
   })
 
@@ -365,7 +366,7 @@ export const makeResolutionActivity = (input: typeof ResolutionActivityInput.Typ
         clustersFormed: parsedGraphs.filter((g) => g.store !== null).length,
         durationMs: DateTime.distance(start, end)
       }
-    }).pipe(Effect.mapError((e) => e instanceof Error ? e.message : String(e))),
+    }).pipe(Effect.mapError(toActivityError)),
     interruptRetryPolicy: activityRetryPolicy
   })
 
@@ -459,7 +460,7 @@ export const makeValidationActivity = (input: typeof ValidationActivityInput.Typ
         reportUri: toGcsUri(bucket, reportPath),
         durationMs: DateTime.distance(start, end)
       }
-    }).pipe(Effect.mapError(toStringError)),
+    }).pipe(Effect.mapError(toActivityError)),
     interruptRetryPolicy: activityRetryPolicy
   })
 
@@ -513,6 +514,6 @@ export const makeIngestionActivity = (input: typeof IngestionActivityInput.Type)
         triplesIngested: stats.tripleCount,
         durationMs: DateTime.distance(start, end)
       }
-    }).pipe(Effect.mapError((e) => e instanceof Error ? e.message : String(e))),
+    }).pipe(Effect.mapError(toActivityError)),
     interruptRetryPolicy: activityRetryPolicy
   })
