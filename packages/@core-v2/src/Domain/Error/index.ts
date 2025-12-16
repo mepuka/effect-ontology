@@ -6,6 +6,7 @@
  */
 
 export * from "./Base.js"
+export * from "./Circuit.js"
 export * from "./Extraction.js"
 export * from "./Llm.js"
 export * from "./Ontology.js"
