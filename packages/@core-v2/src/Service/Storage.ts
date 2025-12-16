@@ -1,7 +1,7 @@
 import { FileSystem, KeyValueStore, Path } from "@effect/platform"
 import { SystemError } from "@effect/platform/Error"
 import { Storage } from "@google-cloud/storage"
-import { Context, Effect, Layer, Option } from "effect"
+import { Context, Effect, Layer, Option, Scope } from "effect"
 import { ConfigService } from "./Config.js"
 
 /**
@@ -25,122 +25,126 @@ export const StorageConfig = Context.GenericTag<StorageConfig>("@core-v2/Storage
 
 // --- GCS Implementation ---
 
-const makeGcsStore = (config: StorageConfig): StorageService => {
-  if (!config.bucketName) {
-    throw new Error("bucketName is required for GCS storage")
-  }
-
-  const storage = new Storage()
-  const bucket = storage.bucket(config.bucketName)
-  const prefix = config.pathPrefix ?? ""
-
-  const toPath = (key: string) => `${prefix}/${key}`.replace(/\/+/g, "/").replace(/^\//, "")
-
-  const handleError = (method: string, key: string, cause: unknown) => {
-    let reason: SystemError["reason"] = "Unknown"
-    let message = String(cause)
-
-    if (cause instanceof Error) {
-      message = cause.message
-      const code = (cause as any).code
-      if (typeof code === "number") {
-        switch (code) {
-          case 404:
-            reason = "NotFound"
-            break
-          case 403:
-            reason = "PermissionDenied"
-            break
-          case 409:
-            reason = "AlreadyExists"
-            break
-          case 400:
-            reason = "InvalidData"
-            break
-          case 408:
-          case 503:
-          case 504:
-            reason = "Busy"
-            break
-        }
-      }
+const makeGcsStore = (config: StorageConfig) =>
+  Effect.gen(function*() {
+    if (!config.bucketName) {
+      return yield* Effect.fail(new Error("bucketName is required for GCS storage"))
     }
 
-    return new SystemError({
-      module: "KeyValueStore",
-      method,
-      reason,
-      pathOrDescriptor: key,
-      description: message
-    })
-  }
+    // Log GCS client creation (it doesn't have explicit close)
+    yield* Effect.logDebug("Creating GCS Storage client", { bucket: config.bucketName })
 
-  const impl = KeyValueStore.make({
-    get: (key) =>
-      Effect.tryPromise({
-        try: async () => {
-          const file = bucket.file(toPath(key))
-          const [exists] = await file.exists()
-          if (!exists) return Option.none()
-          const [content] = await file.download()
-          return Option.some(content.toString("utf-8"))
-        },
-        catch: (e) => handleError("get", key, e)
-      }),
-    getUint8Array: (key) =>
-      Effect.tryPromise({
-        try: async () => {
-          const file = bucket.file(toPath(key))
-          const [exists] = await file.exists()
-          if (!exists) return Option.none()
-          const [content] = await file.download()
-          return Option.some(new Uint8Array(content))
-        },
-        catch: (e) => handleError("getUint8Array", key, e)
-      }),
-    set: (key, value) =>
-      Effect.tryPromise({
-        try: async () => {
-          const content = typeof value === "string" ? value : Buffer.from(value)
-          await bucket.file(toPath(key)).save(content)
-        },
-        catch: (e) => handleError("set", key, e)
-      }),
-    remove: (key) =>
-      Effect.tryPromise({
-        try: async () => {
-          const file = bucket.file(toPath(key))
-          const [exists] = await file.exists()
-          if (exists) await file.delete()
-        },
-        catch: (e) => handleError("remove", key, e)
-      }),
-    clear: Effect.tryPromise({
-      try: async () => await bucket.deleteFiles({ prefix: prefix || undefined }),
-      catch: (e) => handleError("clear", prefix, e)
-    }),
-    size: Effect.tryPromise({
-      try: async () => {
-        const [files] = await bucket.getFiles({ prefix: prefix || undefined })
-        return files.length
-      },
-      catch: (e) => handleError("size", prefix, e)
-    })
-  })
+    const storage = new Storage()
+    const bucket = storage.bucket(config.bucketName)
+    const prefix = config.pathPrefix ?? ""
 
-  return {
-    ...impl,
-    list: (listPrefix) =>
-      Effect.tryPromise({
-        try: async () => {
-          const fullPrefix = toPath(listPrefix)
-          const [files] = await bucket.getFiles({ prefix: fullPrefix })
-          return files.map((f) => f.name.replace(prefix ? prefix + "/" : "", ""))
-        },
-        catch: (e) => handleError("list", listPrefix, e)
+    const toPath = (key: string) => `${prefix}/${key}`.replace(/\/+/g, "/").replace(/^\//, "")
+
+    const handleError = (method: string, key: string, cause: unknown) => {
+      let reason: SystemError["reason"] = "Unknown"
+      let message = String(cause)
+
+      if (cause instanceof Error) {
+        message = cause.message
+        const code = (cause as any).code
+        if (typeof code === "number") {
+          switch (code) {
+            case 404:
+              reason = "NotFound"
+              break
+            case 403:
+              reason = "PermissionDenied"
+              break
+            case 409:
+              reason = "AlreadyExists"
+              break
+            case 400:
+              reason = "InvalidData"
+              break
+            case 408:
+            case 503:
+            case 504:
+              reason = "Busy"
+              break
+          }
+        }
+      }
+
+      return new SystemError({
+        module: "KeyValueStore",
+        method,
+        reason,
+        pathOrDescriptor: key,
+        description: message
       })
-  }
-}
+    }
+
+    const impl = KeyValueStore.make({
+      get: (key) =>
+        Effect.tryPromise({
+          try: async () => {
+            const file = bucket.file(toPath(key))
+            const [exists] = await file.exists()
+            if (!exists) return Option.none()
+            const [content] = await file.download()
+            return Option.some(content.toString("utf-8"))
+          },
+          catch: (e) => handleError("get", key, e)
+        }),
+      getUint8Array: (key) =>
+        Effect.tryPromise({
+          try: async () => {
+            const file = bucket.file(toPath(key))
+            const [exists] = await file.exists()
+            if (!exists) return Option.none()
+            const [content] = await file.download()
+            return Option.some(new Uint8Array(content))
+          },
+          catch: (e) => handleError("getUint8Array", key, e)
+        }),
+      set: (key, value) =>
+        Effect.tryPromise({
+          try: async () => {
+            const content = typeof value === "string" ? value : Buffer.from(value)
+            await bucket.file(toPath(key)).save(content)
+          },
+          catch: (e) => handleError("set", key, e)
+        }),
+      remove: (key) =>
+        Effect.tryPromise({
+          try: async () => {
+            const file = bucket.file(toPath(key))
+            const [exists] = await file.exists()
+            if (exists) await file.delete()
+          },
+          catch: (e) => handleError("remove", key, e)
+        }),
+      clear: Effect.tryPromise({
+        try: async () => await bucket.deleteFiles({ prefix: prefix || undefined }),
+        catch: (e) => handleError("clear", prefix, e)
+      }),
+      size: Effect.tryPromise({
+        try: async () => {
+          const [files] = await bucket.getFiles({ prefix: prefix || undefined })
+          return files.length
+        },
+        catch: (e) => handleError("size", prefix, e)
+      })
+    })
+
+    return {
+      ...impl,
+      list: (listPrefix) =>
+        Effect.tryPromise({
+          try: async () => {
+            const fullPrefix = toPath(listPrefix)
+            const [files] = await bucket.getFiles({ prefix: fullPrefix })
+            return files.map((f) => f.name.replace(prefix ? prefix + "/" : "", ""))
+          },
+          catch: (e) => handleError("list", listPrefix, e)
+        })
+    } as StorageService
+  })
 
 // --- Local Filesystem Implementation ---
 
@@ -255,7 +259,7 @@ const makeMemoryStore = Effect.sync(() => {
 
 // --- Layer Definition ---
 
-export const StorageServiceLive = Layer.effect(
+export const StorageServiceLive = Layer.scoped(
   StorageService,
   Effect.gen(function*() {
     const config = yield* ConfigService
@@ -270,7 +274,7 @@ export const StorageServiceLive = Layer.effect(
     }
 
     if (type === "gcs") {
-      return makeGcsStore(storageConfig)
+      return yield* makeGcsStore(storageConfig)
     } else if (type === "local") {
       return yield* makeLocalStore(storageConfig)
     } else {
