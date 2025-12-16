@@ -13,7 +13,8 @@
  * @module Runtime/CircuitBreaker
  */
 
-import { Clock, Data, Duration, Effect, Ref } from "effect"
+import { Clock, Duration, Effect, Ref } from "effect"
+import { CircuitOpenError } from "../Domain/Error/Circuit.js"
 
 /**
  * Circuit breaker state
@@ -214,23 +215,9 @@ export const makeCircuitBreaker = (
   })
 
 /**
- * Error thrown when circuit breaker is open
- *
- * Uses Data.TaggedError for proper Effect error handling.
- * This allows catchTag to work correctly.
- *
- * @since 2.0.0
- */
-export class CircuitOpenError extends Data.TaggedError("CircuitOpenError")<{
-  readonly resetTimeoutMs: number
-  readonly lastFailureTime: number
-}> {
-  get message(): string {
-    return `Circuit breaker is open. Will retry in ${this.resetTimeoutMs}ms`
-  }
-}
-
-/**
  * Type for the circuit breaker service
  */
 export type CircuitBreaker = Effect.Effect.Success<ReturnType<typeof makeCircuitBreaker>>
+
+// Re-export CircuitOpenError for backward compatibility
+export { CircuitOpenError } from "../Domain/Error/Circuit.js"

@@ -11,7 +11,8 @@
  * @module Service/LlmControl/RateLimiter
  */
 
-import { Context, Data, Effect, Layer, Ref } from "effect"
+import { Context, Effect, Layer, Ref } from "effect"
+import { CircuitOpenError, RateLimitError } from "../../Domain/Error/Circuit.js"
 
 // =============================================================================
 // Types
@@ -68,34 +69,6 @@ const DEFAULT_CONFIG: RateLimiterConfig = {
   failureThreshold: 5,
   recoveryTimeoutMs: 120_000,
   successThreshold: 2
-}
-
-// =============================================================================
-// Errors
-// =============================================================================
-
-/**
- * Error when rate limit is exceeded
- */
-export class RateLimitError extends Data.TaggedError("RateLimitError")<{
-  readonly reason: "tokens" | "requests" | "concurrent"
-  readonly retryAfterMs?: number
-}> {
-  get message() {
-    const base = `Rate limit exceeded: ${this.reason}`
-    return this.retryAfterMs ? `${base}, retry after ${this.retryAfterMs}ms` : base
-  }
-}
-
-/**
- * Error when circuit breaker is open
- */
-export class CircuitOpenError extends Data.TaggedError("CircuitOpenError")<{
-  readonly retryAfterMs: number
-}> {
-  get message() {
-    return `Circuit breaker is open, retry after ${this.retryAfterMs}ms`
-  }
 }
 
 // =============================================================================
@@ -219,6 +192,7 @@ const make = (config: RateLimiterConfig = DEFAULT_CONFIG) =>
             if (elapsed < config.recoveryTimeoutMs) {
               return yield* Effect.fail(
                 new CircuitOpenError({
+                  resetTimeoutMs: config.recoveryTimeoutMs,
                   retryAfterMs: config.recoveryTimeoutMs - elapsed
                 })
               )

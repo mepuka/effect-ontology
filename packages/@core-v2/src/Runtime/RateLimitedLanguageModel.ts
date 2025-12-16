@@ -134,13 +134,14 @@ export const RateLimitedLanguageModelLayer = Layer.scoped(
             Effect.catchTag("CircuitOpenError", (err) => {
               // Type assertion is safe here - we know err is CircuitOpenError based on the tag
               const circuitErr = err as CircuitOpenError
+              const lastFailureStr = circuitErr.lastFailureTime
+                ? new Date(circuitErr.lastFailureTime).toISOString()
+                : "unknown"
               return Effect.fail(
                 new AiError.UnknownError({
                   module: "RateLimitedLanguageModel",
                   method: `${method} (circuit breaker)`,
-                  description: `Circuit breaker is open. Last failure: ${
-                    new Date(circuitErr.lastFailureTime).toISOString()
-                  }. Reset timeout: ${circuitErr.resetTimeoutMs}ms`,
+                  description: `Circuit breaker is open. Last failure: ${lastFailureStr}. Reset timeout: ${circuitErr.resetTimeoutMs}ms`,
                   cause: circuitErr
                 }) as E // Safe cast since E extends AiError.AiError
               )
