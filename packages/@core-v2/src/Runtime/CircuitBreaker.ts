@@ -183,16 +183,19 @@ export const makeCircuitBreaker = (
                   onFailure: () => recordFailure
                 })
               )
-              : getState.pipe(
-                Effect.flatMap((current): Effect.Effect<A, CircuitOpenError, never> =>
-                  Effect.fail(
-                    new CircuitOpenError({
-                      resetTimeoutMs: Duration.toMillis(config.resetTimeout),
-                      lastFailureTime: current.lastFailureTime
-                    })
-                  )
+              : Effect.gen(function*() {
+                const current = yield* getState
+                const now = yield* Clock.currentTimeMillis
+                const resetTimeoutMs = Duration.toMillis(config.resetTimeout)
+                const retryAfterMs = resetTimeoutMs - (Number(now) - current.lastFailureTime)
+                return yield* Effect.fail(
+                  new CircuitOpenError({
+                    resetTimeoutMs,
+                    lastFailureTime: current.lastFailureTime,
+                    retryAfterMs: Math.max(0, retryAfterMs)
+                  })
                 )
-              )
+              })
           )
         ),
 

@@ -327,8 +327,9 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
                         }),
                       CircuitOpenError: (e) =>
                         Effect.gen(function*() {
-                          chunkEvents.push(makeRateLimited(runId, chunkProgress, e.retryAfterMs, "requests"))
-                          yield* Effect.sleep(e.retryAfterMs)
+                          const retryMs = e.retryAfterMs ?? e.resetTimeoutMs
+                          chunkEvents.push(makeRateLimited(runId, chunkProgress, retryMs, "requests"))
+                          yield* Effect.sleep(retryMs)
                           yield* rateLimiter.acquire(estimatedEntityTokens)
                         })
                     })
@@ -404,8 +405,9 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
                           }),
                         CircuitOpenError: (e) =>
                           Effect.gen(function*() {
-                            chunkEvents.push(makeRateLimited(runId, chunkProgress + 30, e.retryAfterMs, "requests"))
-                            yield* Effect.sleep(e.retryAfterMs)
+                            const retryMs = e.retryAfterMs ?? e.resetTimeoutMs
+                            chunkEvents.push(makeRateLimited(runId, chunkProgress + 30, retryMs, "requests"))
+                            yield* Effect.sleep(retryMs)
                             yield* rateLimiter.acquire(estimatedRelationTokens)
                           })
                       })
@@ -462,8 +464,9 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
                           }),
                         CircuitOpenError: (e) =>
                           Effect.gen(function*() {
-                            chunkEvents.push(makeRateLimited(runId, chunkProgress + 50, e.retryAfterMs, "requests"))
-                            yield* Effect.sleep(e.retryAfterMs)
+                            const retryMs = e.retryAfterMs ?? e.resetTimeoutMs
+                            chunkEvents.push(makeRateLimited(runId, chunkProgress + 50, retryMs, "requests"))
+                            yield* Effect.sleep(retryMs)
                             yield* rateLimiter.acquire(estimatedGroundingTokens)
                           })
                       })
