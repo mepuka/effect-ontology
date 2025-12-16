@@ -191,9 +191,14 @@ export class RdfBuilder extends Effect.Service<RdfBuilder>()(
           }),
           (store) =>
             Effect.sync(() => {
-              // Cleanup: ensure store is finalized
-              void store._store.size
-            })
+              // Actually clear the store to release memory
+              const quads = store._store.getQuads(null, null, null, null)
+              store._store.removeQuads(quads)
+            }).pipe(
+              Effect.tap(() => Effect.logDebug("RDF store cleared", {
+                finalQuadCount: store._store.size
+              }))
+            )
         ),
 
         /**
