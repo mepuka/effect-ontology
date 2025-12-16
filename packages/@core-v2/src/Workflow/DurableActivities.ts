@@ -207,6 +207,14 @@ export const makeExtractionActivity = (input: typeof ExtractionActivityInput.Typ
             documentId: input.documentId,
             candidateCount: Chunk.size(classes)
           })
+        ),
+        Effect.tapErrorCause((cause) =>
+          Effect.logError("Extraction: Failed to search candidate classes", {
+            activity: "extraction",
+            batchId: input.batchId,
+            documentId: input.documentId,
+            cause: String(cause)
+          })
         )
       )
 
@@ -319,7 +327,15 @@ export const makeResolutionActivity = (input: typeof ResolutionActivityInput.Typ
       // Load all document graphs
       const graphContents = yield* Effect.forEach(input.documentGraphUris, (uri) =>
         storage.get(stripGsPrefix(uri)).pipe(
-          Effect.flatMap((opt) => requireContent(opt, uri))
+          Effect.flatMap((opt) => requireContent(opt, uri)),
+          Effect.tapErrorCause((cause) =>
+            Effect.logError("Resolution: Failed to load document graph", {
+              activity: "resolution",
+              batchId: input.batchId,
+              graphUri: uri,
+              cause: String(cause)
+            })
+          )
         ), { concurrency: 10 })
 
       // Parse and count entities
@@ -378,16 +394,47 @@ export const makeValidationActivity = (input: typeof ValidationActivityInput.Typ
       })
 
       const resolvedGraph = yield* storage.get(stripGsPrefix(input.resolvedGraphUri)).pipe(
-        Effect.flatMap((opt) => requireContent(opt, input.resolvedGraphUri))
+        Effect.flatMap((opt) => requireContent(opt, input.resolvedGraphUri)),
+        Effect.tapErrorCause((cause) =>
+          Effect.logError("Validation: Failed to load resolved graph", {
+            activity: "validation",
+            batchId: input.batchId,
+            cause: String(cause)
+          })
+        )
       )
 
-      const dataStore = yield* rdf.parseTurtle(resolvedGraph)
+      const dataStore = yield* rdf.parseTurtle(resolvedGraph).pipe(
+        Effect.tapErrorCause((cause) =>
+          Effect.logError("Validation: Failed to parse turtle", {
+            activity: "validation",
+            batchId: input.batchId,
+            cause: String(cause)
+          })
+        )
+      )
 
       const shapesStore = input.shaclUri
         ? yield* shacl.loadShapesFromUri(input.shaclUri)
-        : yield* shacl.generateShapesFromOntology(dataStore._store)
+        : yield* shacl.generateShapesFromOntology(dataStore._store).pipe(
+            Effect.tapErrorCause((cause) =>
+              Effect.logError("Validation: Failed to generate shapes", {
+                activity: "validation",
+                batchId: input.batchId,
+                cause: String(cause)
+              })
+            )
+          )
 
-      const report = yield* shacl.validate(dataStore._store, shapesStore)
+      const report = yield* shacl.validate(dataStore._store, shapesStore).pipe(
+        Effect.tapErrorCause((cause) =>
+          Effect.logError("Validation: SHACL validation failed", {
+            activity: "validation",
+            batchId: input.batchId,
+            cause: String(cause)
+          })
+        )
+      )
 
       const validationGraphPath = PathLayout.batch.validationGraph(input.batchId)
       yield* storage.set(validationGraphPath, resolvedGraph)
@@ -439,7 +486,14 @@ export const makeIngestionActivity = (input: typeof IngestionActivityInput.Type)
       })
 
       const validatedGraph = yield* storage.get(stripGsPrefix(input.validatedGraphUri)).pipe(
-        Effect.flatMap((opt) => requireContent(opt, input.validatedGraphUri))
+        Effect.flatMap((opt) => requireContent(opt, input.validatedGraphUri)),
+        Effect.tapErrorCause((cause) =>
+          Effect.logError("Ingestion: Failed to load validated graph", {
+            activity: "ingestion",
+            batchId: input.batchId,
+            cause: String(cause)
+          })
+        )
       )
 
       const stats = yield* parseTurtleStats(validatedGraph).pipe(

@@ -494,12 +494,15 @@ graph TB
             VPC[VPC Network]
             CONN[VPC Connector]
             FW[Firewall Rules]
+            NAT[Cloud NAT]
+            ROUTER[Cloud Router]
         end
     end
 
     subgraph "External"
         LLM[LLM Providers<br/>Anthropic/OpenAI]
         CLIENT[API Clients]
+        DOCKER[Docker Hub]
     end
 
     CLIENT -->|HTTPS| CR
@@ -510,6 +513,9 @@ graph TB
     CONN --> VPC
     VPC --> CE
     FW -->|Allow 5432| CE
+    CE -->|Pull images| NAT
+    NAT --> ROUTER
+    ROUTER -->|Egress| DOCKER
 
     style CR fill:#4285f4,color:#fff
     style CE fill:#34a853,color:#fff
@@ -723,6 +729,40 @@ Accept: text/event-stream
 ← event: state
 ← id: batch-abc123-Complete-1702300010000
 ← data: {"_tag":"Complete","stats":{...},...}
+```
+
+### SSE Deployment Configuration (Cloud Run)
+
+Server-Sent Events require specific Cloud Run configuration for reliable streaming:
+
+```bash
+# Required settings for SSE
+gcloud run services update SERVICE \
+  --timeout=3600 \           # 60 min max (default 5 min is too short)
+  --no-cpu-throttling \      # CPU always allocated during streaming
+  --min-instances=1          # Prevent cold starts killing connections
+```
+
+| Setting | Default | Required | Purpose |
+|---------|---------|----------|---------|
+| `--timeout` | 300s | **3600s** | Prevents premature connection close |
+| `--no-cpu-throttling` | throttled | **always-on** | Keeps CPU during idle streaming |
+| `--min-instances` | 0 | **1+** | Avoids scale-to-zero killing connections |
+
+**Important**: Clients must use **HTTP/1.1** for SSE connections. HTTP/2 has protocol compatibility issues with Cloud Run's load balancer for SSE streams.
+
+```bash
+# Client example (force HTTP/1.1)
+curl --http1.1 -H "Accept: text/event-stream" https://SERVICE/v1/extract/batch
+```
+
+Required response headers (already configured in HttpServer.ts):
+
+```text
+Content-Type: text/event-stream
+Cache-Control: no-cache, no-store, must-revalidate
+Connection: keep-alive
+X-Accel-Buffering: no
 ```
 
 ### BatchStatusResponse Union

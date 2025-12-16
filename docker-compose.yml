@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   jaeger:
@@ -20,6 +20,29 @@ services:
     networks:
       - effect-ontology
 
+  postgres:
+    image: postgres:15-alpine
+    container_name: workflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: workflow
+      POSTGRES_PASSWORD: workflow
+      POSTGRES_DB: workflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - workflow-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workflow -d workflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - effect-ontology
+
 networks:
   effect-ontology:
     driver: bridge
+
+volumes:
+  workflow-postgres-data:

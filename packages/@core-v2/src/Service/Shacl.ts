@@ -10,6 +10,8 @@
 
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect"
 import * as N3 from "n3"
+// @ts-expect-error shacl-engine types are incorrect - uses named export not default
+import { Validator as ShaclValidator } from "shacl-engine"
 import { ShaclValidationError, ShapesLoadError, ValidationReportError } from "../Domain/Error/Shacl.js"
 import type { RdfStore } from "./Rdf.js"
 import { RdfBuilder } from "./Rdf.js"
@@ -97,12 +99,18 @@ export class ShaclService extends Context.Tag("@core-v2/ShaclService")<
           Effect.gen(function*() {
             const start = yield* DateTime.now
 
-            const ShaclEngine = yield* Effect.promise(() => import("shacl-engine").then((m: any) => m.default ?? m))
-
-            const validator = new ShaclEngine(shapesStore, {
-              factory: N3.DataFactory,
-              debug: false,
-              coverage: false
+            const validator = yield* Effect.try({
+              try: () =>
+                new ShaclValidator(shapesStore, {
+                  factory: N3.DataFactory,
+                  debug: false,
+                  coverage: false
+                }),
+              catch: (cause) =>
+                new ShaclValidationError({
+                  message: `Failed to create SHACL validator: ${cause}`,
+                  cause
+                })
             })
 
             const report = yield* Effect.tryPromise({

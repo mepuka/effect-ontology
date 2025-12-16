@@ -129,6 +129,26 @@ packages/@core-v2/
 
 ## Common Issues
 
+### Issue: ONTOLOGY_PATH must be absolute for file-system backend
+
+**Problem:** Using relative paths like `ontologies/football/ontology.ttl` in `ONTOLOGY_PATH` fails with file-not-found errors when the server is started from different working directories.
+
+**Root Cause:** Relative paths are resolved from the current working directory (CWD), not from the package root. When you run `bun run serve` from `packages/@core-v2/` vs running from the monorepo root, the same relative path resolves to different locations:
+- From `packages/@core-v2/`: resolves to `packages/@core-v2/ontologies/football/ontology.ttl`
+- From monorepo root: resolves to `ontologies/football/ontology.ttl`
+
+**Solution:** Always use absolute paths for `ONTOLOGY_PATH` when using the file-system based OntologyService:
+
+```bash
+# Good - absolute path works from any directory
+ONTOLOGY_PATH=/Users/pooks/Dev/effect-ontology/ontologies/football/ontology.ttl
+
+# Bad - relative path fails depending on CWD
+ONTOLOGY_PATH=ontologies/football/ontology.ttl
+```
+
+**Exception:** GCS backend (when `STORAGE_TYPE=gcs`) may support different path formats - refer to GCS configuration documentation.
+
 ### Issue: Test script uses wrong config
 
 **Problem:** `.env` exists and bun auto-loads it, overriding test config
