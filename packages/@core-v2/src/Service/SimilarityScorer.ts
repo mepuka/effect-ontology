@@ -130,5 +130,6 @@ export class SimilarityScorer extends Effect.Service<SimilarityScorer>()("Simila
       getCacheSize
     }
   }),
-  dependencies: [NomicNlpServiceDefault]
+  dependencies: [NomicNlpServiceDefault],
+  accessors: true
 }) {}

@@ -524,5 +524,6 @@ export class OntologyLoader extends Effect.Service<OntologyLoader>()("@core-v2/O
     RdfBuilder.Default,
     NlpService.Default,
     EmbeddingServiceDefault
-  ]
+  ],
+  accessors: true
 }) {}

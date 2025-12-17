@@ -120,6 +120,7 @@ export class InheritanceService extends Effect.Service<InheritanceService>()(
           })
       }
     }),
-    dependencies: [OntologyService.Default]
+    dependencies: [OntologyService.Default],
+    accessors: true
   }
 ) {}

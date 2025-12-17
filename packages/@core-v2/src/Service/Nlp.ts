@@ -775,7 +775,8 @@ export class NlpService extends Effect.Service<NlpService>()(
           })
       }
     }),
-    dependencies: [NomicNlpServiceDefault]
+    dependencies: [NomicNlpServiceDefault],
+    accessors: true
   }
 ) {
 }

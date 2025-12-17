@@ -722,6 +722,7 @@ export class OntologyService extends Effect.Service<OntologyService>()(
       RdfBuilder.Default,
       // ConfigService and platform layer (FileSystem) provided by parent scope
       NlpService.Default
-    ]
+    ],
+    accessors: true
   }
 ) {}

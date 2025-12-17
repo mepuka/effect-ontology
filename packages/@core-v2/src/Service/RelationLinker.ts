@@ -158,5 +158,6 @@ export class RelationLinker extends Effect.Service<RelationLinker>()("RelationLi
 
         return Chunk.fromIterable(deduplicated)
       })
-  })
+  }),
+  accessors: true
 }) {}
