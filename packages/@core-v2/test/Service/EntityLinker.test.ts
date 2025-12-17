@@ -23,6 +23,7 @@ const MockEmbeddingLayer = Layer.succeed(
   EmbeddingService,
   {
     embed: (_text) => Effect.succeed([]),
+    embedBatch: (texts) => Effect.succeed(texts.map(() => [])),
     cosineSimilarity: (_a, _b) => 0.0
   }
 )

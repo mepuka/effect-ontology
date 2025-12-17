@@ -52,3 +52,22 @@ export class ValidationReportError extends Schema.TaggedError<ValidationReportEr
     cause: Schema.optional(Schema.Unknown)
   }
 ) {}
+
+/**
+ * ValidationPolicyError - Validation failed due to policy violation
+ *
+ * Used when validation results fail the configured severity policy.
+ *
+ * @since 2.0.0
+ * @category Error
+ */
+export class ValidationPolicyError extends Schema.TaggedError<ValidationPolicyError>()(
+  "ValidationPolicyError",
+  {
+    message: Schema.String,
+    violationCount: Schema.Number,
+    warningCount: Schema.Number,
+    severity: Schema.Literal("Violation", "Warning"),
+    cause: Schema.optional(Schema.Unknown)
+  }
+) {}

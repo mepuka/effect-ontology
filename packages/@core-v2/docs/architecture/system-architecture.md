@@ -1,8 +1,8 @@
 # Effect-Ontology @core-v2 System Architecture
 
-> **Version:** 2.1.0
-> **Last Updated:** December 2024
-> **Status:** Implementation Complete - Unified Batch Workflow API
+> **Version:** 2.2.0
+> **Last Updated:** December 2025
+> **Status:** Implementation Complete - Entity Resolution & Pre-computed Embeddings
 
 ## Table of Contents
 
@@ -76,14 +76,30 @@ graph TB
         subgraph "Extraction"
             EE[EntityExtractor]
             RE[RelationExtractor]
+            ME[MentionExtractor]
             GR[Grounder]
+        end
+
+        subgraph "Entity Resolution"
+            ERS[EntityResolutionService]
+            EL[EntityLinker]
+            RLink[RelationLinker]
+            SS2[SimilarityScorer]
+        end
+
+        subgraph "Embedding"
+            ES[EmbeddingService]
+            EC[EmbeddingCache]
+            Nomic[NomicNlpService]
         end
 
         subgraph "Core Services"
             CS[ConfigService]
             SS[StorageService]
             OS[OntologyService]
+            OL[OntologyLoader]
             RB[RdfBuilder]
+            SHACL[ShaclService]
         end
 
         subgraph "LLM Control"
@@ -97,7 +113,9 @@ graph TB
         BW[BatchExtractionWorkflow]
         DA[DurableActivities]
         SE[StreamingExtraction]
-        ERS[EntityResolution]
+        ERA[EntityResolutionActivity]
+        VA[ValidationActivity]
+        CEA[ComputeEmbeddingsActivity]
     end
 
     subgraph "Runtime Layer"
@@ -111,6 +129,7 @@ graph TB
         ID[Identity Types]
         PL[PathLayout]
         MD[Domain Models]
+        OE[OntologyEmbeddings]
         SC[Schemas]
     end
 
@@ -129,10 +148,21 @@ graph TB
     DA --> GR
     DA --> SS
     DA --> RB
+    DA --> ERS
+    DA --> SHACL
 
     EE --> OS
     RE --> OS
     GR --> OS
+    GR --> SS2
+
+    ERS --> ES
+    SS2 --> ES
+    ES --> EC
+    ES --> Nomic
+
+    OL --> ES
+    OL --> RB
 
     EE --> TB
     EE --> ST
@@ -146,6 +176,8 @@ graph TB
 
     style WO fill:#e1f5fe
     style BW fill:#fff3e0
+    style ERS fill:#ffe0b2
+    style ES fill:#e1bee7
     style PS fill:#f3e5f5
 ```
 
@@ -259,15 +291,35 @@ graph LR
     subgraph "Extraction Services"
         EE[EntityExtractor]
         RE[RelationExtractor]
+        ME[MentionExtractor]
         GR[Grounder]
         NLP[NlpService]
+    end
+
+    subgraph "Entity Resolution"
+        ERS[EntityResolutionService]
+        EL[EntityLinker]
+        RLink[RelationLinker]
+        SS2[SimilarityScorer]
+    end
+
+    subgraph "Embedding"
+        ES[EmbeddingService]
+        EC[EmbeddingCache]
+        Nomic[NomicNlpService]
+    end
+
+    subgraph "Ontology"
+        OS[OntologyService]
+        OL[OntologyLoader]
+        IS[InheritanceService]
     end
 
     subgraph "Core Services"
         CS[ConfigService]
         SS[StorageService]
-        OS[OntologyService]
         RB[RdfBuilder]
+        SHACL[ShaclService]
     end
 
     subgraph "LLM Stack"
@@ -283,6 +335,12 @@ graph LR
         RL[CentralRateLimiter]
     end
 
+    subgraph "Run Management"
+        ER[ExtractionRun]
+        ECa[ExtractionCache]
+        ED[ExecutionDeduplicator]
+    end
+
     WO --> WE[WorkflowEngine]
     WO --> SS
     WO --> BSH
@@ -294,6 +352,7 @@ graph LR
     EE --> LR
     RE --> LR
     GR --> LR
+    ME --> NLP
 
     LR --> LM
     LR --> LS
@@ -306,16 +365,38 @@ graph LR
     EE --> OS
     RE --> OS
     GR --> NLP
+    GR --> SS2
+
+    ERS --> ES
+    EL --> ERS
+    RLink --> ERS
+    SS2 --> ES
+
+    ES --> Nomic
+    ES --> EC
+
+    OL --> RB
+    OL --> ES
+    OL --> SS
+    IS --> OS
 
     OS --> RB
     OS --> SS
 
+    SHACL --> RB
+
     RB --> CS
     SS --> CS
     NLP --> CS
+    Nomic --> CS
+
+    ER --> SS
+    ECa --> SS
 
     style WO fill:#bbdefb
     style EE fill:#c8e6c9
+    style ERS fill:#ffe0b2
+    style ES fill:#e1bee7
     style CS fill:#fff9c4
 ```
 
@@ -323,16 +404,37 @@ graph LR
 
 | Service | Purpose | Layer | Dependencies |
 |---------|---------|-------|--------------|
+| **Orchestration** ||||
 | `WorkflowOrchestrator` | High-level batch workflow API | Service | WorkflowEngine, BatchStateHub |
 | `BatchStateHub` | PubSub for real-time state changes | Service | PubSub |
 | `BatchStatePersistence` | State snapshots in storage | Service | StorageService, KeyValueStore |
+| **Extraction** ||||
 | `EntityExtractor` | LLM-based named entity recognition | Service | LanguageModel, OntologyService |
 | `RelationExtractor` | LLM-based relation extraction | Service | LanguageModel, OntologyService |
+| `MentionExtractor` | Entity mention detection via NLP | Service | NlpService |
 | `Grounder` | Entity grounding/linking | Service | NlpService, OntologyService |
+| `SimilarityScorer` | Embedding-based entity similarity | Service | EmbeddingService |
+| **Entity Resolution** ||||
+| `EntityResolutionService` | Graph clustering and entity matching | Service | EmbeddingService |
+| `EntityLinker` | Canonical entity ID queries | Util | EntityResolutionGraph |
+| `RelationLinker` | Relation canonicalization | Service | EntityResolutionGraph |
+| **Embedding** ||||
+| `EmbeddingService` | Cache-through embedding wrapper | Service | NomicNlpService, EmbeddingCache |
+| `EmbeddingCache` | Content-addressable embedding cache | Service | Clock, Ref |
+| `NomicNlpService` | Local Nomic embedding model | Service | ConfigService |
+| **Ontology** ||||
+| `OntologyService` | SKOS/OWL ontology operations | Core | RdfBuilder, StorageService |
+| `OntologyLoader` | Ontology + embeddings loading | Service | RdfBuilder, EmbeddingService, StorageService |
+| `InheritanceService` | Class hierarchy property inheritance | Service | OntologyService |
+| **Core Infrastructure** ||||
 | `ConfigService` | Centralized configuration | Core | Environment |
 | `StorageService` | Abstracted storage (GCS/Local/Memory) | Core | ConfigService |
-| `OntologyService` | SKOS/OWL ontology operations | Core | RdfBuilder, StorageService |
 | `RdfBuilder` | RDF parsing/serialization (N3.js) | Core | ConfigService |
+| `ShaclService` | SHACL validation engine | Core | RdfBuilder |
+| **Run Management** ||||
+| `ExtractionRun` | Run management with artifact storage | Service | StorageService |
+| `ExtractionCache` | Filesystem extraction result cache | Service | FileSystem |
+| `ExecutionDeduplicator` | Idempotency key deduplication | Service | Ref |
 
 ---
 

@@ -8,10 +8,19 @@
  * @module test/Service/Rdf.resource
  */
 
-import { Effect } from "effect"
+import { Effect, Layer } from "effect"
 import { describe, expect, it } from "vitest"
 import { RdfBuilder } from "../../src/Service/Rdf.js"
 import { ConfigServiceDefault } from "../../src/Service/Config.js"
+import { TestConfigProvider } from "../../src/Runtime/TestRuntime.js"
+
+/**
+ * Test layer with proper config provider
+ */
+const TestLayer = RdfBuilder.Default.pipe(
+  Layer.provideMerge(ConfigServiceDefault),
+  Layer.provideMerge(Layer.setConfigProvider(TestConfigProvider))
+)
 
 describe("RdfBuilder Resource Management", () => {
   it("makeStore finalizer should clear store data", () =>
@@ -45,10 +54,7 @@ describe("RdfBuilder Resource Management", () => {
           storeSize = store._store.size
           expect(storeSize).toBe(3) // Should have 3 triples
         })
-      ).pipe(
-        Effect.provide(RdfBuilder.Default),
-        Effect.provide(ConfigServiceDefault)
-      )
+      ).pipe(Effect.provide(TestLayer))
 
       // After scope closes, the finalizer should have cleared the store
       if (storeRef) {
@@ -99,8 +105,7 @@ describe("RdfBuilder Resource Management", () => {
       expect(store1Ref.size).toBe(1)
       expect(store2Ref.size).toBe(2)
     }).pipe(
-      Effect.provide(RdfBuilder.Default),
-      Effect.provide(ConfigServiceDefault),
+      Effect.provide(TestLayer),
       Effect.runPromise
     ))
 
@@ -128,8 +133,7 @@ describe("RdfBuilder Resource Management", () => {
           return yield* Effect.fail(new Error("Intentional failure"))
         })
       ).pipe(
-        Effect.provide(RdfBuilder.Default),
-        Effect.provide(ConfigServiceDefault),
+        Effect.provide(TestLayer),
         Effect.either
       )
 
@@ -161,8 +165,7 @@ describe("RdfBuilder Resource Management", () => {
       // Store persists because it's not scoped
       expect(store._store.size).toBe(1)
     }).pipe(
-      Effect.provide(RdfBuilder.Default),
-      Effect.provide(ConfigServiceDefault),
+      Effect.provide(TestLayer),
       Effect.runPromise
     ))
 })

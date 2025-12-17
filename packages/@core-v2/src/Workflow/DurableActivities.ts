@@ -17,10 +17,19 @@
 
 import { Activity } from "@effect/workflow"
 import { Chunk, DateTime, Effect, Option, Schedule, Schema } from "effect"
-import { DocumentId, GcsUri, toGcsUri } from "../Domain/Identity.js"
-import { KnowledgeGraph } from "../Domain/Model/Entity.js"
+import { ActivityError, notFoundError, toActivityError } from "../Domain/Error/Activity.js"
+import { type BatchId, DocumentId, GcsUri, toGcsUri } from "../Domain/Identity.js"
+import { Entity, KnowledgeGraph, Relation } from "../Domain/Model/Entity.js"
+import { defaultEntityResolutionConfig } from "../Domain/Model/EntityResolution.js"
+import type { ElementEmbedding, OntologyEmbeddings } from "../Domain/Model/OntologyEmbeddings.js"
+import {
+  buildEmbeddingText,
+  computeOntologyVersion,
+  embeddingsPathFromOntology,
+  OntologyEmbeddingsJson
+} from "../Domain/Model/OntologyEmbeddings.js"
 import { PathLayout } from "../Domain/PathLayout.js"
-import { RDF } from "../Domain/Rdf/Types.js"
+import { RDF, RDFS } from "../Domain/Rdf/Types.js"
 import type {
   ExtractionActivityInput,
   IngestionActivityInput,
@@ -28,19 +37,17 @@ import type {
   ValidationActivityInput
 } from "../Domain/Schema/Batch.js"
 import { ValidationActivityOutput } from "../Domain/Schema/Batch.js"
-import {
-  ActivityError,
-  toActivityError,
-  serviceError,
-  notFoundError
-} from "../Domain/Error/Activity.js"
 import { ConfigService } from "../Service/Config.js"
+import { EmbeddingService } from "../Service/Embedding.js"
+import { EntityResolutionService } from "../Service/EntityResolution.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
-import { OntologyService } from "../Service/Ontology.js"
-import { RdfBuilder } from "../Service/Rdf.js"
+import { OntologyService, parseOntologyFromStore } from "../Service/Ontology.js"
+import { RdfBuilder, type RdfStore } from "../Service/Rdf.js"
 import { ShaclService } from "../Service/Shacl.js"
 import type { ShaclViolation } from "../Service/Shacl.js"
 import { StorageService } from "../Service/Storage.js"
+import { extractLocalNameFromIri } from "../Utils/Iri.js"
+import { makeProvenanceUri } from "../Utils/Provenance.js"
 
 // -----------------------------------------------------------------------------
 // Output Schemas (must be serializable for journaling)
@@ -56,8 +63,16 @@ export const ExtractionOutput = Schema.Struct({
 
 export const ResolutionOutput = Schema.Struct({
   resolvedUri: GcsUri,
+  /** Total entities before resolution */
   entitiesTotal: Schema.Number,
+  /** Number of clusters formed (resolved entities) */
   clustersFormed: Schema.Number,
+  /** Total relations in merged graph */
+  relationsTotal: Schema.Number,
+  /** Compression ratio: 1 - (clustersFormed / entitiesTotal) */
+  compressionRatio: Schema.Number,
+  /** Maps canonical entity ID to source document URIs */
+  provenanceMap: Schema.Record({ key: Schema.String, value: Schema.Array(Schema.String) }),
   durationMs: Schema.Number
 })
 
@@ -123,13 +138,122 @@ const parseTurtleStats = (turtle: string) =>
 /**
  * Serialize a KnowledgeGraph to Turtle using RdfBuilder
  */
-const graphToTurtle = (graph: KnowledgeGraph) =>
+const _graphToTurtle = (graph: KnowledgeGraph) =>
   Effect.gen(function*() {
     const rdf = yield* RdfBuilder
     const store = yield* rdf.createStore
     yield* rdf.addEntities(store, graph.entities)
     yield* rdf.addRelations(store, graph.relations)
     return yield* rdf.toTurtle(store)
+  })
+
+/**
+ * Extract minimal KnowledgeGraph from an RDF store
+ *
+ * Reconstructs Entity objects from RDF quads:
+ * - Entity ID from subject IRI local name
+ * - mention from rdfs:label
+ * - types from rdf:type
+ * - Relations from triples where both subject and object are entities
+ */
+const storeToKnowledgeGraph = (store: RdfStore) =>
+  Effect.gen(function*() {
+    const rdf = yield* RdfBuilder
+
+    // Get all type quads to find entities
+    const typeQuads = yield* rdf.queryStore(store, { predicate: RDF.type })
+
+    // Get all label quads
+    const labelQuads = yield* rdf.queryStore(store, { predicate: RDFS.label })
+
+    // Build entity ID -> types map
+    const entityTypes = new Map<string, Array<string>>()
+    const entityIris = new Set<string>()
+
+    for (const quad of typeQuads) {
+      const subjectIri = quad.subject as string
+      // Skip blank nodes and non-instance types (owl:Class, etc.)
+      if (subjectIri.startsWith("_:")) continue
+
+      const typeIri = quad.object as string
+      if (typeof typeIri !== "string") continue
+
+      // Skip OWL/RDFS meta-types
+      if (typeIri.includes("owl#") || typeIri.includes("rdf-schema#")) continue
+
+      entityIris.add(subjectIri)
+      const types = entityTypes.get(subjectIri) ?? []
+      types.push(typeIri)
+      entityTypes.set(subjectIri, types)
+    }
+
+    // Build entity ID -> label map
+    const entityLabels = new Map<string, string>()
+    for (const quad of labelQuads) {
+      const subjectIri = quad.subject as string
+      if (entityIris.has(subjectIri)) {
+        const label = typeof quad.object === "string"
+          ? quad.object
+          : (quad.object as { value: string }).value
+        entityLabels.set(subjectIri, label)
+      }
+    }
+
+    // Create Entity objects
+    const entities: Array<Entity> = []
+    for (const iri of entityIris) {
+      const types = entityTypes.get(iri) ?? []
+      if (types.length === 0) continue
+
+      const id = extractLocalNameFromIri(iri)
+      const mention = entityLabels.get(iri) ?? id
+
+      entities.push(
+        new Entity({
+          id,
+          mention,
+          types,
+          attributes: {}
+        })
+      )
+    }
+
+    // Extract relations (triples where both subject and object are known entities)
+    const entityIdSet = new Set(entities.map((e) => e.id))
+    const allQuads = yield* rdf.queryStore(store, {})
+    const relations: Array<Relation> = []
+
+    for (const quad of allQuads) {
+      const subjectIri = quad.subject as string
+      const subjectId = extractLocalNameFromIri(subjectIri)
+
+      // Skip if subject is not an entity
+      if (!entityIdSet.has(subjectId)) continue
+
+      // Skip rdf:type and rdfs:label (already processed)
+      const predicate = quad.predicate as string
+      if (predicate === RDF.type || predicate === RDFS.label) continue
+
+      // Check if object is an entity reference
+      const objectValue = quad.object
+      if (typeof objectValue === "string" && !objectValue.startsWith("_:")) {
+        const objectId = extractLocalNameFromIri(objectValue)
+        if (entityIdSet.has(objectId)) {
+          relations.push(
+            new Relation({
+              subjectId,
+              predicate,
+              object: objectId
+            })
+          )
+        }
+      }
+    }
+
+    return new KnowledgeGraph({
+      entities,
+      relations
+    })
   })
 
 // -----------------------------------------------------------------------------
@@ -262,21 +386,31 @@ export const makeExtractionActivity = (input: typeof ExtractionActivityInput.Typ
         )
         : Chunk.empty()
 
-      // 6. Create KnowledgeGraph and serialize to Turtle
+      // 6. Create KnowledgeGraph and serialize to Turtle with provenance
       const graph = new KnowledgeGraph({
         entities: Chunk.toReadonlyArray(entities),
         relations: Chunk.toReadonlyArray(relations),
         sourceText: sourceContent
       })
 
-      const turtleContent = yield* graphToTurtle(graph).pipe(
-        Effect.tap((turtle) =>
-          Effect.logInfo("Graph serialized to Turtle", {
-            documentId: input.documentId,
-            turtleLength: turtle.length
-          })
-        )
+      // Generate provenance URI for this document's triples
+      const provenanceUri = makeProvenanceUri(
+        input.batchId as BatchId,
+        input.documentId
       )
+
+      // Serialize with named graph for provenance tracking
+      const rdf = yield* RdfBuilder
+      const store = yield* rdf.createStore
+      yield* rdf.addEntities(store, graph.entities, { graphUri: provenanceUri })
+      yield* rdf.addRelations(store, graph.relations, { graphUri: provenanceUri })
+      const turtleContent = yield* rdf.toTurtle(store)
+
+      yield* Effect.logInfo("Graph serialized to Turtle with provenance", {
+        documentId: input.documentId,
+        provenanceUri,
+        turtleLength: turtleContent.length
+      })
 
       // 7. Save Turtle graph to storage
       const graphPath = PathLayout.document.graph(input.documentId)
@@ -307,7 +441,15 @@ export const makeExtractionActivity = (input: typeof ExtractionActivityInput.Typ
  * Durable Resolution Activity
  *
  * Merges multiple document graphs and performs entity resolution.
+ * Uses EntityResolutionService for proper clustering across documents.
  * Journaled by WorkflowEngine for crash recovery.
+ *
+ * Pipeline:
+ * 1. Load all document Turtle files from storage
+ * 2. Parse each Turtle into RdfStore, extract KnowledgeGraphs
+ * 3. Call EntityResolutionService.resolve() to cluster similar entities
+ * 4. Rewrite entity IRIs to use canonical IDs
+ * 5. Serialize resolved graph back to Turtle
  */
 export const makeResolutionActivity = (input: typeof ResolutionActivityInput.Type) =>
   Activity.make({
@@ -319,6 +461,7 @@ export const makeResolutionActivity = (input: typeof ResolutionActivityInput.Typ
       const storage = yield* StorageService
       const config = yield* ConfigService
       const rdf = yield* RdfBuilder
+      const entityResolution = yield* EntityResolutionService
       const bucket = resolveBucket(config)
 
       yield* Effect.logInfo("Resolution activity starting", {
@@ -326,7 +469,7 @@ export const makeResolutionActivity = (input: typeof ResolutionActivityInput.Typ
         graphCount: input.documentGraphUris.length
       })
 
-      // Load all document graphs
+      // 1. Load all document graphs
       const graphContents = yield* Effect.forEach(input.documentGraphUris, (uri) =>
         storage.get(stripGsPrefix(uri)).pipe(
           Effect.flatMap((opt) => requireContent(opt, uri)),
@@ -340,31 +483,138 @@ export const makeResolutionActivity = (input: typeof ResolutionActivityInput.Typ
           )
         ), { concurrency: 10 })
 
-      // Parse and count entities
-      const parsedGraphs = yield* Effect.forEach(graphContents, (turtle) =>
+      // 2. Parse each Turtle and extract KnowledgeGraphs
+      const knowledgeGraphs = yield* Effect.forEach(graphContents, (turtle) =>
         Effect.gen(function*() {
           const store = yield* rdf.parseTurtle(turtle)
-          const quads = yield* rdf.queryStore(store, {})
-          return { store, quadCount: quads.length }
+          return yield* storeToKnowledgeGraph(store)
         }).pipe(
-          Effect.catchAll(() => Effect.succeed({ store: null, quadCount: 0 }))
+          Effect.catchAll((err) => {
+            Effect.logWarning("Failed to parse document graph, skipping", { error: String(err) })
+            return Effect.succeed(new KnowledgeGraph({ entities: [], relations: [] }))
+          })
         ), { concurrency: 5 })
 
-      // Merge all Turtle content
-      const mergedTurtle = graphContents.join("\n\n")
-      const resolutionPath = PathLayout.batch.resolution(input.batchId)
-      yield* storage.set(resolutionPath, mergedTurtle)
+      // Count total entities and relations before resolution
+      const totalEntities = knowledgeGraphs.reduce((sum, kg) => sum + kg.entities.length, 0)
+      const totalRelations = knowledgeGraphs.reduce((sum, kg) => sum + kg.relations.length, 0)
 
-      const stats = yield* parseTurtleStats(mergedTurtle).pipe(
-        Effect.catchAll(() => Effect.succeed({ entityCount: 0, tripleCount: 0 }))
+      yield* Effect.logInfo("Parsed document graphs", {
+        batchId: input.batchId,
+        graphCount: knowledgeGraphs.length,
+        totalEntities,
+        totalRelations
+      })
+
+      // 3. Perform entity resolution across all graphs
+      const resolutionGraph = yield* entityResolution.resolve(
+        knowledgeGraphs,
+        defaultEntityResolutionConfig
+      ).pipe(
+        Effect.tap((erg) =>
+          Effect.logInfo("Entity resolution complete", {
+            batchId: input.batchId,
+            mentionCount: erg.stats.mentionCount,
+            resolvedCount: erg.stats.resolvedCount,
+            clusterCount: erg.stats.clusterCount
+          })
+        )
       )
 
+      // 4. Build resolved Turtle with canonical IDs
+      // Track entity provenance: which document each entity came from
+      const entityToDocumentUri: Record<string, string> = {}
+      knowledgeGraphs.forEach((kg, docIndex) => {
+        const docUri = input.documentGraphUris[docIndex]
+        for (const entity of kg.entities) {
+          entityToDocumentUri[entity.id] = docUri
+        }
+      })
+
+      // Merge all graphs and rewrite entity IDs using canonicalMap
+      const mergedEntities = knowledgeGraphs.flatMap((kg) => kg.entities)
+      const mergedRelations = knowledgeGraphs.flatMap((kg) => kg.relations)
+
+      // Rewrite entity IDs to canonical IDs
+      const rewrittenEntities = mergedEntities.map((entity) => {
+        const canonicalId = resolutionGraph.canonicalMap[entity.id] ?? entity.id
+        return new Entity({
+          ...entity,
+          id: canonicalId
+        })
+      })
+
+      // Deduplicate entities by canonical ID (keep first occurrence)
+      const seenIds = new Set<string>()
+      const uniqueEntities = rewrittenEntities.filter((entity) => {
+        if (seenIds.has(entity.id)) return false
+        seenIds.add(entity.id)
+        return true
+      })
+
+      // Rewrite relation IDs
+      const rewrittenRelations = mergedRelations.map((rel) => {
+        const canonicalSubject = resolutionGraph.canonicalMap[rel.subjectId] ?? rel.subjectId
+        const canonicalObject = typeof rel.object === "string"
+          ? (resolutionGraph.canonicalMap[rel.object] ?? rel.object)
+          : rel.object
+        return new Relation({
+          subjectId: canonicalSubject,
+          predicate: rel.predicate,
+          object: canonicalObject
+        })
+      })
+
+      // Create resolved KnowledgeGraph
+      const resolvedGraph = new KnowledgeGraph({
+        entities: uniqueEntities,
+        relations: rewrittenRelations
+      })
+
+      // 5. Serialize to Turtle with owl:sameAs links and save
+      const store = yield* rdf.createStore
+      yield* rdf.addEntities(store, resolvedGraph.entities)
+      yield* rdf.addRelations(store, resolvedGraph.relations)
+      yield* rdf.addSameAsLinks(store, resolutionGraph.canonicalMap)
+      const resolvedTurtle = yield* rdf.toTurtle(store)
+      const resolutionPath = PathLayout.batch.resolution(input.batchId)
+      yield* storage.set(resolutionPath, resolvedTurtle)
+
       const end = yield* DateTime.now
+      const compressionRatio = totalEntities > 0
+        ? 1 - (resolutionGraph.stats.resolvedCount / totalEntities)
+        : 0
+
+      // Build provenance map: canonical ID -> source document URIs
+      const provenanceMap: Record<string, Array<string>> = {}
+      for (const [entityId, docUri] of Object.entries(entityToDocumentUri)) {
+        const canonicalId = resolutionGraph.canonicalMap[entityId] ?? entityId
+        if (!provenanceMap[canonicalId]) {
+          provenanceMap[canonicalId] = []
+        }
+        // Only add unique document URIs
+        if (!provenanceMap[canonicalId].includes(docUri)) {
+          provenanceMap[canonicalId].push(docUri)
+        }
+      }
+
+      yield* Effect.logInfo("Resolution activity complete", {
+        batchId: input.batchId,
+        entitiesTotal: totalEntities,
+        clustersFormed: resolutionGraph.stats.clusterCount,
+        relationsTotal: totalRelations,
+        compressionRatio,
+        provenanceMapEntries: Object.keys(provenanceMap).length,
+        durationMs: DateTime.distance(start, end)
+      })
 
       return {
         resolvedUri: toGcsUri(bucket, resolutionPath),
-        entitiesTotal: stats.entityCount,
-        clustersFormed: parsedGraphs.filter((g) => g.store !== null).length,
+        entitiesTotal: totalEntities,
+        clustersFormed: resolutionGraph.stats.clusterCount,
+        relationsTotal: totalRelations,
+        compressionRatio,
+        provenanceMap,
         durationMs: DateTime.distance(start, end)
       }
     }).pipe(Effect.mapError(toActivityError)),
@@ -419,14 +669,14 @@ export const makeValidationActivity = (input: typeof ValidationActivityInput.Typ
       const shapesStore = input.shaclUri
         ? yield* shacl.loadShapesFromUri(input.shaclUri)
         : yield* shacl.generateShapesFromOntology(dataStore._store).pipe(
-            Effect.tapErrorCause((cause) =>
-              Effect.logError("Validation: Failed to generate shapes", {
-                activity: "validation",
-                batchId: input.batchId,
-                cause: String(cause)
-              })
-            )
+          Effect.tapErrorCause((cause) =>
+            Effect.logError("Validation: Failed to generate shapes", {
+              activity: "validation",
+              batchId: input.batchId,
+              cause: String(cause)
+            })
           )
+        )
 
       const report = yield* shacl.validate(dataStore._store, shapesStore).pipe(
         Effect.tapErrorCause((cause) =>
@@ -513,6 +763,161 @@ export const makeIngestionActivity = (input: typeof IngestionActivityInput.Type)
       return {
         canonicalUri: toGcsUri(bucket, canonicalPath),
         triplesIngested: stats.tripleCount,
+        durationMs: DateTime.distance(start, end)
+      }
+    }).pipe(Effect.mapError(toActivityError)),
+    interruptRetryPolicy: activityRetryPolicy
+  })
+
+// -----------------------------------------------------------------------------
+// Compute Ontology Embeddings Activity
+// -----------------------------------------------------------------------------
+
+/**
+ * Input for ComputeOntologyEmbeddings activity
+ */
+export const ComputeEmbeddingsInput = Schema.Struct({
+  /** URI of the ontology (e.g., "gs://bucket/ontologies/football/ontology.ttl") */
+  ontologyUri: Schema.String,
+  /** Embedding model to use */
+  model: Schema.optional(Schema.String)
+})
+export type ComputeEmbeddingsInput = typeof ComputeEmbeddingsInput.Type
+
+/**
+ * Output for ComputeOntologyEmbeddings activity
+ */
+export const ComputeEmbeddingsOutput = Schema.Struct({
+  /** URI of the stored embeddings blob */
+  embeddingsUri: GcsUri,
+  /** Version hash of the ontology */
+  version: Schema.String,
+  /** Number of class embeddings */
+  classCount: Schema.Number,
+  /** Number of property embeddings */
+  propertyCount: Schema.Number,
+  /** Embedding dimension */
+  dimension: Schema.Number,
+  /** Duration in milliseconds */
+  durationMs: Schema.Number
+})
+export type ComputeEmbeddingsOutput = typeof ComputeEmbeddingsOutput.Type
+
+/**
+ * Durable Compute Ontology Embeddings Activity
+ *
+ * Pre-computes embeddings for all classes and properties in an ontology
+ * and stores them as a blob alongside the ontology file.
+ *
+ * Pipeline:
+ * 1. Load ontology from storage
+ * 2. Parse ontology to extract classes and properties
+ * 3. Build embedding text for each (label + description)
+ * 4. Embed all texts
+ * 5. Create OntologyEmbeddings blob
+ * 6. Store blob to GCS
+ *
+ * Idempotent: Same ontology content produces same embeddings blob.
+ */
+export const makeComputeEmbeddingsActivity = (input: ComputeEmbeddingsInput) =>
+  Activity.make({
+    name: `compute-embeddings-${computeOntologyVersion(input.ontologyUri).slice(0, 8)}`,
+    success: ComputeEmbeddingsOutput,
+    error: ActivityError,
+    execute: Effect.gen(function*() {
+      const start = yield* DateTime.now
+      const storage = yield* StorageService
+      const config = yield* ConfigService
+      const rdf = yield* RdfBuilder
+      const embedding = yield* EmbeddingService
+      const bucket = resolveBucket(config)
+
+      yield* Effect.logInfo("Computing ontology embeddings", {
+        ontologyUri: input.ontologyUri
+      })
+
+      // 1. Load ontology content
+      const ontologyPath = stripGsPrefix(input.ontologyUri)
+      const ontologyContent = yield* storage.get(ontologyPath).pipe(
+        Effect.flatMap((opt) => requireContent(opt, ontologyPath))
+      )
+
+      // 2. Compute version hash
+      const version = computeOntologyVersion(ontologyContent)
+
+      // 3. Parse ontology and extract classes/properties
+      const store = yield* rdf.parseTurtle(ontologyContent)
+      const { classes, properties } = yield* parseOntologyFromStore(rdf, store, ontologyPath)
+
+      yield* Effect.logInfo("Ontology loaded", {
+        classCount: Chunk.size(classes),
+        propertyCount: Chunk.size(properties),
+        version
+      })
+
+      // 4. Embed all classes
+      const classEmbeddings: Array<ElementEmbedding> = []
+      for (const cls of classes) {
+        const text = buildEmbeddingText(
+          cls.label,
+          cls.definition ?? cls.comment,
+          cls.altLabels.length > 0 ? cls.altLabels : undefined
+        )
+        const emb = yield* embedding.embed(text, "search_document")
+        classEmbeddings.push({
+          iri: cls.id,
+          text,
+          embedding: Array.from(emb)
+        })
+      }
+
+      // 5. Embed all properties
+      const propertyEmbeddings: Array<ElementEmbedding> = []
+      for (const prop of properties) {
+        const text = buildEmbeddingText(prop.label, prop.comment)
+        const emb = yield* embedding.embed(text, "search_document")
+        propertyEmbeddings.push({
+          iri: prop.id,
+          text,
+          embedding: Array.from(emb)
+        })
+      }
+
+      // 6. Determine dimension from first embedding
+      const dimension = classEmbeddings[0]?.embedding.length ?? propertyEmbeddings[0]?.embedding.length ?? 0
+
+      // 7. Build OntologyEmbeddings blob
+      const embeddingsBlob: OntologyEmbeddings = {
+        ontologyUri: input.ontologyUri,
+        version,
+        model: input.model ?? "nomic-embed-text-v1.5",
+        dimension,
+        createdAt: start,
+        classes: classEmbeddings,
+        properties: propertyEmbeddings
+      }
+
+      // 8. Serialize and store
+      const embeddingsJson = yield* Schema.encode(OntologyEmbeddingsJson)(embeddingsBlob)
+      const embeddingsPath = stripGsPrefix(embeddingsPathFromOntology(input.ontologyUri))
+      yield* storage.set(embeddingsPath, embeddingsJson)
+
+      const end = yield* DateTime.now
+
+      yield* Effect.logInfo("Ontology embeddings computed and stored", {
+        embeddingsPath,
+        classCount: classEmbeddings.length,
+        propertyCount: propertyEmbeddings.length,
+        dimension,
+        durationMs: DateTime.distance(start, end)
+      })
+
+      return {
+        embeddingsUri: toGcsUri(bucket, embeddingsPath),
+        version,
+        classCount: classEmbeddings.length,
+        propertyCount: propertyEmbeddings.length,
+        dimension,
         durationMs: DateTime.distance(start, end)
       }
     }).pipe(Effect.mapError(toActivityError)),

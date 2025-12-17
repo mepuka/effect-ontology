@@ -240,8 +240,28 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
       const manifest = parseManifest(manifestRaw)
 
       const emitState = (state: BatchState) =>
-        publishState(state).pipe(
-          Effect.catchAll((error) => Effect.logWarning("Failed to publish batch state", { batchId, error }))
+        Effect.gen(function*() {
+          const existing = yield* getBatchStateFromStore(batchId)
+
+          // Only publish if state is newer (idempotency guard)
+          const shouldPublish = Option.match(existing, {
+            onNone: () => true,
+            onSome: (e) => DateTime.greaterThan(state.updatedAt, e.updatedAt)
+          })
+
+          if (shouldPublish) {
+            yield* publishState(state)
+          } else {
+            yield* Effect.logDebug("Skipping state publish (not newer)", {
+              batchId,
+              existingUpdatedAt: Option.map(existing, (e) => e.updatedAt),
+              newUpdatedAt: state.updatedAt
+            })
+          }
+        }).pipe(
+          Effect.catchAll((error) =>
+            Effect.logWarning("Failed to publish batch state", { batchId, error })
+          )
         )
 
       const runWorkflow = Effect.gen(function*() {

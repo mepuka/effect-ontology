@@ -43,6 +43,7 @@ import {
 } from "../Domain/Rdf/Constants.js"
 import { type IRI, Literal, type Quad } from "../Domain/Rdf/Types.js"
 import { extractLocalName, iriArrayToLocalNameArrayTransform } from "../Utils/Rdf.js"
+import { rrfFusion } from "../Utils/Retrieval.js"
 import { ConfigService } from "./Config.js"
 import { NlpService } from "./Nlp.js"
 import { RdfBuilder, type RdfStore } from "./Rdf.js"
@@ -667,29 +668,38 @@ export class OntologyService extends Effect.Service<OntologyService>()(
               })
             ], { concurrency: 2 })
 
-            // Merge and deduplicate - semantic results ranked higher
-            const merged = new Map<string, ClassDefinition>()
-            for (const cls of semanticResults) merged.set(cls.id, cls)
-            for (const cls of bm25Results) {
-              if (!merged.has(cls.id)) merged.set(cls.id, cls)
-            }
+            // Fuse results using Reciprocal Rank Fusion (RRF)
+            // RRF properly combines ranking signals from both search methods
+            const semanticArray = Chunk.toReadonlyArray(semanticResults)
+            const bm25Array = Chunk.toReadonlyArray(bm25Results)
+            const fused = rrfFusion([semanticArray, bm25Array])
 
-            // If results are sparse, include ALL classes up to limit
+            // If results are sparse, include remaining classes (sorted by RRF score = 0)
             // This ensures small ontologies get full coverage
-            if (merged.size < limit && ontology.classes.length <= limit) {
-              for (const cls of ontology.classes) merged.set(cls.id, cls)
+            const fusedIds = new Set(fused.map((r) => r.id))
+            const remaining: Array<ClassDefinition> = []
+            if (fused.length < limit && ontology.classes.length <= limit) {
+              for (const cls of ontology.classes) {
+                if (!fusedIds.has(cls.id)) remaining.push(cls)
+              }
             }
 
             yield* Effect.logDebug("Hybrid search complete", {
               query,
-              semanticCount: Chunk.size(semanticResults),
-              bm25Count: Chunk.size(bm25Results),
-              mergedCount: merged.size,
+              semanticCount: semanticArray.length,
+              bm25Count: bm25Array.length,
+              fusedCount: fused.length,
               ontologySize: ontology.classes.length,
               limit
             })
 
-            return Chunk.fromIterable(Array.from(merged.values()).slice(0, limit))
+            // Return fused results + remaining classes up to limit
+            const results = [...fused.map((r) => {
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+              const { rrfScore: _, ...cls } = r
+              return cls as ClassDefinition
+            }), ...remaining]
+            return Chunk.fromIterable(results.slice(0, limit))
           })
       }
     }),

@@ -8,13 +8,16 @@
  * @module Domain/Rdf/Constants
  */
 
-import { Schema } from "effect"
-import { type IRI, IriSchema } from "./Types.js"
+import { type IRI } from "./Types.js"
 
 /**
- * Create an IRI from a string
+ * Create an IRI from a string (type assertion for trusted constants)
+ *
+ * Using type assertion instead of Schema.decodeSync to avoid module
+ * initialization order issues. All IRIs in this file are hardcoded
+ * W3C standard vocabulary strings that don't need runtime validation.
  */
-const iri = (value: string): IRI => Schema.decodeSync(IriSchema)(value)
+const iri = (value: string): IRI => value as IRI
 
 /**
  * RDF Vocabulary IRIs

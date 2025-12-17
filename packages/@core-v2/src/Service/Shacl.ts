@@ -8,11 +8,17 @@
  * @module Service/Shacl
  */
 
-import { Context, DateTime, Effect, Layer, Option, Schema } from "effect"
+import { Context, DateTime, Effect, Layer, Option, Ref, Schema } from "effect"
 import * as N3 from "n3"
 // @ts-expect-error shacl-engine types are incorrect - uses named export not default
 import { Validator as ShaclValidator } from "shacl-engine"
-import { ShaclValidationError, ShapesLoadError, ValidationReportError } from "../Domain/Error/Shacl.js"
+import {
+  ShaclValidationError,
+  ShapesLoadError,
+  ValidationPolicyError,
+  ValidationReportError
+} from "../Domain/Error/Shacl.js"
+import { sha256Sync } from "../Utils/Hash.js"
 import type { RdfStore } from "./Rdf.js"
 import { RdfBuilder } from "./Rdf.js"
 import { StorageService } from "./Storage.js"
@@ -25,6 +31,24 @@ const mapSeverity = (severity: { value?: string } | undefined): "Violation" | "W
 }
 
 const stripGsPrefix = (uri: string): string => uri.startsWith("gs://") ? uri.replace(/^gs:\/\/[^/]+\//, "") : uri
+
+/**
+ * Compute a hash key for an N3 store by serializing to N-Quads
+ * N-Quads is a canonical format so identical graphs produce identical hashes
+ */
+const hashStore = (store: N3.Store): string => {
+  const writer = new N3.Writer({ format: "N-Quads" })
+  for (const quad of store) {
+    writer.addQuad(quad)
+  }
+  let nquads = ""
+  writer.end((_error, result) => {
+    nquads = result
+  })
+  // Sort lines for canonical ordering (N-Quads lines are independent)
+  const sortedNquads = nquads.split("\n").sort().join("\n")
+  return sha256Sync(sortedNquads)
+}
 
 /**
  * Violation summary for SHACL validation
@@ -58,6 +82,20 @@ export const ShaclValidationReport = Schema.Struct({
 })
 export type ShaclValidationReport = typeof ShaclValidationReport.Type
 
+/**
+ * Validation policy for controlling workflow behavior based on severity
+ *
+ * @since 2.0.0
+ * @category Schema
+ */
+export const ValidationPolicy = Schema.Struct({
+  /** Fail if any Violation-level results are present (default: true) */
+  failOnViolation: Schema.optional(Schema.Boolean),
+  /** Fail if any Warning-level results are present (default: false) */
+  failOnWarning: Schema.optional(Schema.Boolean)
+})
+export type ValidationPolicy = typeof ValidationPolicy.Type
+
 export interface ShaclServiceMethods {
   readonly validate: (
     dataStore: RdfStore["_store"],
@@ -71,6 +109,39 @@ export interface ShaclServiceMethods {
   readonly generateShapesFromOntology: (
     ontologyStore: RdfStore["_store"]
   ) => Effect.Effect<N3.Store, ValidationReportError>
+
+  /**
+   * Clear the shapes cache. Useful for testing or when ontology has changed.
+   *
+   * @since 2.0.0
+   */
+  readonly clearShapesCache: () => Effect.Effect<void>
+
+  /**
+   * Get cache statistics for monitoring
+   *
+   * @since 2.0.0
+   */
+  readonly getShapesCacheStats: () => Effect.Effect<{ size: number; keys: ReadonlyArray<string> }>
+
+  /**
+   * Validate with policy-based control over severity handling
+   *
+   * Performs SHACL validation and applies the given policy to determine
+   * whether to fail based on violation/warning severity levels.
+   *
+   * @param dataStore - The RDF data graph to validate
+   * @param shapesStore - The SHACL shapes graph
+   * @param policy - Policy controlling which severities cause failure
+   * @returns The validation report on success, or ValidationPolicyError if policy violated
+   *
+   * @since 2.0.0
+   */
+  readonly validateWithPolicy: (
+    dataStore: RdfStore["_store"],
+    shapesStore: N3.Store,
+    policy: ValidationPolicy
+  ) => Effect.Effect<ShaclValidationReport, ShaclValidationError | ValidationPolicyError>
 }
 
 export class ShaclService extends Context.Tag("@core-v2/ShaclService")<
@@ -82,6 +153,9 @@ export class ShaclService extends Context.Tag("@core-v2/ShaclService")<
     Effect.gen(function*() {
       const rdfBuilder = yield* RdfBuilder
       const storage = yield* StorageService
+
+      // Cache for generated SHACL shapes, keyed by ontology content hash
+      const shapesCache = yield* Ref.make<Map<string, N3.Store>>(new Map())
 
       const loadShapes = (shapesTurtle: string) =>
         rdfBuilder.parseTurtle(shapesTurtle).pipe(
@@ -168,14 +242,323 @@ export class ShaclService extends Context.Tag("@core-v2/ShaclService")<
             )
           ),
 
-        generateShapesFromOntology: (_ontologyStore: RdfStore["_store"]) =>
-          Effect.try({
-            try: () => new N3.Store(),
-            catch: (cause) =>
-              new ValidationReportError({
-                message: `Failed to generate shapes from ontology: ${cause}`,
-                cause
-              })
+        generateShapesFromOntology: (ontologyStore: RdfStore["_store"]) =>
+          Effect.gen(function*() {
+            // Check cache first
+            const cacheKey = hashStore(ontologyStore)
+            const cache = yield* Ref.get(shapesCache)
+
+            const cached = cache.get(cacheKey)
+            if (cached) {
+              // Return a clone of the cached store to prevent mutation
+              const clonedStore = new N3.Store()
+              for (const quad of cached) {
+                clonedStore.addQuad(quad)
+              }
+              return clonedStore
+            }
+
+            // Generate shapes if not cached
+            const generatedStore = yield* Effect.try({
+              try: () => {
+                const store = new N3.Store()
+                const { namedNode } = N3.DataFactory
+
+              // SHACL namespace
+              const SH = {
+                NodeShape: namedNode("http://www.w3.org/ns/shacl#NodeShape"),
+                PropertyShape: namedNode("http://www.w3.org/ns/shacl#PropertyShape"),
+                targetClass: namedNode("http://www.w3.org/ns/shacl#targetClass"),
+                property: namedNode("http://www.w3.org/ns/shacl#property"),
+                path: namedNode("http://www.w3.org/ns/shacl#path"),
+                class: namedNode("http://www.w3.org/ns/shacl#class"),
+                datatype: namedNode("http://www.w3.org/ns/shacl#datatype"),
+                nodeKind: namedNode("http://www.w3.org/ns/shacl#nodeKind"),
+                IRI: namedNode("http://www.w3.org/ns/shacl#IRI"),
+                Literal: namedNode("http://www.w3.org/ns/shacl#Literal"),
+                minCount: namedNode("http://www.w3.org/ns/shacl#minCount"),
+                maxCount: namedNode("http://www.w3.org/ns/shacl#maxCount")
+              }
+
+              const RDF_TYPE = namedNode("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
+              const OWL_CLASS = namedNode("http://www.w3.org/2002/07/owl#Class")
+              const OWL_OBJECT_PROPERTY = namedNode("http://www.w3.org/2002/07/owl#ObjectProperty")
+              const OWL_DATATYPE_PROPERTY = namedNode("http://www.w3.org/2002/07/owl#DatatypeProperty")
+              const OWL_FUNCTIONAL_PROPERTY = namedNode("http://www.w3.org/2002/07/owl#FunctionalProperty")
+              const OWL_RESTRICTION = namedNode("http://www.w3.org/2002/07/owl#Restriction")
+              const OWL_ON_PROPERTY = namedNode("http://www.w3.org/2002/07/owl#onProperty")
+              const OWL_MIN_CARDINALITY = namedNode("http://www.w3.org/2002/07/owl#minCardinality")
+              const OWL_MAX_CARDINALITY = namedNode("http://www.w3.org/2002/07/owl#maxCardinality")
+              const OWL_CARDINALITY = namedNode("http://www.w3.org/2002/07/owl#cardinality")
+              const RDFS_DOMAIN = namedNode("http://www.w3.org/2000/01/rdf-schema#domain")
+              const RDFS_RANGE = namedNode("http://www.w3.org/2000/01/rdf-schema#range")
+              const RDFS_SUBCLASS_OF = namedNode("http://www.w3.org/2000/01/rdf-schema#subClassOf")
+              const XSD_STRING = namedNode("http://www.w3.org/2001/XMLSchema#string")
+
+              // Track property shapes by class+property key for cardinality constraints
+              const propertyShapeMap = new Map<string, N3.BlankNode>()
+              const makeKey = (classIri: string, propIri: string) => `${classIri}|${propIri}`
+
+              // Find all owl:Class instances
+              const classes = ontologyStore.getQuads(null, RDF_TYPE, OWL_CLASS, null)
+
+              for (const classQuad of classes) {
+                const classIri = classQuad.subject
+                const shapeIri = namedNode(`${classIri.value}Shape`)
+
+                // Add NodeShape
+                store.addQuad(shapeIri, RDF_TYPE, SH.NodeShape)
+                store.addQuad(shapeIri, SH.targetClass, classIri)
+
+                // Find ObjectProperties with this class as domain
+                const propsWithDomain = ontologyStore.getQuads(null, RDFS_DOMAIN, classIri, null)
+
+                for (const propQuad of propsWithDomain) {
+                  const propIri = propQuad.subject
+
+                  // Check if it's an ObjectProperty
+                  const isObjectProp = ontologyStore.getQuads(propIri, RDF_TYPE, OWL_OBJECT_PROPERTY, null).length > 0
+                  // Check if it's a DatatypeProperty
+                  const isDatatypeProp = ontologyStore.getQuads(propIri, RDF_TYPE, OWL_DATATYPE_PROPERTY, null).length > 0
+                  // Check if it's a FunctionalProperty
+                  const isFunctionalProp =
+                    ontologyStore.getQuads(propIri, RDF_TYPE, OWL_FUNCTIONAL_PROPERTY, null).length > 0
+
+                  if (isObjectProp) {
+                    const propertyShape = N3.DataFactory.blankNode()
+                    propertyShapeMap.set(makeKey(classIri.value, propIri.value), propertyShape)
+                    store.addQuad(shapeIri, SH.property, propertyShape)
+                    store.addQuad(propertyShape, SH.path, propIri)
+
+                    // Get range
+                    const rangeQuads = ontologyStore.getQuads(propIri, RDFS_RANGE, null, null)
+                    if (rangeQuads.length > 0) {
+                      store.addQuad(propertyShape, SH.class, rangeQuads[0].object)
+                    }
+                    store.addQuad(propertyShape, SH.nodeKind, SH.IRI)
+
+                    // Add sh:maxCount 1 for FunctionalProperty
+                    if (isFunctionalProp) {
+                      store.addQuad(
+                        propertyShape,
+                        SH.maxCount,
+                        N3.DataFactory.literal("1", namedNode("http://www.w3.org/2001/XMLSchema#integer"))
+                      )
+                    }
+                  } else if (isDatatypeProp) {
+                    // Handle DatatypeProperty - use sh:datatype constraint
+                    const propertyShape = N3.DataFactory.blankNode()
+                    propertyShapeMap.set(makeKey(classIri.value, propIri.value), propertyShape)
+                    store.addQuad(shapeIri, SH.property, propertyShape)
+                    store.addQuad(propertyShape, SH.path, propIri)
+
+                    // Get range (XSD datatype)
+                    const rangeQuads = ontologyStore.getQuads(propIri, RDFS_RANGE, null, null)
+                    if (rangeQuads.length > 0) {
+                      // Use sh:datatype for literal types
+                      store.addQuad(propertyShape, SH.datatype, rangeQuads[0].object)
+                    } else {
+                      // Default to xsd:string if no range specified
+                      store.addQuad(propertyShape, SH.datatype, XSD_STRING)
+                    }
+                    store.addQuad(propertyShape, SH.nodeKind, SH.Literal)
+
+                    // Add sh:maxCount 1 for FunctionalProperty
+                    if (isFunctionalProp) {
+                      store.addQuad(
+                        propertyShape,
+                        SH.maxCount,
+                        N3.DataFactory.literal("1", namedNode("http://www.w3.org/2001/XMLSchema#integer"))
+                      )
+                    }
+                  }
+                }
+
+                // Process OWL restrictions on this class (rdfs:subClassOf owl:Restriction)
+                const subClassQuads = ontologyStore.getQuads(classIri, RDFS_SUBCLASS_OF, null, null)
+                for (const subClassQuad of subClassQuads) {
+                  const restrictionNode = subClassQuad.object
+
+                  // Check if it's an owl:Restriction
+                  const isRestriction =
+                    ontologyStore.getQuads(restrictionNode, RDF_TYPE, OWL_RESTRICTION, null).length > 0
+                  if (!isRestriction) continue
+
+                  // Get the property this restriction applies to
+                  const onPropertyQuads = ontologyStore.getQuads(restrictionNode, OWL_ON_PROPERTY, null, null)
+                  if (onPropertyQuads.length === 0) continue
+
+                  const restrictedPropIri = onPropertyQuads[0].object
+                  const key = makeKey(classIri.value, restrictedPropIri.value)
+
+                  // Get or create property shape for this restriction
+                  let propertyShape = propertyShapeMap.get(key)
+                  if (!propertyShape) {
+                    // Create a new property shape if one doesn't exist
+                    propertyShape = N3.DataFactory.blankNode()
+                    propertyShapeMap.set(key, propertyShape)
+                    store.addQuad(shapeIri, SH.property, propertyShape)
+                    store.addQuad(propertyShape, SH.path, restrictedPropIri)
+                  }
+
+                  // Check for owl:minCardinality
+                  const minCardQuads = ontologyStore.getQuads(restrictionNode, OWL_MIN_CARDINALITY, null, null)
+                  if (minCardQuads.length > 0) {
+                    const minValue = minCardQuads[0].object.value
+                    store.addQuad(
+                      propertyShape,
+                      SH.minCount,
+                      N3.DataFactory.literal(minValue, namedNode("http://www.w3.org/2001/XMLSchema#integer"))
+                    )
+                  }
+
+                  // Check for owl:maxCardinality
+                  const maxCardQuads = ontologyStore.getQuads(restrictionNode, OWL_MAX_CARDINALITY, null, null)
+                  if (maxCardQuads.length > 0) {
+                    const maxValue = maxCardQuads[0].object.value
+                    store.addQuad(
+                      propertyShape,
+                      SH.maxCount,
+                      N3.DataFactory.literal(maxValue, namedNode("http://www.w3.org/2001/XMLSchema#integer"))
+                    )
+                  }
+
+                  // Check for owl:cardinality (exact cardinality = both min and max)
+                  const exactCardQuads = ontologyStore.getQuads(restrictionNode, OWL_CARDINALITY, null, null)
+                  if (exactCardQuads.length > 0) {
+                    const exactValue = exactCardQuads[0].object.value
+                    store.addQuad(
+                      propertyShape,
+                      SH.minCount,
+                      N3.DataFactory.literal(exactValue, namedNode("http://www.w3.org/2001/XMLSchema#integer"))
+                    )
+                    store.addQuad(
+                      propertyShape,
+                      SH.maxCount,
+                      N3.DataFactory.literal(exactValue, namedNode("http://www.w3.org/2001/XMLSchema#integer"))
+                    )
+                  }
+                }
+              }
+
+              return store
+              },
+              catch: (cause) =>
+                new ValidationReportError({
+                  message: `Failed to generate shapes from ontology: ${cause}`,
+                  cause
+                })
+            })
+
+            // Store a clone in cache to prevent external mutations affecting cached data
+            const cacheClone = new N3.Store()
+            for (const quad of generatedStore) {
+              cacheClone.addQuad(quad)
+            }
+            yield* Ref.update(shapesCache, (map) => {
+              const newMap = new Map(map)
+              newMap.set(cacheKey, cacheClone)
+              return newMap
+            })
+
+            return generatedStore
+          }),
+
+        clearShapesCache: () => Ref.set(shapesCache, new Map()),
+
+        getShapesCacheStats: () =>
+          Ref.get(shapesCache).pipe(
+            Effect.map((cache) => ({
+              size: cache.size,
+              keys: Array.from(cache.keys())
+            }))
+          ),
+
+        validateWithPolicy: (dataStore, shapesStore, policy) =>
+          Effect.gen(function*() {
+            // Run base validation
+            const validator = yield* Effect.try({
+              try: () =>
+                new ShaclValidator(shapesStore, {
+                  factory: N3.DataFactory,
+                  debug: false,
+                  coverage: false
+                }),
+              catch: (cause) =>
+                new ShaclValidationError({
+                  message: `Failed to create SHACL validator: ${cause}`,
+                  cause
+                })
+            })
+
+            const start = yield* DateTime.now
+
+            const report = yield* Effect.tryPromise({
+              try: async () => validator.validate({ dataset: dataStore }),
+              catch: (cause) =>
+                new ShaclValidationError({
+                  message: `SHACL validation failed: ${cause}`,
+                  cause
+                })
+            })
+
+            const end = yield* DateTime.now
+
+            // Map results
+            const violations = report.results?.map((result: any) => ({
+              focusNode: result.focusNode?.value ?? "unknown",
+              path: result.path?.value,
+              value: result.value?.value,
+              message: Array.isArray(result.message) ? result.message[0] : (result.message ?? "Constraint violation"),
+              severity: mapSeverity(result.severity),
+              sourceShape: result.sourceShape?.value
+            })) ?? []
+
+            const validationReport: ShaclValidationReport = {
+              conforms: report.conforms,
+              violations,
+              validatedAt: start,
+              dataGraphTripleCount: dataStore.size,
+              shapesGraphTripleCount: shapesStore.size,
+              durationMs: DateTime.distance(start, end)
+            }
+
+            // Count by severity
+            const violationCount = violations.filter((v: ShaclViolation) => v.severity === "Violation").length
+            const warningCount = violations.filter((v: ShaclViolation) => v.severity === "Warning").length
+
+            // Apply policy (default: failOnViolation=true, failOnWarning=false)
+            const failOnViolation = policy.failOnViolation ?? true
+            const failOnWarning = policy.failOnWarning ?? false
+
+            if (failOnViolation && violationCount > 0) {
+              return yield* Effect.fail(
+                new ValidationPolicyError({
+                  message: `Validation policy failed: ${violationCount} violation(s) found`,
+                  violationCount,
+                  warningCount,
+                  severity: "Violation"
+                })
+              )
+            }
+
+            if (failOnWarning && warningCount > 0) {
+              return yield* Effect.fail(
+                new ValidationPolicyError({
+                  message: `Validation policy failed: ${warningCount} warning(s) found`,
+                  violationCount,
+                  warningCount,
+                  severity: "Warning"
+                })
+              )
+            }
+
+            // Log info for warnings when not failing on them
+            if (warningCount > 0 && !failOnWarning) {
+              yield* Effect.logWarning(`SHACL validation: ${warningCount} warning(s) detected but not failing per policy`)
+            }
+
+            return validationReport
           })
       }
     })

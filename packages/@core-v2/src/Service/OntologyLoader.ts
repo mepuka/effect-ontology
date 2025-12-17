@@ -1,5 +1,10 @@
-import { Chunk, Effect } from "effect"
-import { OntologyFileNotFound, OntologyParsingFailed } from "../Domain/Error/Ontology.js"
+import { Chunk, Effect, Option, Schema } from "effect"
+import {
+  EmbeddingsNotFound,
+  EmbeddingsVersionMismatch,
+  OntologyFileNotFound,
+  OntologyParsingFailed
+} from "../Domain/Error/Ontology.js"
 import type { ContentHash, Namespace, OntologyName } from "../Domain/Identity.js"
 import {
   type ClassDefinition,
@@ -7,9 +12,17 @@ import {
   OntologyRef,
   type PropertyDefinition
 } from "../Domain/Model/Ontology.js"
+import type { OntologyEmbeddings } from "../Domain/Model/OntologyEmbeddings.js"
+import {
+  computeOntologyVersion,
+  embeddingsPathFromOntology,
+  OntologyEmbeddingsJson
+} from "../Domain/Model/OntologyEmbeddings.js"
 import { PathLayout } from "../Domain/PathLayout.js"
 import { extractLocalNameFromIri } from "../Utils/Iri.js"
+import { rrfFusion } from "../Utils/Retrieval.js"
 import { ConfigService, ConfigServiceDefault } from "./Config.js"
+import { EmbeddingService, EmbeddingServiceDefault } from "./Embedding.js"
 import { NlpService } from "./Nlp.js"
 import { parseOntologyFromStore } from "./Ontology.js"
 import { RdfBuilder } from "./Rdf.js"
@@ -20,6 +33,7 @@ const makeOntologyLoader = Effect.gen(function*() {
   const storage = yield* StorageService
   const rdf = yield* RdfBuilder
   const nlp = yield* NlpService
+  const embedding = yield* EmbeddingService
 
   // Cache Ontology Loading & Parsing -> Returns OntologyContext
   const getOntology = yield* Effect.cached(
@@ -207,6 +221,139 @@ const makeOntologyLoader = Effect.gen(function*() {
         )
       }),
 
+    /**
+     * Load ontology with pre-computed embeddings from storage
+     *
+     * Loads both the ontology file and its pre-computed embeddings blob in parallel.
+     * Validates that embeddings version matches ontology content hash.
+     *
+     * @param ontologyUri - URI of the ontology file (e.g., "gs://bucket/ontologies/football/ontology.ttl")
+     * @returns OntologyContext and OntologyEmbeddings
+     *
+     * @example
+     * ```typescript
+     * const { context, embeddings } = yield* loader.loadOntologyWithEmbeddings(
+     *   "gs://bucket/ontologies/football/ontology.ttl"
+     * )
+     * ```
+     *
+     * @since 2.0.0
+     */
+    loadOntologyWithEmbeddings: (ontologyUri: string) =>
+      Effect.gen(function*() {
+        // Derive embeddings path from ontology URI
+        const embeddingsPath = embeddingsPathFromOntology(ontologyUri)
+
+        // Load ontology and embeddings in parallel
+        const [ontologyContentOpt, embeddingsJsonOpt] = yield* Effect.all([
+          storage.get(ontologyUri).pipe(
+            Effect.mapError((error) =>
+              new OntologyFileNotFound({
+                message: `Failed to read ontology from storage: ${error.message}`,
+                path: ontologyUri,
+                cause: error
+              })
+            )
+          ),
+          storage.get(embeddingsPath).pipe(
+            Effect.catchAll(() => Effect.succeed(Option.none<string>()))
+          )
+        ], { concurrency: 2 })
+
+        // Check ontology exists
+        if (Option.isNone(ontologyContentOpt)) {
+          return yield* Effect.fail(
+            new OntologyFileNotFound({
+              message: `Ontology file not found at ${ontologyUri}`,
+              path: ontologyUri
+            })
+          )
+        }
+
+        const ontologyContent = ontologyContentOpt.value
+
+        // Parse ontology
+        const store = yield* rdf.parseTurtle(ontologyContent).pipe(
+          Effect.mapError((error) =>
+            new OntologyParsingFailed({
+              message: `Failed to parse ontology: ${error.message}`,
+              path: ontologyUri,
+              cause: error
+            })
+          )
+        )
+
+        const { classes, hierarchy, properties, propertyHierarchy } = yield* parseOntologyFromStore(
+          rdf,
+          store,
+          ontologyUri
+        )
+
+        const context = new OntologyContext({
+          classes: Chunk.toReadonlyArray(classes),
+          hierarchy,
+          propertyHierarchy,
+          properties: Chunk.toReadonlyArray(properties)
+        })
+
+        // Compute expected version from ontology content
+        const expectedVersion = computeOntologyVersion(ontologyContent)
+
+        // Check if embeddings exist
+        if (Option.isNone(embeddingsJsonOpt)) {
+          yield* Effect.logWarning("Pre-computed embeddings not found, will need to compute on-the-fly", {
+            ontologyUri,
+            embeddingsPath
+          })
+          return yield* Effect.fail(
+            new EmbeddingsNotFound({
+              message: `Pre-computed embeddings not found for ontology`,
+              ontologyUri,
+              embeddingsPath
+            })
+          )
+        }
+
+        // Parse embeddings JSON
+        const embeddingsJson = embeddingsJsonOpt.value
+        const embeddings = yield* Schema.decode(OntologyEmbeddingsJson)(embeddingsJson).pipe(
+          Effect.mapError((error) =>
+            new OntologyParsingFailed({
+              message: `Failed to parse embeddings JSON: ${String(error)}`,
+              path: embeddingsPath,
+              cause: error
+            })
+          )
+        )
+
+        // Validate version
+        if (embeddings.version !== expectedVersion) {
+          yield* Effect.logWarning("Embeddings version mismatch - ontology has changed", {
+            ontologyUri,
+            expectedVersion,
+            actualVersion: embeddings.version
+          })
+          return yield* Effect.fail(
+            new EmbeddingsVersionMismatch({
+              message: `Embeddings version mismatch: expected ${expectedVersion}, got ${embeddings.version}`,
+              ontologyUri,
+              expectedVersion,
+              actualVersion: embeddings.version
+            })
+          )
+        }
+
+        yield* Effect.logInfo("Ontology with embeddings loaded successfully", {
+          ontologyUri,
+          version: embeddings.version,
+          classCount: context.classes.length,
+          propertyCount: context.properties.length,
+          embeddingCount: embeddings.classes.length + embeddings.properties.length
+        })
+
+        return { context, embeddings }
+      }),
+
     searchClassesHybrid: (query: string, limit: number = 100) =>
       Effect.gen(function*() {
         const { context } = yield* getOntology
@@ -272,6 +419,100 @@ const makeOntologyLoader = Effect.gen(function*() {
         }
 
         return Chunk.fromIterable(Array.from(merged.values()).slice(0, limit))
+      }),
+
+    /**
+     * Search for classes using pre-loaded embeddings (fast path)
+     *
+     * Uses pre-computed ontology embeddings for semantic search instead of
+     * computing embeddings at search time. Combines semantic similarity with
+     * BM25 lexical search using Reciprocal Rank Fusion.
+     *
+     * @param query - Search query string
+     * @param ontologyContext - The ontology context containing class definitions
+     * @param ontologyEmbeddings - Pre-computed embeddings for all classes
+     * @param limit - Maximum number of results (default: 100)
+     * @returns Chunk of ClassDefinition objects ranked by relevance
+     *
+     * @example
+     * ```typescript
+     * const { context, embeddings } = yield* loader.loadOntologyWithEmbeddings(ontologyUri)
+     * const results = yield* loader.searchClassesWithEmbeddings("soccer player", context, embeddings, 10)
+     * ```
+     *
+     * @since 2.0.0
+     */
+    searchClassesWithEmbeddings: (
+      query: string,
+      ontologyContext: OntologyContext,
+      ontologyEmbeddings: OntologyEmbeddings,
+      limit: number = 100
+    ) =>
+      Effect.gen(function*() {
+        // 1. Embed the query using "search_query" task type for asymmetric search
+        const queryEmbedding = yield* embedding.embed(query, "search_query")
+
+        // 2. Compute cosine similarity against all pre-loaded class embeddings
+        // Store as { id, similarity } for ranking, then map back to ClassDefinition
+        const semanticScores: Array<{ id: string; similarity: number }> = []
+
+        for (const classEmb of ontologyEmbeddings.classes) {
+          const similarity = embedding.cosineSimilarity(queryEmbedding, classEmb.embedding)
+          semanticScores.push({ id: classEmb.iri, similarity })
+        }
+
+        // Sort by similarity (descending)
+        semanticScores.sort((a, b) => b.similarity - a.similarity)
+        const semanticRanked = semanticScores.slice(0, Math.ceil(limit * 0.7))
+
+        // 3. Also run BM25 search for lexical matching
+        const bm25Index = yield* getBm25Index
+        const bm25Raw = yield* nlp.searchOntologyIndex(bm25Index, query, Math.ceil(limit * 0.7))
+        const bm25Ranked: Array<{ id: string }> = []
+        const seenIds = new Set<string>()
+
+        for (const result of bm25Raw) {
+          if (result.class && !seenIds.has(result.class.id)) {
+            bm25Ranked.push({ id: result.class.id })
+            seenIds.add(result.class.id)
+          }
+          if (result.property) {
+            for (const domainLocalName of result.property.domain) {
+              const domainClass = ontologyContext.classes.find(
+                (c) => extractLocalNameFromIri(c.id) === domainLocalName
+              )
+              if (domainClass && !seenIds.has(domainClass.id)) {
+                bm25Ranked.push({ id: domainClass.id })
+                seenIds.add(domainClass.id)
+              }
+            }
+          }
+        }
+
+        // 4. Combine using Reciprocal Rank Fusion
+        const fused = rrfFusion([semanticRanked, bm25Ranked])
+
+        // 5. Map back to ClassDefinitions
+        const results: Array<ClassDefinition> = []
+        for (const item of fused.slice(0, limit)) {
+          const classDef = ontologyContext.classes.find((c) => c.id === item.id)
+          if (classDef) {
+            results.push(classDef)
+          }
+        }
+
+        // 6. Fallback: if we don't have enough, add remaining classes
+        if (results.length < limit && ontologyContext.classes.length <= limit) {
+          const existingIds = new Set(results.map((c) => c.id))
+          for (const cls of ontologyContext.classes) {
+            if (!existingIds.has(cls.id)) {
+              results.push(cls)
+              if (results.length >= limit) break
+            }
+          }
+        }
+
+        return Chunk.fromIterable(results)
       })
   }
 })
@@ -281,6 +522,7 @@ export class OntologyLoader extends Effect.Service<OntologyLoader>()("@core-v2/O
   dependencies: [
     ConfigServiceDefault,
     RdfBuilder.Default,
-    NlpService.Default
+    NlpService.Default,
+    EmbeddingServiceDefault
   ]
 }) {}

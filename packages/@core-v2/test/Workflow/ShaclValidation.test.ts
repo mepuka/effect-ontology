@@ -9,11 +9,10 @@ import { ShaclService } from "../../src/Service/Shacl.js"
 import { StorageService, StorageServiceTest } from "../../src/Service/Storage.js"
 import { makeValidationActivity } from "../../src/Workflow/Activities.js"
 
-const testLayer = Layer.mergeAll(
-  StorageServiceTest,
-  RdfBuilder.Default,
-  ShaclService.Default
-).pipe(
+// Layer ordering: Config first, then RdfBuilder (depends on Config), then ShaclService (depends on RdfBuilder + Storage)
+const testLayer = ShaclService.Default.pipe(
+  Layer.provideMerge(RdfBuilder.Default),
+  Layer.provideMerge(StorageServiceTest),
   Layer.provideMerge(ConfigServiceDefault),
   Layer.provideMerge(Layer.setConfigProvider(TestConfigProvider))
 )

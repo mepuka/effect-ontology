@@ -110,3 +110,71 @@ export class OntologyParsingFailed extends Schema.TaggedError<OntologyParsingFai
     })
   }
 ) {}
+
+/**
+ * EmbeddingsNotFound - Pre-computed embeddings blob not found
+ *
+ * @since 2.0.0
+ * @category Error
+ */
+export class EmbeddingsNotFound extends Schema.TaggedError<EmbeddingsNotFound>()(
+  "EmbeddingsNotFound",
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Unknown),
+
+    /**
+     * URI of the ontology for which embeddings were not found
+     */
+    ontologyUri: Schema.String.annotations({
+      title: "Ontology URI",
+      description: "URI of the ontology for which embeddings were not found"
+    }),
+
+    /**
+     * Expected path where embeddings should be stored
+     */
+    embeddingsPath: Schema.String.annotations({
+      title: "Embeddings Path",
+      description: "Expected path to the embeddings blob"
+    })
+  }
+) {}
+
+/**
+ * EmbeddingsVersionMismatch - Embeddings version doesn't match ontology content
+ *
+ * @since 2.0.0
+ * @category Error
+ */
+export class EmbeddingsVersionMismatch extends Schema.TaggedError<EmbeddingsVersionMismatch>()(
+  "EmbeddingsVersionMismatch",
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Unknown),
+
+    /**
+     * URI of the ontology
+     */
+    ontologyUri: Schema.String.annotations({
+      title: "Ontology URI",
+      description: "URI of the ontology"
+    }),
+
+    /**
+     * Expected version (computed from current ontology content)
+     */
+    expectedVersion: Schema.String.annotations({
+      title: "Expected Version",
+      description: "Version hash computed from current ontology content"
+    }),
+
+    /**
+     * Actual version found in embeddings blob
+     */
+    actualVersion: Schema.String.annotations({
+      title: "Actual Version",
+      description: "Version hash found in the embeddings blob"
+    })
+  }
+) {}

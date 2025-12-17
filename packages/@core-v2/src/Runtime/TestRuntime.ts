@@ -141,7 +141,25 @@ export const MockShaclService = (options?: {
           return store
         }),
       loadShapesFromUri: () => Effect.succeed(new N3.Store()),
-      generateShapesFromOntology: () => Effect.succeed(new N3.Store())
+      generateShapesFromOntology: () => Effect.succeed(new N3.Store()),
+      clearShapesCache: () => Effect.void,
+      getShapesCacheStats: () => Effect.succeed({ size: 0, keys: [] as ReadonlyArray<string> }),
+      validateWithPolicy: (dataStore: N3.Store, shapesStore: N3.Store, _policy) =>
+        Effect.succeed({
+          conforms: options?.conforms ?? true,
+          violations: (options?.violations ?? []).map((v) => ({
+            focusNode: v.focusNode ?? "test:node",
+            path: v.path,
+            value: v.value,
+            message: v.message,
+            severity: v.severity,
+            sourceShape: v.sourceShape
+          })),
+          validatedAt: DateTime.unsafeNow(),
+          dataGraphTripleCount: dataStore.size,
+          shapesGraphTripleCount: shapesStore.size,
+          durationMs: 0
+        })
     }
   )
 

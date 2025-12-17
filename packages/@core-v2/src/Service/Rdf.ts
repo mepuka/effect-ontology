@@ -12,6 +12,7 @@ import { Chunk, Effect, type Scope } from "effect"
 import * as N3 from "n3"
 import { ParsingFailed, RdfError, SerializationFailed } from "../Domain/Error/Rdf.js"
 import type { Entity, Relation } from "../Domain/Model/Entity.js"
+import { OWL } from "../Domain/Rdf/Constants.js"
 import { type BlankNode as BlankNodeType, type IRI, Literal, Quad, type RdfTerm } from "../Domain/Rdf/Types.js"
 import { createN3Builders, entityToQuads, relationToQuad } from "../Utils/Rdf.js"
 import { ConfigService } from "./Config.js"
@@ -122,14 +123,36 @@ const domainTermToN3Term = (term: IRI | BlankNodeType | RdfTerm | null | undefin
  *
  * @since 2.0.0
  */
+/**
+ * Options for adding triples to a store with optional named graph
+ *
+ * @since 2.0.0
+ */
+export interface AddTriplesOptions {
+  /** Optional named graph URI - triples go to default graph if not specified */
+  readonly graphUri?: string
+}
+
 export interface RdfBuilderShape {
   readonly makeStore: Effect.Effect<RdfStore, never, Scope.Scope>
   readonly createStore: Effect.Effect<RdfStore, never, never>
   readonly parseTurtle: (turtle: string) => Effect.Effect<RdfStore, ParsingFailed, never>
   readonly queryStore: (store: RdfStore, pattern: QuadPattern) => Effect.Effect<Chunk.Chunk<Quad>, RdfError, never>
   readonly createIri: (iri: string) => IRI
-  readonly addEntities: (store: RdfStore, entities: Iterable<Entity>) => Effect.Effect<void, RdfError, never>
-  readonly addRelations: (store: RdfStore, relations: Iterable<Relation>) => Effect.Effect<void, RdfError, never>
+  readonly addEntities: (
+    store: RdfStore,
+    entities: Iterable<Entity>,
+    options?: AddTriplesOptions
+  ) => Effect.Effect<void, RdfError, never>
+  readonly addRelations: (
+    store: RdfStore,
+    relations: Iterable<Relation>,
+    options?: AddTriplesOptions
+  ) => Effect.Effect<void, RdfError, never>
+  readonly addSameAsLinks: (
+    store: RdfStore,
+    canonicalMap: Record<string, string>
+  ) => Effect.Effect<void, RdfError, never>
   readonly toTurtle: (store: RdfStore) => Effect.Effect<string, SerializationFailed, never>
   readonly validate: (
     store: RdfStore,
@@ -292,20 +315,36 @@ export class RdfBuilder extends Effect.Service<RdfBuilder>()(
          * Add entities to store
          *
          * Converts Entity domain objects to N3 quads using pure utils.
+         * Optionally adds triples to a named graph for provenance tracking.
          *
          * @param store - RdfStore to add to
          * @param entities - Entities to convert to RDF
+         * @param options - Optional settings including graphUri for named graph
          * @returns Effect completing when entities are added
          */
-        addEntities: (store: RdfStore, entities: Iterable<Entity>) =>
+        addEntities: (store: RdfStore, entities: Iterable<Entity>, options?: AddTriplesOptions) =>
           Effect.try({
             try: () => {
               const n3Store = store._store
+              const graphNode = options?.graphUri
+                ? N3.DataFactory.namedNode(options.graphUri)
+                : undefined
+
               for (const entity of entities) {
                 // Use pure util function for transformation
                 const quads = entityToQuads(entity, baseNs, prefixes, builders)
                 for (const quad of quads) {
-                  n3Store.addQuad(quad)
+                  // Add to named graph if specified, otherwise default graph
+                  if (graphNode) {
+                    n3Store.addQuad(N3.DataFactory.quad(
+                      quad.subject,
+                      quad.predicate,
+                      quad.object,
+                      graphNode
+                    ))
+                  } else {
+                    n3Store.addQuad(quad)
+                  }
                 }
               }
             },
@@ -320,24 +359,83 @@ export class RdfBuilder extends Effect.Service<RdfBuilder>()(
          * Add relations to store
          *
          * Converts Relation domain objects to N3 quads using pure utils.
+         * Optionally adds triples to a named graph for provenance tracking.
          *
          * @param store - RdfStore to add to
          * @param relations - Relations to convert to RDF
+         * @param options - Optional settings including graphUri for named graph
          * @returns Effect completing when relations are added
          */
-        addRelations: (store: RdfStore, relations: Iterable<Relation>) =>
+        addRelations: (store: RdfStore, relations: Iterable<Relation>, options?: AddTriplesOptions) =>
           Effect.try({
             try: () => {
               const n3Store = store._store
+              const graphNode = options?.graphUri
+                ? N3.DataFactory.namedNode(options.graphUri)
+                : undefined
+
               for (const rel of relations) {
                 // Use pure util function for transformation
                 const quad = relationToQuad(rel, baseNs, prefixes, builders)
-                n3Store.addQuad(quad)
+                // Add to named graph if specified, otherwise default graph
+                if (graphNode) {
+                  n3Store.addQuad(N3.DataFactory.quad(
+                    quad.subject,
+                    quad.predicate,
+                    quad.object,
+                    graphNode
+                  ))
+                } else {
+                  n3Store.addQuad(quad)
+                }
               }
             },
             catch: (error) =>
               new RdfError({
                 message: `Failed to add relations to RDF store: ${error}`,
+                cause: error
+              })
+          }),
+
+        /**
+         * Add owl:sameAs links for entity resolution
+         *
+         * Generates owl:sameAs triples linking mention IRIs to canonical entity IRIs.
+         * Skips self-referential links (where mentionId === canonicalId).
+         *
+         * @param store - RdfStore to add to
+         * @param canonicalMap - Map of mentionId -> canonicalId
+         * @returns Effect completing when links are added
+         *
+         * @since 2.0.0
+         */
+        addSameAsLinks: (store: RdfStore, canonicalMap: Record<string, string>) =>
+          Effect.try({
+            try: () => {
+              const n3Store = store._store
+              const sameAsPredicate = N3.DataFactory.namedNode(OWL.sameAs)
+
+              for (const [mentionId, canonicalId] of Object.entries(canonicalMap)) {
+                // Skip self-referential links
+                if (mentionId === canonicalId) continue
+
+                // Build full IRIs for the entities
+                const mentionIri = mentionId.startsWith("http")
+                  ? mentionId
+                  : `${baseNs}${mentionId}`
+                const canonicalIri = canonicalId.startsWith("http")
+                  ? canonicalId
+                  : `${baseNs}${canonicalId}`
+
+                const subject = N3.DataFactory.namedNode(mentionIri)
+                const object = N3.DataFactory.namedNode(canonicalIri)
+
+                n3Store.addQuad(N3.DataFactory.quad(subject, sameAsPredicate, object))
+              }
+            },
+            catch: (error) =>
+              new RdfError({
+                message: `Failed to add owl:sameAs links to RDF store: ${error}`,
                 cause: error
               })
           }),

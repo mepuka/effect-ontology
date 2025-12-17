@@ -42,6 +42,22 @@ export interface NomicNlpService {
   ) => Effect.Effect<ReadonlyArray<number>, NomicNlpError>
 
   /**
+   * Generate embeddings for multiple texts in a batch
+   *
+   * More efficient than calling embed() for each text individually
+   * as it reduces model loading overhead.
+   *
+   * @param texts Input texts
+   * @param taskType Task type (defaults to "search_document")
+   * @param dimensionality Optional dimension to truncate to (64-768)
+   */
+  readonly embedBatch: (
+    texts: ReadonlyArray<string>,
+    taskType?: NomicTaskType,
+    dimensionality?: number
+  ) => Effect.Effect<ReadonlyArray<ReadonlyArray<number>>, NomicNlpError>
+
+  /**
    * Compute cosine similarity between two vectors
    */
   readonly cosineSimilarity: (
@@ -148,8 +164,60 @@ export const NomicNlpServiceLive = Layer.effect(
       return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB))
     }
 
+    const embedBatch = (
+      texts: ReadonlyArray<string>,
+      taskType: NomicTaskType = "search_document",
+      dimensionality: number = 768
+    ) =>
+      Effect.gen(function*() {
+        if (texts.length === 0) {
+          return [] as ReadonlyArray<ReadonlyArray<number>>
+        }
+
+        const pipe = yield* getPipeline
+
+        // Add task prefix to all texts
+        const prefix = `${taskType}: `
+        const inputs = texts.map((text) => prefix + text)
+
+        return yield* Effect.tryPromise({
+          try: async () => {
+            // Process each text through the pipeline
+            // Note: transformers.js doesn't support true batching well,
+            // so we process sequentially but share the loaded model
+            const results: Array<Array<number>> = []
+
+            for (const input of inputs) {
+              const output = await pipe(input, {
+                pooling: "mean",
+                normalize: true
+              })
+
+              let vector = Array.from(output.data) as Array<number>
+
+              // Matryoshka Representation Learning (MRL) - Truncate if needed
+              if (dimensionality < 768 && dimensionality > 0) {
+                vector = vector.slice(0, dimensionality)
+
+                // Re-normalize after truncation
+                const norm = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0))
+                if (norm > 0) {
+                  vector = vector.map((val) => val / norm)
+                }
+              }
+
+              results.push(vector)
+            }
+
+            return results
+          },
+          catch: (cause) => new NomicNlpError({ message: "Failed to generate batch embeddings", cause })
+        })
+      })
+
     return {
       embed,
+      embedBatch,
       cosineSimilarity
     }
   })
