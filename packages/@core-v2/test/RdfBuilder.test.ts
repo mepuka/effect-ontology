@@ -9,6 +9,7 @@
 import { Effect, Layer } from "effect"
 import { describe, expect, it } from "vitest"
 import { Entity, Relation } from "../src/Domain/Model/Entity.js"
+import { EntityId } from "../src/Domain/Model/shared.js"
 import { ConfigServiceDefault, RdfBuilder } from "../src/index.js"
 import { TestConfigProvider } from "./setup.js"
 
@@ -23,7 +24,7 @@ describe("RdfBuilder", () => {
       Effect.gen(function*() {
         // Create test entity
         const entity = new Entity({
-          id: "test_entity",
+          id: EntityId("test_entity"),
           mention: "Test Entity",
           types: ["http://schema.org/Thing"],
           attributes: {
@@ -52,7 +53,7 @@ describe("RdfBuilder", () => {
     it("should use prefixes from ConfigService", () =>
       Effect.gen(function*() {
         const entity = new Entity({
-          id: "prefixed_entity",
+          id: EntityId("prefixed_entity"),
           mention: "Prefixed",
           types: ["http://schema.org/Person"],
           attributes: {}
@@ -73,14 +74,14 @@ describe("RdfBuilder", () => {
     it("should convert entity-reference relations to RDF", () =>
       Effect.gen(function*() {
         const entity1 = new Entity({
-          id: "person1",
+          id: EntityId("person1"),
           mention: "Alice",
           types: ["http://schema.org/Person"],
           attributes: {}
         })
 
         const entity2 = new Entity({
-          id: "person2",
+          id: EntityId("person2"),
           mention: "Bob",
           types: ["http://schema.org/Person"],
           attributes: {}
@@ -107,7 +108,7 @@ describe("RdfBuilder", () => {
     it("should convert literal-value relations to RDF", () =>
       Effect.gen(function*() {
         const entity = new Entity({
-          id: "person",
+          id: EntityId("person"),
           mention: "Alice",
           types: ["http://schema.org/Person"],
           attributes: {}
@@ -141,7 +142,7 @@ describe("RdfBuilder", () => {
           const store = yield* RdfBuilder.makeStore
           yield* RdfBuilder.addEntities(store, [
             new Entity({
-              id: "test",
+              id: EntityId("test"),
               mention: "Test",
               types: ["http://schema.org/Thing"],
               attributes: {}

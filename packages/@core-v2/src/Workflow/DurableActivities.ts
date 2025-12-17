@@ -21,6 +21,7 @@ import { Chunk, DateTime, Effect, Option, Schedule, Schema } from "effect"
 import { ActivityError, notFoundError, toActivityError } from "../Domain/Error/Activity.js"
 import { type BatchId, DocumentId, GcsUri, toGcsUri } from "../Domain/Identity.js"
 import { Entity, KnowledgeGraph, Relation } from "../Domain/Model/Entity.js"
+import { EntityId } from "../Domain/Model/shared.js"
 import { defaultEntityResolutionConfig } from "../Domain/Model/EntityResolution.js"
 import type { ElementEmbedding, OntologyEmbeddings } from "../Domain/Model/OntologyEmbeddings.js"
 import {
@@ -209,12 +210,12 @@ const storeToKnowledgeGraph = (store: RdfStore) =>
       const types = entityTypes.get(iri) ?? []
       if (types.length === 0) continue
 
-      const id = extractLocalNameFromIri(iri)
-      const mention = entityLabels.get(iri) ?? id
+      const localName = extractLocalNameFromIri(iri)
+      const mention = entityLabels.get(iri) ?? localName
 
       entities.push(
         new Entity({
-          id,
+          id: EntityId(localName),
           mention,
           types,
           attributes: {}
@@ -229,7 +230,8 @@ const storeToKnowledgeGraph = (store: RdfStore) =>
 
     for (const quad of allQuads) {
       const subjectIri = quad.subject as string
-      const subjectId = extractLocalNameFromIri(subjectIri)
+      const subjectLocalName = extractLocalNameFromIri(subjectIri)
+      const subjectId = EntityId(subjectLocalName)
 
       // Skip if subject is not an entity
       if (!entityIdSet.has(subjectId)) continue
@@ -241,7 +243,8 @@ const storeToKnowledgeGraph = (store: RdfStore) =>
       // Check if object is an entity reference
       const objectValue = quad.object
       if (typeof objectValue === "string" && !objectValue.startsWith("_:")) {
-        const objectId = extractLocalNameFromIri(objectValue)
+        const objectLocalName = extractLocalNameFromIri(objectValue)
+        const objectId = EntityId(objectLocalName)
         if (entityIdSet.has(objectId)) {
           relations.push(
             new Relation({
@@ -544,7 +547,7 @@ export const makeResolutionActivity = (input: typeof ResolutionActivityInput.Typ
         const canonicalId = resolutionGraph.canonicalMap[entity.id] ?? entity.id
         return new Entity({
           ...entity,
-          id: canonicalId
+          id: EntityId(canonicalId)
         })
       })
 

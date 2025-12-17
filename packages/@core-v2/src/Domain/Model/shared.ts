@@ -113,8 +113,33 @@ export const ENTITY_ID_PATTERN = /^[a-z][a-z0-9_]*$/
  */
 export const EntityIdSchema = Schema.String.pipe(
   Schema.pattern(ENTITY_ID_PATTERN),
+  Schema.brand("EntityId"),
   Schema.annotations({
     title: "Entity ID",
     description: "Unique identifier in snake_case format"
   })
 )
+
+/**
+ * Branded EntityId type for compile-time safety
+ *
+ * @since 2.0.0
+ * @category Types
+ */
+export type EntityId = typeof EntityIdSchema.Type
+
+/**
+ * Create a branded EntityId from a string (unsafe - no validation)
+ *
+ * Use this when you have already validated the string matches ENTITY_ID_PATTERN
+ * or when the string is from a trusted source (e.g., LLM extraction output).
+ *
+ * @example
+ * ```typescript
+ * const id = EntityId("cristiano_ronaldo") // Branded EntityId
+ * ```
+ *
+ * @since 2.0.0
+ * @category Constructors
+ */
+export const EntityId = (id: string): EntityId => id as EntityId

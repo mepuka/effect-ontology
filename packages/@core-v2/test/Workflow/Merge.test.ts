@@ -9,6 +9,7 @@
 import { Equal, Hash, HashSet } from "effect"
 import { describe, expect, it } from "vitest"
 import { Entity, KnowledgeGraph, Relation } from "../../src/Domain/Model/Entity.js"
+import { EntityId } from "../../src/Domain/Model/shared.js"
 import { mergeGraphs, mergeGraphsWithConflicts } from "../../src/Workflow/Merge.js"
 
 describe("Relation Structural Equality", () => {
@@ -366,13 +367,13 @@ describe("mergeGraphs", () => {
   it("should handle complex real-world scenario with overlapping relations", () => {
     // Create entities
     const entity1 = new Entity({
-      id: "cristiano_ronaldo",
+      id: EntityId("cristiano_ronaldo"),
       mention: "Cristiano Ronaldo",
       types: ["http://schema.org/Person"],
       attributes: {}
     })
     const entity2 = new Entity({
-      id: "al_nassr_fc",
+      id: EntityId("al_nassr_fc"),
       mention: "Al-Nassr FC",
       types: ["http://schema.org/Organization"],
       attributes: {}
@@ -496,13 +497,13 @@ describe("mergeGraphs", () => {
 describe("mergeGraphsWithConflicts", () => {
   it("should deduplicate relations while detecting entity conflicts", () => {
     const entity1 = new Entity({
-      id: "test_entity",
+      id: EntityId("test_entity"),
       mention: "Test",
       types: ["http://schema.org/Thing"],
       attributes: { "http://schema.org/name": "Value1" }
     })
     const entity2 = new Entity({
-      id: "test_entity",
+      id: EntityId("test_entity"),
       mention: "Test",
       types: ["http://schema.org/Thing"],
       attributes: { "http://schema.org/name": "Value2" }

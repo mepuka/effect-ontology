@@ -108,7 +108,8 @@ export const EmbeddingServiceLive: Layer.Layer<
                 const cached = yield* cache.get(hash)
                 return { text, hash, cached }
               })
-            )
+            ),
+            { concurrency: 50 }
           )
 
           // Step 2: Separate cached from uncached and record metrics

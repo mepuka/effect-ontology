@@ -19,6 +19,7 @@ import { describe, expect } from "vitest"
 import { it } from "@effect/vitest"
 import * as path from "node:path"
 import { Entity } from "../../src/Domain/Model/Entity.js"
+import { EntityId } from "../../src/Domain/Model/shared.js"
 import { TestLayers } from "../../src/Runtime/TestRuntime.js"
 import {
   calculateMetrics,
@@ -107,8 +108,8 @@ describe("E2E: Golden Data Loading", () => {
 describe("E2E: Quality Metrics Calculation", () => {
   it("calculates perfect precision and recall", () => {
     const extracted = [
-      new Entity({ id: "arsenal", mention: "Arsenal", types: ["Team"], attributes: {} }),
-      new Entity({ id: "chelsea", mention: "Chelsea", types: ["Team"], attributes: {} })
+      new Entity({ id: EntityId("arsenal"), mention: "Arsenal", types: ["Team"], attributes: {} }),
+      new Entity({ id: EntityId("chelsea"), mention: "Chelsea", types: ["Team"], attributes: {} })
     ]
     const expected = [
       { id: "arsenal", mention: "Arsenal", primaryType: "Team", types: ["Team"] },
@@ -126,9 +127,9 @@ describe("E2E: Quality Metrics Calculation", () => {
 
   it("calculates partial precision (false positives)", () => {
     const extracted = [
-      new Entity({ id: "arsenal", mention: "Arsenal", types: ["Team"], attributes: {} }),
-      new Entity({ id: "chelsea", mention: "Chelsea", types: ["Team"], attributes: {} }),
-      new Entity({ id: "liverpool", mention: "Liverpool", types: ["Team"], attributes: {} })
+      new Entity({ id: EntityId("arsenal"), mention: "Arsenal", types: ["Team"], attributes: {} }),
+      new Entity({ id: EntityId("chelsea"), mention: "Chelsea", types: ["Team"], attributes: {} }),
+      new Entity({ id: EntityId("liverpool"), mention: "Liverpool", types: ["Team"], attributes: {} })
     ]
     const expected = [
       { id: "arsenal", mention: "Arsenal", primaryType: "Team", types: ["Team"] },
@@ -145,7 +146,7 @@ describe("E2E: Quality Metrics Calculation", () => {
 
   it("calculates partial recall (false negatives)", () => {
     const extracted = [
-      new Entity({ id: "arsenal", mention: "Arsenal", types: ["Team"], attributes: {} })
+      new Entity({ id: EntityId("arsenal"), mention: "Arsenal", types: ["Team"], attributes: {} })
     ]
     const expected = [
       { id: "arsenal", mention: "Arsenal", primaryType: "Team", types: ["Team"] },
@@ -163,7 +164,7 @@ describe("E2E: Quality Metrics Calculation", () => {
   it("handles fuzzy matching by mention", () => {
     // IDs differ but mentions match
     const extracted = [
-      new Entity({ id: "arsenal_fc", mention: "Arsenal", types: ["Team"], attributes: {} })
+      new Entity({ id: EntityId("arsenal_fc"), mention: "Arsenal", types: ["Team"], attributes: {} })
     ]
     const expected = [
       { id: "arsenal", mention: "Arsenal", primaryType: "Team", types: ["Team"] }

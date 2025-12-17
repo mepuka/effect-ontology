@@ -8,6 +8,7 @@
 import { Chunk, Effect, Layer } from "effect"
 import { describe, expect, it } from "vitest"
 import { Entity, Relation } from "../../src/Domain/Model/Entity.js"
+import { EntityId } from "../../src/Domain/Model/shared.js"
 import { RDF } from "../../src/Domain/Rdf/Constants.js"
 import type { IRI } from "../../src/Domain/Rdf/Types.js"
 import { ConfigServiceDefault } from "../../src/Service/Config.js"
@@ -21,7 +22,7 @@ describe("RdfBuilder named graph support", () => {
   )
 
   const testEntity = new Entity({
-    id: "player_1",
+    id: EntityId("player_1"),
     mention: "Messi",
     types: ["http://schema.org/Person"],
     attributes: {}
@@ -34,7 +35,7 @@ describe("RdfBuilder named graph support", () => {
   })
 
   const createEntity = (id: string, mention: string, types: Array<string>) =>
-    new Entity({ id, mention, types, attributes: {} })
+    new Entity({ id: EntityId(id), mention, types, attributes: {} })
 
   describe("addEntities with named graph", () => {
     it("adds triples to named graph when graphUri provided", async () => {

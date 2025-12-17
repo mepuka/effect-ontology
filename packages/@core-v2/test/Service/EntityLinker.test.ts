@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest"
 
 import { Entity, KnowledgeGraph, Relation } from "../../src/Domain/Model/Entity.js"
 import { defaultEntityResolutionConfig, MentionRecord } from "../../src/Domain/Model/EntityResolution.js"
+import { EntityId } from "../../src/Domain/Model/shared.js"
 import { EmbeddingService } from "../../src/Service/Embedding.js"
 import { getCanonicalId, getMentionsForEntity, toMermaid } from "../../src/Service/EntityLinker.js"
 import { buildEntityResolutionGraph } from "../../src/Workflow/EntityResolutionGraph.js"
@@ -36,7 +37,7 @@ const TestLayer = MockEmbeddingLayer.pipe(Layer.provideMerge(BunContext.layer))
 
 const createEntity = (id: string, mention: string, types: Array<string>): Entity =>
   new Entity({
-    id,
+    id: EntityId(id),
     mention,
     types,
     attributes: {}

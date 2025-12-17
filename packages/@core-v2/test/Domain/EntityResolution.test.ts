@@ -16,13 +16,14 @@ import {
   ResolutionEdge,
   ResolvedEntity
 } from "../../src/Domain/Model/EntityResolution.js"
+import { EntityId } from "../../src/Domain/Model/shared.js"
 
 describe("MentionRecord", () => {
   it("should create a valid MentionRecord", () =>
     Effect.gen(function*() {
       const record = new MentionRecord({
         _tag: "MentionRecord",
-        id: "cristiano_ronaldo",
+        id: EntityId("cristiano_ronaldo"),
         mention: "Cristiano Ronaldo",
         types: ["http://schema.org/Person", "http://schema.org/Athlete"],
         attributes: {
@@ -45,7 +46,7 @@ describe("MentionRecord", () => {
     Effect.gen(function*() {
       const chunk0 = new MentionRecord({
         _tag: "MentionRecord",
-        id: "arsenal_1",
+        id: EntityId("arsenal_1"),
         mention: "Arsenal",
         types: ["http://schema.org/SportsTeam"],
         attributes: {},
@@ -54,7 +55,7 @@ describe("MentionRecord", () => {
 
       const chunk2 = new MentionRecord({
         _tag: "MentionRecord",
-        id: "arsenal_2",
+        id: EntityId("arsenal_2"),
         mention: "The Gunners",
         types: ["http://schema.org/SportsTeam"],
         attributes: {},
@@ -69,7 +70,7 @@ describe("MentionRecord", () => {
     Effect.gen(function*() {
       const original = new MentionRecord({
         _tag: "MentionRecord",
-        id: "test_entity",
+        id: EntityId("test_entity"),
         mention: "Test Entity",
         types: ["http://example.org/Type"],
         attributes: { "http://example.org/prop": "value" },
@@ -92,7 +93,7 @@ describe("MentionRecord", () => {
     Effect.gen(function*() {
       const record = new MentionRecord({
         _tag: "MentionRecord",
-        id: "entity_without_confidence",
+        id: EntityId("entity_without_confidence"),
         mention: "Entity",
         types: ["http://example.org/Type"],
         attributes: {},
@@ -108,7 +109,7 @@ describe("ResolvedEntity", () => {
     Effect.gen(function*() {
       const entity = new ResolvedEntity({
         _tag: "ResolvedEntity",
-        canonicalId: "arsenal_fc",
+        canonicalId: EntityId("arsenal_fc"),
         mention: "Arsenal Football Club",
         types: ["http://schema.org/SportsTeam"],
         attributes: {
@@ -134,7 +135,7 @@ describe("ResolvedEntity", () => {
     Effect.gen(function*() {
       const entity = new ResolvedEntity({
         _tag: "ResolvedEntity",
-        canonicalId: "local_entity",
+        canonicalId: EntityId("local_entity"),
         mention: "Local Entity",
         types: ["http://example.org/Type"],
         attributes: {}
@@ -147,7 +148,7 @@ describe("ResolvedEntity", () => {
     Effect.gen(function*() {
       const original = new ResolvedEntity({
         _tag: "ResolvedEntity",
-        canonicalId: "canonical_test",
+        canonicalId: EntityId("canonical_test"),
         mention: "Canonical Test",
         types: ["http://example.org/TypeA", "http://example.org/TypeB"],
         attributes: { "http://example.org/attr": 42 },
@@ -170,7 +171,7 @@ describe("ERNode union", () => {
     Effect.gen(function*() {
       const mention = new MentionRecord({
         _tag: "MentionRecord",
-        id: "m1",
+        id: EntityId("m1"),
         mention: "Test",
         types: ["http://example.org/Type"],
         attributes: {},
@@ -179,7 +180,7 @@ describe("ERNode union", () => {
 
       const resolved = new ResolvedEntity({
         _tag: "ResolvedEntity",
-        canonicalId: "c1",
+        canonicalId: EntityId("c1"),
         mention: "Test",
         types: ["http://example.org/Type"],
         attributes: {}

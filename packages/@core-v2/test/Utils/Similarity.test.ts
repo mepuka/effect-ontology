@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest"
 
 import { Entity, Relation } from "../../src/Domain/Model/Entity.js"
+import { EntityId } from "../../src/Domain/Model/shared.js"
 import { defaultEntityResolutionConfig } from "../../src/Domain/Model/EntityResolution.js"
 import { computeEntitySimilarity, getNeighbors } from "../../src/Utils/Similarity.js"
 
@@ -17,7 +18,7 @@ import { computeEntitySimilarity, getNeighbors } from "../../src/Utils/Similarit
 
 const createEntity = (id: string, mention: string, types: Array<string>): Entity =>
   new Entity({
-    id,
+    id: EntityId(id),
     mention,
     types,
     attributes: {}

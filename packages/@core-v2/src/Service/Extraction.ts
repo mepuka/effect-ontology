@@ -16,6 +16,7 @@ import {
   RelationExtractionFailed
 } from "../Domain/Error/Extraction.js"
 import { Entity, Relation } from "../Domain/Model/Entity.js"
+import { EntityId } from "../Domain/Model/shared.js"
 import type { ClassDefinition, PropertyDefinition } from "../Domain/Model/Ontology.js"
 import type { IRI } from "../Domain/Rdf/Types.js"
 import { generateEntityPrompt, generateMentionPrompt, generateRelationPrompt } from "../Prompt/index.js"
@@ -253,7 +254,7 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
                 // Create Entity domain model with expanded types (full IRIs)
                 return Option.some(
                   new Entity({
-                    id: entityId,
+                    id: EntityId(entityId),
                     mention: entityData.mention,
                     types: expandedTypes as ReadonlyArray<IRI>, // Expanded to full IRIs
                     attributes
@@ -313,7 +314,7 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
       Effect.succeed(
         Chunk.fromIterable([
           new Entity({
-            id: "test_entity",
+            id: EntityId("test_entity"),
             mention: "Test Entity",
             types: candidates.length > 0 ? [candidates[0].id] : [],
             attributes: {}

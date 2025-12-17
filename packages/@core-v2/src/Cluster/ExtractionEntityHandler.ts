@@ -669,10 +669,11 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
           const startEvents = Stream.fromIterable(events)
           const mainStream = Stream.concat(startEvents, Stream.concat(chunkEventsStream, completeEventStream))
 
-          // CANCELLATION: Make stream interruptible and clean up on completion
+          // CANCELLATION: Make stream interruptible and clean up on completion/failure/interruption
+          // Using Stream.ensuring ensures cleanup runs regardless of termination reason
           return mainStream.pipe(
             Stream.interruptWhen(Deferred.await(cancelSignal)),
-            Stream.onDone(() =>
+            Stream.ensuring(
               Ref.update(cancellationRegistry, (map) => HashMap.remove(map, keyString))
             )
           )

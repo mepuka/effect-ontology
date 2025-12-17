@@ -9,6 +9,7 @@
 
 import { Entity, KnowledgeGraph, Relation } from "../Domain/Model/Entity.js"
 import type { EntityResolutionGraph } from "../Domain/Model/EntityResolutionGraph.js"
+import { EntityId } from "../Domain/Model/shared.js"
 
 /**
  * Refine a KnowledgeGraph using the canonical mappings from an EntityResolutionGraph.
@@ -33,7 +34,7 @@ export const refineKnowledgeGraph = (
       // If the ID changed, update it.
       const newEntity = canonicalId === entity.id
         ? entity
-        : new Entity({ ...entity, id: canonicalId })
+        : new Entity({ ...entity, id: EntityId(canonicalId) })
 
       entityMap.set(canonicalId, newEntity)
     } else {

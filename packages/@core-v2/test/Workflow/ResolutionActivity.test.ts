@@ -10,6 +10,7 @@ import { describe, expect, it } from "@effect/vitest"
 import { BunContext } from "@effect/platform-bun"
 import { ConfigProvider, Effect, Layer, Option } from "effect"
 import { Entity, KnowledgeGraph, Relation } from "../../src/Domain/Model/Entity.js"
+import { EntityId } from "../../src/Domain/Model/shared.js"
 import { EntityResolutionService } from "../../src/Service/EntityResolution.js"
 import { EmbeddingService, EmbeddingServiceDefault } from "../../src/Service/Embedding.js"
 import { defaultEntityResolutionConfig } from "../../src/Domain/Model/EntityResolution.js"
@@ -68,13 +69,13 @@ describe("EntityResolutionService Integration", () => {
       const graph1 = new KnowledgeGraph({
         entities: [
           new Entity({
-            id: "arsenal_fc",
+            id: EntityId("arsenal_fc"),
             mention: "Arsenal FC",
             types: ["http://example.org/FootballClub"],
             attributes: {}
           }),
           new Entity({
-            id: "bukayo_saka",
+            id: EntityId("bukayo_saka"),
             mention: "Bukayo Saka",
             types: ["http://example.org/Player"],
             attributes: {}
@@ -92,13 +93,13 @@ describe("EntityResolutionService Integration", () => {
       const graph2 = new KnowledgeGraph({
         entities: [
           new Entity({
-            id: "arsenal",
+            id: EntityId("arsenal"),
             mention: "Arsenal", // Similar to "Arsenal FC"
             types: ["http://example.org/FootballClub"],
             attributes: {}
           }),
           new Entity({
-            id: "saka",
+            id: EntityId("saka"),
             mention: "Saka", // Similar to "Bukayo Saka"
             types: ["http://example.org/Player"],
             attributes: {}
@@ -153,13 +154,13 @@ describe("EntityResolutionService Integration", () => {
       const graph = new KnowledgeGraph({
         entities: [
           new Entity({
-            id: "arsenal_fc",
+            id: EntityId("arsenal_fc"),
             mention: "Arsenal FC",
             types: ["http://example.org/FootballClub"],
             attributes: {}
           }),
           new Entity({
-            id: "manchester_united",
+            id: EntityId("manchester_united"),
             mention: "Manchester United",
             types: ["http://example.org/FootballClub"],
             attributes: {}
@@ -187,19 +188,19 @@ describe("EntityResolutionService Integration", () => {
       const graph = new KnowledgeGraph({
         entities: [
           new Entity({
-            id: "arsenal_football_club",
+            id: EntityId("arsenal_football_club"),
             mention: "Arsenal Football Club", // Longest mention - should be canonical
             types: ["http://example.org/FootballClub"],
             attributes: {}
           }),
           new Entity({
-            id: "arsenal_fc",
+            id: EntityId("arsenal_fc"),
             mention: "Arsenal FC",
             types: ["http://example.org/FootballClub"],
             attributes: {}
           }),
           new Entity({
-            id: "arsenal",
+            id: EntityId("arsenal"),
             mention: "Arsenal",
             types: ["http://example.org/FootballClub"],
             attributes: {}
@@ -236,13 +237,13 @@ describe("Resolution Activity Helpers", () => {
 
     const entities = [
       new Entity({
-        id: "arsenal",
+        id: EntityId("arsenal"),
         mention: "Arsenal",
         types: ["http://example.org/FootballClub"],
         attributes: {}
       }),
       new Entity({
-        id: "saka",
+        id: EntityId("saka"),
         mention: "Saka",
         types: ["http://example.org/Player"],
         attributes: {}
@@ -254,7 +255,7 @@ describe("Resolution Activity Helpers", () => {
       const canonicalId = canonicalMap[entity.id] ?? entity.id
       return new Entity({
         ...entity,
-        id: canonicalId
+        id: EntityId(canonicalId)
       })
     })
 
@@ -292,13 +293,13 @@ describe("Resolution Activity Helpers", () => {
   it("should deduplicate entities by canonical ID", () => {
     const entities = [
       new Entity({
-        id: "arsenal_fc",
+        id: EntityId("arsenal_fc"),
         mention: "Arsenal FC",
         types: ["http://example.org/FootballClub"],
         attributes: {}
       }),
       new Entity({
-        id: "arsenal_fc", // Duplicate after rewriting
+        id: EntityId("arsenal_fc"), // Duplicate after rewriting
         mention: "Arsenal",
         types: ["http://example.org/FootballClub"],
         attributes: {}

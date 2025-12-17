@@ -15,6 +15,7 @@ import { BunContext } from "@effect/platform-bun"
 import { Effect, Layer, Option } from "effect"
 import { describe, expect, it } from "vitest"
 import { Entity, KnowledgeGraph, Relation } from "../../src/Domain/Model/Entity.js"
+import { EntityId } from "../../src/Domain/Model/shared.js"
 import { defaultEntityResolutionConfig } from "../../src/Domain/Model/EntityResolution.js"
 import { EmbeddingService } from "../../src/Service/Embedding.js"
 import { getCanonicalId, getMentionsForEntity, toMermaid } from "../../src/Service/EntityLinker.js"
@@ -43,13 +44,13 @@ const createFootballScenario = () => {
   // Chunk 0: "Arsenal beat Tottenham 4-1."
   const chunk0Entities = [
     new Entity({
-      id: "arsenal_0",
+      id: EntityId("arsenal_0"),
       mention: "Arsenal",
       types: ["http://schema.org/SportsTeam"],
       attributes: {}
     }),
     new Entity({
-      id: "tottenham_0",
+      id: EntityId("tottenham_0"),
       mention: "Tottenham",
       types: ["http://schema.org/SportsTeam"],
       attributes: {}
@@ -59,7 +60,7 @@ const createFootballScenario = () => {
   // Chunk 1: "The Gunners scored four goals."
   const chunk1Entities = [
     new Entity({
-      id: "gunners_1",
+      id: EntityId("gunners_1"),
       mention: "The Gunners",
       types: ["http://schema.org/SportsTeam"],
       attributes: {}
@@ -69,7 +70,7 @@ const createFootballScenario = () => {
   // Chunk 2: "arsenal dominated possession."
   const chunk2Entities = [
     new Entity({
-      id: "arsenal_2",
+      id: EntityId("arsenal_2"),
       mention: "arsenal",
       types: ["http://schema.org/SportsTeam"],
       attributes: {}
@@ -79,19 +80,19 @@ const createFootballScenario = () => {
   // Chunk 3: "Saka and Martinelli scored for Arsenal FC."
   const chunk3Entities = [
     new Entity({
-      id: "saka",
+      id: EntityId("saka"),
       mention: "Saka",
       types: ["http://schema.org/Person", "http://schema.org/Athlete"],
       attributes: {}
     }),
     new Entity({
-      id: "martinelli",
+      id: EntityId("martinelli"),
       mention: "Martinelli",
       types: ["http://schema.org/Person", "http://schema.org/Athlete"],
       attributes: {}
     }),
     new Entity({
-      id: "arsenal_fc_3",
+      id: EntityId("arsenal_fc_3"),
       mention: "Arsenal FC",
       types: ["http://schema.org/SportsTeam"],
       attributes: {}
@@ -248,7 +249,7 @@ describe("Entity Resolution Pipeline - Edge Cases", () => {
       const kg = new KnowledgeGraph({
         entities: [
           new Entity({
-            id: "solo",
+            id: EntityId("solo"),
             mention: "Solo Entity",
             types: ["http://example.org/Type"],
             attributes: {}
@@ -272,13 +273,13 @@ describe("Entity Resolution Pipeline - Edge Cases", () => {
       const kg = new KnowledgeGraph({
         entities: [
           new Entity({
-            id: "ronaldo_1",
+            id: EntityId("ronaldo_1"),
             mention: "Ronaldo",
             types: ["http://schema.org/Person"],
             attributes: { "http://schema.org/age": 39 }
           }),
           new Entity({
-            id: "ronaldo_2",
+            id: EntityId("ronaldo_2"),
             mention: "Cristiano Ronaldo",
             types: ["http://schema.org/Person"],
             attributes: { "http://schema.org/nationality": "Portuguese" }
@@ -306,7 +307,7 @@ describe("Entity Resolution Pipeline - Edge Cases", () => {
       const kg = new KnowledgeGraph({
         entities: [
           new Entity({
-            id: "entity_a",
+            id: EntityId("entity_a"),
             mention: "Entity A",
             types: ["http://example.org/Type"],
             attributes: {}
@@ -332,7 +333,7 @@ describe("Entity Resolution Pipeline - Edge Cases", () => {
       const kg = new KnowledgeGraph({
         entities: [
           new Entity({
-            id: "entity_a",
+            id: EntityId("entity_a"),
             mention: "Entity A",
             types: ["http://example.org/Type"],
             attributes: {}

@@ -10,6 +10,7 @@
 
 import { DateTime, Effect, Graph, Option } from "effect"
 import type { Entity, KnowledgeGraph, Relation } from "../Domain/Model/Entity.js"
+import type { EntityId } from "../Domain/Model/shared.js"
 import {
   type EntityResolutionConfig,
   type EREdge,
@@ -195,7 +196,7 @@ export const clusterEntities = (
     }
 
     // Compute edges using a Stream to allow yielding/concurrency
-    const edgeData: Array<{ source: string; target: string; edge: SimilarityEdge }> = []
+    const edgeData: Array<{ source: EntityId; target: EntityId; edge: SimilarityEdge }> = []
 
     // We process entities in chunks to avoid blocking the event loop
     // Using Effect.forEach with concurrency allows other fibers to run
