@@ -11,6 +11,7 @@ import { EmbeddingCache } from "../../src/Service/EmbeddingCache.js"
 import { EmbeddingService, EmbeddingServiceLive } from "../../src/Service/Embedding.js"
 import type { NomicTaskType } from "../../src/Service/NomicNlp.js"
 import { NomicNlpService } from "../../src/Service/NomicNlp.js"
+import { MetricsService } from "../../src/Telemetry/Metrics.js"
 
 const mockEmbedding = [0.1, 0.2, 0.3, 0.4, 0.5]
 
@@ -36,7 +37,8 @@ describe("EmbeddingService with cache", () => {
 
     const TestLayer = EmbeddingServiceLive.pipe(
       Layer.provideMerge(NomicNlpServiceTest),
-      Layer.provideMerge(EmbeddingCache.Default)
+      Layer.provideMerge(EmbeddingCache.Default),
+      Layer.provideMerge(MetricsService.Default)
     )
 
     const result = await Effect.gen(function*() {
@@ -55,7 +57,8 @@ describe("EmbeddingService with cache", () => {
 
     const TestLayer = EmbeddingServiceLive.pipe(
       Layer.provideMerge(NomicNlpServiceTest),
-      Layer.provideMerge(EmbeddingCache.Default)
+      Layer.provideMerge(EmbeddingCache.Default),
+      Layer.provideMerge(MetricsService.Default)
     )
 
     const result = await Effect.gen(function*() {
@@ -83,7 +86,8 @@ describe("EmbeddingService with cache", () => {
 
     const TestLayer = EmbeddingServiceLive.pipe(
       Layer.provideMerge(NomicNlpServiceTest),
-      Layer.provideMerge(EmbeddingCache.Default)
+      Layer.provideMerge(EmbeddingCache.Default),
+      Layer.provideMerge(MetricsService.Default)
     )
 
     await Effect.gen(function*() {
@@ -106,7 +110,8 @@ describe("EmbeddingService with cache", () => {
 
     const TestLayer = EmbeddingServiceLive.pipe(
       Layer.provideMerge(NomicNlpServiceTest),
-      Layer.provideMerge(EmbeddingCache.Default)
+      Layer.provideMerge(EmbeddingCache.Default),
+      Layer.provideMerge(MetricsService.Default)
     )
 
     await Effect.gen(function*() {
@@ -128,7 +133,8 @@ describe("EmbeddingService with cache", () => {
 
     const TestLayer = EmbeddingServiceLive.pipe(
       Layer.provideMerge(NomicNlpServiceTest),
-      Layer.provideMerge(EmbeddingCache.Default)
+      Layer.provideMerge(EmbeddingCache.Default),
+      Layer.provideMerge(MetricsService.Default)
     )
 
     await Effect.gen(function*() {
@@ -162,7 +168,8 @@ describe("EmbeddingService with cache", () => {
 
     const TestLayer = EmbeddingServiceLive.pipe(
       Layer.provideMerge(NomicNlpServiceTest),
-      Layer.provideMerge(EmbeddingCache.Default)
+      Layer.provideMerge(EmbeddingCache.Default),
+      Layer.provideMerge(MetricsService.Default)
     )
 
     const result = await Effect.gen(function*() {

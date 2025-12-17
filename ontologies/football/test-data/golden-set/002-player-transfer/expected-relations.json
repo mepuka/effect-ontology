@@ -1,0 +1,17 @@
+[
+  {
+    "subject": "frenkie_de_jong",
+    "predicate": "http://visualdataweb.org/newOntology/playsFor",
+    "object": "manchester_united"
+  },
+  {
+    "subject": "erik_ten_hag",
+    "predicate": "http://visualdataweb.org/newOntology/manages",
+    "object": "manchester_united"
+  },
+  {
+    "subject": "manchester_united",
+    "predicate": "http://visualdataweb.org/newOntology/hosts",
+    "object": "old_trafford"
+  }
+]

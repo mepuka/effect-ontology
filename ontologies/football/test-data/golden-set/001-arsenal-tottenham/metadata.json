@@ -1,0 +1,27 @@
+{
+  "id": "001-arsenal-tottenham",
+  "name": "Arsenal vs Tottenham North London Derby",
+  "description": "Match report from a Premier League North London Derby. Tests extraction of teams, players, match events, and performance statistics.",
+  "domain": "sports",
+  "complexity": "medium",
+  "ontologyIri": "http://visualdataweb.org/newOntology/",
+  "expected": {
+    "entities": 12,
+    "relations": 8,
+    "clusters": 10
+  },
+  "thresholds": {
+    "minPrecision": 0.85,
+    "minRecall": 0.80,
+    "maxLatencyMs": 30000,
+    "maxCostUsd": 0.10
+  },
+  "knownIssues": [
+    "Player nicknames may not resolve to full names",
+    "Stadium name variations (Emirates vs Emirates Stadium)"
+  ],
+  "createdDate": "2025-01-15",
+  "lastValidated": "2025-01-15",
+  "source": "hand-curated",
+  "createdBy": "claude"
+}

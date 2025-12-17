@@ -1,0 +1,12 @@
+[
+  {
+    "subject": "mohamed_salah",
+    "predicate": "http://visualdataweb.org/newOntology/playsFor",
+    "object": "liverpool"
+  },
+  {
+    "subject": "liverpool",
+    "predicate": "http://visualdataweb.org/newOntology/hosts",
+    "object": "anfield"
+  }
+]

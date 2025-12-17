@@ -40,6 +40,18 @@ export interface LlmCallMetrics {
 }
 
 /**
+ * Embedding cache metrics input
+ *
+ * @since 2.0.0
+ * @category Types
+ */
+export interface EmbeddingCacheMetrics {
+  readonly hits: number
+  readonly misses: number
+  readonly latencyMs: number
+}
+
+/**
  * Internal metrics state
  */
 interface MetricsState {
@@ -62,6 +74,12 @@ interface MetricsState {
       tokensOutSum: number
     }
   >
+  embeddingCache: {
+    hits: number
+    misses: number
+    latencySumMs: number
+    latencyCount: number
+  }
 }
 
 const initialState: MetricsState = {
@@ -73,7 +91,13 @@ const initialState: MetricsState = {
     entitySum: 0,
     relationSum: 0
   },
-  llmCalls: new Map()
+  llmCalls: new Map(),
+  embeddingCache: {
+    hits: 0,
+    misses: 0,
+    latencySumMs: 0,
+    latencyCount: 0
+  }
 }
 
 /**
@@ -137,6 +161,56 @@ export class MetricsService extends Effect.Service<MetricsService>()(
           }),
 
         /**
+         * Record embedding cache hit
+         */
+        recordCacheHit: (latencyMs: number): Effect.Effect<void> =>
+          Ref.update(stateRef, (state) => ({
+            ...state,
+            embeddingCache: {
+              ...state.embeddingCache,
+              hits: state.embeddingCache.hits + 1,
+              latencySumMs: state.embeddingCache.latencySumMs + latencyMs,
+              latencyCount: state.embeddingCache.latencyCount + 1
+            }
+          })),
+
+        /**
+         * Record embedding cache miss
+         */
+        recordCacheMiss: (latencyMs: number): Effect.Effect<void> =>
+          Ref.update(stateRef, (state) => ({
+            ...state,
+            embeddingCache: {
+              ...state.embeddingCache,
+              misses: state.embeddingCache.misses + 1,
+              latencySumMs: state.embeddingCache.latencySumMs + latencyMs,
+              latencyCount: state.embeddingCache.latencyCount + 1
+            }
+          })),
+
+        /**
+         * Get embedding cache metrics snapshot
+         */
+        getCacheMetrics: (): Effect.Effect<{
+          hits: number
+          misses: number
+          hitRate: number
+          avgLatencyMs: number
+        }> =>
+          Ref.get(stateRef).pipe(
+            Effect.map((state) => {
+              const { hits, misses, latencySumMs, latencyCount } = state.embeddingCache
+              const total = hits + misses
+              return {
+                hits,
+                misses,
+                hitRate: total > 0 ? hits / total : 0,
+                avgLatencyMs: latencyCount > 0 ? latencySumMs / latencyCount : 0
+              }
+            })
+          ),
+
+        /**
          * Export metrics in Prometheus text format
          */
         toPrometheus: (): Effect.Effect<string> =>
@@ -192,6 +266,32 @@ export class MetricsService extends Effect.Service<MetricsService>()(
               lines.push(`llm_tokens_out_sum{${labels}} ${metrics.tokensOutSum}`)
             }
 
+            // Embedding cache metrics
+            lines.push("# HELP embedding_cache_hits_total Total embedding cache hits")
+            lines.push("# TYPE embedding_cache_hits_total counter")
+            lines.push(`embedding_cache_hits_total ${state.embeddingCache.hits}`)
+
+            lines.push("# HELP embedding_cache_misses_total Total embedding cache misses")
+            lines.push("# TYPE embedding_cache_misses_total counter")
+            lines.push(`embedding_cache_misses_total ${state.embeddingCache.misses}`)
+
+            const cacheTotal = state.embeddingCache.hits + state.embeddingCache.misses
+            const hitRate = cacheTotal > 0 ? state.embeddingCache.hits / cacheTotal : 0
+            lines.push("# HELP embedding_cache_hit_rate Embedding cache hit rate (0-1)")
+            lines.push("# TYPE embedding_cache_hit_rate gauge")
+            lines.push(`embedding_cache_hit_rate ${hitRate.toFixed(4)}`)
+
+            const avgLatency = state.embeddingCache.latencyCount > 0
+              ? state.embeddingCache.latencySumMs / state.embeddingCache.latencyCount
+              : 0
+            lines.push("# HELP embedding_cache_latency_ms_avg Average cache lookup latency")
+            lines.push("# TYPE embedding_cache_latency_ms_avg gauge")
+            lines.push(`embedding_cache_latency_ms_avg ${avgLatency.toFixed(2)}`)
+
+            lines.push("# HELP embedding_cache_latency_ms_sum Sum of cache lookup latencies")
+            lines.push("# TYPE embedding_cache_latency_ms_sum counter")
+            lines.push(`embedding_cache_latency_ms_sum ${state.embeddingCache.latencySumMs}`)
+
             return lines.join("\n")
           }),
 
@@ -201,7 +301,13 @@ export class MetricsService extends Effect.Service<MetricsService>()(
         reset: (): Effect.Effect<void> =>
           Ref.set(stateRef, {
             ...initialState,
-            llmCalls: new Map()
+            llmCalls: new Map(),
+            embeddingCache: {
+              hits: 0,
+              misses: 0,
+              latencySumMs: 0,
+              latencyCount: 0
+            }
           })
       }
     })

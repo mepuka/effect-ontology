@@ -8,7 +8,8 @@
  * @module Service/Embedding
  */
 
-import { Context, Effect, Layer, Option } from "effect"
+import { Clock, Context, Effect, Layer, Option } from "effect"
+import { MetricsService } from "../Telemetry/Metrics.js"
 import { hashEmbeddingKey } from "../Utils/Hash.js"
 import { EmbeddingCache } from "./EmbeddingCache.js"
 import type { NomicNlpError, NomicTaskType } from "./NomicNlp.js"
@@ -42,12 +43,12 @@ export interface EmbeddingService {
 export const EmbeddingService = Context.GenericTag<EmbeddingService>("@core-v2/EmbeddingService")
 
 /**
- * EmbeddingService with cache-through behavior
+ * EmbeddingService with cache-through behavior and metrics
  *
  * On embed():
  * 1. Hash (text, taskType) to create cache key
- * 2. Check cache - return immediately on hit
- * 3. On miss: call embedding model, store result, return
+ * 2. Check cache - return immediately on hit (record hit metric)
+ * 3. On miss: call embedding model, store result, return (record miss metric)
  *
  * @since 2.0.0
  * @category Layers
@@ -55,22 +56,27 @@ export const EmbeddingService = Context.GenericTag<EmbeddingService>("@core-v2/E
 export const EmbeddingServiceLive: Layer.Layer<
   EmbeddingService,
   never,
-  NomicNlpService | EmbeddingCache
+  NomicNlpService | EmbeddingCache | MetricsService
 > = Layer.effect(
   EmbeddingService,
   Effect.gen(function*() {
     const nomic = yield* NomicNlpService
     const cache = yield* EmbeddingCache
+    const metrics = yield* MetricsService
 
     return {
       embed: (text, taskType = "search_document") =>
         Effect.gen(function*() {
+          const startTime = yield* Clock.currentTimeMillis
+
           // Hash the text and task type for cache lookup
           const hash = yield* hashEmbeddingKey(text, taskType)
 
           // Check cache first
           const cached = yield* cache.get(hash)
           if (Option.isSome(cached)) {
+            const latencyMs = (yield* Clock.currentTimeMillis) - startTime
+            yield* metrics.recordCacheHit(latencyMs)
             return cached.value
           }
 
@@ -80,6 +86,9 @@ export const EmbeddingServiceLive: Layer.Layer<
           // Store in cache for future lookups
           yield* cache.set(hash, embedding)
 
+          const latencyMs = (yield* Clock.currentTimeMillis) - startTime
+          yield* metrics.recordCacheMiss(latencyMs)
+
           return embedding
         }),
 
@@ -88,6 +97,8 @@ export const EmbeddingServiceLive: Layer.Layer<
           if (texts.length === 0) {
             return [] as ReadonlyArray<ReadonlyArray<number>>
           }
+
+          const startTime = yield* Clock.currentTimeMillis
 
           // Step 1: Hash all texts and check cache
           const hashResults = yield* Effect.all(
@@ -100,14 +111,17 @@ export const EmbeddingServiceLive: Layer.Layer<
             )
           )
 
-          // Step 2: Separate cached from uncached
+          // Step 2: Separate cached from uncached and record metrics
           const uncachedIndices: number[] = []
           const uncachedTexts: string[] = []
+          let cacheHits = 0
 
           hashResults.forEach((result, index) => {
             if (Option.isNone(result.cached)) {
               uncachedIndices.push(index)
               uncachedTexts.push(result.text)
+            } else {
+              cacheHits++
             }
           })
 
@@ -124,7 +138,19 @@ export const EmbeddingServiceLive: Layer.Layer<
             { discard: true }
           )
 
-          // Step 5: Assemble final result in original order
+          // Step 5: Record batch metrics
+          const latencyMs = (yield* Clock.currentTimeMillis) - startTime
+          const avgLatencyPerItem = latencyMs / texts.length
+
+          // Record hits and misses
+          for (let i = 0; i < cacheHits; i++) {
+            yield* metrics.recordCacheHit(avgLatencyPerItem)
+          }
+          for (let i = 0; i < uncachedTexts.length; i++) {
+            yield* metrics.recordCacheMiss(avgLatencyPerItem)
+          }
+
+          // Step 6: Assemble final result in original order
           const results: Array<ReadonlyArray<number>> = []
           let uncachedCounter = 0
 
@@ -147,12 +173,13 @@ export const EmbeddingServiceLive: Layer.Layer<
 )
 
 /**
- * Default: Nomic local model with in-memory cache
+ * Default: Nomic local model with in-memory cache and metrics
  *
  * @since 2.0.0
  * @category Layers
  */
 export const EmbeddingServiceDefault = EmbeddingServiceLive.pipe(
   Layer.provideMerge(NomicNlpServiceLive),
-  Layer.provideMerge(EmbeddingCache.Default)
+  Layer.provideMerge(EmbeddingCache.Default),
+  Layer.provideMerge(MetricsService.Default)
 )

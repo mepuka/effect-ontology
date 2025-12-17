@@ -1,0 +1,20 @@
+{
+  "id": "003-match-simple",
+  "name": "Simple Match Result",
+  "description": "Brief match result with minimal entities. Tests basic extraction with high precision requirements.",
+  "domain": "sports",
+  "complexity": "simple",
+  "ontologyIri": "http://visualdataweb.org/newOntology/",
+  "expected": {
+    "entities": 4,
+    "relations": 2
+  },
+  "thresholds": {
+    "minPrecision": 0.95,
+    "minRecall": 0.90,
+    "maxLatencyMs": 10000
+  },
+  "createdDate": "2025-01-15",
+  "source": "hand-curated",
+  "createdBy": "claude"
+}
