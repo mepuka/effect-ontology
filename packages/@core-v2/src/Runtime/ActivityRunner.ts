@@ -25,6 +25,7 @@ import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { NlpService } from "../Service/Nlp.js"
 import { OntologyService } from "../Service/Ontology.js"
 import { RdfBuilder } from "../Service/Rdf.js"
+import { StageTimeoutServiceLive } from "../Service/LlmControl/StageTimeout.js"
 import { ShaclService } from "../Service/Shacl.js"
 import { StorageServiceLive } from "../Service/Storage.js"
 import {
@@ -146,11 +147,19 @@ const program = Effect.gen(function*() {
  * 1. BunContext provides FileSystem and Path (platform layer)
  * 2. ConfigServiceDefault provides ConfigService
  * 3. makeLanguageModelLayer provides LanguageModel (requires ConfigService)
- * 4. EntityExtractor/RelationExtractor require LanguageModel + ConfigService
- * 5. NlpService requires ConfigService
- * 6. OntologyService requires RdfBuilder + NlpService + BunContext
- * 7. StorageServiceLive requires ConfigService + FileSystem/Path
- * 8. RdfBuilder.Default requires ConfigService
+ * 4. StageTimeoutServiceLive provides StageTimeoutService
+ * 5. EntityExtractor/RelationExtractor require LanguageModel + ConfigService + StageTimeoutService
+ * 6. NlpService requires ConfigService
+ * 7. OntologyService requires RdfBuilder + NlpService + BunContext
+ * 8. StorageServiceLive requires ConfigService + FileSystem/Path
+ * 9. RdfBuilder.Default requires ConfigService
+ *
+ * Type Assertion Rationale:
+ * The composed layer provides all services needed by the activities:
+ * - StorageService, ConfigService, RdfBuilder, EntityExtractor, RelationExtractor
+ * - OntologyService, NlpService, ShaclService, StageTimeoutService, LanguageModel
+ * TypeScript's inference has difficulty with deep Effect layer compositions,
+ * but the runtime composition is correct. The assertion documents this explicitly.
  */
 const ActivityRunnerLive = Layer.mergeAll(
   StorageServiceLive,
@@ -158,15 +167,35 @@ const ActivityRunnerLive = Layer.mergeAll(
   EntityExtractor.Default,
   RelationExtractor.Default,
   OntologyService.Default,
-  NlpService.Default
+  NlpService.Default,
+  StageTimeoutServiceLive
 ).pipe(
   Layer.provideMerge(makeLanguageModelLayer),
   Layer.provideMerge(ConfigServiceDefault),
   Layer.provideMerge(BunContext.layer),
   Layer.provideMerge(ShaclService.Default)
-) as unknown as Layer.Layer<never, never, never>
+) as Layer.Layer<
+  // All provided services (ROut)
+  | import("../Service/Storage.js").StorageService
+  | import("../Service/Rdf.js").RdfBuilder
+  | import("../Service/Extraction.js").EntityExtractor
+  | import("../Service/Extraction.js").RelationExtractor
+  | import("../Service/Ontology.js").OntologyService
+  | import("../Service/Nlp.js").NlpService
+  | import("../Service/LlmControl/StageTimeout.js").StageTimeoutService
+  | import("@effect/ai").LanguageModel.LanguageModel
+  | import("../Service/Config.js").ConfigService
+  | import("../Service/Shacl.js").ShaclService,
+  // Error type (E)
+  never,
+  // Requirements (RIn) - none, all satisfied
+  never
+>
 
-BunRuntime.runMain(Effect.provide(ActivityRunnerLive)(program as any) as any)
+// Run the program with all dependencies provided
+BunRuntime.runMain(program.pipe(
+  Effect.provide(ActivityRunnerLive)
+) as Effect.Effect<unknown, unknown, never>)
 
 // -----------------------------------------------------------------------------
 // Run

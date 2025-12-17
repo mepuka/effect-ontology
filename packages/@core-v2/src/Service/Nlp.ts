@@ -166,13 +166,19 @@ const prepareText = (text: string, nlp: ReturnType<typeof winkNLP>): Array<strin
 
   // Tokenize the enhanced text
   const doc = nlp.readDoc(enhancedText)
-  const tokens = doc
-    .tokens()
-    .filter((t) => !t.out(nlp.its.stopWordFlag)) // Remove stopwords
-    .filter((t) => t.out(nlp.its.type) === "word") // Only words (no punctuation)
-    .out() as Array<string> // Extract token strings
 
-  // Generate additional bigrams from the tokens for phrase matching
+  // Extract lemmas for better morphological matching
+  // "running" → "run", "players" → "player", etc.
+  const tokens: Array<string> = []
+  doc.tokens().each((token: any) => {
+    // Skip stopwords and non-words (punctuation)
+    if (token.out(nlp.its.stopWordFlag)) return
+    if (token.out(nlp.its.type) !== "word") return
+    // Use lemma form for improved recall on morphological variants
+    tokens.push(token.out(nlp.its.lemma) as string)
+  })
+
+  // Generate additional bigrams from the lemmatized tokens for phrase matching
   const bigrams = generateNGrams(tokens, 2)
 
   // Combine tokens and bigrams for richer representation
@@ -244,13 +250,13 @@ export class NlpService extends Effect.Service<NlpService>()(
             // Create BM25 search engine
             const engine = winkBM25()
 
-            // Define text preparation pipeline (same as ontology index)
-            engine.definePrepTasks([(text: string) => prepareText(text, nlp)])
-
-            // Configure
+            // Configure (must come before definePrepTasks)
             engine.defineConfig({
               fldWeights: { text: 1 }
             })
+
+            // Define text preparation pipeline with lemmatization
+            engine.definePrepTasks([(text: string) => prepareText(text, nlp)])
 
             // Add documents to index
             docs.forEach((doc, index) => {

@@ -875,21 +875,25 @@ export class OntologyContext extends Schema.Class<OntologyContext>("OntologyCont
   /**
    * Get all properties for a class (including inherited)
    *
-   * Accepts either full IRI or local name. Extracts local name for comparison
-   * since property domains are stored as local names.
+   * Accepts either full IRI or local name. Extracts local name for comparison.
+   * Property domains are stored as full IRIs, so we extract local names from both
+   * the class IRI and domain IRIs for case-insensitive comparison.
    * Traverses up the class hierarchy to find properties defined on superclasses.
    */
   getPropertiesForClass(classIri: string): Array<PropertyDefinition> {
-    const localName = extractLocalNameFromIri(classIri) as string
+    const localName = extractLocalNameFromIri(classIri).toLowerCase()
 
     // Get all superclasses to check for inherited properties
     const superClasses = this.getAllSuperClasses(classIri)
     const validDomains = new Set<string>([
       localName,
-      ...superClasses.map((c) => extractLocalNameFromIri(c) as string)
+      ...superClasses.map((c) => extractLocalNameFromIri(c).toLowerCase())
     ])
 
-    return this.properties.filter((p) => p.domain.some((d) => validDomains.has(d)))
+    // Extract local name from domain IRIs for comparison (domain stored as full IRIs)
+    return this.properties.filter((p) =>
+      p.domain.some((d) => validDomains.has(extractLocalNameFromIri(d).toLowerCase()))
+    )
   }
 
   /**

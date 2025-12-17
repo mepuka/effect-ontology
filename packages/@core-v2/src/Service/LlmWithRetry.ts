@@ -17,6 +17,7 @@ import type { LanguageModel } from "@effect/ai"
 import type { Schema } from "effect"
 import { Cause, Duration, Effect, JSONSchema, Ref, Schedule } from "effect"
 import { annotateError, annotateLlmCall, annotateRetry, LlmAttributes } from "../Telemetry/LlmAttributes.js"
+import { sha256Sync } from "../Utils/Hash.js"
 import { makeRetryPolicy } from "./Retry.js"
 
 /**
@@ -81,7 +82,7 @@ export const generateObjectWithRetry = <A, I extends Record<string, unknown>, R>
     })
 
     const retryCount = yield* Ref.make(0)
-    const schemaJson = JSON.stringify(JSONSchema.make(schema)).slice(0, 2000)
+    const schemaHash = sha256Sync(JSON.stringify(JSONSchema.make(schema)))
 
     return yield* llm.generateObject({
       prompt,
@@ -128,8 +129,7 @@ export const generateObjectWithRetry = <A, I extends Record<string, unknown>, R>
               promptLength: prompt.length,
               inputTokens: response.usage.inputTokens,
               outputTokens: response.usage.outputTokens,
-              promptText: prompt.slice(0, 2000),
-              schemaJson
+              schemaHash
             }),
             annotateRetry({
               retryCount: retries,
@@ -141,8 +141,7 @@ export const generateObjectWithRetry = <A, I extends Record<string, unknown>, R>
       Effect.withSpan(`${serviceName.toLowerCase()}-llm`, {
         attributes: {
           [LlmAttributes.PROMPT_LENGTH]: prompt.length,
-          [LlmAttributes.PROMPT_TEXT]: prompt.slice(0, 2000),
-          [LlmAttributes.REQUEST_SCHEMA]: schemaJson,
+          [LlmAttributes.SCHEMA_HASH]: schemaHash,
           ...spanAttributes
         }
       })

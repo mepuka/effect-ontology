@@ -235,8 +235,9 @@ const make = (config: RateLimiterConfig = DEFAULT_CONFIG) =>
             )
           }
 
-          // Acquire semaphore permit (this will block if at max concurrency)
-          yield* semaphore.withPermits(1)(Effect.void)
+          // Acquire semaphore permit (blocks if at max concurrency)
+          // CRITICAL: Use take() so permit is held until release() is called
+          yield* semaphore.take(1)
 
           // Increment counters
           yield* Ref.update(state, (s) => ({
@@ -247,29 +248,35 @@ const make = (config: RateLimiterConfig = DEFAULT_CONFIG) =>
         }),
 
       release: (actualTokens: number, success: boolean) =>
-        Ref.update(state, (s) => {
-          if (success) {
-            const newSuccessCount = s.successCount + 1
-            return {
-              ...s,
-              successCount: newSuccessCount,
-              failureCount: 0,
-              circuitState: s.circuitState === "half_open" &&
-                  newSuccessCount >= config.successThreshold
-                ? ("closed" as const)
-                : s.circuitState
+        Effect.gen(function*() {
+          // CRITICAL: Release the semaphore permit acquired in acquire()
+          yield* semaphore.release(1)
+
+          // Update circuit breaker state based on success/failure
+          yield* Ref.update(state, (s) => {
+            if (success) {
+              const newSuccessCount = s.successCount + 1
+              return {
+                ...s,
+                successCount: newSuccessCount,
+                failureCount: 0,
+                circuitState: s.circuitState === "half_open" &&
+                    newSuccessCount >= config.successThreshold
+                  ? ("closed" as const)
+                  : s.circuitState
+              }
+            } else {
+              const newFailureCount = s.failureCount + 1
+              const shouldOpen = newFailureCount >= config.failureThreshold
+              return {
+                ...s,
+                failureCount: newFailureCount,
+                successCount: 0,
+                circuitState: shouldOpen ? ("open" as const) : s.circuitState,
+                lastReset: shouldOpen ? Date.now() : s.lastReset
+              }
             }
-          } else {
-            const newFailureCount = s.failureCount + 1
-            const shouldOpen = newFailureCount >= config.failureThreshold
-            return {
-              ...s,
-              failureCount: newFailureCount,
-              successCount: 0,
-              circuitState: shouldOpen ? ("open" as const) : s.circuitState,
-              lastReset: shouldOpen ? Date.now() : s.lastReset
-            }
-          }
+          })
         }),
 
       getMetrics: () => Ref.get(state),

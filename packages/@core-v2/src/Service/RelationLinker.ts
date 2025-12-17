@@ -150,7 +150,7 @@ export class RelationLinker extends Effect.Service<RelationLinker>()("RelationLi
               new Relation({
                 subjectId: linked.canonicalSubjectId,
                 predicate: linked.canonicalPredicate,
-                object: linked.canonicalObject as string
+                object: linked.canonicalObject
               })
             )
           }

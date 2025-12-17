@@ -12,7 +12,7 @@
  */
 
 import type { Entity } from "@effect/cluster"
-import { Chunk, Effect, Option, Ref, Stream } from "effect"
+import { Chunk, Deferred, Effect, HashMap, Option, Ref, Stream } from "effect"
 import type { ProgressEvent } from "../Contract/ProgressStreaming.js"
 import type { ContentHash, ExtractionRunId, Namespace, OntologyName } from "../Domain/Identity.js"
 import type { Relation } from "../Domain/Model/Entity.js"
@@ -163,6 +163,11 @@ const emptyStats: ExtractionStats = {
 // Entity Handler
 // =============================================================================
 
+/**
+ * Cancellation signal type - a Deferred that when completed triggers interruption
+ */
+type CancellationSignal = Deferred.Deferred<void, never>
+
 export const makeExtractionEntityHandler = Effect.gen(function*() {
   // Capture all dependencies at construction
   const runService = yield* ExtractionRunService
@@ -177,6 +182,12 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
   const tokenBudget = yield* TokenBudgetService
   const stageTimeout = yield* StageTimeoutService
   const rateLimiter = yield* CentralRateLimiterService
+
+  // CANCELLATION REGISTRY: Track running extractions for interruption
+  // Key is the idempotencyKey string (not branded to avoid type complexity)
+  const cancellationRegistry = yield* Ref.make(
+    HashMap.empty<string, CancellationSignal>()
+  )
 
   const ontology = yield* ontologyService.ontology
   const datatypeProperties = ontology.properties.filter((p) => p.rangeType === "datatype")
@@ -207,6 +218,11 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
       // Use Stream.unwrapScoped for proper resource management
       return Stream.unwrapScoped(
         Effect.gen(function*() {
+          // CANCELLATION: Create and register cancellation signal
+          const cancelSignal = yield* Deferred.make<void, never>()
+          const keyString = idempotencyKey as string
+          yield* Ref.update(cancellationRegistry, (map) => HashMap.set(map, keyString, cancelSignal))
+
           // Check cache
           const existingRun = yield* runService.getByKey(idempotencyKey)
           if (existingRun?.status === "complete") {
@@ -643,12 +659,22 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
 
           // Compose: initial events → chunk events → complete
           const startEvents = Stream.fromIterable(events)
-          return Stream.concat(startEvents, Stream.concat(chunkEventsStream, completeEventStream))
+          const mainStream = Stream.concat(startEvents, Stream.concat(chunkEventsStream, completeEventStream))
+
+          // CANCELLATION: Make stream interruptible and clean up on completion
+          return mainStream.pipe(
+            Stream.interruptWhen(Deferred.await(cancelSignal)),
+            Stream.onDone(() =>
+              Ref.update(cancellationRegistry, (map) => HashMap.remove(map, keyString))
+            )
+          )
         }).pipe(
           Effect.catchAll((error) =>
             Effect.gen(function*() {
               const errorMsg = error instanceof Error ? error.message : String(error)
               yield* runService.failRun(runId as ExtractionRunId, "llm_error", errorMsg).pipe(Effect.ignore)
+              // Clean up cancellation registry on error
+              yield* Ref.update(cancellationRegistry, (map) => HashMap.remove(map, idempotencyKey as string))
               return Stream.make(
                 makeEvent(runId, "extraction_failed", 0, {
                   errorType: "extraction_error",
@@ -683,11 +709,21 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
 
     CancelExtraction: (envelope: Entity.Request<typeof CancelExtractionRpc>) =>
       Effect.gen(function*() {
-        const run = yield* runService.getByKey(envelope.payload.idempotencyKey as IdempotencyKey).pipe(
+        const key = envelope.payload.idempotencyKey
+        const run = yield* runService.getByKey(key as IdempotencyKey).pipe(
           Effect.mapError((e) => e.message)
         )
         if (!run) return yield* Effect.fail("Extraction not found")
         if (run.status === "complete" || run.status === "failed") return false
+
+        // CANCELLATION: Trigger the cancellation signal to interrupt running fibers
+        const registry = yield* Ref.get(cancellationRegistry)
+        const signal = HashMap.get(registry, key)
+        if (Option.isSome(signal)) {
+          yield* Deferred.succeed(signal.value, void 0)
+          yield* Ref.update(cancellationRegistry, HashMap.remove(key))
+          yield* Effect.logInfo(`Cancellation signal sent for extraction: ${key}`)
+        }
 
         yield* runService.failRun(run.id, "cancelled", envelope.payload.reason ?? "User cancelled").pipe(
           Effect.mapError((e) => e.message)

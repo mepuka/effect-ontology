@@ -10,8 +10,7 @@
  */
 
 import { FileSystem } from "@effect/platform"
-import { BunContext } from "@effect/platform-bun"
-import { Chunk, Effect, Schema } from "effect"
+import { Chunk, Duration, Effect, Schema } from "effect"
 import { OntologyFileNotFound, OntologyParsingFailed } from "../Domain/Error/Ontology.js"
 import type { RdfError } from "../Domain/Error/Rdf.js"
 import { ClassDefinition, OntologyContext, PropertyDefinition } from "../Domain/Model/Ontology.js"
@@ -42,7 +41,7 @@ import {
   SKOS_SCOPENOTE
 } from "../Domain/Rdf/Constants.js"
 import { type IRI, Literal, type Quad } from "../Domain/Rdf/Types.js"
-import { extractLocalName, iriArrayToLocalNameArrayTransform } from "../Utils/Rdf.js"
+import { extractLocalName } from "../Utils/Rdf.js"
 import { rrfFusion } from "../Utils/Retrieval.js"
 import { ConfigService } from "./Config.js"
 import { NlpService } from "./Nlp.js"
@@ -170,7 +169,12 @@ export const parseOntologyFromStore = (
       predicate: RDF_TYPE,
       object: OWL_FUNCTIONAL_PROPERTY
     })
-    const functionalProps = new Set(Chunk.toReadonlyArray(functionalPropQuads).map((q) => q.subject))
+    // Store as Set<string> for easy lookup by string IDs
+    const functionalProps = new Set<string>(
+      Chunk.toReadonlyArray(functionalPropQuads)
+        .filter((q) => typeof q.subject === "string")
+        .map((q) => q.subject as string)
+    )
 
     const propInfos = new Map<string, { id: string; rangeType: "object" | "datatype" }>()
     for (const quad of Chunk.toReadonlyArray(objectPropQuads)) {
@@ -196,8 +200,14 @@ export const parseOntologyFromStore = (
       }
     }
 
-    // Helper to transform IRIs
-    const toLocalResult = (iris: Array<string>) => Schema.decodeUnknownSync(iriArrayToLocalNameArrayTransform())(iris)
+    // Type-safe IRI coercion for values from RDF store
+    // RDF store returns string IRIs that are valid but not branded
+    // This coerces Array<string> to ReadonlyArray<IRI> for IRI-typed fields
+    // Uses intermediate unknown cast since strings are valid IRI values from ontology parsing
+    const asIriArray = (iris: Array<string>): ReadonlyArray<IRI> => iris as unknown as ReadonlyArray<IRI>
+
+    // Helper to get array with fallback
+    const getOrEmpty = (map: Map<string, Array<string>>, id: string): Array<string> => map.get(id) || []
 
     // Finalize Classes
     const finalClasses: Array<ClassDefinition> = []
@@ -214,19 +224,21 @@ export const parseOntologyFromStore = (
               id: id as IRI,
               label: labels.get(id)?.[0] || "",
               comment: comments.get(id)?.[0] || "",
-              properties: toLocalResult(classProperties.get(id) || []) as unknown as ReadonlyArray<IRI>,
-              prefLabels: prefLabels.get(id) || [],
-              altLabels: altLabels.get(id) || [],
-              hiddenLabels: hiddenLabels.get(id) || [],
+              // properties field expects IRI[], coerce from string[]
+              properties: asIriArray(getOrEmpty(classProperties, id)),
+              prefLabels: getOrEmpty(prefLabels, id),
+              altLabels: getOrEmpty(altLabels, id),
+              hiddenLabels: getOrEmpty(hiddenLabels, id),
               definition: definitions.get(id)?.[0],
               scopeNote: scopeNotes.get(id)?.[0],
               example: examples.get(id)?.[0],
-              broader: toLocalResult(broaders.get(id) || []) as unknown as ReadonlyArray<IRI>,
-              narrower: toLocalResult(narrowers.get(id) || []) as unknown as ReadonlyArray<IRI>,
-              related: toLocalResult(relateds.get(id) || []) as unknown as ReadonlyArray<IRI>,
-              exactMatch: toLocalResult(exactMatches.get(id) || []) as unknown as ReadonlyArray<IRI>,
-              closeMatch: toLocalResult(closeMatches.get(id) || []) as unknown as ReadonlyArray<IRI>,
-              equivalentClass: toLocalResult(equivalentClasses.get(id) || []) as unknown as ReadonlyArray<IRI>
+              // SKOS fields expect string[] (full IRIs as strings)
+              broader: getOrEmpty(broaders, id),
+              narrower: getOrEmpty(narrowers, id),
+              related: getOrEmpty(relateds, id),
+              exactMatch: getOrEmpty(exactMatches, id),
+              closeMatch: getOrEmpty(closeMatches, id),
+              equivalentClass: getOrEmpty(equivalentClasses, id)
             })
           )
         }
@@ -239,25 +251,27 @@ export const parseOntologyFromStore = (
       if ((labels.get(id)?.[0] || prefLabels.get(id)?.[0])) {
         finalProperties.push(
           new PropertyDefinition({
-            id: id as IRI,
+            id: id,  // PropertyDefinition.id is Schema.String, not IRI
             label: labels.get(id)?.[0] || "",
             comment: comments.get(id)?.[0] || "",
-            domain: toLocalResult(domains.get(id) || []) as unknown as ReadonlyArray<IRI>,
-            range: toLocalResult(ranges.get(id) || []) as unknown as ReadonlyArray<IRI>,
+            // domain/range expect string[] (full IRIs as strings)
+            domain: getOrEmpty(domains, id),
+            range: getOrEmpty(ranges, id),
             rangeType: info.rangeType,
-            isFunctional: functionalProps.has(id as any),
-            prefLabels: prefLabels.get(id) || [],
-            altLabels: altLabels.get(id) || [],
-            hiddenLabels: hiddenLabels.get(id) || [],
+            isFunctional: functionalProps.has(id),
+            prefLabels: getOrEmpty(prefLabels, id),
+            altLabels: getOrEmpty(altLabels, id),
+            hiddenLabels: getOrEmpty(hiddenLabels, id),
             definition: definitions.get(id)?.[0],
             scopeNote: scopeNotes.get(id)?.[0],
             example: examples.get(id)?.[0],
-            broader: toLocalResult(broaders.get(id) || []) as unknown as ReadonlyArray<IRI>,
-            narrower: toLocalResult(narrowers.get(id) || []) as unknown as ReadonlyArray<IRI>,
-            related: toLocalResult(relateds.get(id) || []) as unknown as ReadonlyArray<IRI>,
-            exactMatch: toLocalResult(exactMatches.get(id) || []) as unknown as ReadonlyArray<IRI>,
-            closeMatch: toLocalResult(closeMatches.get(id) || []) as unknown as ReadonlyArray<IRI>,
-            inverseOf: toLocalResult(inverseOfs.get(id) || []) as unknown as ReadonlyArray<IRI>
+            // SKOS fields expect string[] (full IRIs as strings)
+            broader: getOrEmpty(broaders, id),
+            narrower: getOrEmpty(narrowers, id),
+            related: getOrEmpty(relateds, id),
+            exactMatch: getOrEmpty(exactMatches, id),
+            closeMatch: getOrEmpty(closeMatches, id),
+            inverseOf: getOrEmpty(inverseOfs, id)
           })
         )
       }
@@ -298,8 +312,9 @@ export class OntologyService extends Effect.Service<OntologyService>()(
       const rdf = yield* RdfBuilder
       const nlp = yield* NlpService
 
-      // use cached to ensure we only load and parse once per process
-      const getOntology = yield* Effect.cached(
+      // Cache ontology with configurable TTL to allow refresh without restart
+      const cacheTtl = Duration.seconds(config.ontology.cacheTtlSeconds)
+      const getOntology = yield* Effect.cachedWithTTL(cacheTtl)(
         Effect.gen(function*() {
           const ontologyPath = config.ontology.path
           const turtleContent = yield* fs.readFileString(ontologyPath).pipe(
@@ -705,9 +720,8 @@ export class OntologyService extends Effect.Service<OntologyService>()(
     }),
     dependencies: [
       RdfBuilder.Default,
-      // ConfigService provided by parent scope (e.g., EnvConfigService.Live)
-      NlpService.Default,
-      BunContext.layer
+      // ConfigService and platform layer (FileSystem) provided by parent scope
+      NlpService.Default
     ]
   }
 ) {}

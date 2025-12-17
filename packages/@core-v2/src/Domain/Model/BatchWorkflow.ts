@@ -140,3 +140,113 @@ export const getError = Match.type<BatchState>().pipe(
   Match.tag("Failed", (s) => s.error),
   Match.orElse(() => undefined)
 )
+
+// -----------------------------------------------------------------------------
+// State Transition Validation
+// -----------------------------------------------------------------------------
+
+/**
+ * Valid state transitions for batch workflow.
+ *
+ * Rules:
+ * - Pending can only go to Extracting or Failed
+ * - Each stage can progress to the next stage or Failed
+ * - Complete and Failed are terminal (no outgoing transitions)
+ */
+export const VALID_TRANSITIONS: Record<BatchStage, ReadonlyArray<BatchStage>> = {
+  Pending: ["Extracting", "Failed"],
+  Extracting: ["Resolving", "Failed"],
+  Resolving: ["Validating", "Failed"],
+  Validating: ["Ingesting", "Failed"],
+  Ingesting: ["Complete", "Failed"],
+  Complete: [], // Terminal state
+  Failed: [] // Terminal state
+}
+
+/**
+ * Check if a state transition is valid.
+ *
+ * @param fromTag - Current state tag
+ * @param toTag - Target state tag
+ * @returns true if transition is valid
+ *
+ * @example
+ * ```typescript
+ * isValidTransition("Pending", "Extracting")   // true
+ * isValidTransition("Pending", "Validating")   // false
+ * isValidTransition("Complete", "Failed")      // false
+ * ```
+ *
+ * @since 2.0.0
+ * @category Validation
+ */
+export const isValidTransition = (fromTag: BatchStage, toTag: BatchStage): boolean => {
+  // Allow same-state updates (e.g., Extracting with updated progress)
+  if (fromTag === toTag) return true
+
+  const validTargets = VALID_TRANSITIONS[fromTag]
+  return validTargets.includes(toTag)
+}
+
+/**
+ * Validate a state transition and return an error message if invalid.
+ *
+ * @param fromTag - Current state tag
+ * @param toTag - Target state tag
+ * @returns undefined if valid, error message if invalid
+ *
+ * @since 2.0.0
+ * @category Validation
+ */
+export const validateTransition = (
+  fromTag: BatchStage,
+  toTag: BatchStage
+): string | undefined => {
+  if (isValidTransition(fromTag, toTag)) {
+    return undefined
+  }
+
+  const validTargets = VALID_TRANSITIONS[fromTag]
+  if (validTargets.length === 0) {
+    return `Invalid transition: ${fromTag} is a terminal state and cannot transition to ${toTag}`
+  }
+
+  return `Invalid transition: ${fromTag} → ${toTag}. Valid targets: ${validTargets.join(", ")}`
+}
+
+/**
+ * Check if a state is a valid successor of another state (using full state objects).
+ *
+ * @param from - Current state
+ * @param to - Target state
+ * @returns true if transition is valid
+ *
+ * @since 2.0.0
+ * @category Validation
+ */
+export const isValidStateTransition = (from: BatchState, to: BatchState): boolean =>
+  isValidTransition(from._tag, to._tag)
+
+/**
+ * Get all valid next states for a given state tag.
+ *
+ * @param tag - Current state tag
+ * @returns Array of valid next state tags
+ *
+ * @since 2.0.0
+ * @category Validation
+ */
+export const getValidNextStates = (tag: BatchStage): ReadonlyArray<BatchStage> =>
+  VALID_TRANSITIONS[tag]
+
+/**
+ * Check if a state can fail (transition to Failed).
+ *
+ * @param tag - Current state tag
+ * @returns true if state can transition to Failed
+ *
+ * @since 2.0.0
+ * @category Validation
+ */
+export const canFail = (tag: BatchStage): boolean =>
+  VALID_TRANSITIONS[tag].includes("Failed")

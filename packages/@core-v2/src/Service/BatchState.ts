@@ -13,9 +13,18 @@ const decodeState = Schema.decodeUnknown(Schema.parseJson(BatchState))
 
 export const BatchStateHub = Context.GenericTag<PubSub.PubSub<BatchState>>("@core-v2/BatchStateHub")
 
+/**
+ * Maximum number of pending state updates in the PubSub.
+ * Uses sliding strategy (drops oldest) to prevent memory growth.
+ *
+ * Set to 1000 to accommodate ~100 concurrent batches with ~10 state updates each.
+ * If subscribers fall behind, oldest state updates are dropped in favor of newer ones.
+ */
+const BATCH_STATE_HUB_CAPACITY = 1000
+
 export const BatchStateHubLayer = Layer.effect(
   BatchStateHub,
-  PubSub.unbounded<BatchState>()
+  PubSub.sliding<BatchState>(BATCH_STATE_HUB_CAPACITY)
 )
 
 const storageAsKeyValueStore = Effect.gen(function*() {
@@ -64,12 +73,10 @@ export const getBatchStateFromStore = (batchId: BatchId) =>
 
     return yield* Option.match(stored, {
       onNone: () => Effect.succeed(Option.none<BatchState>()),
+      // decodeState uses Schema.parseJson which handles JSON parsing directly
+      // No need for explicit JSON.parse - avoids double parse overhead
       onSome: (json) =>
-        Effect.try({
-          try: () => JSON.parse(json),
-          catch: (cause) => cause
-        }).pipe(
-          Effect.flatMap(decodeState),
+        decodeState(json).pipe(
           Effect.asSome,
           Effect.catchAll(() => Effect.succeed(Option.none<BatchState>()))
         )

@@ -6,6 +6,7 @@
  */
 import { pipeline } from "@xenova/transformers"
 import { Context, Data, Effect, Layer, Option } from "effect"
+import { ConfigService } from "./Config.js"
 
 /**
  * Nomic NLP Errors
@@ -231,3 +232,33 @@ export const NomicNlpServiceLive = Layer.effect(
  * @since 2.0.0
  */
 export const NomicNlpServiceDefault = NomicNlpServiceLive
+
+/**
+ * Create NomicNlpConfig from ConfigService embedding settings.
+ *
+ * Uses EMBEDDING_TRANSFORMERS_MODEL_ID from config (or ConfigService.embedding.transformersModelId).
+ *
+ * @since 2.0.0
+ */
+export const NomicNlpConfigFromConfigService: Layer.Layer<NomicNlpConfig, never, ConfigService> = Layer.effect(
+  NomicNlpConfig,
+  Effect.gen(function*() {
+    const config = yield* ConfigService
+    return {
+      modelId: config.embedding.transformersModelId,
+      quantized: true
+    }
+  })
+)
+
+/**
+ * NomicNlpService with configuration from ConfigService.
+ *
+ * Reads embedding model settings from environment:
+ * - EMBEDDING_TRANSFORMERS_MODEL_ID (default: "Xenova/nomic-embed-text-v1")
+ *
+ * @since 2.0.0
+ */
+export const NomicNlpServiceFromConfig: Layer.Layer<NomicNlpService, never, ConfigService> = NomicNlpServiceLive.pipe(
+  Layer.provideMerge(NomicNlpConfigFromConfigService)
+)

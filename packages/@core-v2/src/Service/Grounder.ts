@@ -16,6 +16,7 @@ import type { Relation } from "../Domain/Model/Entity.js"
 import type { PropertyDefinition } from "../Domain/Model/Ontology.js"
 import { LlmAttributes } from "../Telemetry/LlmAttributes.js"
 import { ConfigService } from "./Config.js"
+import { StageTimeoutService } from "./LlmControl/StageTimeout.js"
 import { generateObjectWithRetry } from "./LlmWithRetry.js"
 
 /**
@@ -198,6 +199,7 @@ const DEFAULT_BATCH_SIZE = 5
 export class Grounder extends Effect.Service<Grounder>()("Grounder", {
   effect: Effect.gen(function*() {
     const config = yield* ConfigService
+    const timeout = yield* StageTimeoutService
     const llm = yield* LanguageModel.LanguageModel
 
     return {
@@ -210,29 +212,38 @@ export class Grounder extends Effect.Service<Grounder>()("Grounder", {
       verifyRelation: (input: RelationVerificationInput) =>
         Effect.gen(function*() {
           const prompt = buildGrounderPrompt(input)
-          const result = yield* generateObjectWithRetry({
-            llm,
-            prompt,
-            schema: VerificationSchema,
-            objectName: "GroundingDecision",
-            serviceName: "Grounder",
-            model: config.llm.model,
-            provider: config.llm.provider,
-            retryConfig: {
-              initialDelayMs: config.runtime.retryInitialDelayMs,
-              maxDelayMs: config.runtime.retryMaxDelayMs,
-              maxAttempts: config.runtime.retryMaxAttempts,
-              timeoutMs: config.llm.timeoutMs * 2
-            },
-            spanAttributes: {
-              [LlmAttributes.PROMPT_LENGTH]: prompt.length,
-              [LlmAttributes.PROMPT_TEXT]: prompt.slice(0, 2000)
-            },
-            annotateSuccess: (response) => ({
-              grounded: response.value.grounded,
-              confidence: response.value.confidence
-            })
-          }).pipe(
+          // Wrapped with stage timeout for soft/hard timeout protection
+          const result = yield* timeout.withTimeout(
+            "grounding",
+            generateObjectWithRetry({
+              llm,
+              prompt,
+              schema: VerificationSchema,
+              objectName: "GroundingDecision",
+              serviceName: "Grounder",
+              model: config.llm.model,
+              provider: config.llm.provider,
+              retryConfig: {
+                initialDelayMs: config.runtime.retryInitialDelayMs,
+                maxDelayMs: config.runtime.retryMaxDelayMs,
+                maxAttempts: config.runtime.retryMaxAttempts,
+                timeoutMs: config.llm.timeoutMs * 2
+              },
+              spanAttributes: {
+                [LlmAttributes.PROMPT_LENGTH]: prompt.length
+              },
+              annotateSuccess: (response) => ({
+                grounded: response.value.grounded,
+                confidence: response.value.confidence
+              })
+            }),
+            () =>
+              Effect.logWarning("Grounder verification approaching timeout", {
+                stage: "grounding",
+                subjectId: input.relation.subjectId,
+                predicate: input.relation.predicate
+              })
+          ).pipe(
             Effect.tap((response) =>
               Effect.logDebug("Grounder verification result", {
                 stage: "grounder",
@@ -270,28 +281,37 @@ export class Grounder extends Effect.Service<Grounder>()("Grounder", {
 
           // If only one input, use single verification for efficiency
           if (inputs.length === 1) {
-            const result = yield* generateObjectWithRetry({
-              llm,
-              prompt: buildGrounderPrompt(inputs[0]),
-              schema: VerificationSchema,
-              objectName: "GroundingDecision",
-              serviceName: "Grounder",
-              model: config.llm.model,
-              provider: config.llm.provider,
-              retryConfig: {
-                initialDelayMs: config.runtime.retryInitialDelayMs,
-                maxDelayMs: config.runtime.retryMaxDelayMs,
-                maxAttempts: config.runtime.retryMaxAttempts,
-                timeoutMs: config.llm.timeoutMs * 2
-              },
-              spanAttributes: {
-                [LlmAttributes.PROMPT_LENGTH]: buildGrounderPrompt(inputs[0]).length
-              },
-              annotateSuccess: (response) => ({
-                grounded: response.value.grounded,
-                confidence: response.value.confidence
-              })
-            })
+            const prompt = buildGrounderPrompt(inputs[0])
+            const result = yield* timeout.withTimeout(
+              "grounding",
+              generateObjectWithRetry({
+                llm,
+                prompt,
+                schema: VerificationSchema,
+                objectName: "GroundingDecision",
+                serviceName: "Grounder",
+                model: config.llm.model,
+                provider: config.llm.provider,
+                retryConfig: {
+                  initialDelayMs: config.runtime.retryInitialDelayMs,
+                  maxDelayMs: config.runtime.retryMaxDelayMs,
+                  maxAttempts: config.runtime.retryMaxAttempts,
+                  timeoutMs: config.llm.timeoutMs * 2
+                },
+                spanAttributes: {
+                  [LlmAttributes.PROMPT_LENGTH]: prompt.length
+                },
+                annotateSuccess: (response) => ({
+                  grounded: response.value.grounded,
+                  confidence: response.value.confidence
+                })
+              }),
+              () =>
+                Effect.logWarning("Grounder single verification approaching timeout", {
+                  stage: "grounding",
+                  subjectId: inputs[0].relation.subjectId
+                })
+            )
             return [{
               grounded: result.value.grounded,
               confidence: result.value.confidence,
@@ -302,25 +322,34 @@ export class Grounder extends Effect.Service<Grounder>()("Grounder", {
           // Batch verification
           const prompt = buildBatchGrounderPrompt(context, inputs)
 
-          const response = yield* generateObjectWithRetry({
-            llm,
-            prompt,
-            schema: BatchVerificationSchema,
-            objectName: "BatchGroundingDecision",
-            serviceName: "Grounder",
-            model: config.llm.model,
-            provider: config.llm.provider,
-            retryConfig: {
-              initialDelayMs: config.runtime.retryInitialDelayMs,
-              maxDelayMs: config.runtime.retryMaxDelayMs,
-              maxAttempts: config.runtime.retryMaxAttempts,
-              timeoutMs: config.llm.timeoutMs * 3
-            },
-            spanAttributes: {
-              [LlmAttributes.RELATION_COUNT]: inputs.length,
-              [LlmAttributes.PROMPT_LENGTH]: prompt.length
-            }
-          })
+          // Wrapped with stage timeout for soft/hard timeout protection
+          const response = yield* timeout.withTimeout(
+            "grounding",
+            generateObjectWithRetry({
+              llm,
+              prompt,
+              schema: BatchVerificationSchema,
+              objectName: "BatchGroundingDecision",
+              serviceName: "Grounder",
+              model: config.llm.model,
+              provider: config.llm.provider,
+              retryConfig: {
+                initialDelayMs: config.runtime.retryInitialDelayMs,
+                maxDelayMs: config.runtime.retryMaxDelayMs,
+                maxAttempts: config.runtime.retryMaxAttempts,
+                timeoutMs: config.llm.timeoutMs * 3
+              },
+              spanAttributes: {
+                [LlmAttributes.RELATION_COUNT]: inputs.length,
+                [LlmAttributes.PROMPT_LENGTH]: prompt.length
+              }
+            }),
+            () =>
+              Effect.logWarning("Grounder batch verification approaching timeout", {
+                stage: "grounding",
+                batchSize: inputs.length
+              })
+          )
 
           // Map results back to inputs
           type GrounderResult = { index: number; grounded: boolean; confidence: number }
@@ -374,29 +403,37 @@ export class Grounder extends Effect.Service<Grounder>()("Grounder", {
         relations.pipe(
           // Group into batches
           Stream.grouped(batchSize),
-          // Process each batch with single LLM call
+          // Process each batch with single LLM call, wrapped with timeout
           Stream.mapEffect((batch) => {
             const batchArray = Chunk.toReadonlyArray(batch)
             const prompt = buildBatchGrounderPrompt(context, batchArray)
-            return generateObjectWithRetry({
-              llm,
-              prompt,
-              schema: BatchVerificationSchema,
-              objectName: "BatchGroundingDecision",
-              serviceName: "Grounder",
-              model: config.llm.model,
-              provider: config.llm.provider,
-              retryConfig: {
-                initialDelayMs: config.runtime.retryInitialDelayMs,
-                maxDelayMs: config.runtime.retryMaxDelayMs,
-                maxAttempts: config.runtime.retryMaxAttempts,
-                timeoutMs: config.llm.timeoutMs * 3
-              },
-              spanAttributes: {
-                [LlmAttributes.RELATION_COUNT]: batchArray.length,
-                [LlmAttributes.PROMPT_LENGTH]: prompt.length
-              }
-            }).pipe(
+            return timeout.withTimeout(
+              "grounding",
+              generateObjectWithRetry({
+                llm,
+                prompt,
+                schema: BatchVerificationSchema,
+                objectName: "BatchGroundingDecision",
+                serviceName: "Grounder",
+                model: config.llm.model,
+                provider: config.llm.provider,
+                retryConfig: {
+                  initialDelayMs: config.runtime.retryInitialDelayMs,
+                  maxDelayMs: config.runtime.retryMaxDelayMs,
+                  maxAttempts: config.runtime.retryMaxAttempts,
+                  timeoutMs: config.llm.timeoutMs * 3
+                },
+                spanAttributes: {
+                  [LlmAttributes.RELATION_COUNT]: batchArray.length,
+                  [LlmAttributes.PROMPT_LENGTH]: prompt.length
+                }
+              }),
+              () =>
+                Effect.logWarning("Grounder stream batch approaching timeout", {
+                  stage: "grounding",
+                  batchSize: batchArray.length
+                })
+            ).pipe(
               Effect.map((response) => {
                 type GrounderResult = { index: number; grounded: boolean; confidence: number }
                 const resultsMap = new Map(

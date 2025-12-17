@@ -15,6 +15,7 @@
  * @since 2.0.0
  */
 
+import { LanguageModel } from "@effect/ai"
 import { Activity } from "@effect/workflow"
 import { Chunk, DateTime, Effect, Option, Schedule, Schema } from "effect"
 import { ActivityError, notFoundError, toActivityError } from "../Domain/Error/Activity.js"
@@ -41,11 +42,14 @@ import { ConfigService } from "../Service/Config.js"
 import { EmbeddingService } from "../Service/Embedding.js"
 import { EntityResolutionService } from "../Service/EntityResolution.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
+import { StageTimeoutService } from "../Service/LlmControl/StageTimeout.js"
+import { generateObjectWithRetry } from "../Service/LlmWithRetry.js"
 import { OntologyService, parseOntologyFromStore } from "../Service/Ontology.js"
 import { RdfBuilder, type RdfStore } from "../Service/Rdf.js"
 import { ShaclService } from "../Service/Shacl.js"
 import type { ShaclViolation } from "../Service/Shacl.js"
 import { StorageService } from "../Service/Storage.js"
+import { LlmAttributes } from "../Telemetry/LlmAttributes.js"
 import { extractLocalNameFromIri } from "../Utils/Iri.js"
 import { makeProvenanceUri } from "../Utils/Provenance.js"
 
@@ -666,19 +670,40 @@ export const makeValidationActivity = (input: typeof ValidationActivityInput.Typ
         )
       )
 
-      const shapesStore = input.shaclUri
-        ? yield* shacl.loadShapesFromUri(input.shaclUri)
-        : yield* shacl.generateShapesFromOntology(dataStore._store).pipe(
+      // Generate SHACL shapes from ONTOLOGY (not from extracted data)
+      // This ensures validation enforces ontology constraints, not circular data-derived rules
+      const shapesStore = yield* (input.shaclUri
+        ? shacl.loadShapesFromUri(input.shaclUri)
+        : Effect.gen(function*() {
+          // Load ontology for shape generation
+          const ontologyContent = yield* storage.get(stripGsPrefix(input.ontologyUri)).pipe(
+            Effect.flatMap((opt) => requireContent(opt, input.ontologyUri)),
+            Effect.tapErrorCause((cause) =>
+              Effect.logError("Validation: Failed to load ontology", {
+                activity: "validation",
+                batchId: input.batchId,
+                ontologyUri: input.ontologyUri,
+                cause: String(cause)
+              })
+            )
+          )
+          const ontologyStore = yield* rdf.parseTurtle(ontologyContent)
+          return yield* shacl.generateShapesFromOntology(ontologyStore._store)
+        }).pipe(
           Effect.tapErrorCause((cause) =>
-            Effect.logError("Validation: Failed to generate shapes", {
+            Effect.logError("Validation: Failed to generate shapes from ontology", {
               activity: "validation",
               batchId: input.batchId,
               cause: String(cause)
             })
           )
-        )
+        ))
 
-      const report = yield* shacl.validate(dataStore._store, shapesStore).pipe(
+      // Apply validation policy (default: failOnViolation=true, failOnWarning=false)
+      const policy = input.validationPolicy ?? { failOnViolation: true, failOnWarning: false }
+
+      // Run validation with policy - this will fail if policy is violated
+      const report = yield* shacl.validateWithPolicy(dataStore._store, shapesStore, policy).pipe(
         Effect.tapErrorCause((cause) =>
           Effect.logError("Validation: SHACL validation failed", {
             activity: "validation",
@@ -700,6 +725,7 @@ export const makeValidationActivity = (input: typeof ValidationActivityInput.Typ
         batchId: input.batchId,
         conforms: report.conforms,
         violations: report.violations.length,
+        policyApplied: policy,
         durationMs: DateTime.distance(start, end)
       })
 
@@ -855,33 +881,42 @@ export const makeComputeEmbeddingsActivity = (input: ComputeEmbeddingsInput) =>
         version
       })
 
-      // 4. Embed all classes
-      const classEmbeddings: Array<ElementEmbedding> = []
-      for (const cls of classes) {
-        const text = buildEmbeddingText(
-          cls.label,
-          cls.definition ?? cls.comment,
-          cls.altLabels.length > 0 ? cls.altLabels : undefined
-        )
-        const emb = yield* embedding.embed(text, "search_document")
-        classEmbeddings.push({
-          iri: cls.id,
-          text,
-          embedding: Array.from(emb)
-        })
-      }
+      // 4. Embed all classes (parallelized for ~5x speedup)
+      // Concurrency limited to 5 to respect embedding service rate limits
+      const classEmbeddings = yield* Effect.forEach(
+        Chunk.toReadonlyArray(classes),
+        (cls) =>
+          Effect.gen(function*() {
+            const text = buildEmbeddingText(
+              cls.label,
+              cls.definition ?? cls.comment,
+              cls.altLabels.length > 0 ? cls.altLabels : undefined
+            )
+            const emb = yield* embedding.embed(text, "search_document")
+            return {
+              iri: cls.id,
+              text,
+              embedding: Array.from(emb)
+            } satisfies ElementEmbedding
+          }),
+        { concurrency: 5 }
+      )
 
-      // 5. Embed all properties
-      const propertyEmbeddings: Array<ElementEmbedding> = []
-      for (const prop of properties) {
-        const text = buildEmbeddingText(prop.label, prop.comment)
-        const emb = yield* embedding.embed(text, "search_document")
-        propertyEmbeddings.push({
-          iri: prop.id,
-          text,
-          embedding: Array.from(emb)
-        })
-      }
+      // 5. Embed all properties (parallelized for ~5x speedup)
+      const propertyEmbeddings = yield* Effect.forEach(
+        Chunk.toReadonlyArray(properties),
+        (prop) =>
+          Effect.gen(function*() {
+            const text = buildEmbeddingText(prop.label, prop.comment)
+            const emb = yield* embedding.embed(text, "search_document")
+            return {
+              iri: prop.id,
+              text,
+              embedding: Array.from(emb)
+            } satisfies ElementEmbedding
+          }),
+        { concurrency: 5 }
+      )
 
       // 6. Determine dimension from first embedding
       const dimension = classEmbeddings[0]?.embedding.length ?? propertyEmbeddings[0]?.embedding.length ?? 0
@@ -918,6 +953,369 @@ export const makeComputeEmbeddingsActivity = (input: ComputeEmbeddingsInput) =>
         classCount: classEmbeddings.length,
         propertyCount: propertyEmbeddings.length,
         dimension,
+        durationMs: DateTime.distance(start, end)
+      }
+    }).pipe(Effect.mapError(toActivityError)),
+    interruptRetryPolicy: activityRetryPolicy
+  })
+
+// -----------------------------------------------------------------------------
+// LLM Verification Activity (Entity Resolution Enhancement)
+// -----------------------------------------------------------------------------
+
+/**
+ * Entity pair for LLM verification
+ */
+export const EntityPair = Schema.Struct({
+  /** First entity ID */
+  entityA: Schema.String,
+  /** Second entity ID */
+  entityB: Schema.String,
+  /** Mention text for entity A */
+  mentionA: Schema.String,
+  /** Mention text for entity B */
+  mentionB: Schema.String,
+  /** Types for entity A */
+  typesA: Schema.Array(Schema.String),
+  /** Types for entity B */
+  typesB: Schema.Array(Schema.String),
+  /** Initial similarity score from embedding/string matching */
+  similarity: Schema.Number
+})
+export type EntityPair = typeof EntityPair.Type
+
+/**
+ * Input for LLM verification activity
+ */
+export const LlmVerificationInput = Schema.Struct({
+  /** Batch ID for context */
+  batchId: Schema.String,
+  /** Entity pairs with low confidence to verify */
+  entityPairs: Schema.Array(EntityPair),
+  /** Similarity threshold below which to verify (default: 0.7) */
+  verificationThreshold: Schema.optional(Schema.Number.pipe(Schema.between(0, 1)))
+})
+export type LlmVerificationInput = typeof LlmVerificationInput.Type
+
+/**
+ * Verified entity pair result
+ */
+export const VerifiedPair = Schema.Struct({
+  /** First entity ID */
+  entityA: Schema.String,
+  /** Second entity ID */
+  entityB: Schema.String,
+  /** Whether LLM confirmed these are the same entity */
+  sameEntity: Schema.Boolean,
+  /** LLM confidence in the verification */
+  confidence: Schema.Number.pipe(Schema.between(0, 1)),
+  /** Original similarity score */
+  originalSimilarity: Schema.Number
+})
+export type VerifiedPair = typeof VerifiedPair.Type
+
+/**
+ * Output for LLM verification activity
+ */
+export const LlmVerificationOutput = Schema.Struct({
+  /** Pairs verified as same entity */
+  verified: Schema.Array(VerifiedPair),
+  /** Pairs rejected as different entities */
+  rejected: Schema.Array(VerifiedPair),
+  /** Pairs skipped (above threshold) */
+  skipped: Schema.Number,
+  /** Total pairs processed */
+  totalProcessed: Schema.Number,
+  /** Duration in milliseconds */
+  durationMs: Schema.Number
+})
+export type LlmVerificationOutput = typeof LlmVerificationOutput.Type
+
+/**
+ * Schema for single LLM entity comparison response
+ */
+const EntityComparisonSchema = Schema.Struct({
+  sameEntity: Schema.Boolean.annotations({
+    description: "True if these refer to the same real-world entity"
+  }),
+  confidence: Schema.Number.pipe(
+    Schema.greaterThanOrEqualTo(0),
+    Schema.lessThanOrEqualTo(1)
+  ).annotations({
+    description: "Confidence in the decision (0-1)"
+  }),
+  reasoning: Schema.optional(Schema.String).annotations({
+    description: "Brief explanation of the decision"
+  })
+}).annotations({
+  identifier: "EntityComparison",
+  description: "LLM decision on whether two entities are the same"
+})
+
+/**
+ * Schema for batch entity comparison response
+ */
+const BatchComparisonSchema = Schema.Struct({
+  results: Schema.Array(
+    Schema.Struct({
+      index: Schema.Number.annotations({
+        description: "Index of the pair in the input list (0-based)"
+      }),
+      sameEntity: Schema.Boolean.annotations({
+        description: "True if these refer to the same real-world entity"
+      }),
+      confidence: Schema.Number.pipe(
+        Schema.greaterThanOrEqualTo(0),
+        Schema.lessThanOrEqualTo(1)
+      ).annotations({
+        description: "Confidence in the decision (0-1)"
+      })
+    })
+  )
+}).annotations({
+  identifier: "BatchEntityComparison",
+  description: "LLM decisions for multiple entity pairs"
+})
+
+/**
+ * Build prompt for single entity comparison
+ * @internal
+ */
+const buildComparisonPrompt = (pair: EntityPair): string => {
+  const typeLabelsA = pair.typesA.map((t) => extractLocalNameFromIri(t)).join(", ")
+  const typeLabelsB = pair.typesB.map((t) => extractLocalNameFromIri(t)).join(", ")
+
+  return `You are an entity resolution expert. Determine if these two mentions refer to the same real-world entity.
+
+Entity A:
+- Mention: "${pair.mentionA}"
+- Types: ${typeLabelsA || "Unknown"}
+
+Entity B:
+- Mention: "${pair.mentionB}"
+- Types: ${typeLabelsB || "Unknown"}
+
+Initial similarity score: ${pair.similarity.toFixed(2)}
+
+Instructions:
+- Consider: Are these mentions of the SAME real-world entity (person, organization, place, etc.)?
+- Account for variations: nicknames, abbreviations, alternate spellings, different naming conventions
+- If types don't overlap, they're likely different entities
+- Return JSON: { "sameEntity": boolean, "confidence": number (0-1) }
+- confidence should reflect how certain you are about the decision`
+}
+
+/**
+ * Build prompt for batch entity comparison
+ * @internal
+ */
+const buildBatchComparisonPrompt = (pairs: ReadonlyArray<EntityPair>): string => {
+  const pairsFormatted = pairs.map((pair, i) => {
+    const typeLabelsA = pair.typesA.map((t) => extractLocalNameFromIri(t)).join(", ")
+    const typeLabelsB = pair.typesB.map((t) => extractLocalNameFromIri(t)).join(", ")
+    return `${i}. Entity A: "${pair.mentionA}" (${typeLabelsA || "?"})\n   Entity B: "${pair.mentionB}" (${typeLabelsB || "?"})\n   Similarity: ${pair.similarity.toFixed(2)}`
+  }).join("\n\n")
+
+  return `You are an entity resolution expert. For each pair, determine if the two mentions refer to the same real-world entity.
+
+Pairs to evaluate:
+${pairsFormatted}
+
+Instructions:
+- For each pair, decide: Do these mentions refer to the SAME real-world entity?
+- Consider: nicknames, abbreviations, alternate spellings, naming variations
+- If types don't overlap, they're likely different entities
+- Return JSON with "results" array, each having: { "index": <pair number>, "sameEntity": boolean, "confidence": number (0-1) }
+- Return results for ALL pairs in order`
+}
+
+/**
+ * Default verification threshold (verify pairs below this similarity)
+ */
+const DEFAULT_VERIFICATION_THRESHOLD = 0.7
+
+/**
+ * Batch size for LLM verification
+ */
+const VERIFICATION_BATCH_SIZE = 5
+
+/**
+ * Durable LLM Verification Activity
+ *
+ * Verifies low-confidence entity pairs using LLM to improve resolution accuracy.
+ * This is an optional post-clustering step for entity resolution.
+ *
+ * Use cases:
+ * - Verify uncertain matches (similarity 0.5-0.7) before merging
+ * - Catch false negatives from pure string/embedding matching
+ * - Improve recall for entities with very different surface forms
+ *
+ * @since 2.0.0
+ */
+export const makeLlmVerificationActivity = (input: LlmVerificationInput) =>
+  Activity.make({
+    name: `llm-verification-${input.batchId}`,
+    success: LlmVerificationOutput,
+    error: ActivityError,
+    execute: Effect.gen(function*() {
+      const start = yield* DateTime.now
+      const config = yield* ConfigService
+      const timeout = yield* StageTimeoutService
+      const llm = yield* LanguageModel.LanguageModel
+
+      const threshold = input.verificationThreshold ?? DEFAULT_VERIFICATION_THRESHOLD
+
+      // Filter pairs that need verification (below threshold)
+      const pairsToVerify = input.entityPairs.filter((p) => p.similarity < threshold)
+      const skippedCount = input.entityPairs.length - pairsToVerify.length
+
+      yield* Effect.logInfo("LLM verification activity starting", {
+        batchId: input.batchId,
+        totalPairs: input.entityPairs.length,
+        pairsToVerify: pairsToVerify.length,
+        skipped: skippedCount,
+        threshold
+      })
+
+      if (pairsToVerify.length === 0) {
+        const end = yield* DateTime.now
+        return {
+          verified: [],
+          rejected: [],
+          skipped: skippedCount,
+          totalProcessed: 0,
+          durationMs: DateTime.distance(start, end)
+        }
+      }
+
+      const verified: Array<VerifiedPair> = []
+      const rejected: Array<VerifiedPair> = []
+
+      // Process in batches
+      for (let i = 0; i < pairsToVerify.length; i += VERIFICATION_BATCH_SIZE) {
+        const batch = pairsToVerify.slice(i, i + VERIFICATION_BATCH_SIZE)
+
+        if (batch.length === 1) {
+          // Single pair: use focused prompt
+          const pair = batch[0]
+          const prompt = buildComparisonPrompt(pair)
+
+          const result = yield* timeout.withTimeout(
+            "entity_verification",
+            generateObjectWithRetry({
+              llm,
+              prompt,
+              schema: EntityComparisonSchema,
+              objectName: "EntityComparison",
+              serviceName: "LlmVerification",
+              model: config.llm.model,
+              provider: config.llm.provider,
+              retryConfig: {
+                initialDelayMs: config.runtime.retryInitialDelayMs,
+                maxDelayMs: config.runtime.retryMaxDelayMs,
+                maxAttempts: config.runtime.retryMaxAttempts,
+                timeoutMs: config.llm.timeoutMs
+              },
+              spanAttributes: {
+                [LlmAttributes.PROMPT_LENGTH]: prompt.length,
+                "verification.pair_index": i
+              }
+            }),
+            () =>
+              Effect.logWarning("Entity verification approaching timeout", {
+                batchId: input.batchId,
+                pairIndex: i
+              })
+          )
+
+          const verifiedPair: VerifiedPair = {
+            entityA: pair.entityA,
+            entityB: pair.entityB,
+            sameEntity: result.value.sameEntity,
+            confidence: result.value.confidence,
+            originalSimilarity: pair.similarity
+          }
+
+          if (result.value.sameEntity) {
+            verified.push(verifiedPair)
+          } else {
+            rejected.push(verifiedPair)
+          }
+        } else {
+          // Batch verification
+          const prompt = buildBatchComparisonPrompt(batch)
+
+          const result = yield* timeout.withTimeout(
+            "entity_verification",
+            generateObjectWithRetry({
+              llm,
+              prompt,
+              schema: BatchComparisonSchema,
+              objectName: "BatchEntityComparison",
+              serviceName: "LlmVerification",
+              model: config.llm.model,
+              provider: config.llm.provider,
+              retryConfig: {
+                initialDelayMs: config.runtime.retryInitialDelayMs,
+                maxDelayMs: config.runtime.retryMaxDelayMs,
+                maxAttempts: config.runtime.retryMaxAttempts,
+                timeoutMs: config.llm.timeoutMs * 2
+              },
+              spanAttributes: {
+                [LlmAttributes.PROMPT_LENGTH]: prompt.length,
+                "verification.batch_size": batch.length,
+                "verification.batch_start": i
+              }
+            }),
+            () =>
+              Effect.logWarning("Batch entity verification approaching timeout", {
+                batchId: input.batchId,
+                batchStart: i,
+                batchSize: batch.length
+              })
+          )
+
+          // Map results back to pairs
+          type ComparisonResult = { index: number; sameEntity: boolean; confidence: number }
+          const resultsMap = new Map(
+            (result.value.results as ReadonlyArray<ComparisonResult>).map((r) => [r.index, r])
+          )
+
+          batch.forEach((pair, idx) => {
+            const llmResult = resultsMap.get(idx)
+            const verifiedPair: VerifiedPair = {
+              entityA: pair.entityA,
+              entityB: pair.entityB,
+              sameEntity: llmResult?.sameEntity ?? false,
+              confidence: llmResult?.confidence ?? 0,
+              originalSimilarity: pair.similarity
+            }
+
+            if (llmResult?.sameEntity) {
+              verified.push(verifiedPair)
+            } else {
+              rejected.push(verifiedPair)
+            }
+          })
+        }
+      }
+
+      const end = yield* DateTime.now
+
+      yield* Effect.logInfo("LLM verification activity complete", {
+        batchId: input.batchId,
+        verified: verified.length,
+        rejected: rejected.length,
+        skipped: skippedCount,
+        totalProcessed: pairsToVerify.length,
+        durationMs: DateTime.distance(start, end)
+      })
+
+      return {
+        verified,
+        rejected,
+        skipped: skippedCount,
+        totalProcessed: pairsToVerify.length,
         durationMs: DateTime.distance(start, end)
       }
     }).pipe(Effect.mapError(toActivityError)),

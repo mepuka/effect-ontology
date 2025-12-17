@@ -10,6 +10,7 @@
  * - Entity extraction: 45s soft / 60s hard
  * - Relation extraction: 45s soft / 60s hard
  * - Grounding: 20s soft / 30s hard
+ * - Entity verification: 30s soft / 45s hard
  * - Serialization: 7s soft / 10s hard
  *
  * @since 2.0.0
@@ -30,6 +31,7 @@ export type TimedStage =
   | "entity_extraction"
   | "relation_extraction"
   | "grounding"
+  | "entity_verification"
   | "serialization"
 
 /**
@@ -50,6 +52,7 @@ const STAGE_TIMEOUTS: Record<TimedStage, StageTimeoutConfig> = {
   entity_extraction: { softMs: 45000, hardMs: 60000 },
   relation_extraction: { softMs: 45000, hardMs: 60000 },
   grounding: { softMs: 20000, hardMs: 30000 },
+  entity_verification: { softMs: 30000, hardMs: 45000 },
   serialization: { softMs: 7000, hardMs: 10000 }
 }
 

@@ -203,7 +203,25 @@ const makeLocalStore = (config: StorageConfig) =>
       size: Effect.gen(function*() {
         const p = path.join(basePath, globalPrefix)
         if (!(yield* fs.exists(p))) return 0
-        return 0
+        // Calculate total size by walking directory tree
+        const walkAndSum = (dir: string): Effect.Effect<number, never, never> =>
+          Effect.gen(function*() {
+            const entries = yield* fs.readDirectory(dir).pipe(Effect.catchAll(() => Effect.succeed([] as readonly string[])))
+            let totalSize = 0
+            for (const entry of entries) {
+              const entryPath = path.join(dir, entry)
+              const stat = yield* fs.stat(entryPath).pipe(Effect.catchAll(() => Effect.succeed(null)))
+              if (stat === null) continue
+              if (stat.type === "Directory") {
+                totalSize += yield* walkAndSum(entryPath)
+              } else {
+                // stat.size is a Size type (number), use Number() to ensure plain number
+                totalSize += Number(stat.size)
+              }
+            }
+            return totalSize
+          })
+        return yield* walkAndSum(p)
       })
     })
 

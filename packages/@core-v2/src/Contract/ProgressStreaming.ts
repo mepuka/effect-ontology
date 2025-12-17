@@ -42,7 +42,12 @@ export const ProgressEventTag = Schema.Literal(
   "extraction_cancelled",
   "backpressure_warning",
   "error_recoverable",
-  "error_fatal"
+  "error_fatal",
+  // Generic stage lifecycle events (used by ExtractionEntityHandler)
+  "stage_started",
+  "stage_progress",
+  "stage_completed",
+  "rate_limited"
 )
 
 export type ProgressEventTag = Schema.Schema.Type<typeof ProgressEventTag>
@@ -783,6 +788,119 @@ export class FatalErrorEvent extends Schema.Class<FatalErrorEvent>("FatalErrorEv
 }) {}
 
 // =============================================================================
+// Generic Stage Lifecycle Events (used by ExtractionEntityHandler)
+// =============================================================================
+
+/**
+ * Stage type for generic lifecycle events
+ */
+const StageType = Schema.Literal(
+  "chunking",
+  "entity_extraction",
+  "relation_extraction",
+  "grounding",
+  "serialization"
+)
+
+/**
+ * Stage Started
+ *
+ * Emitted when a processing stage begins
+ */
+export class StageStartedEvent extends Schema.Class<StageStartedEvent>(
+  "StageStartedEvent"
+)({
+  ...BaseProgressEvent.fields,
+  _tag: Schema.Literal("stage_started"),
+
+  /**
+   * Name of the stage starting
+   */
+  stage: StageType
+}) {}
+
+/**
+ * Stage Progress
+ *
+ * Emitted periodically during stage processing
+ */
+export class StageProgressEvent extends Schema.Class<StageProgressEvent>(
+  "StageProgressEvent"
+)({
+  ...BaseProgressEvent.fields,
+  _tag: Schema.Literal("stage_progress"),
+
+  /**
+   * Name of the stage
+   */
+  stage: StageType,
+
+  /**
+   * Percentage complete (0-100)
+   */
+  percent: ProgressPercentage,
+
+  /**
+   * Items processed so far
+   */
+  itemsProcessed: Schema.Number.pipe(Schema.int(), Schema.nonNegative()),
+
+  /**
+   * Total items to process
+   */
+  itemsTotal: Schema.Number.pipe(Schema.int(), Schema.nonNegative())
+}) {}
+
+/**
+ * Stage Completed
+ *
+ * Emitted when a processing stage finishes
+ */
+export class StageCompletedEvent extends Schema.Class<StageCompletedEvent>(
+  "StageCompletedEvent"
+)({
+  ...BaseProgressEvent.fields,
+  _tag: Schema.Literal("stage_completed"),
+
+  /**
+   * Name of the stage that completed
+   */
+  stage: StageType,
+
+  /**
+   * Duration in milliseconds
+   */
+  durationMs: Schema.Number.pipe(Schema.int(), Schema.nonNegative()),
+
+  /**
+   * Number of items processed
+   */
+  itemCount: Schema.Number.pipe(Schema.int(), Schema.nonNegative())
+}) {}
+
+/**
+ * Rate Limited
+ *
+ * Emitted when an operation is delayed due to rate limiting
+ */
+export class RateLimitedEvent extends Schema.Class<RateLimitedEvent>(
+  "RateLimitedEvent"
+)({
+  ...BaseProgressEvent.fields,
+  _tag: Schema.Literal("rate_limited"),
+
+  /**
+   * Time to wait in milliseconds
+   */
+  waitMs: Schema.Number.pipe(Schema.int(), Schema.nonNegative()),
+
+  /**
+   * Reason for rate limit
+   */
+  reason: Schema.Literal("tokens", "requests", "concurrent")
+}) {}
+
+// =============================================================================
 // Union Type: All Progress Events
 // =============================================================================
 
@@ -817,7 +935,12 @@ export const ProgressEventSchema = Schema.Union(
   ExtractionCancelledEvent,
   BackpressureWarningEvent,
   RecoverableErrorEvent,
-  FatalErrorEvent
+  FatalErrorEvent,
+  // Generic stage lifecycle events
+  StageStartedEvent,
+  StageProgressEvent,
+  StageCompletedEvent,
+  RateLimitedEvent
 )
 
 export type ProgressEvent = Schema.Schema.Type<typeof ProgressEventSchema>

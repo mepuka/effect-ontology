@@ -49,22 +49,29 @@ export const DEFAULT_BACKPRESSURE_CONFIG: BackpressureConfig = {
 
 /**
  * Event types that should never be sampled
+ *
+ * These tags align with ProgressEventTag in Contract/ProgressStreaming.ts
  */
 const CRITICAL_EVENT_TAGS = new Set([
+  // Core lifecycle events
   "extraction_started",
   "extraction_complete",
   "extraction_failed",
+  "extraction_cancelled",
+  // Chunking lifecycle
   "chunking_started",
   "chunking_complete",
+  // Chunk processing lifecycle
   "chunk_processing_started",
   "chunk_processing_complete",
-  "grounding_started",
-  "grounding_complete",
-  "entity_resolution_started",
-  "entity_resolution_complete",
-  "serialization_started",
-  "serialization_complete",
-  "error_recoverable"
+  // Generic stage lifecycle (replaces grounding_started, etc.)
+  "stage_started",
+  "stage_completed",
+  // Error and warning events
+  "error_recoverable",
+  "error_fatal",
+  "backpressure_warning",
+  "rate_limited"
 ])
 
 /**

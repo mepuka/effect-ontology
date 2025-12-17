@@ -56,6 +56,15 @@ const GrounderConfig = Config.nested("GROUNDER")(Config.all({
   batchSize: Config.integer("BATCH_SIZE").pipe(Config.withDefault(5))
 }))
 
+const EmbeddingConfig = Config.nested("EMBEDDING")(Config.all({
+  model: Config.string("MODEL").pipe(Config.withDefault("nomic-embed-text-v1.5")),
+  dimension: Config.integer("DIMENSION").pipe(Config.withDefault(768)),
+  /** Transformers.js model ID for local inference */
+  transformersModelId: Config.string("TRANSFORMERS_MODEL_ID").pipe(
+    Config.withDefault("Xenova/nomic-embed-text-v1")
+  )
+}))
+
 const RdfConfig = Config.nested("RDF")(Config.all({
   baseNamespace: Config.string("BASE_NAMESPACE").pipe(Config.withDefault("http://example.org/kg/")),
   outputFormat: Config.literal("Turtle", "N-Triples", "JSON-LD")("OUTPUT_FORMAT").pipe(
@@ -80,6 +89,7 @@ export interface AppConfig {
   readonly ontology: Config.Config.Success<typeof OntologyConfig>
   readonly runtime: Config.Config.Success<typeof RuntimeConfig>
   readonly grounder: Config.Config.Success<typeof GrounderConfig>
+  readonly embedding: Config.Config.Success<typeof EmbeddingConfig>
   readonly rdf: Config.Config.Success<typeof RdfConfig>
 }
 
@@ -115,6 +125,11 @@ export const DEFAULT_CONFIG: AppConfig = {
     confidenceThreshold: 0.8,
     batchSize: 5
   },
+  embedding: {
+    model: "nomic-embed-text-v1.5",
+    dimension: 768,
+    transformersModelId: "Xenova/nomic-embed-text-v1"
+  },
   rdf: {
     baseNamespace: "http://example.org/kg/",
     outputFormat: "Turtle",
@@ -133,12 +148,13 @@ export const DEFAULT_CONFIG: AppConfig = {
 // =============================================================================
 
 const makeConfigService = Effect.gen(function*() {
-  const [llm, storage, ontology, runtime, grounder, rdf] = yield* Effect.all([
+  const [llm, storage, ontology, runtime, grounder, embedding, rdf] = yield* Effect.all([
     LlmConfig,
     StorageConfig,
     OntologyConfig,
     RuntimeConfig,
     GrounderConfig,
+    EmbeddingConfig,
     RdfConfig
   ])
 
@@ -148,6 +164,7 @@ const makeConfigService = Effect.gen(function*() {
     ontology,
     runtime,
     grounder,
+    embedding,
     rdf
   } satisfies AppConfig
 })

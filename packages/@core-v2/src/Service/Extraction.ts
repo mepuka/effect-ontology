@@ -23,9 +23,11 @@ import { makeEntitySchema } from "../Schema/EntityFactory.js"
 import { type Mention, MentionGraphSchema } from "../Schema/MentionFactory.js"
 import { makeRelationSchema } from "../Schema/RelationFactory.js"
 import { annotateExtraction, annotateLlmCall, LlmAttributes } from "../Telemetry/LlmAttributes.js"
+import { sha256Sync } from "../Utils/Hash.js"
 import { buildLocalNameToIriMap, expandLocalNameToIri, expandTypesToIris } from "../Utils/Iri.js"
 import { ConfigService } from "./Config.js"
 import { generateObjectWithFeedback } from "./GenerateWithFeedback.js"
+import { StageTimeoutService, type TimeoutError } from "./LlmControl/StageTimeout.js"
 import { generateObjectWithRetry } from "./LlmWithRetry.js"
 
 export type { Mention }
@@ -56,6 +58,7 @@ const generateEntityId = (mention: string): string => {
 export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityExtractor", {
   effect: Effect.gen(function*() {
     const config = yield* ConfigService
+    const timeout = yield* StageTimeoutService
 
     const llm = yield* LanguageModel.LanguageModel
 
@@ -116,9 +119,9 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
             prompt: prompt.slice(0, 1000) // First 1000 chars
           })
 
-          // Log schema summary
+          // Log schema summary (hash only to prevent PII leakage)
           const jsonSchema = JSONSchema.make(schema)
-          const schemaJson = JSON.stringify(jsonSchema).slice(0, 2000)
+          const schemaHash = sha256Sync(JSON.stringify(jsonSchema))
           yield* Effect.logDebug("Entity extraction schema", {
             stage: "entity-extraction",
             schemaIdentifier: jsonSchema.$defs?.EntityGraph?.title || "EntityGraph",
@@ -128,15 +131,25 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
 
           // Call LLM for structured output using generateObjectWithFeedback
           // This handles retries with schema validation feedback automatically
-          const response = yield* generateObjectWithFeedback(llm, {
-            prompt,
-            schema,
-            objectName: "EntityGraph",
-            maxAttempts: config.runtime.retryMaxAttempts,
-            serviceName: "EntityExtractor",
-            timeoutMs: config.llm.timeoutMs,
-            retrySchedule
-          }).pipe(
+          // Wrapped with stage timeout for soft/hard timeout protection
+          const response = yield* timeout.withTimeout(
+            "entity_extraction",
+            generateObjectWithFeedback(llm, {
+              prompt,
+              schema,
+              objectName: "EntityGraph",
+              maxAttempts: config.runtime.retryMaxAttempts,
+              serviceName: "EntityExtractor",
+              timeoutMs: config.llm.timeoutMs,
+              retrySchedule
+            }),
+            () =>
+              Effect.logWarning("Entity extraction approaching timeout", {
+                stage: "entity-extraction",
+                textLength: text.length,
+                candidateClasses: candidates.length
+              })
+          ).pipe(
             Effect.tap((response) =>
               Effect.all([
                 Effect.logInfo("Entity extraction LLM response", {
@@ -151,8 +164,7 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
                   promptLength: prompt.length,
                   inputTokens: response.usage.inputTokens,
                   outputTokens: response.usage.outputTokens,
-                  promptText: prompt.slice(0, 2000),
-                  schemaJson
+                  schemaHash
                 }),
                 annotateExtraction({
                   entityCount: response.value.entities.length,
@@ -164,8 +176,7 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
               attributes: {
                 [LlmAttributes.PROMPT_LENGTH]: prompt.length,
                 [LlmAttributes.CANDIDATE_CLASS_COUNT]: candidates.length,
-                [LlmAttributes.PROMPT_TEXT]: prompt.slice(0, 2000),
-                [LlmAttributes.REQUEST_SCHEMA]: schemaJson
+                [LlmAttributes.SCHEMA_HASH]: schemaHash
               }
             }),
             Effect.mapError((error) =>
@@ -177,15 +188,16 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
             )
           )
 
-          // Build set of valid property IRIs for post-extraction filtering
-          // Schema is permissive (accepts any string keys), we filter invalid keys here
-          const validPropertyIris = new Set(
-            (datatypeProps ?? []).map((p) => p.id)
-          )
+          // Build property IRI structures for attribute key expansion and validation
+          // LLM outputs local names (e.g., "age") which we expand to full IRIs (e.g., "http://schema.org/age")
+          // PropertyDefinition.id is string but contains valid IRIs from ontology parsing
+          const propertyIris: ReadonlyArray<IRI> = (datatypeProps ?? []).map((p) => p.id as IRI)
+          const propertyLocalNameToIriMap = buildLocalNameToIriMap(propertyIris)
 
           // Build local name to IRI map for expanding types post-extraction
           // LLM outputs local names (e.g., "Player") which we expand to full IRIs
-          const classIris = candidates.map((c) => c.id) as unknown as ReadonlyArray<IRI>
+          // ClassDefinition.id is already IRI type (branded)
+          const classIris: ReadonlyArray<IRI> = candidates.map((c) => c.id)
           const localNameToIriMap = buildLocalNameToIriMap(classIris)
 
           // Convert to Entity domain models
@@ -214,18 +226,24 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
                   return Option.none()
                 }
 
-                // Convert attributes to proper format and filter invalid keys
-                // Only keep attributes with keys that are valid ontology property IRIs
+                // Convert attributes to proper format and expand keys to full IRIs
+                // LLM outputs local name keys (e.g., "age") which we expand to full IRIs (e.g., "http://schema.org/age")
                 const attributes: Record<string, string | number | boolean> = {}
                 if (entityData.attributes) {
                   for (const [key, value] of Object.entries(entityData.attributes)) {
-                    // Filter: only keep if validPropertyIris is empty (no constraints) or key is valid
-                    if (validPropertyIris.size === 0 || validPropertyIris.has(key)) {
+                    // Expand local name key to full IRI (case-insensitive match)
+                    const expandedKey = expandLocalNameToIri(key, propertyLocalNameToIriMap)
+                    if (expandedKey) {
+                      if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+                        attributes[expandedKey] = value
+                      }
+                    } else if (propertyLocalNameToIriMap.size === 0) {
+                      // No property constraints - keep key as-is (likely already a full IRI or no ontology)
                       if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
                         attributes[key] = value
                       }
                     } else {
-                      // Track filtered attributes for logging (specifically, keys not in validPropertyIris)
+                      // Track filtered attributes for logging (key doesn't match any ontology property)
                       filteredAttributeCount++
                       droppedKeysCount++
                     }
@@ -317,6 +335,7 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
 export class MentionExtractor extends Effect.Service<MentionExtractor>()("MentionExtractor", {
   effect: Effect.gen(function*() {
     const config = yield* ConfigService
+    const timeout = yield* StageTimeoutService
 
     const llm = yield* LanguageModel.LanguageModel
 
@@ -338,27 +357,37 @@ export class MentionExtractor extends Effect.Service<MentionExtractor>()("Mentio
             textPreview: text.slice(0, 200)
           })
 
-          const response = yield* generateObjectWithRetry({
-            llm,
-            prompt,
-            schema: MentionGraphSchema,
-            objectName: "MentionGraph",
-            serviceName: "MentionExtractor",
-            model: config.llm.model,
-            provider: config.llm.provider,
-            retryConfig: {
-              initialDelayMs: config.runtime.retryInitialDelayMs,
-              maxDelayMs: config.runtime.retryMaxDelayMs,
-              maxAttempts: config.runtime.retryMaxAttempts,
-              timeoutMs: config.llm.timeoutMs
-            },
-            spanAttributes: {
-              [LlmAttributes.CHUNK_TEXT_LENGTH]: text.length
-            },
-            annotateSuccess: (response) => ({
-              mentionCount: response.value.mentions.length
-            })
-          }).pipe(
+          // Wrapped with stage timeout for soft/hard timeout protection
+          // Mention extraction uses entity_extraction stage timing
+          const response = yield* timeout.withTimeout(
+            "entity_extraction",
+            generateObjectWithRetry({
+              llm,
+              prompt,
+              schema: MentionGraphSchema,
+              objectName: "MentionGraph",
+              serviceName: "MentionExtractor",
+              model: config.llm.model,
+              provider: config.llm.provider,
+              retryConfig: {
+                initialDelayMs: config.runtime.retryInitialDelayMs,
+                maxDelayMs: config.runtime.retryMaxDelayMs,
+                maxAttempts: config.runtime.retryMaxAttempts,
+                timeoutMs: config.llm.timeoutMs
+              },
+              spanAttributes: {
+                [LlmAttributes.CHUNK_TEXT_LENGTH]: text.length
+              },
+              annotateSuccess: (response) => ({
+                mentionCount: response.value.mentions.length
+              })
+            }),
+            () =>
+              Effect.logWarning("Mention extraction approaching timeout", {
+                stage: "mention-extraction",
+                textLength: text.length
+              })
+          ).pipe(
             Effect.tap((response) =>
               annotateExtraction({
                 mentionCount: response.value.mentions.length
@@ -425,6 +454,7 @@ export class MentionExtractor extends Effect.Service<MentionExtractor>()("Mentio
 export class RelationExtractor extends Effect.Service<RelationExtractor>()("RelationExtractor", {
   effect: Effect.gen(function*() {
     const config = yield* ConfigService
+    const timeout = yield* StageTimeoutService
 
     const llm = yield* LanguageModel.LanguageModel
 
@@ -480,39 +510,50 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
             prompt: prompt.slice(0, 1000) // First 1000 chars
           })
 
-          // Log schema summary
+          // Log schema summary (hash for tracing without PII)
           const jsonSchema = JSONSchema.make(schema)
-          const schemaJson = JSON.stringify(jsonSchema).slice(0, 2000)
+          const schemaHash = sha256Sync(JSON.stringify(jsonSchema))
           yield* Effect.logDebug("Relation extraction schema", {
             stage: "relation-extraction",
             schemaIdentifier: jsonSchema.$defs?.RelationGraph?.title || "RelationGraph",
             schemaDescription: jsonSchema.$defs?.RelationGraph?.description?.slice(0, 200),
+            schemaHash,
             validEntityIdCount: validEntityIds.length,
             allowedPropertyCount: properties.length
           })
 
           // Call LLM for structured output using LanguageModel.generateObject directly
-          const response = yield* generateObjectWithRetry({
-            llm,
-            prompt,
-            schema,
-            objectName: "RelationGraph",
-            serviceName: "RelationExtractor",
-            model: config.llm.model,
-            provider: config.llm.provider,
-            retryConfig: {
-              initialDelayMs: config.runtime.retryInitialDelayMs,
-              maxDelayMs: config.runtime.retryMaxDelayMs,
-              maxAttempts: config.runtime.retryMaxAttempts,
-              timeoutMs: config.llm.timeoutMs
-            },
-            spanAttributes: {
-              [LlmAttributes.ENTITY_COUNT]: entityArray.length
-            },
-            annotateSuccess: (response) => ({
-              relationCount: response.value.relations.length
-            })
-          }).pipe(
+          // Wrapped with stage timeout for soft/hard timeout protection
+          const response = yield* timeout.withTimeout(
+            "relation_extraction",
+            generateObjectWithRetry({
+              llm,
+              prompt,
+              schema,
+              objectName: "RelationGraph",
+              serviceName: "RelationExtractor",
+              model: config.llm.model,
+              provider: config.llm.provider,
+              retryConfig: {
+                initialDelayMs: config.runtime.retryInitialDelayMs,
+                maxDelayMs: config.runtime.retryMaxDelayMs,
+                maxAttempts: config.runtime.retryMaxAttempts,
+                timeoutMs: config.llm.timeoutMs
+              },
+              spanAttributes: {
+                [LlmAttributes.ENTITY_COUNT]: entityArray.length
+              },
+              annotateSuccess: (response) => ({
+                relationCount: response.value.relations.length
+              })
+            }),
+            () =>
+              Effect.logWarning("Relation extraction approaching timeout", {
+                stage: "relation-extraction",
+                entityCount: entityArray.length,
+                propertyCount: properties.length
+              })
+          ).pipe(
             Effect.tap((response) =>
               annotateExtraction({
                 relationCount: response.value.relations.length,
@@ -532,7 +573,8 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
           // Schema validation already enforced all constraints (subjectId, predicate, rangeType)
           // If generateObject succeeded, all relations are valid
           // Post-extraction expansion converts local names (e.g., "playsFor") to full IRIs
-          const propertyIris = properties.map((p) => p.id) as unknown as ReadonlyArray<IRI>
+          // PropertyDefinition.id is string but contains valid IRIs from ontology parsing
+          const propertyIris: ReadonlyArray<IRI> = properties.map((p) => p.id as IRI)
           const localNameToIriMap = buildLocalNameToIriMap(propertyIris)
           let skippedRelationCount = 0
           type RelationData = { subjectId: string; predicate: string; object: string }

@@ -106,12 +106,14 @@ describe("Activity Input Schemas", () => {
     it("decodes validation input without optional SHACL", () => {
       const raw = {
         batchId: testBatchId,
-        resolvedGraphUri: makeGcsUri("resolved/graph.ttl")
+        resolvedGraphUri: makeGcsUri("resolved/graph.ttl"),
+        ontologyUri: makeGcsUri("ontology/football.ttl")
       }
 
       const result = Schema.decodeUnknownSync(ValidationActivityInput)(raw)
 
       expect(result.batchId).toBe(testBatchId)
+      expect(result.ontologyUri).toContain("football")
       expect(result.shaclUri).toBeUndefined()
     })
 
@@ -119,6 +121,7 @@ describe("Activity Input Schemas", () => {
       const raw = {
         batchId: testBatchId,
         resolvedGraphUri: makeGcsUri("resolved/graph.ttl"),
+        ontologyUri: makeGcsUri("ontology/football.ttl"),
         shaclUri: makeGcsUri("shapes/shacl.ttl")
       }
 

@@ -5,6 +5,7 @@
  * @module Utils
  */
 
+export * from "./Datatype.js"
 export * from "./Entity.js"
 export * from "./IdempotencyKey.js"
 export * from "./Iri.js"

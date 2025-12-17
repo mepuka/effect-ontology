@@ -93,6 +93,62 @@ export const OWL = {
 } as const
 
 /**
+ * PROV-O Vocabulary IRIs (Provenance Ontology)
+ * http://www.w3.org/ns/prov#
+ */
+export const PROV = {
+  Entity: iri("http://www.w3.org/ns/prov#Entity"),
+  Activity: iri("http://www.w3.org/ns/prov#Activity"),
+  Agent: iri("http://www.w3.org/ns/prov#Agent"),
+  wasGeneratedBy: iri("http://www.w3.org/ns/prov#wasGeneratedBy"),
+  wasDerivedFrom: iri("http://www.w3.org/ns/prov#wasDerivedFrom"),
+  wasAttributedTo: iri("http://www.w3.org/ns/prov#wasAttributedTo"),
+  startedAtTime: iri("http://www.w3.org/ns/prov#startedAtTime"),
+  endedAtTime: iri("http://www.w3.org/ns/prov#endedAtTime"),
+  generatedAtTime: iri("http://www.w3.org/ns/prov#generatedAtTime"),
+  used: iri("http://www.w3.org/ns/prov#used"),
+  wasAssociatedWith: iri("http://www.w3.org/ns/prov#wasAssociatedWith")
+} as const
+
+/**
+ * Dublin Core Terms Vocabulary IRIs
+ * http://purl.org/dc/terms/
+ */
+export const DCTERMS = {
+  title: iri("http://purl.org/dc/terms/title"),
+  description: iri("http://purl.org/dc/terms/description"),
+  creator: iri("http://purl.org/dc/terms/creator"),
+  created: iri("http://purl.org/dc/terms/created"),
+  modified: iri("http://purl.org/dc/terms/modified"),
+  source: iri("http://purl.org/dc/terms/source"),
+  identifier: iri("http://purl.org/dc/terms/identifier"),
+  format: iri("http://purl.org/dc/terms/format"),
+  type: iri("http://purl.org/dc/terms/type"),
+  subject: iri("http://purl.org/dc/terms/subject"),
+  publisher: iri("http://purl.org/dc/terms/publisher"),
+  contributor: iri("http://purl.org/dc/terms/contributor"),
+  rights: iri("http://purl.org/dc/terms/rights"),
+  license: iri("http://purl.org/dc/terms/license")
+} as const
+
+/**
+ * XSD Vocabulary IRIs (XML Schema Datatypes)
+ * http://www.w3.org/2001/XMLSchema#
+ */
+export const XSD = {
+  string: iri("http://www.w3.org/2001/XMLSchema#string"),
+  integer: iri("http://www.w3.org/2001/XMLSchema#integer"),
+  decimal: iri("http://www.w3.org/2001/XMLSchema#decimal"),
+  float: iri("http://www.w3.org/2001/XMLSchema#float"),
+  double: iri("http://www.w3.org/2001/XMLSchema#double"),
+  boolean: iri("http://www.w3.org/2001/XMLSchema#boolean"),
+  date: iri("http://www.w3.org/2001/XMLSchema#date"),
+  time: iri("http://www.w3.org/2001/XMLSchema#time"),
+  dateTime: iri("http://www.w3.org/2001/XMLSchema#dateTime"),
+  anyURI: iri("http://www.w3.org/2001/XMLSchema#anyURI")
+} as const
+
+/**
  * SKOS Vocabulary IRIs
  * http://www.w3.org/2004/02/skos/core#
  */
@@ -119,6 +175,28 @@ export const SKOS = {
   inScheme: iri("http://www.w3.org/2004/02/skos/core#inScheme"),
   hasTopConcept: iri("http://www.w3.org/2004/02/skos/core#hasTopConcept"),
   topConceptOf: iri("http://www.w3.org/2004/02/skos/core#topConceptOf")
+} as const
+
+/**
+ * Extraction Vocabulary IRIs (Effect Ontology extraction-specific predicates)
+ * These are used for extraction metadata and confidence scoring.
+ *
+ * Uses a custom namespace to avoid conflicts with standard vocabularies.
+ * The namespace should be configured per-deployment but defaults to example.org.
+ *
+ * @since 2.0.0
+ */
+export const EXTR = {
+  /** Confidence score for an extracted triple (0-1, xsd:double) */
+  confidence: iri("http://example.org/kg/confidence"),
+  /** Model used for extraction (xsd:string) */
+  usedModel: iri("http://example.org/kg/usedModel"),
+  /** Ontology version used for extraction (xsd:string) */
+  ontologyVersion: iri("http://example.org/kg/ontologyVersion"),
+  /** Source chunk index (xsd:integer) */
+  sourceChunk: iri("http://example.org/kg/sourceChunk"),
+  /** Extraction method used (xsd:string) */
+  extractionMethod: iri("http://example.org/kg/extractionMethod")
 } as const
 
 // Legacy named exports for backward compatibility

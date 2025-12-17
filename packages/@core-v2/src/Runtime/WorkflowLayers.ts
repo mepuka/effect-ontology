@@ -18,6 +18,7 @@ import { BunContext } from "@effect/platform-bun"
 import { Layer } from "effect"
 import { ConfigService, ConfigServiceDefault } from "../Service/Config.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
+import { StageTimeoutServiceLive } from "../Service/LlmControl/StageTimeout.js"
 import { NlpService } from "../Service/Nlp.js"
 import { OntologyService } from "../Service/Ontology.js"
 import { RdfBuilder } from "../Service/Rdf.js"
@@ -45,6 +46,7 @@ const CoreDependenciesLayer = ConfigServiceDefault
  *
  * Dependencies:
  * - LanguageModel (provider-specific, selected by ConfigService)
+ * - StageTimeoutService (for per-stage timeout enforcement)
  * - ConfigService (for LLM settings)
  *
  * Uses Layer.provideMerge for order-independent composition.
@@ -53,6 +55,7 @@ const LlmExtractionBundle = Layer.mergeAll(
   EntityExtractor.Default,
   RelationExtractor.Default
 ).pipe(
+  Layer.provideMerge(StageTimeoutServiceLive),
   Layer.provideMerge(makeLanguageModelLayer),
   Layer.provideMerge(CoreDependenciesLayer)
 )

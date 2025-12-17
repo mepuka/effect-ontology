@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Layer, Option } from "effect"
+import { Effect, Exit, Layer, Option } from "effect"
 import type { BatchId, GcsUri } from "../../src/Domain/Identity.js"
+import { ValidationPolicyError } from "../../src/Domain/Error/Shacl.js"
 import type { ValidationActivityInput } from "../../src/Domain/Schema/Batch.js"
 import { TestConfigProvider } from "../../src/Runtime/TestRuntime.js"
 import { ConfigServiceDefault } from "../../src/Service/Config.js"
@@ -20,12 +21,24 @@ const testLayer = ShaclService.Default.pipe(
 const runWithLayer = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   Effect.runPromise(Effect.provide(testLayer)(effect as any) as any)
 
-const dataGraph = `
+const runWithLayerExit = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  Effect.runPromiseExit(Effect.provide(testLayer)(effect as any) as any)
+
+// Conforming data - has required schema:name
+const conformingDataGraph = `
   @prefix ex: <http://example.org/> .
   @prefix schema: <http://schema.org/> .
 
   ex:alice a schema:Person ;
     schema:name "Alice" .
+`
+
+// Non-conforming data - missing required schema:name
+const nonConformingDataGraph = `
+  @prefix ex: <http://example.org/> .
+  @prefix schema: <http://schema.org/> .
+
+  ex:bob a schema:Person .
 `
 
 const shapesGraph = `
@@ -40,12 +53,16 @@ const shapesGraph = `
     ] .
 `
 
+// Legacy alias for existing test
+const dataGraph = conformingDataGraph
+
 describe("ShaclValidationActivity", () => {
   it("validates a conforming graph and writes report", () =>
     runWithLayer(Effect.gen(function*() {
       const input: typeof ValidationActivityInput.Type = {
         batchId: "test-batch" as BatchId,
         resolvedGraphUri: "gs://test-bucket/batches/test-batch/resolved.ttl" as GcsUri,
+        ontologyUri: "gs://test-bucket/ontologies/person.ttl" as GcsUri,
         shaclUri: "gs://test-bucket/shapes/person.ttl" as GcsUri
       }
 
@@ -72,5 +89,71 @@ describe("ShaclValidationActivity", () => {
 
       const parsedReport = JSON.parse(reportJson) as { conforms: boolean; violations?: Array<unknown> }
       expect(parsedReport.conforms).toBe(true)
+    })))
+
+  it("detects violations in non-conforming data using real SHACL engine", () =>
+    runWithLayer(Effect.gen(function*() {
+      const shacl = yield* ShaclService
+      const rdf = yield* RdfBuilder
+
+      // Parse non-conforming data (missing schema:name)
+      const dataStore = yield* rdf.parseTurtle(nonConformingDataGraph)
+
+      // Parse shapes
+      const shapesStore = yield* shacl.loadShapes(shapesGraph)
+
+      // Validate - should detect violation
+      const report = yield* shacl.validate(dataStore._store, shapesStore)
+
+      expect(report.conforms).toBe(false)
+      expect(report.violations.length).toBeGreaterThan(0)
+
+      // The violation should be about missing schema:name
+      const violation = report.violations[0]
+      expect(violation.focusNode).toContain("bob")
+      expect(violation.severity).toBe("Violation")
+    })))
+
+  it("fails with ValidationPolicyError when policy requires", () =>
+    runWithLayerExit(Effect.gen(function*() {
+      const shacl = yield* ShaclService
+      const rdf = yield* RdfBuilder
+
+      // Parse non-conforming data
+      const dataStore = yield* rdf.parseTurtle(nonConformingDataGraph)
+      const shapesStore = yield* shacl.loadShapes(shapesGraph)
+
+      // Validate with policy that fails on violations
+      return yield* shacl.validateWithPolicy(dataStore._store, shapesStore, {
+        failOnViolation: true,
+        failOnWarning: false
+      })
+    })).then((exit) => {
+      expect(Exit.isFailure(exit)).toBe(true)
+      if (Exit.isFailure(exit)) {
+        const error = exit.cause._tag === "Fail" ? exit.cause.error : null
+        expect(error).toBeInstanceOf(ValidationPolicyError)
+        expect((error as ValidationPolicyError).violationCount).toBeGreaterThan(0)
+      }
+    }))
+
+  it("succeeds when policy allows violations", () =>
+    runWithLayer(Effect.gen(function*() {
+      const shacl = yield* ShaclService
+      const rdf = yield* RdfBuilder
+
+      // Parse non-conforming data
+      const dataStore = yield* rdf.parseTurtle(nonConformingDataGraph)
+      const shapesStore = yield* shacl.loadShapes(shapesGraph)
+
+      // Validate with policy that allows violations
+      const report = yield* shacl.validateWithPolicy(dataStore._store, shapesStore, {
+        failOnViolation: false,
+        failOnWarning: false
+      })
+
+      // Should succeed but report violations
+      expect(report.conforms).toBe(false)
+      expect(report.violations.length).toBeGreaterThan(0)
     })))
 })

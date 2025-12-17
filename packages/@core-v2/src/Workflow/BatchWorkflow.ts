@@ -97,6 +97,7 @@ export const BatchWorkflowLayer = BatchWorkflow.toLayer(({ batchId, manifestUri,
     const validationResult = yield* makeValidationActivity({
       batchId,
       resolvedGraphUri: resolutionResult.resolvedUri,
+      ontologyUri: manifest.ontologyUri,
       shaclUri: manifest.shaclUri
     }).execute
 

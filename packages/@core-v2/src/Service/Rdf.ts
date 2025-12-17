@@ -12,7 +12,7 @@ import { Chunk, Effect, type Scope } from "effect"
 import * as N3 from "n3"
 import { ParsingFailed, RdfError, SerializationFailed } from "../Domain/Error/Rdf.js"
 import type { Entity, Relation } from "../Domain/Model/Entity.js"
-import { OWL } from "../Domain/Rdf/Constants.js"
+import { DCTERMS, EXTR, OWL, PROV, XSD } from "../Domain/Rdf/Constants.js"
 import { type BlankNode as BlankNodeType, type IRI, Literal, Quad, type RdfTerm } from "../Domain/Rdf/Types.js"
 import { createN3Builders, entityToQuads, relationToQuad } from "../Utils/Rdf.js"
 import { ConfigService } from "./Config.js"
@@ -133,6 +133,28 @@ export interface AddTriplesOptions {
   readonly graphUri?: string
 }
 
+/**
+ * Extraction metadata for provenance tracking
+ *
+ * Captures information about the extraction run for audit purposes.
+ *
+ * @since 2.0.0
+ */
+export interface ExtractionMetadata {
+  /** Graph URI where metadata triples will be added (typically the provenance graph) */
+  readonly graphUri: string
+  /** Activity URI representing the extraction run */
+  readonly activityUri?: string
+  /** ISO 8601 timestamp when extraction was performed */
+  readonly timestamp: string
+  /** Source document URI */
+  readonly sourceUri: string
+  /** LLM model used for extraction */
+  readonly model: string
+  /** Ontology version identifier (e.g., "football/ontology@abc123") */
+  readonly ontologyVersion: string
+}
+
 export interface RdfBuilderShape {
   readonly makeStore: Effect.Effect<RdfStore, never, Scope.Scope>
   readonly createStore: Effect.Effect<RdfStore, never, never>
@@ -152,6 +174,30 @@ export interface RdfBuilderShape {
   readonly addSameAsLinks: (
     store: RdfStore,
     canonicalMap: Record<string, string>
+  ) => Effect.Effect<void, RdfError, never>
+  readonly addExtractionMetadata: (
+    store: RdfStore,
+    metadata: ExtractionMetadata
+  ) => Effect.Effect<void, RdfError, never>
+  /**
+   * Add a triple with confidence annotation using RDF-star
+   *
+   * Creates the original triple and adds a confidence score annotation
+   * using RDF-star quoted triple syntax:
+   * `<<subject predicate object>> ex:confidence "0.95"^^xsd:double .`
+   *
+   * @param store - Target RDF store
+   * @param triple - Triple components (subject IRI, predicate IRI, object IRI or literal)
+   * @param confidence - Confidence score between 0 and 1
+   * @param graphUri - Optional named graph URI
+   *
+   * @since 2.0.0
+   */
+  readonly addTripleWithConfidence: (
+    store: RdfStore,
+    triple: { subject: string; predicate: string; object: string | number | boolean },
+    confidence: number,
+    graphUri?: string
   ) => Effect.Effect<void, RdfError, never>
   readonly toTurtle: (store: RdfStore) => Effect.Effect<string, SerializationFailed, never>
   readonly validate: (
@@ -436,6 +482,159 @@ export class RdfBuilder extends Effect.Service<RdfBuilder>()(
             catch: (error) =>
               new RdfError({
                 message: `Failed to add owl:sameAs links to RDF store: ${error}`,
+                cause: error
+              })
+          }),
+
+        /**
+         * Add extraction run metadata triples for provenance tracking
+         *
+         * Generates PROV-O and Dublin Core metadata triples describing the
+         * extraction activity. Triples are added to the specified named graph.
+         *
+         * Generated triples:
+         * - prov:wasGeneratedBy → extraction activity
+         * - prov:generatedAtTime → timestamp
+         * - dcterms:source → document URI
+         * - :usedModel → LLM model name
+         * - :ontologyVersion → ontology IRI + hash
+         *
+         * @param store - RdfStore to add metadata to
+         * @param metadata - Extraction metadata
+         * @returns Effect completing when metadata is added
+         *
+         * @since 2.0.0
+         */
+        addExtractionMetadata: (store: RdfStore, metadata: ExtractionMetadata) =>
+          Effect.try({
+            try: () => {
+              const n3Store = store._store
+              const graphNode = N3.DataFactory.namedNode(metadata.graphUri)
+              const graphSubject = N3.DataFactory.namedNode(metadata.graphUri)
+
+              // Activity URI defaults to graph URI with /activity suffix
+              const activityUri = metadata.activityUri ?? `${metadata.graphUri}/activity`
+              const activityNode = N3.DataFactory.namedNode(activityUri)
+
+              // Custom predicates in the extraction namespace
+              const usedModelPredicate = N3.DataFactory.namedNode(`${baseNs}usedModel`)
+              const ontologyVersionPredicate = N3.DataFactory.namedNode(`${baseNs}ontologyVersion`)
+
+              // prov:wasGeneratedBy
+              n3Store.addQuad(N3.DataFactory.quad(
+                graphSubject,
+                N3.DataFactory.namedNode(PROV.wasGeneratedBy),
+                activityNode,
+                graphNode
+              ))
+
+              // prov:generatedAtTime
+              n3Store.addQuad(N3.DataFactory.quad(
+                graphSubject,
+                N3.DataFactory.namedNode(PROV.generatedAtTime),
+                N3.DataFactory.literal(metadata.timestamp, N3.DataFactory.namedNode(XSD.dateTime)),
+                graphNode
+              ))
+
+              // dcterms:source
+              n3Store.addQuad(N3.DataFactory.quad(
+                graphSubject,
+                N3.DataFactory.namedNode(DCTERMS.source),
+                N3.DataFactory.namedNode(metadata.sourceUri),
+                graphNode
+              ))
+
+              // :usedModel (custom predicate)
+              n3Store.addQuad(N3.DataFactory.quad(
+                activityNode,
+                usedModelPredicate,
+                N3.DataFactory.literal(metadata.model),
+                graphNode
+              ))
+
+              // :ontologyVersion (custom predicate)
+              n3Store.addQuad(N3.DataFactory.quad(
+                activityNode,
+                ontologyVersionPredicate,
+                N3.DataFactory.literal(metadata.ontologyVersion),
+                graphNode
+              ))
+
+              // Mark activity as prov:Activity type
+              n3Store.addQuad(N3.DataFactory.quad(
+                activityNode,
+                N3.DataFactory.namedNode("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+                N3.DataFactory.namedNode(PROV.Activity),
+                graphNode
+              ))
+            },
+            catch: (error) =>
+              new RdfError({
+                message: `Failed to add extraction metadata to RDF store: ${error}`,
+                cause: error
+              })
+          }),
+
+        /**
+         * Add a triple with confidence annotation using RDF-star
+         *
+         * Uses N3.js quoted triple support to create:
+         * - The original triple (subject predicate object)
+         * - A confidence annotation triple using the original as subject
+         *
+         * RDF-star syntax: <<:subject :predicate :object>> ex:confidence "0.95"^^xsd:double
+         */
+        addTripleWithConfidence: (
+          store: RdfStore,
+          triple: { subject: string; predicate: string; object: string | number | boolean },
+          confidence: number,
+          graphUri?: string
+        ) =>
+          Effect.try({
+            try: () => {
+              const n3Store = store._store
+              const graphNode = graphUri
+                ? N3.DataFactory.namedNode(graphUri)
+                : N3.DataFactory.defaultGraph()
+
+              // Create subject and predicate nodes
+              const subjectNode = N3.DataFactory.namedNode(triple.subject)
+              const predicateNode = N3.DataFactory.namedNode(triple.predicate)
+
+              // Create object node (IRI or literal)
+              const objectNode = typeof triple.object === "string"
+                ? (triple.object.startsWith("http://") || triple.object.startsWith("https://") || triple.object.startsWith("urn:"))
+                  ? N3.DataFactory.namedNode(triple.object)
+                  : N3.DataFactory.literal(triple.object)
+                : typeof triple.object === "number"
+                  ? N3.DataFactory.literal(triple.object.toString(), N3.DataFactory.namedNode(XSD.double))
+                  : N3.DataFactory.literal(triple.object.toString(), N3.DataFactory.namedNode(XSD.boolean))
+
+              // Create the original quad (triple)
+              const originalQuad = N3.DataFactory.quad(
+                subjectNode,
+                predicateNode,
+                objectNode,
+                graphNode
+              )
+
+              // Add the original quad to the store
+              n3Store.addQuad(originalQuad)
+
+              // Create confidence annotation using RDF-star (quoted triple as subject)
+              // The N3.DataFactory.quad() can accept a Quad as subject for RDF-star
+              const confidenceQuad = N3.DataFactory.quad(
+                originalQuad, // Quoted triple as subject (RDF-star)
+                N3.DataFactory.namedNode(EXTR.confidence),
+                N3.DataFactory.literal(confidence.toString(), N3.DataFactory.namedNode(XSD.double)),
+                graphNode
+              )
+
+              n3Store.addQuad(confidenceQuad)
+            },
+            catch: (error) =>
+              new RdfError({
+                message: `Failed to add triple with confidence: ${error}`,
                 cause: error
               })
           }),

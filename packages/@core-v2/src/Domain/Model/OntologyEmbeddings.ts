@@ -8,6 +8,7 @@
  * @module Domain/Model/OntologyEmbeddings
  */
 
+import { createHash } from "node:crypto"
 import { Schema } from "effect"
 
 /**
@@ -84,8 +85,7 @@ export const OntologyEmbeddingsJson = Schema.parseJson(OntologyEmbeddings)
  * @category Utils
  */
 export const computeOntologyVersion = (ontologyContent: string): string => {
-  const crypto = require("crypto")
-  return crypto.createHash("sha256").update(ontologyContent).digest("hex").slice(0, 16)
+  return createHash("sha256").update(ontologyContent).digest("hex").slice(0, 16)
 }
 
 /**

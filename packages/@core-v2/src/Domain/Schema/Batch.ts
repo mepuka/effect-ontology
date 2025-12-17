@@ -40,10 +40,25 @@ export const ResolutionActivityInput = Schema.Struct({
   documentGraphUris: Schema.Array(GcsUri)
 })
 
+/**
+ * Validation policy for controlling workflow behavior based on severity
+ */
+export const ValidationPolicy = Schema.Struct({
+  /** Fail if any Violation-level results are present (default: true) */
+  failOnViolation: Schema.optional(Schema.Boolean),
+  /** Fail if any Warning-level results are present (default: false) */
+  failOnWarning: Schema.optional(Schema.Boolean)
+})
+export type ValidationPolicy = typeof ValidationPolicy.Type
+
 export const ValidationActivityInput = Schema.Struct({
   batchId: BatchId,
   resolvedGraphUri: GcsUri,
-  shaclUri: Schema.optional(GcsUri)
+  /** Ontology URI for generating SHACL shapes (when shaclUri not provided) */
+  ontologyUri: GcsUri,
+  shaclUri: Schema.optional(GcsUri),
+  /** Policy for handling validation violations (default: failOnViolation=true) */
+  validationPolicy: Schema.optional(ValidationPolicy)
 })
 export const ValidationActivityViolationSummary = Schema.Struct({
   severity: Schema.String,

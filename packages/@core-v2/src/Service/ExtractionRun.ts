@@ -7,8 +7,9 @@
  * @module Service/ExtractionRun
  */
 
+import { createHash } from "node:crypto"
 import { FileSystem, Path } from "@effect/platform"
-import { Context, Effect, Hash, Layer } from "effect"
+import { Context, Effect, Layer } from "effect"
 import type { ChunkId, ExtractionRunId, IdempotencyKey } from "../Domain/Identity.js"
 import type {
   AuditError,
@@ -27,15 +28,33 @@ import { getOutputFilename } from "../Domain/Model/OutputType.js"
 // Helpers
 // =============================================================================
 
-const hashToHex = (hash: number): string => {
-  const unsigned = hash >>> 0
-  return unsigned.toString(16).padStart(16, "0")
+/**
+ * Generate SHA-256 hash of content
+ *
+ * Uses cryptographic hash for collision resistance:
+ * - 256-bit output space
+ * - Birthday attack requires ~2^128 hashes
+ *
+ * @param content - Content to hash
+ * @returns Full 64-character hex hash
+ */
+const sha256Hex = (content: string): string => {
+  return createHash("sha256").update(content).digest("hex")
 }
 
+/**
+ * Generate document ID from text using SHA-256
+ *
+ * Uses 32 hex characters (128 bits) for collision resistance.
+ * Birthday attack threshold: ~2^64 documents before 50% collision probability.
+ *
+ * @param text - Document text to hash
+ * @returns Deterministic document ID
+ */
 const generateDocumentId = (text: string): ExtractionRunId => {
-  const hash = Hash.string(text)
-  const hex = hashToHex(hash)
-  const prefix = hex.slice(0, 12)
+  const hash = sha256Hex(text)
+  // Use first 32 hex chars (128 bits) for collision resistance
+  const prefix = hash.slice(0, 32)
   return `doc-${prefix}` as ExtractionRunId
 }
 
@@ -44,10 +63,10 @@ const generateDocumentId = (text: string): ExtractionRunId => {
  */
 export const getRunIdFromText = (text: string): ExtractionRunId => generateDocumentId(text)
 
-const hashContent = (content: string): string => {
-  const hash = Hash.string(content)
-  return hashToHex(hash)
-}
+/**
+ * Hash content for integrity checking
+ */
+const hashContent = (content: string): string => sha256Hex(content)
 
 const getBaseDir = (): string => process.env.EXTRACTION_RUNS_DIR || "./output/runs"
 
@@ -227,6 +246,29 @@ const makeExtractionRunService = Effect.gen(function*() {
         const inputDir = path.resolve(runDir, "input")
         const chunksDir = path.resolve(inputDir, "chunks")
         const outputsDir = path.resolve(runDir, "outputs")
+        const documentPath = path.resolve(inputDir, "document.txt")
+        const metadataPath = path.resolve(runDir, "metadata.json")
+
+        // COLLISION DETECTION: Check if run already exists
+        const existingMetadata = yield* fs.exists(metadataPath)
+        if (existingMetadata) {
+          // Run exists - verify content matches (idempotency check)
+          const existingText = yield* fs.readFileString(documentPath).pipe(
+            Effect.orElseSucceed(() => "")
+          )
+          if (existingText === text) {
+            // Same content - return existing run (idempotent)
+            const json = yield* fs.readFileString(metadataPath)
+            return new ExtractionRun(JSON.parse(json))
+          } else {
+            // Different content with same hash - true collision (extremely rare with SHA-256)
+            yield* Effect.logWarning(
+              `Hash collision detected for runId ${runId}. ` +
+              `Existing content length: ${existingText.length}, new content length: ${text.length}. ` +
+              `This should be extremely rare with SHA-256. Overwriting.`
+            )
+          }
+        }
 
         // Create directories sequentially to ensure parent exists before child
         yield* fs.makeDirectory(runDir, { recursive: true })
@@ -234,7 +276,7 @@ const makeExtractionRunService = Effect.gen(function*() {
         yield* fs.makeDirectory(chunksDir, { recursive: true })
         yield* fs.makeDirectory(outputsDir, { recursive: true })
 
-        yield* fs.writeFileString(path.resolve(inputDir, "document.txt"), text)
+        yield* fs.writeFileString(documentPath, text)
 
         const now = new Date().toISOString()
         const run = new ExtractionRun({

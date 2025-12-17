@@ -21,7 +21,10 @@ export const TestConfigProvider = ConfigProvider.fromMap(
     ["STORAGE_TYPE", "memory"],
     ["RUNTIME_CONCURRENCY", "4"],
     ["RUNTIME_LLM_CONCURRENCY", "2"],
-    ["RUNTIME_ENABLE_TRACING", "false"]
+    ["RUNTIME_ENABLE_TRACING", "false"],
+    ["EMBEDDING_MODEL", "nomic-embed-text-v1.5"],
+    ["EMBEDDING_DIMENSION", "768"],
+    ["EMBEDDING_TRANSFORMERS_MODEL_ID", "Xenova/nomic-embed-text-v1"]
   ]),
   { pathDelim: "_" }
 )

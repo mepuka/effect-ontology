@@ -29,13 +29,10 @@ export const LlmAttributes = {
   // Cost tracking (custom)
   ESTIMATED_COST_USD: "llm.cost.usd",
 
-  // Request details
+  // Request details (safe metadata only - no PII)
   PROMPT_LENGTH: "gen_ai.prompt.length",
-  PROMPT_TEXT: "gen_ai.prompt.text",
-  RESPONSE_TEXT: "gen_ai.response.text",
-
-  // Schema (custom - JSON Schema for structured output)
-  REQUEST_SCHEMA: "gen_ai.request.schema",
+  RESPONSE_LENGTH: "gen_ai.response.length",
+  SCHEMA_HASH: "gen_ai.request.schema_hash",
 
   // Extraction-specific (custom)
   ENTITY_COUNT: "extraction.entity_count",
@@ -74,9 +71,8 @@ export const annotateLlmCall = (attrs: {
   promptLength: number
   inputTokens?: number
   outputTokens?: number
-  promptText?: string
-  responseText?: string
-  schemaJson?: string
+  responseLength?: number
+  schemaHash?: string
 }): Effect.Effect<void> =>
   Effect.gen(function*() {
     yield* Effect.annotateCurrentSpan(LlmAttributes.MODEL, attrs.model)
@@ -97,21 +93,13 @@ export const annotateLlmCall = (attrs: {
       const cost = calculateCost(attrs.model, attrs.inputTokens, attrs.outputTokens)
       yield* Effect.annotateCurrentSpan(LlmAttributes.ESTIMATED_COST_USD, cost)
     }
-    if (attrs.promptText !== undefined) {
-      // Truncate prompt text to avoid huge spans
-      yield* Effect.annotateCurrentSpan(
-        LlmAttributes.PROMPT_TEXT,
-        attrs.promptText.slice(0, 1000)
-      )
+    // NOTE: Removed PROMPT_TEXT and RESPONSE_TEXT to prevent PII leakage
+    // Only safe metadata (lengths, hashes) should be captured in telemetry
+    if (attrs.responseLength !== undefined) {
+      yield* Effect.annotateCurrentSpan(LlmAttributes.RESPONSE_LENGTH, attrs.responseLength)
     }
-    if (attrs.responseText !== undefined) {
-      yield* Effect.annotateCurrentSpan(
-        LlmAttributes.RESPONSE_TEXT,
-        attrs.responseText.slice(0, 1000)
-      )
-    }
-    if (attrs.schemaJson !== undefined) {
-      yield* Effect.annotateCurrentSpan(LlmAttributes.REQUEST_SCHEMA, attrs.schemaJson)
+    if (attrs.schemaHash !== undefined) {
+      yield* Effect.annotateCurrentSpan(LlmAttributes.SCHEMA_HASH, attrs.schemaHash)
     }
   })
 
