@@ -227,7 +227,7 @@ export const clusterEntities = (
             }
           }
         }),
-      { concurrency: "unbounded" } // Allow yielding between iterations
+      { concurrency: 50 } // Bounded to prevent OOM with large entity sets
     )
 
     // Step 3: Build Graph synchronously (cheap now that edges are pre-computed)
