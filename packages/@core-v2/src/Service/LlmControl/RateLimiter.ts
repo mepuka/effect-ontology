@@ -11,7 +11,7 @@
  * @module Service/LlmControl/RateLimiter
  */
 
-import { Context, Effect, Layer, Ref } from "effect"
+import { Clock, Context, Effect, Layer, Ref } from "effect"
 import { CircuitOpenError, RateLimitError } from "../../Domain/Error/Circuit.js"
 
 // =============================================================================
@@ -160,10 +160,11 @@ export class CentralRateLimiterService extends Context.Tag(
  */
 const make = (config: RateLimiterConfig = DEFAULT_CONFIG) =>
   Effect.gen(function*() {
+    const initialTime = yield* Clock.currentTimeMillis
     const state = yield* Ref.make<RateLimiterState>({
       requestsThisMinute: 0,
       tokensThisMinute: 0,
-      lastReset: Date.now(),
+      lastReset: Number(initialTime),
       circuitState: "closed",
       failureCount: 0,
       successCount: 0
@@ -183,7 +184,7 @@ const make = (config: RateLimiterConfig = DEFAULT_CONFIG) =>
     return {
       acquire: (estimatedTokens: number) =>
         Effect.gen(function*() {
-          const now = Date.now()
+          const now = Number(yield* Clock.currentTimeMillis)
           const current = yield* Ref.get(state)
 
           // Check circuit breaker
@@ -252,6 +253,9 @@ const make = (config: RateLimiterConfig = DEFAULT_CONFIG) =>
           // CRITICAL: Release the semaphore permit acquired in acquire()
           yield* semaphore.release(1)
 
+          // Get current time for potential circuit open reset
+          const now = Number(yield* Clock.currentTimeMillis)
+
           // Update circuit breaker state based on success/failure
           yield* Ref.update(state, (s) => {
             if (success) {
@@ -273,7 +277,7 @@ const make = (config: RateLimiterConfig = DEFAULT_CONFIG) =>
                 failureCount: newFailureCount,
                 successCount: 0,
                 circuitState: shouldOpen ? ("open" as const) : s.circuitState,
-                lastReset: shouldOpen ? Date.now() : s.lastReset
+                lastReset: shouldOpen ? now : s.lastReset
               }
             }
           })
@@ -282,12 +286,12 @@ const make = (config: RateLimiterConfig = DEFAULT_CONFIG) =>
       getMetrics: () => Ref.get(state),
 
       getResetTime: () =>
-        Ref.get(state).pipe(
-          Effect.map((s) => {
-            const elapsed = Date.now() - s.lastReset
-            return Math.max(0, 60_000 - elapsed)
-          })
-        ),
+        Effect.gen(function*() {
+          const s = yield* Ref.get(state)
+          const now = Number(yield* Clock.currentTimeMillis)
+          const elapsed = now - s.lastReset
+          return Math.max(0, 60_000 - elapsed)
+        }),
 
       setCircuitState: (circuitState: CircuitState) =>
         Ref.update(state, (s) => ({

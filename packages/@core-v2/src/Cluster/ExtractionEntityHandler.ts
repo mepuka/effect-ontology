@@ -12,7 +12,7 @@
  */
 
 import type { Entity } from "@effect/cluster"
-import { Chunk, Deferred, Effect, HashMap, Option, Ref, Stream } from "effect"
+import { Chunk, Clock, Deferred, Effect, HashMap, Option, Ref, Stream } from "effect"
 import type { ProgressEvent } from "../Contract/ProgressStreaming.js"
 import type { ContentHash, ExtractionRunId, Namespace, OntologyName } from "../Domain/Identity.js"
 import type { Relation } from "../Domain/Model/Entity.js"
@@ -213,11 +213,12 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
         (params ?? {}) as ExtractionParams
       )
       const runId = getRunIdFromText(text)
-      const startTime = Date.now()
 
       // Use Stream.unwrapScoped for proper resource management
       return Stream.unwrapScoped(
         Effect.gen(function*() {
+          const startTime = yield* Clock.currentTimeMillis
+
           // CANCELLATION: Create and register cancellation signal
           const cancelSignal = yield* Deferred.make<void, never>()
           const keyString = idempotencyKey as string
@@ -242,7 +243,7 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
           yield* tokenBudget.reset(config.llm.maxTokens)
 
           // Chunk text with timeout
-          const chunkingStart = Date.now()
+          const chunkingStart = yield* Clock.currentTimeMillis
           const chunks = yield* stageTimeout.withTimeout(
             "chunking",
             nlpService.chunkText(text, { maxChunkSize: 500, preserveSentences: true }),
@@ -305,15 +306,16 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
           )
 
           // Emit chunking stage events
+          const chunkingEndTime = yield* Clock.currentTimeMillis
           events.push(makeStageStarted(runId, "chunking", 5))
-          events.push(makeStageCompleted(runId, "chunking", 10, Date.now() - chunkingStart, totalChunks))
+          events.push(makeStageCompleted(runId, "chunking", 10, Number(chunkingEndTime - chunkingStart), totalChunks))
 
           // Process chunks with bounded concurrency
           const chunkEventsStream = Stream.fromIterable(chunks).pipe(
             Stream.mapEffect(
               (chunk) =>
                 Effect.gen(function*() {
-                  const chunkStartTime = Date.now()
+                  const chunkStartTime = yield* Clock.currentTimeMillis
                   const chunkProgress = 10 + ((chunk.index / totalChunks) * 70)
                   const chunkEvents: Array<ProgressEvent> = []
 
@@ -360,7 +362,7 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
                   }
 
                   // Extract entities with timeout
-                  const entityStart = Date.now()
+                  const entityStart = yield* Clock.currentTimeMillis
                   const entities = yield* stageTimeout.withTimeout(
                     "entity_extraction",
                     entityExtractor
@@ -377,12 +379,13 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
                       }))
                   )
 
+                  const entityEndTime = yield* Clock.currentTimeMillis
                   chunkEvents.push(
                     makeStageCompleted(
                       runId,
                       "entity_extraction",
                       chunkProgress + 20,
-                      Date.now() - entityStart,
+                      Number(entityEndTime - entityStart),
                       Chunk.size(entities)
                     )
                   )
@@ -429,7 +432,7 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
                       })
                     )
 
-                    const relationStart = Date.now()
+                    const relationStart = yield* Clock.currentTimeMillis
                     relations = yield* stageTimeout.withTimeout(
                       "relation_extraction",
                       relationExtractor
@@ -446,12 +449,13 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
                         }))
                     )
 
+                    const relationEndTime = yield* Clock.currentTimeMillis
                     chunkEvents.push(
                       makeStageCompleted(
                         runId,
                         "relation_extraction",
                         chunkProgress + 45,
-                        Date.now() - relationStart,
+                        Number(relationEndTime - relationStart),
                         Chunk.size(relations)
                       )
                     )
@@ -517,7 +521,7 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
                       }
                     })
 
-                    const groundingStart = Date.now()
+                    const groundingStart = yield* Clock.currentTimeMillis
                     const verificationResults = yield* stageTimeout.withTimeout(
                       "grounding",
                       grounder.verifyRelationBatch(chunk.text, verificationInputs),
@@ -552,12 +556,13 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
                       )
                     )
 
+                    const groundingEndTime = yield* Clock.currentTimeMillis
                     chunkEvents.push(
                       makeStageCompleted(
                         runId,
                         "grounding",
                         chunkProgress + 65,
-                        Date.now() - groundingStart,
+                        Number(groundingEndTime - groundingStart),
                         verifiedRelations.length
                       )
                     )
@@ -592,12 +597,13 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
                   yield* runService.saveChunk(runId as ExtractionRunId, chunk.index, chunk.text).pipe(Effect.ignore)
 
                   // Emit chunk complete
+                  const chunkEndTime = yield* Clock.currentTimeMillis
                   chunkEvents.push(
                     makeEvent(runId, "chunk_processing_complete", chunkProgress + 80, {
                       chunkIndex: chunk.index,
                       entityCount: Chunk.size(entities),
                       relationCount: verifiedRelations.length,
-                      durationMs: Date.now() - chunkStartTime
+                      durationMs: Number(chunkEndTime - chunkStartTime)
                     })
                   )
 
@@ -634,6 +640,8 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
           const completeEventStream = Stream.fromEffect(
             Effect.gen(function*() {
               const stats = yield* Ref.get(statsRef)
+              const endTime = yield* Clock.currentTimeMillis
+              const totalDuration = Number(endTime - startTime)
 
               yield* runService.updateStats(runId as ExtractionRunId, {
                 chunkCount: totalChunks,
@@ -642,7 +650,7 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
                 resolvedCount: 0,
                 clusterCount: 0,
                 tokensUsed: stats.tokensUsed,
-                durationMs: Date.now() - startTime
+                durationMs: totalDuration
               })
               yield* runService.completeRun(runId as ExtractionRunId)
 
@@ -650,7 +658,7 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
                 totalEntities: stats.totalEntities,
                 totalRelations: stats.verifiedRelations,
                 uniqueEntityTypes: stats.entityTypes.size,
-                totalDurationMs: Date.now() - startTime,
+                totalDurationMs: totalDuration,
                 successfulChunks: stats.successfulChunks,
                 failedChunks: stats.failedChunks
               })

@@ -7,7 +7,7 @@
  * @module Service/ExecutionDeduplicator
  */
 
-import { Deferred, Effect, Option, Ref } from "effect"
+import { Clock, Deferred, Effect, Option, Ref } from "effect"
 import type { KnowledgeGraph } from "../Domain/Model/Entity.js"
 
 // =============================================================================
@@ -46,10 +46,11 @@ export const makeExecutionDeduplicator = Effect.gen(function*() {
 
         // Create new handle
         const deferred = yield* Deferred.make<KnowledgeGraph, Error>()
+        const now = yield* Clock.currentTimeMillis
         const handle: ExecutionHandle = {
           status: "running",
           deferred,
-          startedAt: Date.now()
+          startedAt: now
         }
 
         // Atomic insert - use modify to handle race where another fiber may have inserted

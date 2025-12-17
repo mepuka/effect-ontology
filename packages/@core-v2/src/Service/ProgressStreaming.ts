@@ -8,7 +8,7 @@
  * @module Service/ProgressStreaming
  */
 
-import { Chunk, Effect, Option, Ref, Stream } from "effect"
+import { Chunk, Clock, Effect, Option, Ref, Stream } from "effect"
 import { v4 as uuidv4 } from "uuid"
 import type { BackpressureConfig, ProgressEvent } from "../Contract/ProgressStreaming.js"
 import {
@@ -436,7 +436,7 @@ export const enqueueEvent = (
 
     // Check warning threshold
     if (ratio >= state.config.warningThreshold) {
-      const now = Date.now()
+      const now = yield* Clock.currentTimeMillis
       if (now - state.lastWarnTime > 5000) {
         yield* Ref.update(ref, (s) => ({
           ...s,
