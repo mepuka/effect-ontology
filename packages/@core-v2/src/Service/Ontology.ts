@@ -95,7 +95,22 @@ export const parseOntologyFromStore = (
         return map
       })
 
-    // Fetch all metadata in parallel batches
+    // Helper to wrap predicate fetch with graceful failure handling
+    // Returns empty map if the query fails, allowing partial ontology loads
+    const fetchPredicateMapSafe = (predicate: IRI) =>
+      fetchPredicateMap(predicate).pipe(
+        Effect.catchAll((error) =>
+          Effect.gen(function*() {
+            yield* Effect.logWarning("Failed to fetch predicate metadata, using empty map", {
+              predicate,
+              error: String(error)
+            })
+            return new Map<string, Array<string>>()
+          })
+        )
+      )
+
+    // Fetch all metadata in parallel batches with failure isolation
     const [
       labels,
       comments,
@@ -117,25 +132,25 @@ export const parseOntologyFromStore = (
       inverseOfs,
       equivalentClasses
     ] = yield* Effect.all([
-      fetchPredicateMap(RDFS_LABEL),
-      fetchPredicateMap(RDFS_COMMENT),
-      fetchPredicateMap(RDFS_DOMAIN),
-      fetchPredicateMap(RDFS_RANGE),
-      fetchPredicateMap(RDFS_SUBCLASSOF),
-      fetchPredicateMap(RDFS_SUBPROPERTYOF),
-      fetchPredicateMap(SKOS_PREFLABEL),
-      fetchPredicateMap(SKOS_ALTLABEL),
-      fetchPredicateMap(SKOS_HIDDENLABEL),
-      fetchPredicateMap(SKOS_DEFINITION),
-      fetchPredicateMap(SKOS_SCOPENOTE),
-      fetchPredicateMap(SKOS_EXAMPLE),
-      fetchPredicateMap(SKOS_BROADER),
-      fetchPredicateMap(SKOS_NARROWER),
-      fetchPredicateMap(SKOS_RELATED),
-      fetchPredicateMap(SKOS_EXACTMATCH),
-      fetchPredicateMap(SKOS_CLOSEMATCH),
-      fetchPredicateMap(OWL_INVERSEOF),
-      fetchPredicateMap(OWL_EQUIVALENT_CLASS)
+      fetchPredicateMapSafe(RDFS_LABEL),
+      fetchPredicateMapSafe(RDFS_COMMENT),
+      fetchPredicateMapSafe(RDFS_DOMAIN),
+      fetchPredicateMapSafe(RDFS_RANGE),
+      fetchPredicateMapSafe(RDFS_SUBCLASSOF),
+      fetchPredicateMapSafe(RDFS_SUBPROPERTYOF),
+      fetchPredicateMapSafe(SKOS_PREFLABEL),
+      fetchPredicateMapSafe(SKOS_ALTLABEL),
+      fetchPredicateMapSafe(SKOS_HIDDENLABEL),
+      fetchPredicateMapSafe(SKOS_DEFINITION),
+      fetchPredicateMapSafe(SKOS_SCOPENOTE),
+      fetchPredicateMapSafe(SKOS_EXAMPLE),
+      fetchPredicateMapSafe(SKOS_BROADER),
+      fetchPredicateMapSafe(SKOS_NARROWER),
+      fetchPredicateMapSafe(SKOS_RELATED),
+      fetchPredicateMapSafe(SKOS_EXACTMATCH),
+      fetchPredicateMapSafe(SKOS_CLOSEMATCH),
+      fetchPredicateMapSafe(OWL_INVERSEOF),
+      fetchPredicateMapSafe(OWL_EQUIVALENT_CLASS)
     ], { concurrency: 5 })
 
     // Find all classes (subjects where ?s rdf:type owl:Class)

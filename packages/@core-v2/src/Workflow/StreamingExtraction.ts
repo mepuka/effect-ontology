@@ -503,6 +503,8 @@ export const makeExtractionWorkflow = Effect.gen(function*() {
               })
             ),
             Stream.filterMap((x) => x),
+            // Add buffer for backpressure - limits memory accumulation for in-flight chunks
+            Stream.buffer({ capacity: effectiveConcurrency * 2 }),
             // Phase 6: Merge all fragments using monoid operation
             Stream.runFold(
               new KnowledgeGraph({ entities: [], relations: [] }), // Identity element

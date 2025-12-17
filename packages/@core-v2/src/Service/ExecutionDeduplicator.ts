@@ -7,7 +7,7 @@
  * @module Service/ExecutionDeduplicator
  */
 
-import { Clock, Deferred, Effect, Option, Ref } from "effect"
+import { Clock, Deferred, Effect, HashMap, Option, Ref } from "effect"
 import type { KnowledgeGraph } from "../Domain/Model/Entity.js"
 
 // =============================================================================
@@ -25,7 +25,7 @@ export interface ExecutionHandle {
 // =============================================================================
 
 export const makeExecutionDeduplicator = Effect.gen(function*() {
-  const map = yield* Ref.make<Map<string, ExecutionHandle>>(new Map())
+  const map = yield* Ref.make(HashMap.empty<string, ExecutionHandle>())
 
   return {
     /**
@@ -36,7 +36,7 @@ export const makeExecutionDeduplicator = Effect.gen(function*() {
       Effect.gen(function*() {
         // First check if handle exists (atomic read)
         const existing = yield* Ref.get(map).pipe(
-          Effect.map((m) => Option.fromNullable(m.get(key)))
+          Effect.map((m) => HashMap.get(m, key))
         )
 
         if (Option.isSome(existing)) {
@@ -55,15 +55,13 @@ export const makeExecutionDeduplicator = Effect.gen(function*() {
 
         // Atomic insert - use modify to handle race where another fiber may have inserted
         const result = yield* Ref.modify(map, (m) => {
-          const raceExisting = m.get(key)
-          if (raceExisting) {
+          const raceExisting = HashMap.get(m, key)
+          if (Option.isSome(raceExisting)) {
             // Another fiber beat us - return existing handle
-            return [{ handle: raceExisting, isNew: false }, m]
+            return [{ handle: raceExisting.value, isNew: false }, m]
           }
-          // We won - insert our handle
-          const newMap = new Map(m)
-          newMap.set(key, handle)
-          return [{ handle, isNew: true }, newMap]
+          // We won - insert our handle (HashMap.set returns new immutable map)
+          return [{ handle, isNew: true }, HashMap.set(m, key, handle)]
         })
 
         if (result.isNew) {
@@ -82,14 +80,12 @@ export const makeExecutionDeduplicator = Effect.gen(function*() {
       Effect.gen(function*() {
         // Atomically update status and get the handle
         const handle = yield* Ref.modify(map, (m) => {
-          const existing = m.get(key)
-          if (!existing) return [Option.none<ExecutionHandle>(), m]
+          const existing = HashMap.get(m, key)
+          if (Option.isNone(existing)) return [Option.none<ExecutionHandle>(), m]
 
-          // Create new map with updated handle (immutable update)
-          const updated: ExecutionHandle = { ...existing, status: "completed" }
-          const newMap = new Map(m)
-          newMap.set(key, updated)
-          return [Option.some(updated), newMap]
+          // Immutable update with HashMap.set
+          const updated: ExecutionHandle = { ...existing.value, status: "completed" }
+          return [Option.some(updated), HashMap.set(m, key, updated)]
         })
 
         // Notify waiters outside of Ref.modify (Deferred operations are safe)
@@ -107,14 +103,12 @@ export const makeExecutionDeduplicator = Effect.gen(function*() {
       Effect.gen(function*() {
         // Atomically update status and get the handle
         const handle = yield* Ref.modify(map, (m) => {
-          const existing = m.get(key)
-          if (!existing) return [Option.none<ExecutionHandle>(), m]
+          const existing = HashMap.get(m, key)
+          if (Option.isNone(existing)) return [Option.none<ExecutionHandle>(), m]
 
-          // Create new map with updated handle (immutable update)
-          const updated: ExecutionHandle = { ...existing, status: "failed" }
-          const newMap = new Map(m)
-          newMap.set(key, updated)
-          return [Option.some(updated), newMap]
+          // Immutable update with HashMap.set
+          const updated: ExecutionHandle = { ...existing.value, status: "failed" }
+          return [Option.some(updated), HashMap.set(m, key, updated)]
         })
 
         // Notify waiters outside of Ref.modify
@@ -129,11 +123,7 @@ export const makeExecutionDeduplicator = Effect.gen(function*() {
      */
     cleanup: (key: string) =>
       Effect.gen(function*() {
-        yield* Ref.update(map, (m) => {
-          const newMap = new Map(m)
-          newMap.delete(key)
-          return newMap
-        })
+        yield* Ref.update(map, (m) => HashMap.remove(m, key))
         yield* Effect.logDebug(`Cleaned up execution handle key=${key}`)
       })
   }

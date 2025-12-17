@@ -8,8 +8,19 @@
  * @module Runtime/LlmSemaphore
  */
 
-import { Effect } from "effect"
+import { Data, Duration, Effect } from "effect"
 import { ConfigService } from "../Service/Config.js"
+
+/**
+ * Error thrown when semaphore permit acquisition times out
+ *
+ * @since 2.0.0
+ * @category Errors
+ */
+export class SemaphoreTimeoutError extends Data.TaggedError("SemaphoreTimeoutError")<{
+  readonly message: string
+  readonly waitDuration: Duration.Duration
+}> {}
 
 /**
  * LlmSemaphoreService - Concurrency control for LLM calls
@@ -34,14 +45,31 @@ export class LlmSemaphoreService extends Effect.Service<LlmSemaphoreService>()("
       concurrencyLimit: limit
     })
 
+    // Timeout for permit acquisition - prevents deadlock if permits never released
+    const permitTimeout = Duration.minutes(5)
+
     return {
       /**
        * Execute effect with semaphore permit
        *
        * Acquires a permit before execution and releases after.
-       * Blocks if no permits available.
+       * Times out if permit acquisition takes longer than 5 minutes.
+       *
+       * @throws SemaphoreTimeoutError if permit acquisition times out
        */
-      withPermit: <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> => semaphore.withPermits(1)(effect),
+      withPermit: <A, E, R>(
+        effect: Effect.Effect<A, E, R>
+      ): Effect.Effect<A, E | SemaphoreTimeoutError, R> =>
+        semaphore.withPermits(1)(effect).pipe(
+          Effect.timeoutFail({
+            duration: permitTimeout,
+            onTimeout: () =>
+              new SemaphoreTimeoutError({
+                message: `LLM semaphore permit acquisition timed out after ${Duration.toMillis(permitTimeout)}ms`,
+                waitDuration: permitTimeout
+              })
+          })
+        ),
 
       /**
        * Get number of available permits
