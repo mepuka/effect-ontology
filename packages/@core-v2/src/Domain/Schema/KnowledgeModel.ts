@@ -412,6 +412,208 @@ export const DerivedAssertion = Schema.Struct({
 export type DerivedAssertion = typeof DerivedAssertion.Type
 
 // =============================================================================
+// Event - First-Class Node
+// =============================================================================
+
+/**
+ * EventId: event-{12 hex chars}
+ * Unique identifier for events
+ *
+ * @since 2.0.0
+ * @category Identity
+ */
+export const EventId = Schema.String.pipe(
+  Schema.pattern(/^event-[a-f0-9]{12}$/),
+  Schema.brand("EventId"),
+  Schema.annotations({
+    title: "Event ID",
+    description: "Unique identifier for an event"
+  })
+)
+export type EventId = typeof EventId.Type
+
+/**
+ * EventType - Categorizes events for timeline visualization
+ *
+ * Event types determine how events are displayed and grouped:
+ * - StaffAnnouncement: Personnel changes, hires, departures
+ * - PolicyInitiative: New policies, programs, initiatives
+ * - CouncilVote: Legislative votes, resolutions
+ * - Appointment: Official appointments to positions
+ * - BudgetAction: Budget decisions, allocations
+ * - PublicMeeting: Meetings, hearings, public events
+ * - Generic: Uncategorized events
+ *
+ * @since 2.0.0
+ * @category Event
+ */
+export const EventType = Schema.Literal(
+  "StaffAnnouncement",
+  "PolicyInitiative",
+  "CouncilVote",
+  "Appointment",
+  "BudgetAction",
+  "PublicMeeting",
+  "Generic"
+).annotations({
+  title: "Event Type",
+  description: "Category of event for timeline grouping"
+})
+export type EventType = typeof EventType.Type
+
+/**
+ * EntityRef - Reference to an entity by IRI
+ *
+ * Used in event participants to link to entity nodes.
+ *
+ * @since 2.0.0
+ * @category Event
+ */
+export const EntityRef = Schema.Struct({
+  /** Entity IRI */
+  iri: IriSchema.annotations({
+    title: "Entity IRI",
+    description: "IRI of the referenced entity"
+  }),
+  /** Entity role in the event (e.g., "appointee", "voter", "subject") */
+  role: Schema.optional(Schema.String).annotations({
+    title: "Role",
+    description: "Role of the entity in this event"
+  }),
+  /** Display label for the entity */
+  label: Schema.optional(Schema.String).annotations({
+    title: "Label",
+    description: "Human-readable label for display"
+  })
+}).annotations({
+  title: "Entity Reference",
+  description: "Reference to an entity participating in an event"
+})
+export type EntityRef = typeof EntityRef.Type
+
+/**
+ * Event - First-class node for timeline representation
+ *
+ * Events group related assertions and provide temporal context for
+ * knowledge graph visualization. Each event represents a real-world
+ * occurrence (announcement, vote, policy change) with participants
+ * and associated facts.
+ *
+ * @example
+ * ```typescript
+ * const event = {
+ *   id: "event-abc123def456" as EventId,
+ *   type: "StaffAnnouncement",
+ *   title: "City Manager Announces New Finance Director",
+ *   eventTime: DateTime.unsafeMake("2024-01-15T09:00:00Z"),
+ *   publishedAt: DateTime.unsafeMake("2024-01-15T14:30:00Z"),
+ *   participants: [
+ *     { iri: "http://example.org/person/jane_doe" as IRI, role: "appointee" },
+ *     { iri: "http://example.org/person/city_manager" as IRI, role: "announcer" }
+ *   ],
+ *   factGroup: ["assertion-111..." as AssertionId],
+ *   sourceDocuments: ["gs://bucket/docs/press-release.txt" as GcsUri]
+ * }
+ * ```
+ *
+ * @since 2.0.0
+ * @category Event
+ */
+export const Event = Schema.Struct({
+  /** Unique event identifier */
+  id: EventId,
+
+  /** Event type for categorization and display */
+  type: EventType,
+
+  /** Human-readable event title/headline */
+  title: Schema.optional(Schema.String).annotations({
+    title: "Title",
+    description: "Event headline for display"
+  }),
+
+  /**
+   * When the real-world event occurred
+   *
+   * May be approximate or extracted from text.
+   * Optional because some events have unknown occurrence times.
+   */
+  eventTime: Schema.optional(Schema.DateTimeUtc).annotations({
+    title: "Event Time",
+    description: "When the real-world event occurred"
+  }),
+
+  /**
+   * When the source document was published
+   *
+   * Used for sorting when eventTime is unavailable.
+   */
+  publishedAt: Schema.DateTimeUtc.annotations({
+    title: "Published At",
+    description: "Publication date of source document"
+  }),
+
+  /**
+   * When this event was ingested into the knowledge base
+   */
+  ingestedAt: Schema.optional(Schema.DateTimeUtc).annotations({
+    title: "Ingested At",
+    description: "System timestamp when event was created"
+  }),
+
+  /**
+   * Entities participating in this event
+   *
+   * Includes people, organizations, and other entities with their roles.
+   */
+  participants: Schema.Array(EntityRef).annotations({
+    title: "Participants",
+    description: "Entities involved in this event"
+  }),
+
+  /**
+   * Assertions grouped under this event
+   *
+   * All facts extracted from the same source document that relate
+   * to this event are grouped together.
+   */
+  factGroup: Schema.Array(AssertionId).annotations({
+    title: "Fact Group",
+    description: "Assertions belonging to this event"
+  }),
+
+  /**
+   * Source documents from which this event was extracted
+   *
+   * At least one source document is required.
+   */
+  sourceDocuments: Schema.NonEmptyArray(GcsUri).annotations({
+    title: "Source Documents",
+    description: "GCS URIs of source documents"
+  }),
+
+  /**
+   * Optional summary or description of the event
+   */
+  summary: Schema.optional(Schema.String).annotations({
+    title: "Summary",
+    description: "Brief description of the event"
+  }),
+
+  /**
+   * Optional tags for additional categorization
+   */
+  tags: Schema.optional(Schema.Array(Schema.String)).annotations({
+    title: "Tags",
+    description: "Additional categorization tags"
+  })
+}).annotations({
+  title: "Event",
+  description: "First-class event node for timeline representation"
+})
+export type Event = typeof Event.Type
+
+// =============================================================================
 // Helper Constructors
 // =============================================================================
 
@@ -441,3 +643,12 @@ export const assertionIdFromHash = (hash: string): AssertionId =>
  */
 export const derivedAssertionIdFromHash = (hash: string): DerivedAssertionId =>
   `derived-${hash.slice(0, 12)}` as DerivedAssertionId
+
+/**
+ * Create an EventId from a hash
+ *
+ * @since 2.0.0
+ * @category Constructors
+ */
+export const eventIdFromHash = (hash: string): EventId =>
+  `event-${hash.slice(0, 12)}` as EventId
