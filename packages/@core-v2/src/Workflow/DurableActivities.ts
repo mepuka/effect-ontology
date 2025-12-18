@@ -40,6 +40,7 @@ import type {
 } from "../Domain/Schema/Batch.js"
 import { BatchManifest, ValidationActivityOutput } from "../Domain/Schema/Batch.js"
 import {
+  type ChunkingStrategy,
   computePriority,
   type DocumentMetadata,
   type DocumentType,
@@ -1556,10 +1557,23 @@ export const makePreprocessingActivity = (input: typeof PreprocessingActivityInp
       const llm = yield* LanguageModel.LanguageModel
       const bucket = resolveBucket(config)
 
+      // Resolve preprocessing options (use defaults if not provided)
+      // Support both new preprocessing options and deprecated skipClassification
+      const shouldClassify = input.preprocessing?.classifyDocuments !== undefined
+        ? input.preprocessing.classifyDocuments
+        : (input.skipClassification !== undefined ? !input.skipClassification : true)
+      const options = {
+        classifyDocuments: shouldClassify,
+        adaptiveChunking: input.preprocessing?.adaptiveChunking ?? true,
+        priorityOrdering: input.preprocessing?.priorityOrdering ?? true,
+        chunkingStrategyOverride: input.preprocessing?.chunkingStrategyOverride,
+        classificationBatchSize: input.preprocessing?.classificationBatchSize ?? CLASSIFICATION_BATCH_SIZE
+      }
+
       yield* Effect.logInfo("Preprocessing activity starting", {
         batchId: input.batchId,
         manifestUri: input.manifestUri,
-        skipClassification: input.skipClassification ?? false
+        options
       })
 
       // 1. Load the batch manifest
@@ -1619,35 +1633,49 @@ export const makePreprocessingActivity = (input: typeof PreprocessingActivityInp
       let classifiedCount = 0
       let failedCount = 0
 
-      if (input.skipClassification) {
-        // Use defaults for all documents
-        documentMetadata = previews.map((p) => ({
-          documentId: p.documentId,
-          sourceUri: p.sourceUri,
-          contentType: p.contentType,
-          sizeBytes: p.sizeBytes,
-          preprocessedAt,
-          title: undefined,
-          language: "en",
-          estimatedTokens: estimateTokens(p.sizeBytes),
-          documentType: "unknown" as DocumentType,
-          domainTags: [],
-          complexityScore: 0.5,
-          entityDensityHint: "moderate" as EntityDensity,
-          chunkingStrategy: "standard" as const,
-          suggestedChunkSize: 500,
-          suggestedOverlap: 2,
-          priority: 50,
-          estimatedExtractionCost: estimateTokens(p.sizeBytes) * 2
-        }))
+      if (!options.classifyDocuments) {
+        // Use defaults for all documents (no classification)
+        // Apply chunkingStrategyOverride if provided
+        const overrideStrategy = options.chunkingStrategyOverride
+        documentMetadata = previews.map((p) => {
+          const tokens = estimateTokens(p.sizeBytes)
+          const baseChunking = overrideStrategy
+            ? selectChunkingStrategy("unknown", "moderate", 0.5)
+            : { strategy: "standard" as const, chunkSize: 500, overlap: 2 }
+          // Override strategy if provided
+          const chunkConfig = overrideStrategy
+            ? { ...baseChunking, strategy: overrideStrategy }
+            : baseChunking
+
+          return {
+            documentId: p.documentId,
+            sourceUri: p.sourceUri,
+            contentType: p.contentType,
+            sizeBytes: p.sizeBytes,
+            preprocessedAt,
+            title: undefined,
+            language: "en",
+            estimatedTokens: tokens,
+            documentType: "unknown" as DocumentType,
+            domainTags: [],
+            complexityScore: 0.5,
+            entityDensityHint: "moderate" as EntityDensity,
+            chunkingStrategy: chunkConfig.strategy,
+            suggestedChunkSize: chunkConfig.chunkSize,
+            suggestedOverlap: chunkConfig.overlap,
+            priority: 50,
+            estimatedExtractionCost: tokens * 2
+          }
+        })
         failedCount = previews.length
       } else {
         // Batch LLM classification
         const classifications = new Map<number, typeof DocumentClassificationResponse.Type>()
 
-        // Process in batches
-        for (let i = 0; i < previews.length; i += CLASSIFICATION_BATCH_SIZE) {
-          const batch = previews.slice(i, i + CLASSIFICATION_BATCH_SIZE)
+        // Process in batches (use configurable batch size)
+        const batchSize = options.classificationBatchSize
+        for (let i = 0; i < previews.length; i += batchSize) {
+          const batch = previews.slice(i, i + batchSize)
           const batchPreviews = batch.map((p) => ({
             index: p.index,
             preview: p.preview,
@@ -1706,11 +1734,28 @@ export const makePreprocessingActivity = (input: typeof PreprocessingActivityInp
           if (classification) {
             classifiedCount++
             const tokens = estimateTokens(p.sizeBytes)
-            const { chunkSize, overlap, strategy } = selectChunkingStrategy(
-              classification.documentType,
-              classification.entityDensity,
-              classification.complexityScore
-            )
+
+            // Determine chunking strategy based on options
+            let chunkConfig: { strategy: ChunkingStrategy; chunkSize: number; overlap: number }
+            if (options.chunkingStrategyOverride) {
+              // Use override strategy with default params
+              chunkConfig = {
+                strategy: options.chunkingStrategyOverride,
+                chunkSize: 500,
+                overlap: 2
+              }
+            } else if (options.adaptiveChunking) {
+              // Use adaptive chunking based on classification
+              chunkConfig = selectChunkingStrategy(
+                classification.documentType,
+                classification.entityDensity,
+                classification.complexityScore
+              )
+            } else {
+              // Use standard chunking (no adaptation)
+              chunkConfig = { strategy: "standard" as ChunkingStrategy, chunkSize: 500, overlap: 2 }
+            }
+
             const priority = computePriority(
               classification.complexityScore,
               tokens,
@@ -1730,9 +1775,9 @@ export const makePreprocessingActivity = (input: typeof PreprocessingActivityInp
               domainTags: classification.domainTags,
               complexityScore: classification.complexityScore,
               entityDensityHint: classification.entityDensity,
-              chunkingStrategy: strategy,
-              suggestedChunkSize: chunkSize,
-              suggestedOverlap: overlap,
+              chunkingStrategy: chunkConfig.strategy,
+              suggestedChunkSize: chunkConfig.chunkSize,
+              suggestedOverlap: chunkConfig.overlap,
               priority,
               estimatedExtractionCost: tokens * 2
             } satisfies DocumentMetadata
@@ -1763,8 +1808,10 @@ export const makePreprocessingActivity = (input: typeof PreprocessingActivityInp
         })
       }
 
-      // 5. Sort by priority (lower = process first)
-      documentMetadata.sort((a, b) => a.priority - b.priority)
+      // 5. Sort by priority if enabled (lower = process first)
+      if (options.priorityOrdering) {
+        documentMetadata.sort((a, b) => a.priority - b.priority)
+      }
 
       // 6. Compute stats
       const totalEstimatedTokens = documentMetadata.reduce((sum, d) => sum + d.estimatedTokens, 0)

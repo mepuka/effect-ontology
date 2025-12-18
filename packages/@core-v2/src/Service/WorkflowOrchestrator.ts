@@ -360,10 +360,24 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
         yield* emitState(preprocessingState)
 
         // Run preprocessing activity with graceful fallback
-        const preprocessingResult = yield* makePreprocessingActivity({
-          batchId,
-          manifestUri
-        }).execute.pipe(
+        // Skip entirely if preprocessing.enabled is false
+        const preprocessingEnabled = payload.preprocessing?.enabled !== false
+        const preprocessingResult = yield* (preprocessingEnabled
+          ? makePreprocessingActivity({
+            batchId,
+            manifestUri,
+            preprocessing: payload.preprocessing,
+            skipClassification: payload.preprocessing?.classifyDocuments === false
+          }).execute
+          : Effect.succeed({
+            enrichedManifestUri: manifestUri as GcsUri,
+            totalDocuments: manifest.documents.length,
+            classifiedCount: 0,
+            failedCount: 0,
+            totalEstimatedTokens: 0,
+            averageComplexity: 0.5,
+            durationMs: 0
+          })).pipe(
           Effect.tap((result) =>
             Effect.gen(function*() {
               const updatedPreprocessingState: BatchState = {
