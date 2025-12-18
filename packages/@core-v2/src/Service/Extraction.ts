@@ -16,8 +16,8 @@ import {
   RelationExtractionFailed
 } from "../Domain/Error/Extraction.js"
 import { Entity, Relation } from "../Domain/Model/Entity.js"
-import { EntityId } from "../Domain/Model/shared.js"
 import type { ClassDefinition, PropertyDefinition } from "../Domain/Model/Ontology.js"
+import { EntityId } from "../Domain/Model/shared.js"
 import type { IRI } from "../Domain/Rdf/Types.js"
 import { generateEntityPrompt, generateMentionPrompt, generateRelationPrompt } from "../Prompt/index.js"
 import { makeEntitySchema } from "../Schema/EntityFactory.js"
@@ -28,7 +28,7 @@ import { sha256Sync } from "../Utils/Hash.js"
 import { buildLocalNameToIriMap, expandLocalNameToIri, expandTypesToIris } from "../Utils/Iri.js"
 import { ConfigService } from "./Config.js"
 import { generateObjectWithFeedback } from "./GenerateWithFeedback.js"
-import { StageTimeoutService, type TimeoutError } from "./LlmControl/StageTimeout.js"
+import { StageTimeoutService } from "./LlmControl/StageTimeout.js"
 import { generateObjectWithRetry } from "./LlmWithRetry.js"
 
 export type { Mention }

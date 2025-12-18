@@ -15,6 +15,7 @@ import winkNLP from "wink-nlp"
 // @ts-expect-error - wink-bm25-text-search has no type definitions
 import winkBM25 from "wink-bm25-text-search"
 import type { ClassDefinition, OntologyContext, PropertyDefinition } from "../Domain/Model/Ontology.js"
+import { type ChunkingStrategy, defaultChunkingParams } from "../Domain/Schema/DocumentMetadata.js"
 import { enhanceTextForSearch, generateNGrams } from "../Utils/Text.js"
 import { NomicNlpService, NomicNlpServiceDefault } from "./NomicNlp.js"
 
@@ -58,6 +59,20 @@ export interface ChunkOptions {
    * Set to 0 for no overlap.
    */
   readonly overlapSentences?: number
+  /**
+   * Chunking strategy for adaptive document processing.
+   * Each strategy optimizes for different document structures:
+   * - standard: Default ~500 chars, 2 sentence overlap
+   * - fine_grained: Dense content ~300 chars, 3 sentence overlap
+   * - high_overlap: Complex content ~400 chars, 4 sentence overlap
+   * - section_aware: Contracts/reports - respect section headers
+   * - speaker_aware: Transcripts - respect speaker turns
+   * - paragraph_based: Articles - use natural paragraph breaks
+   *
+   * If provided, overrides maxChunkSize, overlapSentences, preserveSentences
+   * with strategy-specific defaults.
+   */
+  readonly strategy?: ChunkingStrategy
 }
 
 /**
@@ -196,6 +211,291 @@ const embeddingRetrySchedule = Schedule.exponential(Duration.seconds(1)).pipe(
   Schedule.intersect(Schedule.recurs(3)),
   Schedule.jittered
 )
+
+// =============================================================================
+// Strategy-Specific Chunking Helpers
+// =============================================================================
+
+/**
+ * Section header pattern: Markdown headers (##, ###) or numbered sections (1., 1.1, etc.)
+ */
+const SECTION_HEADER_PATTERN = /^(?:#{1,6}\s+.+|(?:\d+\.)+\s+.+|[A-Z][A-Z\s]+:?\s*$)/gm
+
+/**
+ * Speaker turn pattern: "Name:", "SPEAKER 1:", "[Speaker]:", etc.
+ */
+const SPEAKER_TURN_PATTERN = /^(?:\[?[A-Z][a-zA-Z\s]+\]?:|[A-Z]{2,}(?:\s+\d+)?:)/gm
+
+/**
+ * Paragraph separator: Two or more newlines
+ */
+const PARAGRAPH_SEPARATOR = /\n{2,}/
+
+/**
+ * Chunk text by section headers
+ *
+ * Splits on markdown headers (##, ###) or numbered sections (1., 1.1).
+ * Each section becomes a chunk, with overflow split by sentences.
+ */
+function chunkBySections(
+  text: string,
+  maxChunkSize: number,
+  _overlapSentences: number
+): Array<TextChunk> {
+  const chunks: Array<TextChunk> = []
+  let chunkIndex = 0
+  let lastOffset = 0
+
+  // Find all section header positions
+  const headerMatches: Array<{ index: number; match: string }> = []
+  let match: RegExpExecArray | null
+
+  const pattern = new RegExp(SECTION_HEADER_PATTERN.source, "gm")
+  while ((match = pattern.exec(text)) !== null) {
+    headerMatches.push({ index: match.index, match: match[0] })
+  }
+
+  // If no headers found, fall back to simple chunking
+  if (headerMatches.length === 0) {
+    return chunkBySize(text, maxChunkSize, chunkIndex)
+  }
+
+  // Process text before first header
+  if (headerMatches[0].index > 0) {
+    const preText = text.slice(0, headerMatches[0].index).trim()
+    if (preText.length > 0) {
+      const preChunks = chunkBySize(preText, maxChunkSize, chunkIndex)
+      chunks.push(...preChunks)
+      chunkIndex += preChunks.length
+    }
+    lastOffset = headerMatches[0].index
+  }
+
+  // Process each section
+  for (let i = 0; i < headerMatches.length; i++) {
+    const start = headerMatches[i].index
+    const end = i < headerMatches.length - 1 ? headerMatches[i + 1].index : text.length
+    const sectionText = text.slice(start, end).trim()
+
+    if (sectionText.length === 0) continue
+
+    if (sectionText.length <= maxChunkSize) {
+      chunks.push({
+        index: chunkIndex++,
+        text: sectionText,
+        startOffset: start,
+        endOffset: end
+      })
+    } else {
+      // Section too large - split by sentences within section
+      const sectionChunks = chunkBySize(sectionText, maxChunkSize, chunkIndex)
+      // Adjust offsets relative to section start
+      for (const chunk of sectionChunks) {
+        chunks.push({
+          ...chunk,
+          index: chunkIndex++,
+          startOffset: start + chunk.startOffset,
+          endOffset: start + chunk.endOffset
+        })
+      }
+    }
+    lastOffset = end
+  }
+
+  return chunks
+}
+
+/**
+ * Chunk text by speaker turns
+ *
+ * Splits on speaker patterns like "Name:", "SPEAKER 1:", "[Interviewer]:".
+ * Each speaker turn becomes a chunk, with overflow split by sentences.
+ */
+function chunkBySpeakerTurns(
+  text: string,
+  maxChunkSize: number,
+  _overlapSentences: number
+): Array<TextChunk> {
+  const chunks: Array<TextChunk> = []
+  let chunkIndex = 0
+
+  // Find all speaker turn positions
+  const turnMatches: Array<{ index: number; match: string }> = []
+  let match: RegExpExecArray | null
+
+  const pattern = new RegExp(SPEAKER_TURN_PATTERN.source, "gm")
+  while ((match = pattern.exec(text)) !== null) {
+    turnMatches.push({ index: match.index, match: match[0] })
+  }
+
+  // If no speaker turns found, fall back to simple chunking
+  if (turnMatches.length === 0) {
+    return chunkBySize(text, maxChunkSize, chunkIndex)
+  }
+
+  // Process text before first speaker turn
+  if (turnMatches[0].index > 0) {
+    const preText = text.slice(0, turnMatches[0].index).trim()
+    if (preText.length > 0) {
+      const preChunks = chunkBySize(preText, maxChunkSize, chunkIndex)
+      chunks.push(...preChunks)
+      chunkIndex += preChunks.length
+    }
+  }
+
+  // Process each speaker turn
+  for (let i = 0; i < turnMatches.length; i++) {
+    const start = turnMatches[i].index
+    const end = i < turnMatches.length - 1 ? turnMatches[i + 1].index : text.length
+    const turnText = text.slice(start, end).trim()
+
+    if (turnText.length === 0) continue
+
+    if (turnText.length <= maxChunkSize) {
+      chunks.push({
+        index: chunkIndex++,
+        text: turnText,
+        startOffset: start,
+        endOffset: end
+      })
+    } else {
+      // Turn too large - split by sentences
+      const turnChunks = chunkBySize(turnText, maxChunkSize, chunkIndex)
+      for (const chunk of turnChunks) {
+        chunks.push({
+          ...chunk,
+          index: chunkIndex++,
+          startOffset: start + chunk.startOffset,
+          endOffset: start + chunk.endOffset
+        })
+      }
+    }
+  }
+
+  return chunks
+}
+
+/**
+ * Chunk text by paragraphs
+ *
+ * Splits on double newlines (paragraph breaks).
+ * Each paragraph becomes a chunk, with overflow split by sentences.
+ */
+function chunkByParagraphs(
+  text: string,
+  maxChunkSize: number,
+  overlapSentences: number
+): Array<TextChunk> {
+  const chunks: Array<TextChunk> = []
+  let chunkIndex = 0
+  let currentOffset = 0
+
+  // Split by paragraph separators
+  const paragraphs = text.split(PARAGRAPH_SEPARATOR)
+
+  for (const paragraph of paragraphs) {
+    const trimmedParagraph = paragraph.trim()
+    if (trimmedParagraph.length === 0) {
+      // Skip empty paragraphs but track offset
+      currentOffset += paragraph.length + 2 // +2 for the \n\n
+      continue
+    }
+
+    // Find actual position in original text
+    const startOffset = text.indexOf(trimmedParagraph, currentOffset)
+    const endOffset = startOffset + trimmedParagraph.length
+
+    if (trimmedParagraph.length <= maxChunkSize) {
+      chunks.push({
+        index: chunkIndex++,
+        text: trimmedParagraph,
+        startOffset: startOffset >= 0 ? startOffset : currentOffset,
+        endOffset: startOffset >= 0 ? endOffset : currentOffset + trimmedParagraph.length
+      })
+    } else {
+      // Paragraph too large - split by sentences
+      const paraChunks = chunkBySize(trimmedParagraph, maxChunkSize, chunkIndex)
+      for (const chunk of paraChunks) {
+        const chunkStart = startOffset >= 0 ? startOffset + chunk.startOffset : currentOffset + chunk.startOffset
+        chunks.push({
+          ...chunk,
+          index: chunkIndex++,
+          startOffset: chunkStart,
+          endOffset: chunkStart + chunk.text.length
+        })
+      }
+    }
+
+    currentOffset = endOffset + 2 // +2 for the \n\n separator
+  }
+
+  return chunks
+}
+
+/**
+ * Simple size-based chunking helper
+ *
+ * Splits text into chunks of approximately maxChunkSize characters,
+ * trying to break at sentence boundaries when possible.
+ */
+function chunkBySize(
+  text: string,
+  maxChunkSize: number,
+  startIndex: number
+): Array<TextChunk> {
+  const chunks: Array<TextChunk> = []
+  let chunkIndex = startIndex
+  let currentChunk = ""
+  let startOffset = 0
+  let currentOffset = 0
+
+  // Simple sentence split (approximation without wink-nlp)
+  const sentencePattern = /[.!?]+\s+/g
+  const sentences: Array<string> = []
+  let lastEnd = 0
+  let sentenceMatch: RegExpExecArray | null
+
+  while ((sentenceMatch = sentencePattern.exec(text)) !== null) {
+    sentences.push(text.slice(lastEnd, sentenceMatch.index + sentenceMatch[0].length))
+    lastEnd = sentenceMatch.index + sentenceMatch[0].length
+  }
+  // Add remaining text as last sentence
+  if (lastEnd < text.length) {
+    sentences.push(text.slice(lastEnd))
+  }
+
+  // If no sentences found, treat whole text as one
+  if (sentences.length === 0) {
+    sentences.push(text)
+  }
+
+  for (const sentence of sentences) {
+    if (currentChunk.length + sentence.length > maxChunkSize && currentChunk.length > 0) {
+      chunks.push({
+        index: chunkIndex++,
+        text: currentChunk.trim(),
+        startOffset,
+        endOffset: currentOffset
+      })
+      startOffset = currentOffset
+      currentChunk = ""
+    }
+    currentChunk += sentence
+    currentOffset += sentence.length
+  }
+
+  // Add final chunk
+  if (currentChunk.trim().length > 0) {
+    chunks.push({
+      index: chunkIndex++,
+      text: currentChunk.trim(),
+      startOffset,
+      endOffset: currentOffset
+    })
+  }
+
+  return chunks
+}
 
 const EMBEDDING_TIMEOUT_MS = 10_000
 
@@ -363,12 +663,28 @@ export class NlpService extends Effect.Service<NlpService>()(
           options?: ChunkOptions
         ) =>
           Effect.sync(() => {
-            const {
-              maxChunkSize = 500,
-              overlapSentences = 2,
-              preserveSentences = true
-            } = options ?? {}
+            // Apply strategy-specific defaults if strategy is provided
+            const strategy = options?.strategy
+            const strategyDefaults = strategy ? defaultChunkingParams[strategy] : undefined
 
+            const maxChunkSize = options?.maxChunkSize ?? strategyDefaults?.chunkSize ?? 500
+            const overlapSentences = options?.overlapSentences ?? strategyDefaults?.overlapSentences ?? 2
+            const preserveSentences = options?.preserveSentences ?? strategyDefaults?.preserveSentences ?? true
+
+            // Handle special chunking strategies
+            if (strategy === "section_aware") {
+              return chunkBySections(text, maxChunkSize, overlapSentences)
+            }
+
+            if (strategy === "speaker_aware") {
+              return chunkBySpeakerTurns(text, maxChunkSize, overlapSentences)
+            }
+
+            if (strategy === "paragraph_based") {
+              return chunkByParagraphs(text, maxChunkSize, overlapSentences)
+            }
+
+            // Standard sentence-aware chunking (standard, fine_grained, high_overlap)
             const doc = nlp.readDoc(text)
             const sentences = doc.sentences().out() as Array<string>
 

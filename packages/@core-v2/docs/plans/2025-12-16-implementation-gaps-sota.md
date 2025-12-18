@@ -17,10 +17,11 @@ This document identifies gaps between the current implementation and state-of-th
 | Embedding Cache | ✅ Complete | Content-addressable cache with hash keys |
 | RRF Score Fusion | ✅ Complete | `Utils/Retrieval.ts` |
 | Pre-computed Embeddings | ✅ Complete | `OntologyEmbeddings` blob pattern |
-| SHACL Auto-generation | ⚠️ Stub | Returns empty store |
-| owl:sameAs generation | ❌ Not started | Canonical IDs exist but no triples |
+| SHACL Auto-generation | ✅ Complete | Full OWL→SHACL in `Shacl.ts:389-610` |
+| SHACL Workflow Integration | ✅ Complete | `BatchWorkflow.ts`, `WorkflowOrchestrator.ts` |
+| owl:sameAs generation | ✅ Complete | `RdfBuilder.addSameAsLinks()` called in `DurableActivities.ts:596` |
 
-**Remaining P0 gaps**: SHACL auto-generation, owl:sameAs triple generation.
+**Remaining P0 gaps**: None! All P0 critical gaps are complete.
 
 ---
 
@@ -61,20 +62,18 @@ const canonicalId = resolutionGraph.canonicalMap[entity.id] ?? entity.id
 | Leiden clustering | No | Uses `connectedComponents` (simpler) |
 | Correlation clustering | No | Not implemented |
 | LLM-assisted matching | No | No uncertain-case verification |
-| owl:sameAs generation | No | Canonical IDs exist but no RDF statements |
+| owl:sameAs generation | ✅ Yes | `RdfBuilder.addSameAsLinks()` in `DurableActivities.ts:596` |
 
 ### Recommended Actions
 
-**P0 (Critical)**: ✅ COMPLETED
+**P0 (Critical)**: ✅ ALL COMPLETED
 1. ~~Wire `buildEntityResolutionGraph()` into `makeResolutionActivity`~~ ✅ Done
 2. ~~Preserve provenance: which document(s) each entity came from~~ ✅ Done (via canonical map)
-
-**P0 (Remaining)**:
-1. Generate `owl:sameAs` triples linking mentions to canonical entities
+3. ~~Generate `owl:sameAs` triples linking mentions to canonical entities~~ ✅ Done (`RdfBuilder.addSameAsLinks`)
 
 **P1 (High)**:
-4. Add LLM verification pass for low-confidence matches (similarity < 0.7)
-5. Implement Leiden clustering as alternative to connected components (better for dense graphs)
+1. Add LLM verification pass for low-confidence matches (similarity < 0.7)
+2. Implement Leiden clustering as alternative to connected components (better for dense graphs)
 
 **P2 (Medium)**:
 6. Add correlation clustering for pairwise constraint satisfaction
@@ -95,55 +94,68 @@ const canonicalId = resolutionGraph.canonicalMap[entity.id] ?? entity.id
 
 ### Current State
 
+**✅ FULLY IMPLEMENTED** (Updated 2025-12-18)
+
 | Component | Location | Status |
 |-----------|----------|--------|
-| Validation engine | `Service/Shacl.ts` | **Working** (shacl-engine) |
-| Shape loading from URI | `Shacl.ts:146-169` | Working |
-| Auto-generate from ontology | `Shacl.ts:171-180` | **STUB (returns empty store)** |
+| Validation engine | `Service/Shacl.ts` | ✅ Working (shacl-engine) |
+| Shape loading from URI | `Shacl.ts:364-387` | ✅ Working |
+| Auto-generate from ontology | `Shacl.ts:389-610` | ✅ **Full implementation** |
+| Workflow integration | `BatchWorkflow.ts:97`, `WorkflowOrchestrator.ts:450` | ✅ Wired |
+| Severity-based policy | `Shacl.ts:622-709` | ✅ `validateWithPolicy()` |
+| Shape caching | `Shacl.ts:391-403` | ✅ By ontology content hash |
 
-**The `generateShapesFromOntology` method returns an empty N3.Store:**
+**The `generateShapesFromOntology` method provides full OWL→SHACL conversion:**
 
 ```typescript
-generateShapesFromOntology: (_ontologyStore: RdfStore["_store"]) =>
-  Effect.try({
-    try: () => new N3.Store(), // ← Empty store!
-    catch: ...
+// Shacl.ts:389-610 - Full implementation, not a stub
+generateShapesFromOntology: (ontologyStore: RdfStore["_store"]) =>
+  Effect.gen(function*() {
+    // Check cache by ontology hash first
+    const cacheKey = hashStore(ontologyStore)
+    // ...
+    // Converts: owl:Class → sh:NodeShape + sh:targetClass
+    // Converts: owl:ObjectProperty + rdfs:domain/range → sh:property + sh:class
+    // Converts: owl:DatatypeProperty → sh:property + sh:datatype
+    // Converts: owl:FunctionalProperty → sh:maxCount 1
+    // Converts: owl:Restriction (min/max/exact cardinality) → sh:minCount/sh:maxCount
   })
+```
+
+**Workflow Integration:**
+
+```typescript
+// BatchWorkflow.ts:97-103
+const validationResult = yield* makeValidationActivity({
+  batchId,
+  resolvedGraphUri: resolutionResult.resolvedUri,
+  ontologyUri: manifest.ontologyUri,
+  shaclUri: manifest.shaclUri,  // Optional: use provided shapes
+  validationPolicy: { failOnViolation: true, failOnWarning: false }
+})
 ```
 
 ### SOTA Gap Analysis
 
 | SOTA Technique | Current | Gap |
 |----------------|---------|-----|
-| shacl-engine validation | Yes | Working correctly |
-| Auto-shape generation | Stub | Need OWL→SHACL conversion |
+| shacl-engine validation | ✅ Yes | Working correctly |
+| Auto-shape generation | ✅ Yes | Full OWL→SHACL conversion |
+| Severity-based filtering | ✅ Yes | `validateWithPolicy()` with configurable thresholds |
+| Shape caching | ✅ Yes | Content-addressable by ontology hash |
 | Incremental validation | No | Full revalidation each time |
-| Severity-based filtering | Partial | Mapped but not used for workflow control |
 
 ### Recommended Actions
 
-**P0 (Critical)**:
-1. Implement `generateShapesFromOntology`:
-   - `owl:Class` → `sh:NodeShape` with `sh:targetClass`
-   - `owl:ObjectProperty` → `sh:PropertyShape` with `sh:class` constraint
-   - `owl:DatatypeProperty` → `sh:PropertyShape` with `sh:datatype`
-   - `owl:FunctionalProperty` → `sh:maxCount 1`
-   - Cardinality restrictions → `sh:minCount`/`sh:maxCount`
-
-**P1 (High)**:
-2. Add severity-based workflow control (fail on Violations, warn on Warnings)
-3. Cache generated shapes per ontology version
+**P0 (Critical)**: ✅ ALL COMPLETED
+1. ~~Implement `generateShapesFromOntology`~~ ✅ Done (`Shacl.ts:389-610`)
+2. ~~Wire into batch workflow~~ ✅ Done (`BatchWorkflow.ts:97`)
+3. ~~Add severity-based workflow control~~ ✅ Done (`validateWithPolicy`)
+4. ~~Cache generated shapes~~ ✅ Done (by ontology content hash)
 
 **P2 (Medium)**:
-4. Investigate incremental validation (UpSHACL pattern) for large graphs
-
-### Effort Estimate
-
-| Task | Effort |
-|------|--------|
-| Basic shape generation | 2-3 days |
-| Cardinality handling | 1 day |
-| Severity-based control | 1 day |
+1. Investigate incremental validation (UpSHACL pattern) for large graphs
+2. Add more OWL pattern support (`owl:unionOf` → `sh:or`, etc.)
 
 ---
 
@@ -410,21 +422,22 @@ export const rrfFusion = <T extends { id: string }>(
 | Priority | Task | Effort | Status |
 |----------|------|--------|--------|
 | P0-1 | Wire entity resolution into workflow | 2-3 days | ✅ Complete |
-| P0-2 | Implement `generateShapesFromOntology` | 2-3 days | ⚠️ Stub |
+| P0-2 | Implement `generateShapesFromOntology` | 2-3 days | ✅ Complete |
+| P0-2b | Wire SHACL into batch workflow | 1 day | ✅ Complete |
 | P0-3 | Add embedding cache | 1-2 days | ✅ Complete |
 | P0-4 | Implement RRF score fusion | 1 day | ✅ Complete |
 | P0-5 | Pre-computed ontology embeddings | 2-3 days | ✅ Complete |
 
 ### Phase 2: High Priority (2-3 weeks)
 
-| Priority | Task | Effort | Dependencies |
-|----------|------|--------|--------------|
-| P1-1 | Generate owl:sameAs triples | 1 day | P0-1 |
-| P1-2 | LLM verification for uncertain matches | 2-3 days | P0-1 |
-| P1-3 | Few-shot exemplars in prompts | 2-3 days | None |
-| P1-4 | Lemmatization in BM25 | 1 day | None |
-| P1-5 | Named graphs for provenance | 2-3 days | None |
-| P1-6 | Self-critique extraction pass | 2 days | P1-3 |
+| Priority | Task | Effort | Status |
+|----------|------|--------|--------|
+| P1-1 | Generate owl:sameAs triples | 1 day | ✅ Complete |
+| P1-2 | LLM verification for uncertain matches | 2-3 days | Open |
+| P1-3 | Few-shot exemplars in prompts | 2-3 days | Open |
+| P1-4 | Lemmatization in BM25 | 1 day | Open |
+| P1-5 | Named graphs for provenance | 2-3 days | Open |
+| P1-6 | Self-critique extraction pass | 2 days | Open |
 
 ### Phase 3: Medium Priority (3-4 weeks)
 

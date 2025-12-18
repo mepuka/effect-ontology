@@ -1,8 +1,8 @@
 # Effect-Ontology @core-v2 System Architecture
 
-> **Version:** 2.2.0
+> **Version:** 2.3.0
 > **Last Updated:** December 2025
-> **Status:** Implementation Complete - Entity Resolution & Pre-computed Embeddings
+> **Status:** In Progress - Agentic Document Preprocessing
 
 ## Table of Contents
 
@@ -15,6 +15,7 @@
 7. [Infrastructure](#infrastructure)
 8. [Layer Composition](#layer-composition)
 9. [API Reference](#api-reference)
+10. [Document Preprocessing](#document-preprocessing)
 
 ---
 
@@ -27,7 +28,8 @@ Effect-Ontology is a knowledge graph extraction system that transforms unstructu
 - **Ontology-Guided Extraction**: Uses SKOS/OWL ontologies to constrain entity types and relation predicates
 - **Durable Workflows**: @effect/workflow-based pipelines with PostgreSQL persistence for crash recovery
 - **SSE Streaming**: Real-time batch state streaming via Server-Sent Events
-- **Batch Processing**: 4-stage pipeline (Extract → Resolve → Validate → Ingest)
+- **Batch Processing**: 5-stage pipeline (Preprocess → Extract → Resolve → Validate → Ingest)
+- **Agentic Document Preprocessing**: LLM-based document classification, adaptive chunking strategies, and intelligent batch ordering
 - **Entity Resolution**: Graph-based clustering for entity deduplication
 - **SHACL Validation**: Optional shape-based constraint checking
 
@@ -187,13 +189,16 @@ graph TB
 
 ### Batch Extraction Workflow
 
-The core processing pipeline consists of 4 durable stages:
+The core processing pipeline consists of 5 durable stages:
 
 ```mermaid
 stateDiagram-v2
     [*] --> Pending: start()
 
-    Pending --> Extracting: Load manifest
+    Pending --> Preprocessing: Load manifest
+
+    Preprocessing --> Extracting: Documents classified
+    Preprocessing --> Failed: Preprocessing error
 
     Extracting --> Resolving: All documents extracted
     Extracting --> Failed: Extraction error
@@ -210,9 +215,16 @@ stateDiagram-v2
     Complete --> [*]
     Failed --> [*]
 
+    note right of Preprocessing
+        Agentic classification
+        Adaptive chunking
+        Batch ordering
+    end note
+
     note right of Extracting
         Parallel execution
         concurrency: 5
+        Uses preprocessing hints
     end note
 
     note right of Validating
@@ -228,39 +240,51 @@ sequenceDiagram
     participant C as Client
     participant WO as WorkflowOrchestrator
     participant WE as WorkflowEngine
+    participant PA as PreprocessingActivity
     participant EA as ExtractionActivity
     participant RA as ResolutionActivity
     participant VA as ValidationActivity
     participant IA as IngestionActivity
     participant S as StorageService
+    participant LLM as LLM Provider
     participant PG as PostgreSQL
 
     C->>WO: start(payload)
     WO->>WE: execute(BatchExtractionWorkflow)
     WE->>PG: Journal workflow start
 
-    Note over WE: Stage 1: Extraction
-    loop For each document (parallel x5)
+    Note over WE: Stage 1: Preprocessing (NEW)
+    WE->>PA: makePreprocessingActivity
+    PA->>S: Load document previews (first 4KB)
+    PA->>LLM: Classify documents (batched)
+    PA->>PA: Compute chunking strategies
+    PA->>PA: Order documents by priority
+    PA->>S: Write enriched manifest
+    WE->>PG: Journal activity complete
+
+    Note over WE: Stage 2: Extraction
+    loop For each document (parallel x5, priority order)
         WE->>EA: makeExtractionActivity
         EA->>S: Read source document
+        Note over EA: Use preprocessing hints:<br/>chunkSize, overlap, entityDensity
         EA->>S: Write document graph
         WE->>PG: Journal activity complete
     end
 
-    Note over WE: Stage 2: Resolution
+    Note over WE: Stage 3: Resolution
     WE->>RA: makeResolutionActivity
     RA->>S: Read all document graphs
     RA->>S: Write merged graph
     WE->>PG: Journal activity complete
 
-    Note over WE: Stage 3: Validation
+    Note over WE: Stage 4: Validation
     WE->>VA: makeValidationActivity
     VA->>S: Read merged graph
     VA->>S: Read SHACL shapes (optional)
     VA->>S: Write validation report
     WE->>PG: Journal activity complete
 
-    Note over WE: Stage 4: Ingestion
+    Note over WE: Stage 5: Ingestion
     WE->>IA: makeIngestionActivity
     IA->>S: Read validated graph
     IA->>S: Write to canonical store
@@ -964,7 +988,9 @@ const BatchManifest = Schema.Struct({
 | `src/Service/Storage.ts` | Storage abstraction (GCS/Local/Memory) |
 | `src/Service/Extraction.ts` | Entity/Relation extractors |
 | `src/Service/Grounder.ts` | Entity grounding |
+| `src/Service/DocumentClassifier.ts` | **NEW**: LLM-based document classification |
 | `src/Workflow/Activities.ts` | @effect/workflow durable activities |
+| `src/Workflow/DurableActivities.ts` | Durable activity implementations |
 | `src/Workflow/StreamingExtraction.ts` | 2-stage extraction pipeline |
 | `src/Workflow/EntityResolution.ts` | Graph-based entity resolution |
 | `src/Runtime/HttpServer.ts` | HTTP routes + SSE streaming |
@@ -976,10 +1002,12 @@ const BatchManifest = Schema.Struct({
 | `src/Domain/Model/BatchWorkflow.ts` | BatchState union type |
 | `src/Domain/Schema/Batch.ts` | BatchManifest, BatchWorkflowPayload |
 | `src/Domain/Schema/BatchRequest.ts` | API request schema |
+| `src/Domain/Schema/DocumentMetadata.ts` | **NEW**: DocumentMetadata, EnrichedManifest schemas |
 | `src/Domain/Schema/BatchStatusResponse.ts` | Active/Suspended/NotFound union |
 | `src/Domain/Error/Workflow.ts` | WorkflowError, WorkflowSuspendedError |
 | `infra/modules/postgres/` | Terraform for PostgreSQL |
 | `infra/modules/cloud-run/` | Terraform for Cloud Run |
+| `infra/modules/preprocess-job/` | **NEW**: Terraform for preprocessing Cloud Run Job |
 
 ---
 
@@ -1009,3 +1037,320 @@ export const BatchExtractionWorkflow = Workflow.make({
   )
 })
 ```
+
+---
+
+## Document Preprocessing
+
+### Overview
+
+Document preprocessing is an agentic pipeline stage that analyzes documents before extraction to optimize chunking strategies, classify content, and order batches for efficient processing.
+
+### Architecture
+
+```mermaid
+graph TB
+    subgraph "Preprocessing Pipeline"
+        INPUT[BatchManifest<br/>documents: ManifestDocument[]]
+
+        subgraph "Stage 1: Load Previews"
+            LP[Load first 4KB<br/>of each document]
+        end
+
+        subgraph "Stage 2: LLM Classification"
+            CL[Batch classify<br/>10 docs at a time]
+            DT[Document Type]
+            DOM[Domain Tags]
+            COMP[Complexity Score]
+            DENS[Entity Density]
+        end
+
+        subgraph "Stage 3: Strategy Selection"
+            CS[Chunking Strategy]
+            SIZE[Chunk Size]
+            OVER[Overlap]
+        end
+
+        subgraph "Stage 4: Batch Optimization"
+            PRI[Priority Scoring]
+            ORD[Batch Ordering]
+            TOK[Token Estimation]
+        end
+
+        OUTPUT[EnrichedManifest<br/>documents: DocumentMetadata[]]
+    end
+
+    INPUT --> LP
+    LP --> CL
+    CL --> DT
+    CL --> DOM
+    CL --> COMP
+    CL --> DENS
+    DT --> CS
+    DOM --> CS
+    COMP --> CS
+    DENS --> CS
+    CS --> SIZE
+    CS --> OVER
+    SIZE --> PRI
+    OVER --> PRI
+    COMP --> PRI
+    PRI --> ORD
+    ORD --> TOK
+    TOK --> OUTPUT
+
+    style INPUT fill:#e3f2fd
+    style OUTPUT fill:#c8e6c9
+    style CL fill:#fff3e0
+```
+
+### Cloud Deployment Options
+
+| Batch Size | Strategy | Infrastructure | Timeout |
+|------------|----------|----------------|---------|
+| Small (<50 docs) | Inline Activity | Same Cloud Run service | 5 min |
+| Medium (50-500 docs) | Cloud Run Job | Dedicated job instance | 30 min |
+| Large (>500 docs) | Cloud Tasks Fan-out | Parallel job workers | 60 min |
+
+```mermaid
+graph TB
+    subgraph "Cloud Architecture"
+        CR[Cloud Run Service<br/>effect-ontology-core]
+
+        subgraph "Small Batch Path"
+            IA[Inline<br/>PreprocessingActivity]
+        end
+
+        subgraph "Large Batch Path"
+            CRJ[Cloud Run Job<br/>effect-ontology-preprocess]
+            CT[Cloud Tasks Queue]
+        end
+
+        GCS[(Cloud Storage<br/>enriched-manifest.json)]
+        PG[(PostgreSQL<br/>Workflow State)]
+    end
+
+    CR -->|"<50 docs"| IA
+    CR -->|"≥50 docs"| CT
+    CT --> CRJ
+    IA --> GCS
+    CRJ --> GCS
+    IA --> PG
+    CRJ --> PG
+
+    style CR fill:#4285f4,color:#fff
+    style CRJ fill:#34a853,color:#fff
+    style GCS fill:#fbbc04
+```
+
+### DocumentMetadata Schema
+
+```typescript
+// Domain/Schema/DocumentMetadata.ts
+
+export const DocumentType = Schema.Literal(
+  "article",      // News, blog posts
+  "transcript",   // Meeting notes, interviews
+  "report",       // Technical reports, whitepapers
+  "contract",     // Legal documents
+  "correspondence", // Emails, letters
+  "reference",    // Wikipedia, encyclopedic
+  "narrative",    // Stories, descriptions
+  "structured",   // Tables, lists, forms
+  "unknown"
+)
+
+export const EntityDensity = Schema.Literal(
+  "sparse",       // Few entities, mostly narrative
+  "moderate",     // Average entity density
+  "dense"         // Many entities per sentence
+)
+
+export const ChunkingStrategy = Schema.Literal(
+  "standard",         // Default: 500 chars, 2 sentence overlap
+  "fine_grained",     // Dense: 300 chars, 3 sentence overlap
+  "high_overlap",     // Complex: 400 chars, 4 sentence overlap
+  "section_aware",    // Contracts: respect section boundaries
+  "speaker_aware",    // Transcripts: respect speaker turns
+  "paragraph_based"   // Articles: natural paragraph breaks
+)
+
+export const DocumentMetadata = Schema.Struct({
+  // === Original fields ===
+  documentId: DocumentId,
+  sourceUri: GcsUri,
+  contentType: Schema.String,
+  sizeBytes: Schema.Number,
+
+  // === Preprocessing timestamp ===
+  preprocessedAt: Schema.DateTimeUtc,
+
+  // === Basic extraction (always populated) ===
+  title: Schema.optional(Schema.String),
+  language: Schema.String,              // ISO 639-1: "en", "es", etc.
+  estimatedTokens: Schema.Number,
+
+  // === LLM Classification ===
+  documentType: DocumentType,
+  domainTags: Schema.Array(Schema.String),  // ["sports", "football"]
+  complexityScore: Schema.Number.pipe(      // 0-1 scale
+    Schema.greaterThanOrEqualTo(0),
+    Schema.lessThanOrEqualTo(1)
+  ),
+  entityDensityHint: EntityDensity,
+
+  // === Chunking Strategy (derived) ===
+  chunkingStrategy: ChunkingStrategy,
+  suggestedChunkSize: Schema.Number,
+  suggestedOverlap: Schema.Number,
+
+  // === Batch Optimization ===
+  priority: Schema.Number,              // Lower = process first
+  estimatedExtractionCost: Schema.Number
+})
+
+export const EnrichedManifest = Schema.Struct({
+  batchId: BatchId,
+  ontologyUri: GcsUri,
+  ontologyVersion: OntologyVersion,
+  shaclUri: Schema.optional(GcsUri),
+  targetNamespace: Namespace,
+  documents: Schema.Array(DocumentMetadata),  // Enriched!
+  createdAt: Schema.DateTimeUtc,
+
+  // === Preprocessing Stats ===
+  preprocessingStats: Schema.Struct({
+    totalDocuments: Schema.Number,
+    classifiedCount: Schema.Number,
+    totalEstimatedTokens: Schema.Number,
+    preprocessingDurationMs: Schema.Number,
+    averageComplexity: Schema.Number
+  })
+})
+```
+
+### Chunking Strategy Selection
+
+```typescript
+// Strategy decision tree based on classification
+
+const selectChunkingStrategy = (
+  documentType: DocumentType,
+  entityDensity: EntityDensity,
+  complexity: number
+): { strategy: ChunkingStrategy; chunkSize: number; overlap: number } => {
+  // Document type takes precedence
+  if (documentType === "transcript") {
+    return { strategy: "speaker_aware", chunkSize: 1000, overlap: 3 }
+  }
+  if (documentType === "contract") {
+    return { strategy: "section_aware", chunkSize: 800, overlap: 1 }
+  }
+  if (documentType === "article" || documentType === "narrative") {
+    return { strategy: "paragraph_based", chunkSize: 600, overlap: 2 }
+  }
+
+  // Entity density for other types
+  if (entityDensity === "dense") {
+    return { strategy: "fine_grained", chunkSize: 300, overlap: 3 }
+  }
+
+  // Complexity fallback
+  if (complexity > 0.8) {
+    return { strategy: "high_overlap", chunkSize: 400, overlap: 4 }
+  }
+
+  // Default
+  return { strategy: "standard", chunkSize: 500, overlap: 2 }
+}
+```
+
+### Batch Priority Scoring
+
+Documents are ordered to optimize resource utilization:
+
+```typescript
+// Lower priority = process first
+const computePriority = (metadata: DocumentMetadata): number => {
+  let priority = 50  // Base priority
+
+  // Simple documents first (fail fast on easy wins)
+  priority -= (1 - metadata.complexityScore) * 20
+
+  // Smaller documents first
+  if (metadata.estimatedTokens < 1000) priority -= 10
+  if (metadata.estimatedTokens > 10000) priority += 10
+
+  // Sparse entity density is faster
+  if (metadata.entityDensityHint === "sparse") priority -= 5
+  if (metadata.entityDensityHint === "dense") priority += 5
+
+  return priority
+}
+```
+
+### Storage Layout
+
+```text
+batches/{batch-id}/
+  manifest.json              # Original (unchanged)
+  enriched-manifest.json     # NEW: With DocumentMetadata[]
+  preprocessing-report.json  # NEW: Stats and timings
+  ...
+```
+
+### Terraform Module (Phase 4)
+
+```hcl
+# infra/modules/preprocess-job/main.tf
+
+resource "google_cloud_run_v2_job" "preprocess" {
+  name     = "effect-ontology-preprocess-${var.environment}"
+  location = var.region
+
+  template {
+    template {
+      service_account = var.cloud_run_sa
+      timeout         = "1800s"  # 30 minutes max
+
+      containers {
+        image = var.image
+        args  = ["--mode", "preprocess"]
+
+        resources {
+          limits = {
+            cpu    = "2"
+            memory = "4Gi"
+          }
+        }
+
+        # Environment variables (same as main service)
+        env { name = "LLM_PROVIDER"; value = var.llm_provider }
+        env { name = "LLM_MODEL"; value = var.llm_model }
+        env {
+          name = "LLM_API_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = var.llm_api_key_secret
+              version = "latest"
+            }
+          }
+        }
+        env { name = "STORAGE_TYPE"; value = "gcs" }
+        env { name = "STORAGE_BUCKET"; value = var.storage_bucket }
+      }
+    }
+  }
+}
+```
+
+### Implementation Phases
+
+| Phase | Scope | Files | Depends On |
+|-------|-------|-------|------------|
+| **1** | `DocumentMetadata` and `EnrichedManifest` schemas | `Domain/Schema/DocumentMetadata.ts` | - |
+| **2** | `PreprocessingActivity` (inline) | `Workflow/DurableActivities.ts` | Phase 1 |
+| **3** | `BatchState.Preprocessing` state | `Domain/Model/BatchWorkflow.ts` | Phase 2 |
+| **4** | Extraction uses preprocessing hints | `Workflow/StreamingExtraction.ts`, `Service/Nlp.ts` | Phase 3 |
+| **5** | Cloud Run Job for large batches | `infra/modules/preprocess-job/` | Phase 4 |
+| **6** | Cloud Tasks fan-out (optional) | Future | Phase 5 |

@@ -38,7 +38,18 @@ import type {
   ResolutionActivityInput,
   ValidationActivityInput
 } from "../Domain/Schema/Batch.js"
-import { ValidationActivityOutput } from "../Domain/Schema/Batch.js"
+import { BatchManifest, ValidationActivityOutput } from "../Domain/Schema/Batch.js"
+import {
+  computePriority,
+  type DocumentMetadata,
+  type DocumentType,
+  type EnrichedManifest,
+  type EntityDensity,
+  estimateTokens,
+  type PreprocessingActivityInput,
+  type PreprocessingActivityOutput,
+  selectChunkingStrategy
+} from "../Domain/Schema/DocumentMetadata.js"
 import { ConfigService } from "../Service/Config.js"
 import { EmbeddingService } from "../Service/Embedding.js"
 import { EntityResolutionService } from "../Service/EntityResolution.js"
@@ -1320,6 +1331,400 @@ export const makeLlmVerificationActivity = (input: LlmVerificationInput) =>
         skipped: skippedCount,
         totalProcessed: pairsToVerify.length,
         durationMs: DateTime.distance(start, end)
+      }
+    }).pipe(Effect.mapError(toActivityError)),
+    interruptRetryPolicy: activityRetryPolicy
+  })
+
+// -----------------------------------------------------------------------------
+// Document Preprocessing Activity
+// -----------------------------------------------------------------------------
+
+/**
+ * LLM response schema for document classification
+ *
+ * Used to classify document type, extract domain tags, and estimate complexity.
+ */
+const DocumentClassificationResponse = Schema.Struct({
+  /** Classified document type */
+  documentType: Schema.Literal(
+    "article",
+    "transcript",
+    "report",
+    "contract",
+    "correspondence",
+    "reference",
+    "narrative",
+    "structured",
+    "unknown"
+  ).annotations({
+    description: "Document structure/type classification"
+  }),
+  /** Domain/topic tags extracted from content */
+  domainTags: Schema.Array(Schema.String).annotations({
+    description: "2-5 domain tags describing the document topic"
+  }),
+  /** Complexity score 0-1 */
+  complexityScore: Schema.Number.pipe(
+    Schema.greaterThanOrEqualTo(0),
+    Schema.lessThanOrEqualTo(1)
+  ).annotations({
+    description: "Document complexity (0=simple, 1=complex)"
+  }),
+  /** Entity density estimation */
+  entityDensity: Schema.Literal("sparse", "moderate", "dense").annotations({
+    description: "Estimated entity density"
+  }),
+  /** Optional detected language */
+  language: Schema.optional(Schema.String).annotations({
+    description: "Detected language code (ISO 639-1)"
+  }),
+  /** Optional extracted title */
+  title: Schema.optional(Schema.String).annotations({
+    description: "Document title if detectable"
+  })
+})
+
+/**
+ * Batch classification response for multiple documents
+ */
+const BatchClassificationResponse = Schema.Struct({
+  classifications: Schema.Array(
+    Schema.Struct({
+      /** Document index in the batch (0-based) */
+      index: Schema.Number,
+      /** Classification result */
+      classification: DocumentClassificationResponse
+    })
+  )
+})
+
+/**
+ * Output schema for preprocessing activity
+ */
+export const PreprocessingOutput = Schema.Struct({
+  enrichedManifestUri: GcsUri,
+  totalDocuments: Schema.Number,
+  classifiedCount: Schema.Number,
+  failedCount: Schema.Number,
+  totalEstimatedTokens: Schema.Number,
+  averageComplexity: Schema.Number,
+  durationMs: Schema.Number
+})
+export type PreprocessingOutput = typeof PreprocessingOutput.Type
+
+/** Preview size in bytes for classification */
+const PREVIEW_SIZE = 4096
+
+/** Batch size for LLM classification calls */
+const CLASSIFICATION_BATCH_SIZE = 10
+
+/**
+ * Build classification prompt for a batch of document previews
+ */
+const buildClassificationPrompt = (
+  previews: ReadonlyArray<{ index: number; preview: string; contentType: string }>
+): string => {
+  const docSummaries = previews.map(({ index, preview, contentType }) =>
+    `Document ${index} (${contentType}):\n"""${preview.slice(0, 1500)}"""`
+  ).join("\n\n---\n\n")
+
+  return `You are a document classification assistant. Analyze the following document previews and classify each one.
+
+For each document, determine:
+1. **documentType**: The structural type (article, transcript, report, contract, correspondence, reference, narrative, structured, unknown)
+2. **domainTags**: 2-5 topic tags describing what the document is about
+3. **complexityScore**: How complex is the language/structure? (0=very simple, 1=highly technical/complex)
+4. **entityDensity**: How many named entities per paragraph?
+   - "sparse": Few entities, mostly prose
+   - "moderate": Average density
+   - "dense": Many entities (lists, tables, rosters)
+5. **language**: ISO 639-1 code if detectable (e.g., "en", "es")
+6. **title**: Document title if visible
+
+${docSummaries}
+
+Respond with classifications for each document by index.`
+}
+
+/**
+ * Durable Preprocessing Activity
+ *
+ * Preprocesses documents in a batch to extract metadata for intelligent batching:
+ * - Loads document previews (first ${PREVIEW_SIZE} bytes)
+ * - Classifies documents using LLM in batches
+ * - Computes chunking strategies and priorities
+ * - Creates EnrichedManifest for downstream processing
+ *
+ * @since 2.3.0
+ */
+export const makePreprocessingActivity = (input: typeof PreprocessingActivityInput.Type) =>
+  Activity.make({
+    name: `preprocessing-${input.batchId}`,
+    success: PreprocessingOutput,
+    error: ActivityError,
+    execute: Effect.gen(function*() {
+      const start = yield* DateTime.now
+      const storage = yield* StorageService
+      const config = yield* ConfigService
+      const llm = yield* LanguageModel.LanguageModel
+      const bucket = resolveBucket(config)
+
+      yield* Effect.logInfo("Preprocessing activity starting", {
+        batchId: input.batchId,
+        manifestUri: input.manifestUri,
+        skipClassification: input.skipClassification ?? false
+      })
+
+      // 1. Load the batch manifest
+      const manifestPath = stripGsPrefix(input.manifestUri)
+      const manifestContent = yield* storage.get(manifestPath).pipe(
+        Effect.flatMap((opt) => requireContent(opt, manifestPath))
+      )
+      const manifest = yield* Schema.decodeUnknown(BatchManifest)(JSON.parse(manifestContent)).pipe(
+        Effect.mapError((e) => notFoundError("BatchManifest", `Parse error: ${e}`))
+      )
+
+      yield* Effect.logInfo("Manifest loaded", {
+        batchId: input.batchId,
+        documentCount: manifest.documents.length
+      })
+
+      // 2. Load document previews (first PREVIEW_SIZE bytes of each)
+      const previews = yield* Effect.forEach(
+        manifest.documents,
+        (doc, index) =>
+          Effect.gen(function*() {
+            const sourcePath = stripGsPrefix(doc.sourceUri)
+            const content = yield* storage.get(sourcePath).pipe(
+              Effect.map((opt) => Option.getOrElse(opt, () => "")),
+              Effect.catchAll(() => Effect.succeed(""))
+            )
+            return {
+              index,
+              documentId: doc.documentId,
+              sourceUri: doc.sourceUri,
+              contentType: doc.contentType,
+              sizeBytes: doc.sizeBytes,
+              preview: content.slice(0, PREVIEW_SIZE)
+            }
+          }),
+        { concurrency: 10 }
+      )
+
+      yield* Effect.logInfo("Document previews loaded", {
+        batchId: input.batchId,
+        previewCount: previews.length
+      })
+
+      // 3. Classify documents (skip if requested)
+      const preprocessedAt = yield* DateTime.now
+
+      let documentMetadata: Array<DocumentMetadata>
+      let classifiedCount = 0
+      let failedCount = 0
+
+      if (input.skipClassification) {
+        // Use defaults for all documents
+        documentMetadata = previews.map((p) => ({
+          documentId: p.documentId,
+          sourceUri: p.sourceUri,
+          contentType: p.contentType,
+          sizeBytes: p.sizeBytes,
+          preprocessedAt,
+          title: undefined,
+          language: "en",
+          estimatedTokens: estimateTokens(p.sizeBytes),
+          documentType: "unknown" as DocumentType,
+          domainTags: [],
+          complexityScore: 0.5,
+          entityDensityHint: "moderate" as EntityDensity,
+          chunkingStrategy: "standard" as const,
+          suggestedChunkSize: 500,
+          suggestedOverlap: 2,
+          priority: 50,
+          estimatedExtractionCost: estimateTokens(p.sizeBytes) * 2
+        }))
+        failedCount = previews.length
+      } else {
+        // Batch LLM classification
+        const classifications = new Map<number, typeof DocumentClassificationResponse.Type>()
+
+        // Process in batches
+        for (let i = 0; i < previews.length; i += CLASSIFICATION_BATCH_SIZE) {
+          const batch = previews.slice(i, i + CLASSIFICATION_BATCH_SIZE)
+          const batchPreviews = batch.map((p) => ({
+            index: p.index,
+            preview: p.preview,
+            contentType: p.contentType
+          }))
+
+          yield* Effect.logDebug("Classifying batch", {
+            batchId: input.batchId,
+            batchStart: i,
+            batchSize: batch.length
+          })
+
+          const result = yield* generateObjectWithRetry({
+            llm,
+            prompt: buildClassificationPrompt(batchPreviews),
+            schema: BatchClassificationResponse,
+            objectName: "batch_classification",
+            serviceName: "Preprocessing",
+            model: config.llm.model,
+            provider: config.llm.provider,
+            retryConfig: {
+              initialDelayMs: 1000,
+              maxDelayMs: 30000,
+              maxAttempts: 3,
+              timeoutMs: 60000
+            },
+            spanAttributes: {
+              "preprocessing.batch_id": input.batchId,
+              "preprocessing.batch_start": i,
+              "preprocessing.batch_size": batch.length
+            }
+          }).pipe(
+            Effect.catchAll((error) => {
+              // Log error but continue with defaults
+              return Effect.gen(function*() {
+                yield* Effect.logWarning("Classification batch failed, using defaults", {
+                  batchId: input.batchId,
+                  batchStart: i,
+                  error: String(error)
+                })
+                return { value: { classifications: [] } }
+              })
+            })
+          )
+
+          // Store classifications by index
+          for (const item of result.value.classifications) {
+            classifications.set(item.index, item.classification)
+          }
+        }
+
+        // 4. Build DocumentMetadata for each document
+        documentMetadata = previews.map((p) => {
+          const classification = classifications.get(p.index)
+
+          if (classification) {
+            classifiedCount++
+            const tokens = estimateTokens(p.sizeBytes)
+            const { strategy, chunkSize, overlap } = selectChunkingStrategy(
+              classification.documentType,
+              classification.entityDensity,
+              classification.complexityScore
+            )
+            const priority = computePriority(
+              classification.complexityScore,
+              tokens,
+              classification.entityDensity
+            )
+
+            return {
+              documentId: p.documentId,
+              sourceUri: p.sourceUri,
+              contentType: p.contentType,
+              sizeBytes: p.sizeBytes,
+              preprocessedAt,
+              title: classification.title,
+              language: (classification.language ?? "en") as string,
+              estimatedTokens: tokens,
+              documentType: classification.documentType,
+              domainTags: classification.domainTags,
+              complexityScore: classification.complexityScore,
+              entityDensityHint: classification.entityDensity,
+              chunkingStrategy: strategy,
+              suggestedChunkSize: chunkSize,
+              suggestedOverlap: overlap,
+              priority,
+              estimatedExtractionCost: tokens * 2
+            } satisfies DocumentMetadata
+          } else {
+            // Use defaults for failed classifications
+            failedCount++
+            const tokens = estimateTokens(p.sizeBytes)
+            return {
+              documentId: p.documentId,
+              sourceUri: p.sourceUri,
+              contentType: p.contentType,
+              sizeBytes: p.sizeBytes,
+              preprocessedAt,
+              title: undefined,
+              language: "en",
+              estimatedTokens: tokens,
+              documentType: "unknown" as DocumentType,
+              domainTags: [],
+              complexityScore: 0.5,
+              entityDensityHint: "moderate" as EntityDensity,
+              chunkingStrategy: "standard" as const,
+              suggestedChunkSize: 500,
+              suggestedOverlap: 2,
+              priority: 50,
+              estimatedExtractionCost: tokens * 2
+            } satisfies DocumentMetadata
+          }
+        })
+      }
+
+      // 5. Sort by priority (lower = process first)
+      documentMetadata.sort((a, b) => a.priority - b.priority)
+
+      // 6. Compute stats
+      const totalEstimatedTokens = documentMetadata.reduce((sum, d) => sum + d.estimatedTokens, 0)
+      const avgComplexity = documentMetadata.reduce((sum, d) => sum + d.complexityScore, 0) / documentMetadata.length
+      const typeDistribution: Record<string, number> = {}
+      for (const d of documentMetadata) {
+        typeDistribution[d.documentType] = (typeDistribution[d.documentType] ?? 0) + 1
+      }
+
+      // 7. Compute duration and create EnrichedManifest
+      const end = yield* DateTime.now
+      const durationMs = DateTime.distance(start, end)
+
+      const enrichedManifest: EnrichedManifest = {
+        batchId: manifest.batchId,
+        ontologyUri: manifest.ontologyUri,
+        ontologyVersion: manifest.ontologyVersion,
+        shaclUri: manifest.shaclUri,
+        targetNamespace: manifest.targetNamespace,
+        documents: documentMetadata,
+        createdAt: manifest.createdAt,
+        preprocessedAt,
+        preprocessingStats: {
+          totalDocuments: documentMetadata.length,
+          classifiedCount,
+          failedCount,
+          totalEstimatedTokens,
+          preprocessingDurationMs: durationMs,
+          averageComplexity: avgComplexity,
+          documentTypeDistribution: typeDistribution
+        }
+      }
+
+      // 8. Write enriched manifest to storage
+      const enrichedManifestPath = PathLayout.batch.enrichedManifest(input.batchId)
+      yield* storage.set(enrichedManifestPath, JSON.stringify(enrichedManifest, null, 2))
+
+      yield* Effect.logInfo("Preprocessing activity complete", {
+        batchId: input.batchId,
+        totalDocuments: documentMetadata.length,
+        classifiedCount,
+        failedCount,
+        totalEstimatedTokens,
+        averageComplexity: avgComplexity,
+        durationMs
+      })
+
+      return {
+        enrichedManifestUri: toGcsUri(bucket, enrichedManifestPath),
+        totalDocuments: documentMetadata.length,
+        classifiedCount,
+        failedCount,
+        totalEstimatedTokens,
+        averageComplexity: avgComplexity,
+        durationMs
       }
     }).pipe(Effect.mapError(toActivityError)),
     interruptRetryPolicy: activityRetryPolicy

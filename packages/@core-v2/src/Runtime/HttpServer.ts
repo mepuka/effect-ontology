@@ -9,7 +9,7 @@ import { BatchState } from "../Domain/Model/BatchWorkflow.js"
 import { PathLayout } from "../Domain/PathLayout.js"
 import type { BatchWorkflowPayload } from "../Domain/Schema/Batch.js"
 import { BatchManifest } from "../Domain/Schema/Batch.js"
-import { BatchRequest } from "../Domain/Schema/BatchRequest.js"
+import { BatchRequest, type PreprocessingOptions } from "../Domain/Schema/BatchRequest.js"
 import { BatchStatusResponse } from "../Domain/Schema/BatchStatusResponse.js"
 import { getBatchStateFromStore } from "../Service/BatchState.js"
 import { ConfigService } from "../Service/Config.js"
@@ -161,14 +161,19 @@ const stageManifest = (manifest: BatchManifest) =>
     return toGcsUri(bucket, manifestPath)
   })
 
-const toPayload = (manifest: BatchManifest, manifestUri: GcsUri): BatchWorkflowPayloadType => ({
+const toPayload = (
+  manifest: BatchManifest,
+  manifestUri: GcsUri,
+  preprocessing?: PreprocessingOptions
+): BatchWorkflowPayloadType => ({
   batchId: manifest.batchId,
   manifestUri,
   ontologyVersion: manifest.ontologyVersion,
   ontologyUri: manifest.ontologyUri,
   targetNamespace: manifest.targetNamespace,
   shaclUri: manifest.shaclUri,
-  documentIds: manifest.documents.map((doc) => doc.documentId)
+  documentIds: manifest.documents.map((doc) => doc.documentId),
+  preprocessing
 })
 
 export const ExtractionRouter = HttpRouter.empty.pipe(
@@ -188,7 +193,7 @@ export const ExtractionRouter = HttpRouter.empty.pipe(
               const manifestUri = yield* stageManifest(manifest)
 
               const orchestrator = yield* WorkflowOrchestrator
-              const executionId = yield* orchestrator.start(toPayload(manifest, manifestUri))
+              const executionId = yield* orchestrator.start(toPayload(manifest, manifestUri, request.preprocessing))
 
               return yield* streamBatchExtraction(executionId)
             })
@@ -211,7 +216,7 @@ export const ExtractionRouter = HttpRouter.empty.pipe(
               const manifest = yield* createManifest(request)
               const manifestUri = yield* stageManifest(manifest)
               const orchestrator = yield* WorkflowOrchestrator
-              const executionId = yield* orchestrator.start(toPayload(manifest, manifestUri))
+              const executionId = yield* orchestrator.start(toPayload(manifest, manifestUri, request.preprocessing))
               return yield* streamBatchExtraction(executionId)
             })
         })

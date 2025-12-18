@@ -17,6 +17,8 @@
 import { BunContext } from "@effect/platform-bun"
 import { Layer } from "effect"
 import { ConfigService, ConfigServiceDefault } from "../Service/Config.js"
+import { EmbeddingService, EmbeddingServiceDefault } from "../Service/Embedding.js"
+import { EntityResolutionService } from "../Service/EntityResolution.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { StageTimeoutServiceLive } from "../Service/LlmControl/StageTimeout.js"
 import { NlpService } from "../Service/Nlp.js"
@@ -128,6 +130,20 @@ const ShaclBundle = ShaclService.Default.pipe(
   Layer.provideMerge(StorageBundle)
 )
 
+/**
+ * Entity Resolution services with cached embeddings
+ *
+ * Dependencies:
+ * - EmbeddingService (with cache-through behavior)
+ * - EmbeddingCache (in-memory with TTL/LRU eviction)
+ * - NomicNlpService (local embedding model)
+ * - MetricsService (cache hit/miss tracking)
+ *
+ * CRITICAL: This bundle provides EmbeddingCache.Default which gives actual
+ * caching behavior. Without this, embeddings are recomputed for every entity.
+ */
+const EntityResolutionBundle = EntityResolutionService.Live
+
 // =============================================================================
 // Activity Dependencies (complete bundle for workflow activities)
 // =============================================================================
@@ -142,6 +158,8 @@ const ShaclBundle = ShaclService.Default.pipe(
  * - EntityExtractor: LLM-based entity extraction
  * - RelationExtractor: LLM-based relation extraction
  * - OntologyService: Ontology class/property lookup
+ * - EntityResolutionService: Entity clustering with cached embeddings
+ * - EmbeddingService: Embedding generation with cache-through
  *
  * Note: ConfigService is included in output for HTTP handlers that need config.
  */
@@ -150,7 +168,8 @@ export const ActivityDependenciesLayer = Layer.mergeAll(
   CoreDependenciesLayer,
   LlmExtractionBundle,
   OntologyBundle,
-  ShaclBundle
+  ShaclBundle,
+  EntityResolutionBundle
 )
 
 // =============================================================================

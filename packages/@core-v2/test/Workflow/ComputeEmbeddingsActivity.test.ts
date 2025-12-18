@@ -18,6 +18,7 @@ import type { NomicTaskType } from "../../src/Service/NomicNlp.js"
 import { NomicNlpService } from "../../src/Service/NomicNlp.js"
 import { parseOntologyFromStore } from "../../src/Service/Ontology.js"
 import { RdfBuilder } from "../../src/Service/Rdf.js"
+import { MetricsService } from "../../src/Telemetry/Metrics.js"
 import { TestConfigProvider } from "../setup.js"
 
 // Minimal football ontology for testing
@@ -102,6 +103,7 @@ describe("ComputeEmbeddingsActivity", () => {
     const TestLayer = EmbeddingServiceLive.pipe(
       Layer.provideMerge(NomicNlpServiceTest),
       Layer.provideMerge(EmbeddingCache.Default),
+      Layer.provideMerge(MetricsService.Default),
       Layer.provideMerge(RdfTestLayer)
     )
 

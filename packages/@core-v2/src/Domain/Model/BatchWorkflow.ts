@@ -26,6 +26,15 @@ export const BatchPending = Schema.TaggedStruct("Pending", {
   documentCount: Schema.Number
 })
 
+export const BatchPreprocessing = Schema.TaggedStruct("Preprocessing", {
+  ...BatchBase,
+  documentsTotal: Schema.Number,
+  documentsClassified: Schema.Number,
+  documentsFailed: Schema.Number,
+  /** URI of the enriched manifest once preprocessing completes */
+  enrichedManifestUri: Schema.optional(GcsUri)
+})
+
 export const BatchExtracting = Schema.TaggedStruct("Extracting", {
   ...BatchBase,
   documentsTotal: Schema.Number,
@@ -71,19 +80,20 @@ export const BatchComplete = Schema.TaggedStruct("Complete", {
 export const BatchFailed = Schema.TaggedStruct("Failed", {
   ...BatchBase,
   failedAt: Schema.DateTimeUtc,
-  failedInStage: Schema.Literal("pending", "extracting", "resolving", "validating", "ingesting"),
+  failedInStage: Schema.Literal("pending", "preprocessing", "extracting", "resolving", "validating", "ingesting"),
   error: Schema.Struct({
     code: Schema.String,
     message: Schema.String,
     cause: Schema.optional(Schema.Unknown)
   }),
   lastSuccessfulStage: Schema.optional(
-    Schema.Literal("pending", "extracting", "resolving", "validating", "ingesting")
+    Schema.Literal("pending", "preprocessing", "extracting", "resolving", "validating", "ingesting")
   )
 })
 
 export const BatchState = Schema.Union(
   BatchPending,
+  BatchPreprocessing,
   BatchExtracting,
   BatchResolving,
   BatchValidating,
@@ -104,6 +114,7 @@ export type BatchStage = BatchState["_tag"]
  */
 export const stageDisplayName = Match.type<BatchState>().pipe(
   Match.tag("Pending", () => "Pending"),
+  Match.tag("Preprocessing", () => "Preprocessing"),
   Match.tag("Extracting", () => "Extracting"),
   Match.tag("Resolving", () => "Resolving"),
   Match.tag("Validating", () => "Validating"),
@@ -117,18 +128,35 @@ export const stageDisplayName = Match.type<BatchState>().pipe(
  */
 export const isTerminal = Match.type<BatchState>().pipe(
   Match.tag("Complete", "Failed", () => true),
-  Match.tag("Pending", "Extracting", "Resolving", "Validating", "Ingesting", () => false)
+  Match.tag("Pending", "Preprocessing", "Extracting", "Resolving", "Validating", "Ingesting", () => false)
 )
 
 /**
  * Rough progress indicator (0-100, -1 on failure)
+ *
+ * Pipeline stages and progress allocation:
+ * - Pending: 0%
+ * - Preprocessing: 0-10% (based on classification progress)
+ * - Extracting: 10-35% (based on document completion)
+ * - Resolving: 40-50%
+ * - Validating: 55-70%
+ * - Ingesting: 75-100% (based on triples ingested)
+ * - Complete: 100%
+ * - Failed: -1
  */
 export const progressPercent = Match.type<BatchState>().pipe(
   Match.tag("Pending", () => 0),
-  Match.tag("Extracting", (s) => s.documentsTotal > 0 ? Math.round((s.documentsCompleted / s.documentsTotal) * 25) : 0),
-  Match.tag("Resolving", () => 50),
-  Match.tag("Validating", () => 75),
-  Match.tag("Ingesting", (s) => s.triplesTotal > 0 ? 75 + Math.round((s.triplesIngested / s.triplesTotal) * 25) : 90),
+  Match.tag("Preprocessing", (s) =>
+    s.documentsTotal > 0 ? Math.round((s.documentsClassified / s.documentsTotal) * 10) : 0
+  ),
+  Match.tag("Extracting", (s) =>
+    s.documentsTotal > 0 ? 10 + Math.round((s.documentsCompleted / s.documentsTotal) * 25) : 10
+  ),
+  Match.tag("Resolving", () => 45),
+  Match.tag("Validating", () => 65),
+  Match.tag("Ingesting", (s) =>
+    s.triplesTotal > 0 ? 75 + Math.round((s.triplesIngested / s.triplesTotal) * 25) : 85
+  ),
   Match.tag("Complete", () => 100),
   Match.tag("Failed", () => -1)
 )
@@ -149,12 +177,14 @@ export const getError = Match.type<BatchState>().pipe(
  * Valid state transitions for batch workflow.
  *
  * Rules:
- * - Pending can only go to Extracting or Failed
+ * - Pending can go to Preprocessing or Failed
+ * - Preprocessing can go to Extracting or Failed
  * - Each stage can progress to the next stage or Failed
  * - Complete and Failed are terminal (no outgoing transitions)
  */
 export const VALID_TRANSITIONS: Record<BatchStage, ReadonlyArray<BatchStage>> = {
-  Pending: ["Extracting", "Failed"],
+  Pending: ["Preprocessing", "Failed"],
+  Preprocessing: ["Extracting", "Failed"],
   Extracting: ["Resolving", "Failed"],
   Resolving: ["Validating", "Failed"],
   Validating: ["Ingesting", "Failed"],

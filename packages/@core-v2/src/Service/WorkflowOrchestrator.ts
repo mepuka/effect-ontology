@@ -17,12 +17,13 @@
 import { Workflow, WorkflowEngine } from "@effect/workflow"
 import { Cause, Context, DateTime, Effect, Exit, Hash, Layer, Match, Option, Ref, Schedule, Schema } from "effect"
 import { WorkflowError, WorkflowNotFoundError, WorkflowSuspendedError } from "../Domain/Error/Workflow.js"
-import type { BatchId } from "../Domain/Identity.js"
+import type { BatchId, GcsUri } from "../Domain/Identity.js"
 import { BatchState } from "../Domain/Model/BatchWorkflow.js"
 import { BatchManifest, BatchWorkflowPayload } from "../Domain/Schema/Batch.js"
 import {
   makeExtractionActivity,
   makeIngestionActivity,
+  makePreprocessingActivity,
   makeResolutionActivity,
   makeValidationActivity
 } from "../Workflow/DurableActivities.js"
@@ -30,7 +31,7 @@ import { getBatchStateFromStore, publishState } from "./BatchState.js"
 import { StorageService } from "./Storage.js"
 
 type BatchWorkflowPayloadType = typeof BatchWorkflowPayload.Type
-type PipelineStage = "pending" | "extracting" | "resolving" | "validating" | "ingesting"
+type PipelineStage = "pending" | "preprocessing" | "extracting" | "resolving" | "validating" | "ingesting"
 
 // -----------------------------------------------------------------------------
 // Workflow Definition
@@ -39,14 +40,16 @@ type PipelineStage = "pending" | "extracting" | "resolving" | "validating" | "in
 /**
  * Batch Extraction Workflow
  *
- * Orchestrates the 4-stage pipeline:
- * 1. Extraction: Extract entities/relations from each document
- * 2. Resolution: Merge graphs and resolve entity references
- * 3. Validation: Validate against SHACL shapes (optional)
- * 4. Ingestion: Write to canonical store
+ * Orchestrates the 5-stage pipeline:
+ * 1. Preprocessing: Classify documents, compute metadata, determine chunking strategies
+ * 2. Extraction: Extract entities/relations from each document
+ * 3. Resolution: Merge graphs and resolve entity references
+ * 4. Validation: Validate against SHACL shapes (optional)
+ * 5. Ingestion: Write to canonical store
  *
  * The workflow is durable - if it crashes, it will resume from the last
- * completed activity on restart.
+ * completed activity on restart. Preprocessing has graceful fallback -
+ * if classification fails, the workflow continues with default metadata.
  */
 export const BatchExtractionWorkflow = Workflow.make({
   name: "batch-extraction",
@@ -91,6 +94,8 @@ const stageFromState = (state: BatchState): PipelineStage => {
   switch (state._tag) {
     case "Pending":
       return "pending"
+    case "Preprocessing":
+      return "preprocessing"
     case "Extracting":
       return "extracting"
     case "Resolving":
@@ -276,12 +281,93 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
         }
         yield* emitState(pendingState)
 
+        // -------------------------------------------------------------------------
+        // Stage 1: Preprocessing (document classification and metadata enrichment)
+        // -------------------------------------------------------------------------
+        yield* Effect.logInfo("Starting preprocessing stage", {
+          batchId,
+          documentCount: manifest.documents.length
+        })
+
+        currentStage = "preprocessing"
+
+        const preprocessingState: BatchState = {
+          _tag: "Preprocessing",
+          batchId,
+          manifestUri,
+          ontologyVersion,
+          createdAt: workflowStart,
+          updatedAt: yield* DateTime.now,
+          documentsTotal: manifest.documents.length,
+          documentsClassified: 0,
+          documentsFailed: 0,
+          enrichedManifestUri: undefined
+        }
+        yield* emitState(preprocessingState)
+
+        // Run preprocessing activity with graceful fallback
+        const preprocessingResult = yield* makePreprocessingActivity({
+          batchId,
+          manifestUri
+        }).execute.pipe(
+          Effect.tap((result) =>
+            Effect.gen(function*() {
+              const updatedPreprocessingState: BatchState = {
+                _tag: "Preprocessing",
+                batchId,
+                manifestUri,
+                ontologyVersion,
+                createdAt: workflowStart,
+                updatedAt: yield* DateTime.now,
+                documentsTotal: result.totalDocuments,
+                documentsClassified: result.classifiedCount,
+                documentsFailed: result.failedCount,
+                enrichedManifestUri: result.enrichedManifestUri
+              }
+              yield* emitState(updatedPreprocessingState)
+            })
+          ),
+          // Graceful fallback: if preprocessing fails, continue with original manifest
+          Effect.catchAll((error) =>
+            Effect.gen(function*() {
+              yield* Effect.logWarning("Preprocessing failed, continuing with original manifest", {
+                batchId,
+                error: String(error)
+              })
+              return {
+                enrichedManifestUri: manifestUri as GcsUri,
+                totalDocuments: manifest.documents.length,
+                classifiedCount: 0,
+                failedCount: 0,
+                totalEstimatedTokens: 0,
+                averageComplexity: 0.5,
+                durationMs: 0
+              }
+            })
+          )
+        )
+
+        lastSuccessfulStage = "preprocessing"
+
+        yield* Effect.logInfo("Preprocessing complete", {
+          batchId,
+          classifiedCount: preprocessingResult.classifiedCount,
+          failedCount: preprocessingResult.failedCount,
+          enrichedManifestUri: preprocessingResult.enrichedManifestUri
+        })
+
+        // -------------------------------------------------------------------------
+        // Stage 2: Extraction (extract entities/relations from each document)
+        // -------------------------------------------------------------------------
         yield* Effect.logInfo("Starting extraction stage", {
           batchId,
           documentCount: manifest.documents.length
         })
 
         currentStage = "extracting"
+
+        // Reset progress counter for extraction stage
+        yield* Ref.set(progressRef, 0)
 
         const extractionResults = yield* Effect.forEach(
           manifest.documents,

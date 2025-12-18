@@ -20,6 +20,7 @@ describe("BatchWorkflow State Transitions", () => {
     it("should define all stages", () => {
       const stages: Array<BatchStage> = [
         "Pending",
+        "Preprocessing",
         "Extracting",
         "Resolving",
         "Validating",
@@ -41,6 +42,7 @@ describe("BatchWorkflow State Transitions", () => {
     it("should allow all non-terminal states to fail", () => {
       const nonTerminalStages: Array<BatchStage> = [
         "Pending",
+        "Preprocessing",
         "Extracting",
         "Resolving",
         "Validating",
@@ -59,8 +61,12 @@ describe("BatchWorkflow State Transitions", () => {
       expect(isValidTransition("Ingesting", "Ingesting")).toBe(true)
     })
 
-    it("should allow Pending → Extracting", () => {
-      expect(isValidTransition("Pending", "Extracting")).toBe(true)
+    it("should allow Pending → Preprocessing", () => {
+      expect(isValidTransition("Pending", "Preprocessing")).toBe(true)
+    })
+
+    it("should allow Preprocessing → Extracting", () => {
+      expect(isValidTransition("Preprocessing", "Extracting")).toBe(true)
     })
 
     it("should allow Extracting → Resolving", () => {
@@ -81,6 +87,7 @@ describe("BatchWorkflow State Transitions", () => {
 
     it("should allow any non-terminal state → Failed", () => {
       expect(isValidTransition("Pending", "Failed")).toBe(true)
+      expect(isValidTransition("Preprocessing", "Failed")).toBe(true)
       expect(isValidTransition("Extracting", "Failed")).toBe(true)
       expect(isValidTransition("Resolving", "Failed")).toBe(true)
       expect(isValidTransition("Validating", "Failed")).toBe(true)
@@ -88,9 +95,11 @@ describe("BatchWorkflow State Transitions", () => {
     })
 
     it("should reject skipping stages", () => {
+      expect(isValidTransition("Pending", "Extracting")).toBe(false) // Must go through Preprocessing
       expect(isValidTransition("Pending", "Validating")).toBe(false)
       expect(isValidTransition("Extracting", "Complete")).toBe(false)
       expect(isValidTransition("Pending", "Ingesting")).toBe(false)
+      expect(isValidTransition("Preprocessing", "Resolving")).toBe(false) // Must go through Extracting
     })
 
     it("should reject transitions from terminal states", () => {
@@ -109,7 +118,8 @@ describe("BatchWorkflow State Transitions", () => {
 
   describe("validateTransition", () => {
     it("should return undefined for valid transitions", () => {
-      expect(validateTransition("Pending", "Extracting")).toBeUndefined()
+      expect(validateTransition("Pending", "Preprocessing")).toBeUndefined()
+      expect(validateTransition("Preprocessing", "Extracting")).toBeUndefined()
       expect(validateTransition("Extracting", "Failed")).toBeUndefined()
       expect(validateTransition("Extracting", "Extracting")).toBeUndefined()
     })
@@ -138,18 +148,29 @@ describe("BatchWorkflow State Transitions", () => {
   describe("isValidStateTransition", () => {
     it("should validate using state objects", () => {
       const pendingState = { _tag: "Pending" } as const
+      const preprocessingState = { _tag: "Preprocessing" } as const
       const extractingState = { _tag: "Extracting" } as const
       const failedState = { _tag: "Failed" } as const
 
-      // Valid
+      // Valid: Pending → Preprocessing
       expect(
-        isValidStateTransition(pendingState as any, extractingState as any)
+        isValidStateTransition(pendingState as any, preprocessingState as any)
       ).toBe(true)
 
-      // Invalid (skipping stages)
+      // Valid: Preprocessing → Extracting
+      expect(
+        isValidStateTransition(preprocessingState as any, extractingState as any)
+      ).toBe(true)
+
+      // Invalid: Pending → Extracting (must go through Preprocessing)
+      expect(
+        isValidStateTransition(pendingState as any, extractingState as any)
+      ).toBe(false)
+
+      // Valid: Pending → Failed (failing is always valid from non-terminal)
       expect(
         isValidStateTransition(pendingState as any, failedState as any)
-      ).toBe(true) // Failing is always valid from non-terminal
+      ).toBe(true)
 
       // Invalid (from terminal)
       expect(
@@ -160,7 +181,11 @@ describe("BatchWorkflow State Transitions", () => {
 
   describe("getValidNextStates", () => {
     it("should return correct next states for Pending", () => {
-      expect(getValidNextStates("Pending")).toEqual(["Extracting", "Failed"])
+      expect(getValidNextStates("Pending")).toEqual(["Preprocessing", "Failed"])
+    })
+
+    it("should return correct next states for Preprocessing", () => {
+      expect(getValidNextStates("Preprocessing")).toEqual(["Extracting", "Failed"])
     })
 
     it("should return correct next states for Extracting", () => {
@@ -176,6 +201,7 @@ describe("BatchWorkflow State Transitions", () => {
   describe("canFail", () => {
     it("should return true for non-terminal states", () => {
       expect(canFail("Pending")).toBe(true)
+      expect(canFail("Preprocessing")).toBe(true)
       expect(canFail("Extracting")).toBe(true)
       expect(canFail("Resolving")).toBe(true)
       expect(canFail("Validating")).toBe(true)

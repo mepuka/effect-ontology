@@ -9,6 +9,7 @@
 
 import { Schema } from "effect"
 import { BatchId, DocumentId, GcsUri, Namespace, OntologyVersion } from "../Identity.js"
+import { PreprocessingOptions } from "./BatchRequest.js"
 
 export const ManifestDocument = Schema.Struct({
   documentId: DocumentId,
@@ -87,6 +88,12 @@ export const BatchWorkflowPayload = Schema.Struct({
   ontologyUri: GcsUri,
   targetNamespace: Namespace,
   shaclUri: Schema.optional(GcsUri),
-  documentIds: Schema.Array(DocumentId)
+  documentIds: Schema.Array(DocumentId),
+  /**
+   * Preprocessing configuration (optional)
+   *
+   * When omitted, all preprocessing features are enabled with defaults.
+   */
+  preprocessing: Schema.optional(PreprocessingOptions)
 })
 export type BatchWorkflowPayload = typeof BatchWorkflowPayload.Type

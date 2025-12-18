@@ -67,6 +67,7 @@ export type BatchResolutionPath = string
 export type BatchValidationGraphPath = string
 export type BatchValidationReportPath = string
 export type BatchCanonicalPath = string
+export type BatchEnrichedManifestPath = string
 export type DocumentMetadataPath = string
 export type DocumentInputPath = string
 export type DocumentGraphPath = string
@@ -180,6 +181,8 @@ export const PathLayout = {
     validationGraph: (batchId: BatchId): BatchValidationGraphPath => makeBatchPath(batchId, "validation/validated.ttl"),
     validationReport: (batchId: BatchId): BatchValidationReportPath => makeBatchPath(batchId, "validation/report.json"),
     canonical: (batchId: BatchId): BatchCanonicalPath => makeBatchPath(batchId, "canonical/final.ttl"),
+    enrichedManifest: (batchId: BatchId): BatchEnrichedManifestPath =>
+      makeBatchPath(batchId, "preprocessing/enriched-manifest.json"),
     // Additional batch paths for ingestion
     ingestManifest: (batchId: BatchId): string => makeBatchPath(batchId, "ingest/manifest.json"),
     finalOutput: (batchId: BatchId): string => makeBatchPath(batchId, "ingest/output.ttl")
