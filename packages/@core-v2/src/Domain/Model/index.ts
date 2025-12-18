@@ -6,6 +6,7 @@
  */
 
 export * from "./shared.js"
+export * from "./Agent.js"
 export * from "./Entity.js"
 export * from "./EntityResolution.js"
 export * from "./Ontology.js"

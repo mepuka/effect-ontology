@@ -21,7 +21,6 @@ import { Chunk, DateTime, Effect, Option, Schedule, Schema } from "effect"
 import { ActivityError, notFoundError, toActivityError } from "../Domain/Error/Activity.js"
 import { type BatchId, DocumentId, GcsUri, toGcsUri } from "../Domain/Identity.js"
 import { Entity, KnowledgeGraph, Relation } from "../Domain/Model/Entity.js"
-import { EntityId } from "../Domain/Model/shared.js"
 import { defaultEntityResolutionConfig } from "../Domain/Model/EntityResolution.js"
 import type { ElementEmbedding, OntologyEmbeddings } from "../Domain/Model/OntologyEmbeddings.js"
 import {
@@ -30,6 +29,7 @@ import {
   embeddingsPathFromOntology,
   OntologyEmbeddingsJson
 } from "../Domain/Model/OntologyEmbeddings.js"
+import { EntityId } from "../Domain/Model/shared.js"
 import { PathLayout } from "../Domain/PathLayout.js"
 import { RDF, RDFS } from "../Domain/Rdf/Types.js"
 import type {
@@ -46,8 +46,7 @@ import {
   type EnrichedManifest,
   type EntityDensity,
   estimateTokens,
-  type PreprocessingActivityInput,
-  type PreprocessingActivityOutput,
+  PreprocessingActivityInput,
   selectChunkingStrategy
 } from "../Domain/Schema/DocumentMetadata.js"
 import { ConfigService } from "../Service/Config.js"
@@ -1186,7 +1185,9 @@ const buildBatchComparisonPrompt = (pairs: ReadonlyArray<EntityPair>): string =>
   const pairsFormatted = pairs.map((pair, i) => {
     const typeLabelsA = pair.typesA.map((t) => extractLocalNameFromIri(t)).join(", ")
     const typeLabelsB = pair.typesB.map((t) => extractLocalNameFromIri(t)).join(", ")
-    return `${i}. Entity A: "${pair.mentionA}" (${typeLabelsA || "?"})\n   Entity B: "${pair.mentionB}" (${typeLabelsB || "?"})\n   Similarity: ${pair.similarity.toFixed(2)}`
+    return `${i}. Entity A: "${pair.mentionA}" (${typeLabelsA || "?"})\n   Entity B: "${pair.mentionB}" (${
+      typeLabelsB || "?"
+    })\n   Similarity: ${pair.similarity.toFixed(2)}`
   }).join("\n\n")
 
   return `You are an entity resolution expert. For each pair, determine if the two mentions refer to the same real-world entity.
@@ -1484,7 +1485,7 @@ const CLASSIFICATION_BATCH_SIZE = 10
 const buildClassificationPrompt = (
   previews: ReadonlyArray<{ index: number; preview: string; contentType: string }>
 ): string => {
-  const docSummaries = previews.map(({ index, preview, contentType }) =>
+  const docSummaries = previews.map(({ contentType, index, preview }) =>
     `Document ${index} (${contentType}):\n"""${preview.slice(0, 1500)}"""`
   ).join("\n\n---\n\n")
 
@@ -1670,7 +1671,7 @@ export const makePreprocessingActivity = (input: typeof PreprocessingActivityInp
           if (classification) {
             classifiedCount++
             const tokens = estimateTokens(p.sizeBytes)
-            const { strategy, chunkSize, overlap } = selectChunkingStrategy(
+            const { chunkSize, overlap, strategy } = selectChunkingStrategy(
               classification.documentType,
               classification.entityDensity,
               classification.complexityScore
