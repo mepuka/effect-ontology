@@ -261,6 +261,25 @@ export const DocumentMetadata = Schema.Struct({
   /** Document size in bytes */
   sizeBytes: Schema.Number,
 
+  // === Bitemporal timestamps ===
+  /**
+   * When the real-world event described in this document occurred
+   *
+   * For news articles, this is typically the event date (not publication date).
+   */
+  eventTime: Schema.optional(Schema.DateTimeUtc),
+  /**
+   * When the source document was published
+   *
+   * Publication date from the original source (newspaper, website, etc.).
+   */
+  publishedAt: Schema.optional(Schema.DateTimeUtc),
+  /**
+   * When this document was ingested into the system
+   *
+   * Auto-set during preprocessing. Used for temporal queries and audit trails.
+   */
+  ingestedAt: Schema.DateTimeUtc,
   // === Preprocessing timestamp ===
   /** When preprocessing was performed */
   preprocessedAt: Schema.DateTimeUtc,
@@ -513,12 +532,16 @@ export const defaultDocumentMetadata = (
   sourceUri: GcsUri,
   contentType: string,
   sizeBytes: number,
-  preprocessedAt: Date
-): Omit<DocumentMetadata, "preprocessedAt"> & { preprocessedAt: Date } => ({
+  preprocessedAt: Date,
+  ingestedAt?: Date
+): Omit<DocumentMetadata, "preprocessedAt" | "ingestedAt"> & { preprocessedAt: Date; ingestedAt: Date } => ({
   documentId,
   sourceUri,
   contentType,
   sizeBytes,
+  eventTime: undefined,
+  publishedAt: undefined,
+  ingestedAt: ingestedAt ?? preprocessedAt,
   preprocessedAt,
   title: undefined,
   language: "en" as LanguageCode,

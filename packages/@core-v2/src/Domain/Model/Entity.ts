@@ -102,6 +102,28 @@ export class Entity extends Schema.Class<Entity>("Entity")({
   chunkId: Schema.optional(Schema.String).annotations({
     title: "Chunk ID",
     description: "Unique chunk ID for extraction run provenance (optional)"
+  }),
+
+  /**
+   * When this entity was extracted from text
+   *
+   * Auto-set during extraction. Used for temporal queries and audit trails.
+   * This is a system timestamp (when KB was updated), not the event time.
+   */
+  extractedAt: Schema.optional(Schema.DateTimeUtc).annotations({
+    title: "Extracted At",
+    description: "System timestamp when entity was extracted"
+  }),
+
+  /**
+   * When the real-world event involving this entity occurred
+   *
+   * Inherited from source document's eventTime or extracted from text.
+   * @example A person's appointment date, an event's occurrence date
+   */
+  eventTime: Schema.optional(Schema.DateTimeUtc).annotations({
+    title: "Event Time",
+    description: "When the real-world event occurred"
   })
 }) {
   /**
@@ -115,7 +137,9 @@ export class Entity extends Schema.Class<Entity>("Entity")({
       types: this.types,
       attributes: this.attributes,
       chunkIndex: this.chunkIndex,
-      chunkId: this.chunkId
+      chunkId: this.chunkId,
+      extractedAt: this.extractedAt,
+      eventTime: this.eventTime
     }
   }
 }

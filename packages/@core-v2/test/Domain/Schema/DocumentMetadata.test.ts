@@ -204,6 +204,7 @@ describe("DocumentMetadata Schema", () => {
       sourceUri: validGcsUri,
       contentType: "text/plain",
       sizeBytes: 1024,
+      ingestedAt: "2024-01-01T00:00:00Z",
       preprocessedAt: "2024-01-01T00:00:00Z",
       title: "Test Document",
       language: "en",

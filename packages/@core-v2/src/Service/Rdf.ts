@@ -170,6 +170,17 @@ export interface RdfBuilderShape {
   readonly makeStore: Effect.Effect<RdfStore, never, Scope.Scope>
   readonly createStore: Effect.Effect<RdfStore, never, never>
   readonly parseTurtle: (turtle: string) => Effect.Effect<RdfStore, ParsingFailed, never>
+  /**
+   * Parse TriG string to RDF store
+   *
+   * Parses RDF TriG syntax (with named graphs) into an RdfStore.
+   *
+   * @param trig - TriG RDF string
+   * @returns Effect yielding RdfStore or ParsingFailed
+   *
+   * @since 2.0.0
+   */
+  readonly parseTriG: (trig: string) => Effect.Effect<RdfStore, ParsingFailed, never>
   readonly queryStore: (store: RdfStore, pattern: QuadPattern) => Effect.Effect<Chunk.Chunk<Quad>, RdfError, never>
   readonly createIri: (iri: string) => IRI
   readonly addEntities: (
@@ -211,6 +222,87 @@ export interface RdfBuilderShape {
     graphUri?: string
   ) => Effect.Effect<void, RdfError, never>
   readonly toTurtle: (store: RdfStore) => Effect.Effect<string, SerializationFailed, never>
+  /**
+   * Serialize store to TriG format with named graphs
+   *
+   * TriG format supports named graphs, outputting quads as:
+   * ```trig
+   * @prefix ex: <http://example.org/> .
+   *
+   * ex:graph1 {
+   *   ex:s ex:p ex:o .
+   * }
+   *
+   * ex:graph2 {
+   *   ex:a ex:b ex:c .
+   * }
+   * ```
+   *
+   * @param store - RdfStore to serialize
+   * @returns TriG string
+   *
+   * @since 2.0.0
+   */
+  readonly toTriG: (store: RdfStore) => Effect.Effect<string, SerializationFailed, never>
+  /**
+   * Get all named graphs in the store
+   *
+   * Returns a list of all graph IRIs that have quads.
+   * Does not include the default graph.
+   *
+   * @param store - RdfStore to query
+   * @returns Array of graph IRIs
+   *
+   * @since 2.0.0
+   */
+  readonly getGraphs: (store: RdfStore) => Effect.Effect<Array<IRI>, RdfError, never>
+  /**
+   * Get all quads from a specific named graph
+   *
+   * @param store - RdfStore to query
+   * @param graphIri - Named graph IRI
+   * @returns Chunk of Quad objects from the graph
+   *
+   * @since 2.0.0
+   */
+  readonly getQuadsFromGraph: (
+    store: RdfStore,
+    graphIri: IRI
+  ) => Effect.Effect<Chunk.Chunk<Quad>, RdfError, never>
+  /**
+   * Copy quads between graphs
+   *
+   * Copies all quads from source graph to target graph.
+   * Useful for promoting claims from article graphs to the main KB graph.
+   *
+   * @param store - RdfStore to operate on
+   * @param sourceGraph - Source graph IRI
+   * @param targetGraph - Target graph IRI
+   * @returns Number of quads copied
+   *
+   * @since 2.0.0
+   */
+  readonly copyGraphQuads: (
+    store: RdfStore,
+    sourceGraph: IRI,
+    targetGraph: IRI
+  ) => Effect.Effect<number, RdfError, never>
+  /**
+   * Delete a named graph and all its quads
+   *
+   * Removes all quads in the specified graph.
+   * Useful for retracting article claims.
+   *
+   * @param store - RdfStore to operate on
+   * @param graphIri - Graph IRI to delete
+   * @returns Number of quads deleted
+   *
+   * @since 2.0.0
+   */
+  readonly deleteGraph: (
+    store: RdfStore,
+    graphIri: IRI
+  ) => Effect.Effect<number, RdfError, never>
   readonly validate: (
     store: RdfStore,
     shapesGraph: string
@@ -316,6 +408,31 @@ export class RdfBuilder extends Effect.Service<RdfBuilder>()(
                 message: `Failed to parse Turtle: ${error}`,
                 cause: error,
                 format: "Turtle"
+              })
+          }),
+
+        /**
+         * Parse TriG string to RDF store
+         *
+         * Parses RDF TriG syntax (with named graphs) into an RdfStore.
+         *
+         * @param trig - TriG RDF string
+         * @returns Effect yielding RdfStore or ParsingFailed
+         */
+        parseTriG: (trig: string) =>
+          Effect.try({
+            try: () => {
+              const parser = new N3.Parser({ format: "application/trig" })
+              const quads = parser.parse(trig)
+              const n3Store = new N3.Store()
+              n3Store.addQuads(quads)
+              return { _tag: "RdfStore" as const, _store: n3Store } satisfies RdfStore
+            },
+            catch: (error) =>
+              new ParsingFailed({
+                message: `Failed to parse TriG: ${error}`,
+                cause: error,
+                format: "TriG"
               })
           }),
 
@@ -687,6 +804,143 @@ export class RdfBuilder extends Effect.Service<RdfBuilder>()(
                 resume(Effect.succeed(result))
               }
             })
+          }),
+
+        /**
+         * Serialize store to TriG format with named graphs
+         *
+         * Uses prefixes from ConfigService for clean output.
+         * Async operation via N3.Writer with TriG format.
+         *
+         * @param store - RdfStore to serialize
+         * @returns TriG string
+         */
+        toTriG: (store: RdfStore) =>
+          Effect.async<string, SerializationFailed>((resume) => {
+            const n3Store = store._store
+            const writer = new N3.Writer({
+              format: "application/trig",
+              prefixes: config.rdf.prefixes
+            })
+
+            // Add all quads from store (including graph information)
+            n3Store.forEach((q) => writer.addQuad(q))
+
+            writer.end((error, result) => {
+              if (error) {
+                resume(Effect.fail(
+                  new SerializationFailed({
+                    message: `TriG serialization failed: ${error}`,
+                    cause: error,
+                    format: "TriG"
+                  })
+                ))
+              } else {
+                resume(Effect.succeed(result))
+              }
+            })
+          }),
+
+        /**
+         * Get all named graphs in the store
+         *
+         * Returns unique graph IRIs from all quads.
+         */
+        getGraphs: (store: RdfStore) =>
+          Effect.try({
+            try: () => {
+              const n3Store = store._store
+              const graphs = new Set<string>()
+
+              // Iterate all quads and collect unique graph IRIs
+              n3Store.forEach((quad) => {
+                if (quad.graph.termType === "NamedNode") {
+                  graphs.add(quad.graph.value)
+                }
+              })
+
+              return Array.from(graphs) as Array<IRI>
+            },
+            catch: (error) =>
+              new RdfError({
+                message: `Failed to get graphs: ${error}`,
+                cause: error
+              })
+          }),
+
+        /**
+         * Get all quads from a specific named graph
+         */
+        getQuadsFromGraph: (store: RdfStore, graphIri: IRI) =>
+          Effect.try({
+            try: () => {
+              const n3Store = store._store
+              const graphNode = N3.DataFactory.namedNode(graphIri)
+              const n3Quads = n3Store.getQuads(null, null, null, graphNode)
+              return Chunk.fromIterable(n3Quads.map(n3QuadToDomainQuad))
+            },
+            catch: (error) =>
+              new RdfError({
+                message: `Failed to get quads from graph ${graphIri}: ${error}`,
+                cause: error
+              })
+          }),
+
+        /**
+         * Copy quads between graphs
+         */
+        copyGraphQuads: (store: RdfStore, sourceGraph: IRI, targetGraph: IRI) =>
+          Effect.try({
+            try: () => {
+              const n3Store = store._store
+              const sourceNode = N3.DataFactory.namedNode(sourceGraph)
+              const targetNode = N3.DataFactory.namedNode(targetGraph)
+
+              // Get all quads from source graph
+              const sourceQuads = n3Store.getQuads(null, null, null, sourceNode)
+
+              // Add each quad to target graph
+              for (const quad of sourceQuads) {
+                n3Store.addQuad(N3.DataFactory.quad(
+                  quad.subject,
+                  quad.predicate,
+                  quad.object,
+                  targetNode
+                ))
+              }
+
+              return sourceQuads.length
+            },
+            catch: (error) =>
+              new RdfError({
+                message: `Failed to copy quads from ${sourceGraph} to ${targetGraph}: ${error}`,
+                cause: error
+              })
+          }),
+
+        /**
+         * Delete a named graph and all its quads
+         */
+        deleteGraph: (store: RdfStore, graphIri: IRI) =>
+          Effect.try({
+            try: () => {
+              const n3Store = store._store
+              const graphNode = N3.DataFactory.namedNode(graphIri)
+
+              // Get all quads in the graph
+              const quadsToDelete = n3Store.getQuads(null, null, null, graphNode)
+              const count = quadsToDelete.length
+
+              // Remove all quads
+              n3Store.removeQuads(quadsToDelete)
+
+              return count
+            },
+            catch: (error) =>
+              new RdfError({
+                message: `Failed to delete graph ${graphIri}: ${error}`,
+                cause: error
+              })
           }),
 
         /**

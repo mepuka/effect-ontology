@@ -93,7 +93,10 @@ Comprehensive state-of-the-art review with implementation priorities:
 ### Supporting Research Documents
 - [entity_resolution_clustering_research.md](./ontology_research/entity_resolution_clustering_research.md) - 50+ sources
 - [rdf_shacl_reasoning_research.md](./ontology_research/rdf_shacl_reasoning_research.md) - 70+ sources
+- [shacl_shape_management_research.md](./ontology_research/shacl_shape_management_research.md) - **NEW (2025-12-18)** SHACL shape repositories, design patterns, production tooling, shape management
+- [owl_reasoning_validation_production.md](./ontology_research/owl_reasoning_validation_production.md) - **NEW (2025-12-18)** OWL vs SHACL, incremental reasoning, JS reasoners
 - [advanced_retrieval_nlp_research.md](./ontology_research/advanced_retrieval_nlp_research.md) - 80+ sources
+- [temporal_conflicting_claims_research.md](./ontology_research/temporal_conflicting_claims_research.md) - Temporal KG, corrections, belief revision
 - [synthesis_and_implementation_roadmap.md](./ontology_research/synthesis_and_implementation_roadmap.md) - Consolidated plan
 
 ---

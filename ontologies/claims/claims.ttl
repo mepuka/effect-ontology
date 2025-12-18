@@ -1,0 +1,241 @@
+@prefix : <http://effect-ontology.dev/claims#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix oa: <http://www.w3.org/ns/oa#> .
+@base <http://effect-ontology.dev/claims> .
+
+# =============================================================================
+# Ontology Declaration
+# =============================================================================
+
+<http://effect-ontology.dev/claims> rdf:type owl:Ontology ;
+    dc:title "Effect Ontology Claims Vocabulary"@en ;
+    dc:description "Vocabulary for reified claims with Wikidata-style ranks, temporal validity, and provenance tracking."@en ;
+    dc:creator "Effect Ontology Project" ;
+    dcterms:created "2024-12-18"^^xsd:date ;
+    owl:versionInfo "1.0.0" ;
+    rdfs:seeAlso <https://www.wikidata.org/wiki/Help:Ranking> .
+
+# =============================================================================
+# Claim Ranks (Wikidata Pattern)
+# =============================================================================
+
+:ClaimRank rdf:type owl:Class ;
+    rdfs:label "Claim Rank"@en ;
+    rdfs:comment "Enumeration of claim rank values following Wikidata's ranking system."@en ;
+    rdfs:seeAlso <https://www.wikidata.org/wiki/Help:Ranking> .
+
+:Preferred rdf:type owl:NamedIndividual, :ClaimRank ;
+    rdfs:label "Preferred"@en ;
+    rdfs:comment "Current accepted/best value. When multiple claims exist for the same property, preferred claims are shown prominently."@en ;
+    :rankOrder 1 .
+
+:Normal rdf:type owl:NamedIndividual, :ClaimRank ;
+    rdfs:label "Normal"@en ;
+    rdfs:comment "Valid but not highlighted. Used for historical values, alternative names, or secondary information."@en ;
+    :rankOrder 2 .
+
+:Deprecated rdf:type owl:NamedIndividual, :ClaimRank ;
+    rdfs:label "Deprecated"@en ;
+    rdfs:comment "Incorrect, outdated, or retracted. Kept for transparency and audit trail but not used for current queries."@en ;
+    :rankOrder 3 .
+
+:rankOrder rdf:type owl:DatatypeProperty ;
+    rdfs:label "rank order"@en ;
+    rdfs:comment "Numeric ordering for ranks (lower = higher priority)."@en ;
+    rdfs:domain :ClaimRank ;
+    rdfs:range xsd:integer .
+
+# =============================================================================
+# Claim Class (Reified Statement)
+# =============================================================================
+
+:Claim rdf:type owl:Class ;
+    rdfs:subClassOf prov:Entity ;
+    rdfs:label "Claim"@en ;
+    rdfs:comment "A reified RDF statement extracted from a source document. Claims may conflict with other claims and require curation before becoming assertions."@en .
+
+:claimSubject rdf:type owl:ObjectProperty ;
+    rdfs:label "claim subject"@en ;
+    rdfs:comment "The subject IRI of the reified statement."@en ;
+    rdfs:domain :Claim .
+
+:claimPredicate rdf:type owl:ObjectProperty ;
+    rdfs:label "claim predicate"@en ;
+    rdfs:comment "The predicate IRI of the reified statement."@en ;
+    rdfs:domain :Claim .
+
+:claimObject rdf:type owl:DatatypeProperty ;
+    rdfs:label "claim object"@en ;
+    rdfs:comment "The object value of the reified statement (IRI or literal)."@en ;
+    rdfs:domain :Claim .
+
+:rank rdf:type owl:ObjectProperty ;
+    rdfs:label "rank"@en ;
+    rdfs:comment "The Wikidata-style rank of this claim."@en ;
+    rdfs:domain :Claim ;
+    rdfs:range :ClaimRank .
+
+:confidence rdf:type owl:DatatypeProperty ;
+    rdfs:label "confidence"@en ;
+    rdfs:comment "Extraction confidence score between 0 and 1."@en ;
+    rdfs:domain :Claim ;
+    rdfs:range xsd:double .
+
+# =============================================================================
+# Temporal Validity
+# =============================================================================
+
+:validFrom rdf:type owl:DatatypeProperty ;
+    rdfs:label "valid from"@en ;
+    rdfs:comment "Start of the temporal validity period for this claim."@en ;
+    rdfs:domain :Claim ;
+    rdfs:range xsd:dateTime .
+
+:validUntil rdf:type owl:DatatypeProperty ;
+    rdfs:label "valid until"@en ;
+    rdfs:comment "End of the temporal validity period for this claim."@en ;
+    rdfs:domain :Claim ;
+    rdfs:range xsd:dateTime .
+
+:eventTime rdf:type owl:DatatypeProperty ;
+    rdfs:label "event time"@en ;
+    rdfs:comment "When the real-world event described by this claim occurred."@en ;
+    rdfs:domain :Claim ;
+    rdfs:range xsd:dateTime .
+
+# =============================================================================
+# Provenance Properties
+# =============================================================================
+
+:statedIn rdf:type owl:ObjectProperty ;
+    rdfs:subPropertyOf prov:wasDerivedFrom ;
+    rdfs:label "stated in"@en ;
+    rdfs:comment "The source article/document where this claim was stated."@en ;
+    rdfs:domain :Claim .
+
+:extractedAt rdf:type owl:DatatypeProperty ;
+    rdfs:label "extracted at"@en ;
+    rdfs:comment "System timestamp when this claim was extracted."@en ;
+    rdfs:domain :Claim ;
+    rdfs:range xsd:dateTime .
+
+:extractedBy rdf:type owl:ObjectProperty ;
+    rdfs:subPropertyOf prov:wasAttributedTo ;
+    rdfs:label "extracted by"@en ;
+    rdfs:comment "The extraction agent/pipeline that produced this claim."@en ;
+    rdfs:domain :Claim ;
+    rdfs:range prov:Agent .
+
+# =============================================================================
+# Deprecation and Supersession
+# =============================================================================
+
+:deprecatedAt rdf:type owl:DatatypeProperty ;
+    rdfs:label "deprecated at"@en ;
+    rdfs:comment "Timestamp when this claim was marked as deprecated."@en ;
+    rdfs:domain :Claim ;
+    rdfs:range xsd:dateTime .
+
+:deprecationReason rdf:type owl:DatatypeProperty ;
+    rdfs:label "deprecation reason"@en ;
+    rdfs:comment "Human-readable explanation for why this claim was deprecated."@en ;
+    rdfs:domain :Claim ;
+    rdfs:range xsd:string .
+
+:supersedes rdf:type owl:ObjectProperty ;
+    rdfs:label "supersedes"@en ;
+    rdfs:comment "This claim supersedes (replaces) the referenced claim."@en ;
+    rdfs:domain :Claim ;
+    rdfs:range :Claim .
+
+:supersededBy rdf:type owl:ObjectProperty ;
+    owl:inverseOf :supersedes ;
+    rdfs:label "superseded by"@en ;
+    rdfs:comment "This claim has been superseded (replaced) by the referenced claim."@en ;
+    rdfs:domain :Claim ;
+    rdfs:range :Claim .
+
+# =============================================================================
+# Evidence (W3C Web Annotation aligned)
+# =============================================================================
+
+:Evidence rdf:type owl:Class ;
+    rdfs:label "Evidence"@en ;
+    rdfs:comment "Text evidence supporting a claim, aligned with W3C Web Annotation model."@en .
+
+:hasEvidence rdf:type owl:ObjectProperty ;
+    rdfs:label "has evidence"@en ;
+    rdfs:comment "Links a claim to its supporting evidence."@en ;
+    rdfs:domain :Claim ;
+    rdfs:range :Evidence .
+
+:evidenceSource rdf:type owl:ObjectProperty ;
+    rdfs:subPropertyOf oa:hasSource ;
+    rdfs:label "evidence source"@en ;
+    rdfs:comment "The source document containing the evidence."@en ;
+    rdfs:domain :Evidence .
+
+:evidenceText rdf:type owl:DatatypeProperty ;
+    rdfs:label "evidence text"@en ;
+    rdfs:comment "The exact quoted text that serves as evidence."@en ;
+    rdfs:domain :Evidence ;
+    rdfs:range xsd:string .
+
+:startOffset rdf:type owl:DatatypeProperty ;
+    rdfs:label "start offset"@en ;
+    rdfs:comment "Character offset where the evidence text starts in the source document."@en ;
+    rdfs:domain :Evidence ;
+    rdfs:range xsd:integer .
+
+:endOffset rdf:type owl:DatatypeProperty ;
+    rdfs:label "end offset"@en ;
+    rdfs:comment "Character offset where the evidence text ends in the source document."@en ;
+    rdfs:domain :Evidence ;
+    rdfs:range xsd:integer .
+
+# =============================================================================
+# Article Claim Set (Named Graph Metadata)
+# =============================================================================
+
+:ArticleClaimSet rdf:type owl:Class ;
+    rdfs:label "Article Claim Set"@en ;
+    rdfs:comment "Metadata about a named graph containing all claims from a single article."@en .
+
+:claimStatus rdf:type owl:ObjectProperty ;
+    rdfs:label "claim status"@en ;
+    rdfs:comment "The curation status of an article's claim set."@en ;
+    rdfs:domain :ArticleClaimSet ;
+    rdfs:range :ClaimSetStatus .
+
+:ClaimSetStatus rdf:type owl:Class ;
+    rdfs:label "Claim Set Status"@en ;
+    rdfs:comment "Enumeration of possible statuses for an article's claim set."@en .
+
+:Pending rdf:type owl:NamedIndividual, :ClaimSetStatus ;
+    rdfs:label "Pending"@en ;
+    rdfs:comment "Claims are awaiting curation/review."@en .
+
+:Accepted rdf:type owl:NamedIndividual, :ClaimSetStatus ;
+    rdfs:label "Accepted"@en ;
+    rdfs:comment "Claims from this article have been accepted into the knowledge base."@en .
+
+:Retracted rdf:type owl:NamedIndividual, :ClaimSetStatus ;
+    rdfs:label "Retracted"@en ;
+    rdfs:comment "All claims from this article have been retracted (e.g., due to source correction)."@en .
+
+:containsClaim rdf:type owl:ObjectProperty ;
+    rdfs:label "contains claim"@en ;
+    rdfs:comment "Links an article claim set to the claims it contains."@en ;
+    rdfs:domain :ArticleClaimSet ;
+    rdfs:range :Claim .
+
+:sourceArticle rdf:type owl:ObjectProperty ;
+    rdfs:label "source article"@en ;
+    rdfs:comment "The article this claim set was extracted from."@en ;
+    rdfs:domain :ArticleClaimSet .

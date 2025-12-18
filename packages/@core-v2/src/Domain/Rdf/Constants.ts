@@ -199,6 +199,109 @@ export const EXTR = {
   extractionMethod: iri("http://example.org/kg/extractionMethod")
 } as const
 
+/**
+ * Claims Vocabulary IRIs (Effect Ontology claims namespace)
+ * http://effect-ontology.dev/claims#
+ *
+ * Wikidata-style claim ranks and reified statement properties.
+ *
+ * @since 2.0.0
+ */
+export const CLAIMS = {
+  // Namespace
+  namespace: "http://effect-ontology.dev/claims#",
+
+  // Classes
+  Claim: iri("http://effect-ontology.dev/claims#Claim"),
+  ClaimRank: iri("http://effect-ontology.dev/claims#ClaimRank"),
+  Evidence: iri("http://effect-ontology.dev/claims#Evidence"),
+  ArticleClaimSet: iri("http://effect-ontology.dev/claims#ArticleClaimSet"),
+  ClaimSetStatus: iri("http://effect-ontology.dev/claims#ClaimSetStatus"),
+
+  // Rank Individuals
+  Preferred: iri("http://effect-ontology.dev/claims#Preferred"),
+  Normal: iri("http://effect-ontology.dev/claims#Normal"),
+  Deprecated: iri("http://effect-ontology.dev/claims#Deprecated"),
+
+  // Status Individuals
+  Pending: iri("http://effect-ontology.dev/claims#Pending"),
+  Accepted: iri("http://effect-ontology.dev/claims#Accepted"),
+  Retracted: iri("http://effect-ontology.dev/claims#Retracted"),
+
+  // Properties
+  rank: iri("http://effect-ontology.dev/claims#rank"),
+  confidence: iri("http://effect-ontology.dev/claims#confidence"),
+  validFrom: iri("http://effect-ontology.dev/claims#validFrom"),
+  validUntil: iri("http://effect-ontology.dev/claims#validUntil"),
+  eventTime: iri("http://effect-ontology.dev/claims#eventTime"),
+  statedIn: iri("http://effect-ontology.dev/claims#statedIn"),
+  extractedAt: iri("http://effect-ontology.dev/claims#extractedAt"),
+  extractedBy: iri("http://effect-ontology.dev/claims#extractedBy"),
+  deprecatedAt: iri("http://effect-ontology.dev/claims#deprecatedAt"),
+  deprecationReason: iri("http://effect-ontology.dev/claims#deprecationReason"),
+  supersedes: iri("http://effect-ontology.dev/claims#supersedes"),
+  supersededBy: iri("http://effect-ontology.dev/claims#supersededBy"),
+  hasEvidence: iri("http://effect-ontology.dev/claims#hasEvidence"),
+  evidenceText: iri("http://effect-ontology.dev/claims#evidenceText"),
+  startOffset: iri("http://effect-ontology.dev/claims#startOffset"),
+  endOffset: iri("http://effect-ontology.dev/claims#endOffset"),
+  claimStatus: iri("http://effect-ontology.dev/claims#claimStatus"),
+  containsClaim: iri("http://effect-ontology.dev/claims#containsClaim"),
+  sourceArticle: iri("http://effect-ontology.dev/claims#sourceArticle")
+} as const
+
+/**
+ * Corrections Vocabulary IRIs (Effect Ontology corrections namespace)
+ * http://effect-ontology.dev/corrections#
+ *
+ * PROV-O based vocabulary for tracking corrections, retractions, and updates.
+ *
+ * @since 2.0.0
+ */
+export const CORRECTIONS = {
+  // Namespace
+  namespace: "http://effect-ontology.dev/corrections#",
+
+  // Classes
+  Correction: iri("http://effect-ontology.dev/corrections#Correction"),
+  CorrectionType: iri("http://effect-ontology.dev/corrections#CorrectionType"),
+  CorrectionChain: iri("http://effect-ontology.dev/corrections#CorrectionChain"),
+  Conflict: iri("http://effect-ontology.dev/corrections#Conflict"),
+  ConflictType: iri("http://effect-ontology.dev/corrections#ConflictType"),
+  ResolutionStrategy: iri("http://effect-ontology.dev/corrections#ResolutionStrategy"),
+
+  // Correction Type Individuals
+  Retraction: iri("http://effect-ontology.dev/corrections#Retraction"),
+  Clarification: iri("http://effect-ontology.dev/corrections#Clarification"),
+  Update: iri("http://effect-ontology.dev/corrections#Update"),
+  Amendment: iri("http://effect-ontology.dev/corrections#Amendment"),
+
+  // Conflict Type Individuals
+  PositionConflict: iri("http://effect-ontology.dev/corrections#PositionConflict"),
+  TemporalConflict: iri("http://effect-ontology.dev/corrections#TemporalConflict"),
+  ContradictoryConflict: iri("http://effect-ontology.dev/corrections#ContradictoryConflict"),
+
+  // Resolution Strategy Individuals
+  TemporalPrecedence: iri("http://effect-ontology.dev/corrections#TemporalPrecedence"),
+  SourceAuthority: iri("http://effect-ontology.dev/corrections#SourceAuthority"),
+  ManualReview: iri("http://effect-ontology.dev/corrections#ManualReview"),
+
+  // Properties
+  correctionType: iri("http://effect-ontology.dev/corrections#correctionType"),
+  correctionDate: iri("http://effect-ontology.dev/corrections#correctionDate"),
+  correctionReason: iri("http://effect-ontology.dev/corrections#correctionReason"),
+  sourceDocument: iri("http://effect-ontology.dev/corrections#sourceDocument"),
+  invalidates: iri("http://effect-ontology.dev/corrections#invalidates"),
+  invalidatedBy: iri("http://effect-ontology.dev/corrections#invalidatedBy"),
+  refines: iri("http://effect-ontology.dev/corrections#refines"),
+  introduces: iri("http://effect-ontology.dev/corrections#introduces"),
+  conflictType: iri("http://effect-ontology.dev/corrections#conflictType"),
+  involvesClaim: iri("http://effect-ontology.dev/corrections#involvesClaim"),
+  detectedAt: iri("http://effect-ontology.dev/corrections#detectedAt"),
+  resolvedBy: iri("http://effect-ontology.dev/corrections#resolvedBy"),
+  resolutionStrategy: iri("http://effect-ontology.dev/corrections#resolutionStrategy")
+} as const
+
 // Legacy named exports for backward compatibility
 // @deprecated Use RDF.type instead
 export const RDF_TYPE = RDF.type

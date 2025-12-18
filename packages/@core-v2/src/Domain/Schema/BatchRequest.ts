@@ -9,7 +9,20 @@ export const BatchRequestDocument = Schema.Struct({
   sourceUri: GcsUri,
   contentType: Schema.String,
   sizeBytes: Schema.optional(Schema.Number),
-  documentId: Schema.optional(DocumentId)
+  documentId: Schema.optional(DocumentId),
+  /**
+   * When the real-world event described in this document occurred
+   *
+   * For news articles, this is typically the event date (not publication date).
+   * @example A news article about an earthquake might have eventTime of the earthquake date.
+   */
+  eventTime: Schema.optional(Schema.DateTimeUtc),
+  /**
+   * When the source document was published
+   *
+   * Publication date from the original source (newspaper, website, etc.).
+   */
+  publishedAt: Schema.optional(Schema.DateTimeUtc)
 })
 
 export const BatchRequest = Schema.Struct({
