@@ -244,4 +244,177 @@ describe("makeEntitySchema", () => {
     expect(result2.entities[0].attributes).toBeDefined()
     expect(result2.entities[0].attributes!["http://schema.org/age"]).toBe(39)
   })
+
+  describe("evidence spans", () => {
+    it("should accept entity with mentions array containing evidence spans", () => {
+      const classes = [
+        new ClassDefinition({
+          id: iri("http://schema.org/Person"),
+          label: "Person",
+          comment: "A person",
+          properties: []
+        })
+      ]
+
+      const schema = makeEntitySchema(classes)
+
+      const entityWithMentions = {
+        entities: [
+          {
+            id: "cristiano_ronaldo",
+            mention: "Cristiano Ronaldo",
+            types: ["Person"],
+            mentions: [
+              {
+                text: "Cristiano Ronaldo",
+                startChar: 42,
+                endChar: 59,
+                confidence: 0.95
+              },
+              {
+                text: "Ronaldo",
+                startChar: 156,
+                endChar: 163,
+                confidence: 0.88
+              }
+            ]
+          }
+        ]
+      }
+
+      const result = decode(schema)(entityWithMentions) as any
+      expect(result.entities[0].mentions).toHaveLength(2)
+      expect(result.entities[0].mentions[0].text).toBe("Cristiano Ronaldo")
+      expect(result.entities[0].mentions[0].startChar).toBe(42)
+      expect(result.entities[0].mentions[0].endChar).toBe(59)
+      expect(result.entities[0].mentions[0].confidence).toBe(0.95)
+    })
+
+    it("should accept mentions without confidence (optional field)", () => {
+      const classes = [
+        new ClassDefinition({
+          id: iri("http://schema.org/Person"),
+          label: "Person",
+          comment: "A person",
+          properties: []
+        })
+      ]
+
+      const schema = makeEntitySchema(classes)
+
+      const entityWithMentions = {
+        entities: [
+          {
+            id: "test_entity",
+            mention: "Test Entity",
+            types: ["Person"],
+            mentions: [
+              {
+                text: "Test Entity",
+                startChar: 0,
+                endChar: 11
+                // no confidence
+              }
+            ]
+          }
+        ]
+      }
+
+      const result = decode(schema)(entityWithMentions) as any
+      expect(result.entities[0].mentions).toHaveLength(1)
+      expect(result.entities[0].mentions[0].confidence).toBeUndefined()
+    })
+
+    it("should accept entity without mentions (optional field)", () => {
+      const classes = [
+        new ClassDefinition({
+          id: iri("http://schema.org/Person"),
+          label: "Person",
+          comment: "A person",
+          properties: []
+        })
+      ]
+
+      const schema = makeEntitySchema(classes)
+
+      const entityWithoutMentions = {
+        entities: [
+          {
+            id: "test_entity",
+            mention: "Test Entity",
+            types: ["Person"]
+            // no mentions field
+          }
+        ]
+      }
+
+      const result = decode(schema)(entityWithoutMentions) as any
+      expect(result.entities[0].mentions).toBeUndefined()
+    })
+
+    it("should reject mentions with negative character offsets", () => {
+      const classes = [
+        new ClassDefinition({
+          id: iri("http://schema.org/Person"),
+          label: "Person",
+          comment: "A person",
+          properties: []
+        })
+      ]
+
+      const schema = makeEntitySchema(classes)
+
+      const invalidMention = {
+        entities: [
+          {
+            id: "test_entity",
+            mention: "Test Entity",
+            types: ["Person"],
+            mentions: [
+              {
+                text: "Test",
+                startChar: -1, // Invalid: negative offset
+                endChar: 4
+              }
+            ]
+          }
+        ]
+      }
+
+      expect(() => decode(schema)(invalidMention)).toThrow()
+    })
+
+    it("should reject mentions with confidence outside 0-1 range", () => {
+      const classes = [
+        new ClassDefinition({
+          id: iri("http://schema.org/Person"),
+          label: "Person",
+          comment: "A person",
+          properties: []
+        })
+      ]
+
+      const schema = makeEntitySchema(classes)
+
+      const invalidConfidence = {
+        entities: [
+          {
+            id: "test_entity",
+            mention: "Test Entity",
+            types: ["Person"],
+            mentions: [
+              {
+                text: "Test",
+                startChar: 0,
+                endChar: 4,
+                confidence: 1.5 // Invalid: > 1
+              }
+            ]
+          }
+        ]
+      }
+
+      expect(() => decode(schema)(invalidConfidence)).toThrow()
+    })
+  })
 })

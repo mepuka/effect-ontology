@@ -11,6 +11,90 @@
 import { Equal, Hash, pipe, Schema } from "effect"
 import { AttributesSchema, EntityIdSchema } from "./shared.js"
 
+// =============================================================================
+// Evidence Span Types
+// =============================================================================
+
+/**
+ * EvidenceSpan - Character-level text evidence for provenance
+ *
+ * Captures the exact text span and character offsets where a fact
+ * was mentioned in the source document. Uses W3C Web Annotation
+ * TextQuoteSelector semantics for interoperability.
+ *
+ * @example
+ * ```typescript
+ * const evidence: EvidenceSpan = {
+ *   text: "Cristiano Ronaldo",
+ *   startChar: 42,
+ *   endChar: 59,
+ *   confidence: 0.95
+ * }
+ * ```
+ *
+ * @since 2.0.0
+ * @category Types
+ */
+export const EvidenceSpanSchema = Schema.Struct({
+  /**
+   * Exact text span from source document
+   */
+  text: Schema.String.annotations({
+    title: "Text",
+    description: "Exact text span from source document"
+  }),
+
+  /**
+   * Character offset start (0-indexed)
+   */
+  startChar: Schema.Number.pipe(
+    Schema.int(),
+    Schema.nonNegative(),
+    Schema.annotations({
+      title: "Start Character",
+      description: "Character offset start (0-indexed)"
+    })
+  ),
+
+  /**
+   * Character offset end (exclusive)
+   */
+  endChar: Schema.Number.pipe(
+    Schema.int(),
+    Schema.nonNegative(),
+    Schema.annotations({
+      title: "End Character",
+      description: "Character offset end (exclusive)"
+    })
+  ),
+
+  /**
+   * Extraction confidence (0-1)
+   */
+  confidence: Schema.optional(
+    Schema.Number.pipe(
+      Schema.greaterThanOrEqualTo(0),
+      Schema.lessThanOrEqualTo(1)
+    )
+  ).annotations({
+    title: "Confidence",
+    description: "Extraction confidence score (0-1)"
+  })
+}).annotations({
+  title: "EvidenceSpan",
+  description: "Character-level text evidence with offsets"
+})
+
+/**
+ * Type alias for EvidenceSpan
+ * @since 2.0.0
+ */
+export type EvidenceSpan = Schema.Schema.Type<typeof EvidenceSpanSchema>
+
+// =============================================================================
+// Entity Model
+// =============================================================================
+
 /**
  * Entity - Represents an extracted entity from text
  *
@@ -124,6 +208,25 @@ export class Entity extends Schema.Class<Entity>("Entity")({
   eventTime: Schema.optional(Schema.DateTimeUtc).annotations({
     title: "Event Time",
     description: "When the real-world event occurred"
+  }),
+
+  /**
+   * Evidence spans showing where this entity was mentioned in source text
+   *
+   * Each span captures the exact text and character offsets for provenance.
+   * Multiple spans support the same entity mentioned multiple times.
+   *
+   * @example
+   * ```typescript
+   * mentions: [
+   *   { text: "Cristiano Ronaldo", startChar: 42, endChar: 59, confidence: 0.95 },
+   *   { text: "Ronaldo", startChar: 156, endChar: 163, confidence: 0.88 }
+   * ]
+   * ```
+   */
+  mentions: Schema.optional(Schema.Array(EvidenceSpanSchema)).annotations({
+    title: "Mentions",
+    description: "Text spans where this entity was mentioned in source"
   })
 }) {
   /**
@@ -139,7 +242,8 @@ export class Entity extends Schema.Class<Entity>("Entity")({
       chunkIndex: this.chunkIndex,
       chunkId: this.chunkId,
       extractedAt: this.extractedAt,
-      eventTime: this.eventTime
+      eventTime: this.eventTime,
+      mentions: this.mentions
     }
   }
 }
@@ -202,6 +306,27 @@ export class Relation extends Schema.Class<Relation>("Relation")({
   ).annotations({
     title: "Object",
     description: "Entity ID reference or literal value"
+  }),
+
+  /**
+   * Evidence span showing where this relation was expressed in source text
+   *
+   * Captures the exact quote and character offsets for provenance tracking.
+   * Shows users precisely where in the document this fact was stated.
+   *
+   * @example
+   * ```typescript
+   * evidence: {
+   *   text: "Ronaldo joined Al-Nassr in January 2023",
+   *   startChar: 245,
+   *   endChar: 285,
+   *   confidence: 0.92
+   * }
+   * ```
+   */
+  evidence: Schema.optional(EvidenceSpanSchema).annotations({
+    title: "Evidence",
+    description: "Text span where this relation was expressed in source"
   })
 }) {
   /**
@@ -245,7 +370,8 @@ export class Relation extends Schema.Class<Relation>("Relation")({
       subjectId: this.subjectId,
       predicate: this.predicate,
       object: this.object,
-      isEntityReference: this.isEntityReference
+      isEntityReference: this.isEntityReference,
+      evidence: this.evidence
     }
   }
 }

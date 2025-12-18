@@ -486,4 +486,214 @@ describe("makeRelationSchema", () => {
     const result = Schema.decodeUnknownSync(schema)(validRelation)
     expect(result.relations).toHaveLength(2)
   })
+
+  describe("evidence spans", () => {
+    it("should accept relation with evidence containing text and character offsets", () => {
+      const validEntityIds = ["cristiano_ronaldo", "al_nassr"]
+      const properties = [
+        new PropertyDefinition({
+          id: "http://schema.org/memberOf",
+          label: "member of",
+          comment: "Organization membership",
+          domain: [],
+          range: [],
+          rangeType: "object"
+        })
+      ]
+
+      const schema = makeRelationSchema(validEntityIds, properties)
+
+      const relationWithEvidence = {
+        relations: [
+          {
+            subjectId: "cristiano_ronaldo",
+            predicate: "memberOf",
+            object: "al_nassr",
+            evidence: {
+              text: "Ronaldo joined Al-Nassr in January 2023",
+              startChar: 245,
+              endChar: 285,
+              confidence: 0.92
+            }
+          }
+        ]
+      }
+
+      const result = Schema.decodeUnknownSync(schema)(relationWithEvidence) as any
+      expect(result.relations[0].evidence).toBeDefined()
+      expect(result.relations[0].evidence.text).toBe("Ronaldo joined Al-Nassr in January 2023")
+      expect(result.relations[0].evidence.startChar).toBe(245)
+      expect(result.relations[0].evidence.endChar).toBe(285)
+      expect(result.relations[0].evidence.confidence).toBe(0.92)
+    })
+
+    it("should accept evidence without confidence (optional field)", () => {
+      const validEntityIds = ["cristiano_ronaldo", "al_nassr"]
+      const properties = [
+        new PropertyDefinition({
+          id: "http://schema.org/memberOf",
+          label: "member of",
+          comment: "Organization membership",
+          domain: [],
+          range: [],
+          rangeType: "object"
+        })
+      ]
+
+      const schema = makeRelationSchema(validEntityIds, properties)
+
+      const relationWithEvidence = {
+        relations: [
+          {
+            subjectId: "cristiano_ronaldo",
+            predicate: "memberOf",
+            object: "al_nassr",
+            evidence: {
+              text: "Ronaldo joined Al-Nassr",
+              startChar: 245,
+              endChar: 268
+              // no confidence
+            }
+          }
+        ]
+      }
+
+      const result = Schema.decodeUnknownSync(schema)(relationWithEvidence) as any
+      expect(result.relations[0].evidence).toBeDefined()
+      expect(result.relations[0].evidence.confidence).toBeUndefined()
+    })
+
+    it("should accept relation without evidence (optional field)", () => {
+      const validEntityIds = ["cristiano_ronaldo", "al_nassr"]
+      const properties = [
+        new PropertyDefinition({
+          id: "http://schema.org/memberOf",
+          label: "member of",
+          comment: "Organization membership",
+          domain: [],
+          range: [],
+          rangeType: "object"
+        })
+      ]
+
+      const schema = makeRelationSchema(validEntityIds, properties)
+
+      const relationWithoutEvidence = {
+        relations: [
+          {
+            subjectId: "cristiano_ronaldo",
+            predicate: "memberOf",
+            object: "al_nassr"
+            // no evidence field
+          }
+        ]
+      }
+
+      const result = Schema.decodeUnknownSync(schema)(relationWithoutEvidence) as any
+      expect(result.relations[0].evidence).toBeUndefined()
+    })
+
+    it("should work with datatype property relations", () => {
+      const validEntityIds = ["cristiano_ronaldo"]
+      const properties = [
+        new PropertyDefinition({
+          id: "http://schema.org/birthDate",
+          label: "birth date",
+          comment: "Date of birth",
+          domain: [],
+          range: [],
+          rangeType: "datatype"
+        })
+      ]
+
+      const schema = makeRelationSchema(validEntityIds, properties)
+
+      const relationWithEvidence = {
+        relations: [
+          {
+            subjectId: "cristiano_ronaldo",
+            predicate: "birthDate",
+            object: "1985-02-05",
+            evidence: {
+              text: "born on February 5, 1985",
+              startChar: 100,
+              endChar: 124,
+              confidence: 0.85
+            }
+          }
+        ]
+      }
+
+      const result = Schema.decodeUnknownSync(schema)(relationWithEvidence) as any
+      expect(result.relations[0].object).toBe("1985-02-05")
+      expect(result.relations[0].evidence.text).toBe("born on February 5, 1985")
+    })
+
+    it("should reject evidence with negative character offsets", () => {
+      const validEntityIds = ["cristiano_ronaldo", "al_nassr"]
+      const properties = [
+        new PropertyDefinition({
+          id: "http://schema.org/memberOf",
+          label: "member of",
+          comment: "Organization membership",
+          domain: [],
+          range: [],
+          rangeType: "object"
+        })
+      ]
+
+      const schema = makeRelationSchema(validEntityIds, properties)
+
+      const invalidEvidence = {
+        relations: [
+          {
+            subjectId: "cristiano_ronaldo",
+            predicate: "memberOf",
+            object: "al_nassr",
+            evidence: {
+              text: "Ronaldo joined Al-Nassr",
+              startChar: -1, // Invalid: negative offset
+              endChar: 268
+            }
+          }
+        ]
+      }
+
+      expect(() => Schema.decodeUnknownSync(schema)(invalidEvidence)).toThrow()
+    })
+
+    it("should reject evidence with confidence outside 0-1 range", () => {
+      const validEntityIds = ["cristiano_ronaldo", "al_nassr"]
+      const properties = [
+        new PropertyDefinition({
+          id: "http://schema.org/memberOf",
+          label: "member of",
+          comment: "Organization membership",
+          domain: [],
+          range: [],
+          rangeType: "object"
+        })
+      ]
+
+      const schema = makeRelationSchema(validEntityIds, properties)
+
+      const invalidConfidence = {
+        relations: [
+          {
+            subjectId: "cristiano_ronaldo",
+            predicate: "memberOf",
+            object: "al_nassr",
+            evidence: {
+              text: "Ronaldo joined Al-Nassr",
+              startChar: 0,
+              endChar: 23,
+              confidence: 2.5 // Invalid: > 1
+            }
+          }
+        ]
+      }
+
+      expect(() => Schema.decodeUnknownSync(schema)(invalidConfidence)).toThrow()
+    })
+  })
 })

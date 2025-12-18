@@ -165,6 +165,35 @@ export const makeRelationSchema = (
     ? localNameSchema(datatypeProperties.map((p) => p.id) as unknown as ReadonlyArray<IRI>, "properties")
     : null
 
+  // Evidence span schema for provenance tracking
+  const EvidenceSpan = S.Struct({
+    text: S.String.annotations({
+      description: "Exact text span expressing this relation"
+    }),
+    startChar: S.Number.pipe(
+      S.int(),
+      S.nonNegative(),
+      S.annotations({
+        description: "Character offset start (0-indexed)"
+      })
+    ),
+    endChar: S.Number.pipe(
+      S.int(),
+      S.nonNegative(),
+      S.annotations({
+        description: "Character offset end (exclusive)"
+      })
+    ),
+    confidence: S.optional(S.Number.pipe(
+      S.greaterThanOrEqualTo(0),
+      S.lessThanOrEqualTo(1)
+    )).annotations({
+      description: "Extraction confidence (0-1)"
+    })
+  }).annotations({
+    description: "Character-level text evidence for provenance"
+  })
+
   // Create relation schemas discriminated by rangeType
   const relationSchemas: Array<S.Schema<any>> = []
 
@@ -180,6 +209,9 @@ export const makeRelationSchema = (
         }),
         object: EntityIdUnion.annotations({
           description: "Object entity ID from Stage 1 - MUST be one of the identified entities"
+        }),
+        evidence: S.optional(EvidenceSpan).annotations({
+          description: "Text span where this relation was expressed (include startChar/endChar offsets)"
         })
       }).annotations({
         description: "Object property relation - links two entities"
@@ -209,6 +241,9 @@ export const makeRelationSchema = (
           })
         ).annotations({
           description: "Literal value - string, number, or boolean (NOT entity ID)"
+        }),
+        evidence: S.optional(EvidenceSpan).annotations({
+          description: "Text span where this relation was expressed (include startChar/endChar offsets)"
         })
       }).annotations({
         description: "Datatype property relation - has literal value"
@@ -254,6 +289,7 @@ CRITICAL RULES:
 - Use the exact entity IDs from Stage 1 - do not create new IDs
 - Use LOCAL NAMES for predicates (e.g., '${allPropertyNames.slice(0, 3).join("', '")}') - NOT full URIs
 - Predicate MUST be one of the allowed property names
+- Include evidence with character offsets: text quote, startChar (0-indexed), endChar (exclusive)
 - Extract as many relations as possible`
   })
 }

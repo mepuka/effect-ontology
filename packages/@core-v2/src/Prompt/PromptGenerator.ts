@@ -302,11 +302,17 @@ const buildOutputFormatSection = (stage: "mention" | "entity" | "relation"): Doc
 - id: snake_case unique identifier (e.g., "arsenal_fc")
 - mention: exact text from source (human-readable name)
 - types: array of class names (e.g., ["Player", "Team"]) - use local names, not full URIs
-- attributes: optional object with property names as keys and literal values`
+- attributes: optional object with property names as keys and literal values
+- mentions: array of evidence spans, each with:
+  - text: exact quote from source
+  - startChar: character offset start (0-indexed)
+  - endChar: character offset end (exclusive)
+  - confidence: optional extraction confidence (0-1)`
     : `Return a JSON object with a "relations" array. Each relation should have:
 - subjectId: entity ID from Stage 1
 - predicate: property name (e.g., "playsFor") - use local name, not full URI
-- object: entity ID (for object properties) OR literal value (for datatype properties)`
+- object: entity ID (for object properties) OR literal value (for datatype properties)
+- evidence: optional span with text quote, startChar, endChar, confidence for provenance`
 
   return Doc.vsep([
     Doc.text("=== OUTPUT FORMAT ==="),

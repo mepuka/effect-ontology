@@ -252,12 +252,14 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
                 }
 
                 // Create Entity domain model with expanded types (full IRIs)
+                // Include evidence spans if provided by LLM
                 return Option.some(
                   new Entity({
                     id: EntityId(entityId),
                     mention: entityData.mention,
                     types: expandedTypes as ReadonlyArray<IRI>, // Expanded to full IRIs
-                    attributes
+                    attributes,
+                    mentions: entityData.mentions
                   })
                 )
               }),
@@ -578,7 +580,18 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
           const propertyIris: ReadonlyArray<IRI> = properties.map((p) => p.id as IRI)
           const localNameToIriMap = buildLocalNameToIriMap(propertyIris)
           let skippedRelationCount = 0
-          type RelationData = { subjectId: string; predicate: string; object: string }
+          type EvidenceData = {
+            text: string
+            startChar: number
+            endChar: number
+            confidence?: number
+          }
+          type RelationData = {
+            subjectId: string
+            predicate: string
+            object: string
+            evidence?: EvidenceData
+          }
           const relations = yield* Stream.fromIterable(response.value.relations as ReadonlyArray<RelationData>)
             .pipe(
               Stream.filterMap((relationData: RelationData): Option.Option<Relation> => {
@@ -593,7 +606,8 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
                   new Relation({
                     subjectId: relationData.subjectId,
                     predicate: expandedPredicate as IRI,
-                    object: relationData.object
+                    object: relationData.object,
+                    evidence: relationData.evidence
                   })
                 )
               }),

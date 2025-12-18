@@ -264,6 +264,35 @@ export const makeEntitySchema = (
     })
   }
 
+  // Evidence span schema for provenance tracking
+  const EvidenceSpan = S.Struct({
+    text: S.String.annotations({
+      description: "Exact text span from source document"
+    }),
+    startChar: S.Number.pipe(
+      S.int(),
+      S.nonNegative(),
+      S.annotations({
+        description: "Character offset start (0-indexed)"
+      })
+    ),
+    endChar: S.Number.pipe(
+      S.int(),
+      S.nonNegative(),
+      S.annotations({
+        description: "Character offset end (exclusive)"
+      })
+    ),
+    confidence: S.optional(S.Number.pipe(
+      S.greaterThanOrEqualTo(0),
+      S.lessThanOrEqualTo(1)
+    )).annotations({
+      description: "Extraction confidence (0-1)"
+    })
+  }).annotations({
+    description: "Character-level text evidence for provenance"
+  })
+
   // Single entity schema matching Entity domain model
   const EntitySchema = S.Struct({
     id: S.String.pipe(
@@ -286,9 +315,14 @@ export const makeEntitySchema = (
     ),
     attributes: S.optional(AttributesSchema).annotations({
       description: `Entity attributes - use allowed property names${propList}`
+    }),
+    mentions: S.optional(S.Array(EvidenceSpan).pipe(
+      S.minItems(1)
+    )).annotations({
+      description: "Text spans where this entity appears in source (include startChar/endChar offsets)"
     })
   }).annotations({
-    description: "A single entity with its types and optional attributes"
+    description: "A single entity with its types, attributes, and evidence spans"
   })
 
   // Full entity graph schema
@@ -307,7 +341,8 @@ CRITICAL RULES:
 - Reuse the exact same ID when referring to the same entity
 - Use LOCAL NAMES for types (e.g., "Player", "Team") - NOT full URIs
 - Map each entity to at least one ontology class from the allowed list
-- Extract as many entities as possible`
+- Extract as many entities as possible
+- Include character offsets in mentions array: startChar (0-indexed) and endChar (exclusive) for provenance`
   })
 }
 
