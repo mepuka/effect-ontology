@@ -7,6 +7,7 @@
 
 export * from "./Agent/index.js"
 export * from "./BatchState.js"
+export * from "./Assertion.js"
 export * from "./Claim.js"
 export * from "./Config.js"
 export * from "./EntityLinker.js"
