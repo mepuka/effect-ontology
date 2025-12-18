@@ -18,6 +18,17 @@ export const BatchRequest = Schema.Struct({
   ontologyVersion: OntologyVersion,
   targetNamespace: Namespace,
   shaclUri: Schema.optional(GcsUri),
+  /**
+   * Pre-computed ontology embeddings URI (optional)
+   *
+   * When provided, the workflow uses pre-computed embeddings for semantic search
+   * instead of computing embeddings on-the-fly. Significantly speeds up startup
+   * for workflows processing many documents against the same ontology.
+   *
+   * Generate with `makeComputeEmbeddingsActivity()`.
+   * If omitted, derived automatically from ontologyUri (ontology.ttl -> ontology-embeddings.json).
+   */
+  ontologyEmbeddingsUri: Schema.optional(GcsUri),
   documents: Schema.NonEmptyArray(BatchRequestDocument),
   /**
    * Preprocessing configuration (optional)

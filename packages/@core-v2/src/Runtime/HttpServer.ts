@@ -3,8 +3,9 @@ import { HttpRouter, HttpServer, HttpServerRequest, HttpServerResponse } from "@
 import { Cause, DateTime, Deferred, Duration, Effect, Layer, Option, Schedule, Schema, Stream } from "effect"
 import { type ParseError, TreeFormatter } from "effect/ParseResult"
 import { WorkflowNotFoundError, WorkflowSuspendedError } from "../Domain/Error/Workflow.js"
-import type { DocumentId, GcsUri } from "../Domain/Identity.js"
-import { BatchId, documentIdFromHash, toGcsUri } from "../Domain/Identity.js"
+import type { DocumentId } from "../Domain/Identity.js"
+import { BatchId, documentIdFromHash, GcsUri, toGcsUri } from "../Domain/Identity.js"
+import { embeddingsPathFromOntology } from "../Domain/Model/OntologyEmbeddings.js"
 import { BatchState } from "../Domain/Model/BatchWorkflow.js"
 import { PathLayout } from "../Domain/PathLayout.js"
 import type { BatchWorkflowPayload } from "../Domain/Schema/Batch.js"
@@ -164,17 +165,24 @@ const stageManifest = (manifest: BatchManifest) =>
 const toPayload = (
   manifest: BatchManifest,
   manifestUri: GcsUri,
-  preprocessing?: PreprocessingOptions
-): BatchWorkflowPayloadType => ({
-  batchId: manifest.batchId,
-  manifestUri,
-  ontologyVersion: manifest.ontologyVersion,
-  ontologyUri: manifest.ontologyUri,
-  targetNamespace: manifest.targetNamespace,
-  shaclUri: manifest.shaclUri,
-  documentIds: manifest.documents.map((doc) => doc.documentId),
-  preprocessing
-})
+  preprocessing?: PreprocessingOptions,
+  ontologyEmbeddingsUri?: GcsUri
+): BatchWorkflowPayloadType => {
+  // Derive embeddings URI from ontology if not explicitly provided
+  const embeddingsUri = ontologyEmbeddingsUri ?? (embeddingsPathFromOntology(manifest.ontologyUri) as GcsUri)
+
+  return {
+    batchId: manifest.batchId,
+    manifestUri,
+    ontologyVersion: manifest.ontologyVersion,
+    ontologyUri: manifest.ontologyUri,
+    targetNamespace: manifest.targetNamespace,
+    shaclUri: manifest.shaclUri,
+    documentIds: manifest.documents.map((doc) => doc.documentId),
+    ontologyEmbeddingsUri: embeddingsUri,
+    preprocessing
+  }
+}
 
 export const ExtractionRouter = HttpRouter.empty.pipe(
   HttpRouter.post(
@@ -193,7 +201,9 @@ export const ExtractionRouter = HttpRouter.empty.pipe(
               const manifestUri = yield* stageManifest(manifest)
 
               const orchestrator = yield* WorkflowOrchestrator
-              const executionId = yield* orchestrator.start(toPayload(manifest, manifestUri, request.preprocessing))
+              const executionId = yield* orchestrator.start(
+                toPayload(manifest, manifestUri, request.preprocessing, request.ontologyEmbeddingsUri)
+              )
 
               return yield* streamBatchExtraction(executionId)
             })
@@ -216,7 +226,9 @@ export const ExtractionRouter = HttpRouter.empty.pipe(
               const manifest = yield* createManifest(request)
               const manifestUri = yield* stageManifest(manifest)
               const orchestrator = yield* WorkflowOrchestrator
-              const executionId = yield* orchestrator.start(toPayload(manifest, manifestUri, request.preprocessing))
+              const executionId = yield* orchestrator.start(
+                toPayload(manifest, manifestUri, request.preprocessing, request.ontologyEmbeddingsUri)
+              )
               return yield* streamBatchExtraction(executionId)
             })
         })
