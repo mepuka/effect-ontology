@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  OWL Import Catalog for Effect Ontology
+
+  This catalog provides local resolution for external ontology imports.
+  Tools that support XML Catalogs (Protégé, OWL API, etc.) will use
+  these mappings to load bundled versions instead of fetching from the web.
+
+  Usage: Configure your ontology tool to use this catalog for import resolution.
+
+  Last updated: 2025-12-18
+-->
+<catalog xmlns="urn:oasis:names:tc:entity:xmlns:xml:catalog"
+         prefer="public">
+
+  <!-- W3C Provenance Ontology (PROV-O) -->
+  <!-- Version: W3C Recommendation 30 April 2013 -->
+  <uri name="http://www.w3.org/ns/prov#" uri="prov-o.ttl"/>
+  <uri name="http://www.w3.org/ns/prov-o#" uri="prov-o.ttl"/>
+  <uri name="http://www.w3.org/ns/prov" uri="prov-o.ttl"/>
+
+  <!-- W3C Web Annotation Ontology -->
+  <!-- Version: W3C Recommendation 23 February 2017 -->
+  <uri name="http://www.w3.org/ns/oa#" uri="web-annotation.ttl"/>
+  <uri name="http://www.w3.org/ns/oa" uri="web-annotation.ttl"/>
+
+  <!-- Dublin Core Terms -->
+  <!-- Version: DCMI Metadata Terms -->
+  <uri name="http://purl.org/dc/terms/" uri="dcterms.ttl"/>
+  <uri name="http://purl.org/dc/elements/1.1/" uri="dcterms.ttl"/>
+
+  <!-- SKOS (Simple Knowledge Organization System) -->
+  <!-- Version: W3C Recommendation 18 August 2009 -->
+  <uri name="http://www.w3.org/2004/02/skos/core#" uri="skos.rdf"/>
+  <uri name="http://www.w3.org/2004/02/skos/core" uri="skos.rdf"/>
+
+</catalog>
