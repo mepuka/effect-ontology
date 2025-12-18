@@ -1,8 +1,8 @@
 # Effect-Ontology @core-v2 System Architecture
 
-> **Version:** 2.3.0
+> **Version:** 2.4.0
 > **Last Updated:** December 2025
-> **Status:** In Progress - Agentic Document Preprocessing
+> **Status:** GraphRAG Complete - Multi-Agent Next
 
 ## Table of Contents
 
@@ -16,6 +16,7 @@
 8. [Layer Composition](#layer-composition)
 9. [API Reference](#api-reference)
 10. [Document Preprocessing](#document-preprocessing)
+11. [GraphRAG: Knowledge Graph Querying](#graphrag-knowledge-graph-querying)
 
 ---
 
@@ -32,6 +33,7 @@ Effect-Ontology is a knowledge graph extraction system that transforms unstructu
 - **Agentic Document Preprocessing**: LLM-based document classification, adaptive chunking strategies, and intelligent batch ordering
 - **Entity Resolution**: Graph-based clustering for entity deduplication
 - **SHACL Validation**: Optional shape-based constraint checking
+- **GraphRAG Querying**: Retrieval-augmented generation with knowledge graph context, grounded answers with citations, and explainable reasoning traces
 
 ---
 
@@ -93,6 +95,12 @@ graph TB
             ES[EmbeddingService]
             EC[EmbeddingCache]
             Nomic[NomicNlpService]
+        end
+
+        subgraph "GraphRAG"
+            GRAG[GraphRAG]
+            EIdx[EntityIndex]
+            SGE[SubgraphExtractor]
         end
 
         subgraph "Core Services"
@@ -170,6 +178,11 @@ graph TB
     EE --> ST
     EE --> RL
 
+    GRAG --> EIdx
+    GRAG --> SGE
+    EIdx --> ES
+    SGE --> EIdx
+
     WE --> PS
     PS --> PostgreSQL[(PostgreSQL)]
 
@@ -180,6 +193,7 @@ graph TB
     style BW fill:#fff3e0
     style ERS fill:#ffe0b2
     style ES fill:#e1bee7
+    style GRAG fill:#b2dfdb
     style PS fill:#f3e5f5
 ```
 
@@ -333,6 +347,12 @@ graph LR
         Nomic[NomicNlpService]
     end
 
+    subgraph "GraphRAG"
+        GRAG[GraphRAG]
+        EIdx[EntityIndex]
+        SGE[SubgraphExtractor]
+    end
+
     subgraph "Ontology"
         OS[OntologyService]
         OL[OntologyLoader]
@@ -417,10 +437,16 @@ graph LR
     ER --> SS
     ECa --> SS
 
+    GRAG --> EIdx
+    GRAG --> SGE
+    EIdx --> ES
+    SGE --> EIdx
+
     style WO fill:#bbdefb
     style EE fill:#c8e6c9
     style ERS fill:#ffe0b2
     style ES fill:#e1bee7
+    style GRAG fill:#b2dfdb
     style CS fill:#fff9c4
 ```
 
@@ -442,6 +468,10 @@ graph LR
 | `EntityResolutionService` | Graph clustering and entity matching | Service | EmbeddingService |
 | `EntityLinker` | Canonical entity ID queries | Util | EntityResolutionGraph |
 | `RelationLinker` | Relation canonicalization | Service | EntityResolutionGraph |
+| **GraphRAG** ||||
+| `GraphRAG` | Retrieval-augmented generation with KG context | Service | EntityIndex, SubgraphExtractor, LanguageModel |
+| `EntityIndex` | In-memory k-NN entity index via embeddings | Service | EmbeddingService |
+| `SubgraphExtractor` | N-hop subgraph extraction around seeds | Service | EntityIndex |
 | **Embedding** ||||
 | `EmbeddingService` | Cache-through embedding wrapper | Service | NomicNlpService, EmbeddingCache |
 | `EmbeddingCache` | Content-addressable embedding cache | Service | Clock, Ref |
@@ -988,7 +1018,10 @@ const BatchManifest = Schema.Struct({
 | `src/Service/Storage.ts` | Storage abstraction (GCS/Local/Memory) |
 | `src/Service/Extraction.ts` | Entity/Relation extractors |
 | `src/Service/Grounder.ts` | Entity grounding |
-| `src/Service/DocumentClassifier.ts` | **NEW**: LLM-based document classification |
+| `src/Service/GraphRAG.ts` | **NEW**: GraphRAG retrieval and generation |
+| `src/Service/EntityIndex.ts` | **NEW**: Entity embedding k-NN index |
+| `src/Service/SubgraphExtractor.ts` | **NEW**: N-hop subgraph extraction |
+| `src/Service/DocumentClassifier.ts` | LLM-based document classification |
 | `src/Workflow/Activities.ts` | @effect/workflow durable activities |
 | `src/Workflow/DurableActivities.ts` | Durable activity implementations |
 | `src/Workflow/StreamingExtraction.ts` | 2-stage extraction pipeline |
@@ -1354,3 +1387,170 @@ resource "google_cloud_run_v2_job" "preprocess" {
 | **4** | Extraction uses preprocessing hints | `Workflow/StreamingExtraction.ts`, `Service/Nlp.ts` | Phase 3 |
 | **5** | Cloud Run Job for large batches | `infra/modules/preprocess-job/` | Phase 4 |
 | **6** | Cloud Tasks fan-out (optional) | Future | Phase 5 |
+
+---
+
+## GraphRAG: Knowledge Graph Querying
+
+### Overview
+
+GraphRAG (Graph Retrieval-Augmented Generation) enables LLMs to answer questions by retrieving relevant subgraphs from extracted knowledge, reducing hallucinations and providing traceable reasoning paths.
+
+### Architecture
+
+```mermaid
+graph TB
+    subgraph "GraphRAG Pipeline"
+        Q[Natural Language Query]
+
+        subgraph "1. Entity Retrieval"
+            EI[EntityIndex]
+            EMB[Query Embedding]
+            KNN[k-NN Search]
+        end
+
+        subgraph "2. Subgraph Extraction"
+            SE[SubgraphExtractor]
+            BFS[N-hop BFS Traversal]
+            PRUNE[Node Pruning]
+        end
+
+        subgraph "3. Context Scoring"
+            RRF[RRF Fusion Scoring]
+            FMT[Context Formatting]
+        end
+
+        subgraph "4. Grounded Generation"
+            GRAG[GraphRAG Service]
+            LLM[LLM w/ Schema]
+            ANS[GroundedAnswer]
+        end
+
+        subgraph "5. Reasoning Trace"
+            PATH[Path Extraction]
+            EXP[NL Explanation]
+            TRACE[ReasoningTrace]
+        end
+    end
+
+    Q --> EMB
+    EMB --> KNN
+    KNN --> EI
+    EI --> SE
+    SE --> BFS
+    BFS --> PRUNE
+    PRUNE --> RRF
+    RRF --> FMT
+    FMT --> GRAG
+    GRAG --> LLM
+    LLM --> ANS
+    ANS --> PATH
+    PATH --> EXP
+    EXP --> TRACE
+
+    style EI fill:#b2dfdb
+    style SE fill:#b2dfdb
+    style GRAG fill:#b2dfdb
+    style ANS fill:#c8e6c9
+    style TRACE fill:#fff3e0
+```
+
+### Core Types
+
+```typescript
+// Grounded answer with citations
+interface GroundedAnswer {
+  answer: string                    // Generated response
+  citations: string[]               // Entity IDs cited
+  confidence: number                // 0-1 score
+  reasoning: string                 // Brief explanation
+  retrieval: RetrievalResult        // Full context used
+}
+
+// Reasoning trace for explainability
+interface ReasoningTrace {
+  steps: ReasoningStep[]            // Path through graph
+  explanation: string               // NL explanation
+  confidence: number                // Inherited from answer
+  query: string                     // Original query
+  involvedEntities: string[]        // All entity IDs
+}
+
+interface ReasoningStep {
+  from: Entity                      // Source entity
+  relation: Relation                // Edge traversed
+  to: Entity                        // Target entity
+  explanation: string               // Step explanation
+}
+```
+
+### Retrieval Pipeline
+
+| Stage | Service | Method | Output |
+|-------|---------|--------|--------|
+| **Index** | EntityIndex | `index(graph)` | Entities indexed with embeddings |
+| **Search** | EntityIndex | `findSimilar(query, k)` | Top-k similar entities |
+| **Extract** | SubgraphExtractor | `extract(seeds, hops)` | N-hop subgraph |
+| **Score** | GraphRAG | RRF fusion | Scored nodes |
+| **Format** | GraphRAG | `formatContext()` | LLM-ready context |
+| **Generate** | GraphRAG | `generate(llm, query)` | GroundedAnswer |
+| **Explain** | GraphRAG | `explain(llm, answer)` | ReasoningTrace |
+
+### RRF Scoring
+
+Reciprocal Rank Fusion combines multiple ranking signals:
+
+```
+score = Σ (1 / (rank_i + 60))
+```
+
+Signals used:
+- Embedding similarity rank
+- Hop distance from seed (closer = better)
+- Type relevance (if filtering)
+
+### Usage Example
+
+```typescript
+import { GraphRAG } from "./Service/GraphRAG.js"
+
+const program = Effect.gen(function*() {
+  const graphRAG = yield* GraphRAG
+  const llm = yield* LanguageModel.LanguageModel
+
+  // 1. Full pipeline: index + retrieve + generate
+  const answer = yield* graphRAG.answer(
+    llm,
+    knowledgeGraph,
+    "Where does Alice work?",
+    { topK: 5, hops: 2 }
+  )
+
+  console.log(answer.answer)      // "Alice works at ACME Corporation"
+  console.log(answer.citations)   // ["alice", "acme_corp"]
+  console.log(answer.confidence)  // 0.95
+
+  // 2. Generate reasoning trace
+  const trace = yield* graphRAG.explain(llm, answer)
+
+  for (const step of trace.steps) {
+    console.log(`${step.from.mention} → ${step.to.mention}`)
+    console.log(`  ${step.explanation}`)
+  }
+})
+```
+
+### Service Dependencies
+
+```mermaid
+graph LR
+    GraphRAG --> EntityIndex
+    GraphRAG --> SubgraphExtractor
+    GraphRAG --> LanguageModel
+
+    EntityIndex --> EmbeddingService
+    SubgraphExtractor --> EntityIndex
+
+    EmbeddingService --> NomicNlpService
+    EmbeddingService --> EmbeddingCache
+```

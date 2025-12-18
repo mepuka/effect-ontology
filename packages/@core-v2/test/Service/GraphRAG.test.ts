@@ -11,6 +11,8 @@ import {
   GraphRAG,
   type GraphRAGService,
   type GroundedAnswer,
+  type ReasoningStep,
+  type ReasoningTrace,
   type RetrievalResult,
   type ScoredNode
 } from "../../src/Service/GraphRAG.js"
@@ -369,6 +371,9 @@ const createTestGraphRAG = () => {
 
     answer: () =>
       Effect.die(new Error("answer() not implemented in test mock")),
+
+    explain: () =>
+      Effect.die(new Error("explain() not implemented in test mock")),
 
     clear: () => Effect.sync(() => {
       indexState = { entities: new Map(), embeddings: new Map() }
@@ -858,6 +863,106 @@ describe("GraphRAG grounded generation", () => {
       expect(typeof result.stats.edgeCount).toBe("number")
       expect(typeof result.stats.hops).toBe("number")
       expect(typeof result.stats.avgScore).toBe("number")
+    })
+  })
+
+  describe("explain() - reasoning traces", () => {
+    it("ReasoningStep has correct structure", () => {
+      const e = createTestEntities()
+      const step: ReasoningStep = {
+        from: e.alice,
+        relation: new Relation({
+          subjectId: "alice",
+          predicate: "http://schema.org/worksFor",
+          object: "acme_corp"
+        }),
+        to: e.acme,
+        explanation: "Alice works at ACME Corporation"
+      }
+
+      expect(step.from.id).toBe("alice")
+      expect(step.to.id).toBe("acme_corp")
+      expect(step.relation.predicate).toContain("worksFor")
+      expect(step.explanation).toBeTruthy()
+    })
+
+    it("ReasoningTrace has correct structure", () => {
+      const e = createTestEntities()
+      const trace: ReasoningTrace = {
+        steps: [
+          {
+            from: e.alice,
+            relation: new Relation({
+              subjectId: "alice",
+              predicate: "http://schema.org/worksFor",
+              object: "acme_corp"
+            }),
+            to: e.acme,
+            explanation: "Alice works at ACME Corporation"
+          }
+        ],
+        explanation: "The answer was derived by finding that Alice works at ACME Corporation.",
+        confidence: 0.9,
+        query: "Where does Alice work?",
+        involvedEntities: ["alice", "acme_corp"]
+      }
+
+      expect(trace.steps).toHaveLength(1)
+      expect(trace.explanation).toBeTruthy()
+      expect(trace.confidence).toBeGreaterThanOrEqual(0)
+      expect(trace.confidence).toBeLessThanOrEqual(1)
+      expect(trace.query).toBe("Where does Alice work?")
+      expect(trace.involvedEntities).toContain("alice")
+      expect(trace.involvedEntities).toContain("acme_corp")
+    })
+
+    it("ReasoningTrace can represent multi-hop paths", () => {
+      const e = createTestEntities()
+      const trace: ReasoningTrace = {
+        steps: [
+          {
+            from: e.alice,
+            relation: new Relation({
+              subjectId: "alice",
+              predicate: "http://schema.org/knows",
+              object: "bob"
+            }),
+            to: e.bob,
+            explanation: "Alice knows Bob"
+          },
+          {
+            from: e.bob,
+            relation: new Relation({
+              subjectId: "bob",
+              predicate: "http://schema.org/worksFor",
+              object: "tech_co"
+            }),
+            to: e.techCo,
+            explanation: "Bob works for TechCo"
+          }
+        ],
+        explanation: "Alice knows Bob, who works at TechCo.",
+        confidence: 0.85,
+        query: "What company does Alice's friend work for?",
+        involvedEntities: ["alice", "bob", "tech_co"]
+      }
+
+      expect(trace.steps).toHaveLength(2)
+      expect(trace.steps[0].to.id).toBe("bob")
+      expect(trace.steps[1].from.id).toBe("bob")
+      expect(trace.involvedEntities).toHaveLength(3)
+    })
+
+    it("ExplainOptions extends GenerationOptions", () => {
+      const options = {
+        temperature: 0.2,
+        timeoutMs: 20000,
+        maxAttempts: 2,
+        generateStepExplanations: true
+      }
+
+      expect(options.temperature).toBe(0.2)
+      expect(options.generateStepExplanations).toBe(true)
     })
   })
 })

@@ -143,6 +143,57 @@ export interface GenerationOptions {
  */
 export interface AnswerOptions extends RetrievalOptions, GenerationOptions {}
 
+// =============================================================================
+// Reasoning Trace Types
+// =============================================================================
+
+/**
+ * A single step in a reasoning path through the knowledge graph
+ *
+ * @since 2.0.0
+ * @category Types
+ */
+export interface ReasoningStep {
+  /** Source entity in this step */
+  readonly from: Entity
+  /** Relation connecting from → to */
+  readonly relation: Relation
+  /** Target entity in this step */
+  readonly to: Entity
+  /** Human-readable explanation of this step */
+  readonly explanation: string
+}
+
+/**
+ * Complete reasoning trace showing how an answer was derived
+ *
+ * @since 2.0.0
+ * @category Types
+ */
+export interface ReasoningTrace {
+  /** Ordered steps through the knowledge graph */
+  readonly steps: ReadonlyArray<ReasoningStep>
+  /** Natural language explanation of the full reasoning */
+  readonly explanation: string
+  /** Confidence inherited from the grounded answer */
+  readonly confidence: number
+  /** The original query */
+  readonly query: string
+  /** Entity IDs involved in the reasoning path */
+  readonly involvedEntities: ReadonlyArray<string>
+}
+
+/**
+ * Options for reasoning trace generation
+ *
+ * @since 2.0.0
+ * @category Types
+ */
+export interface ExplainOptions extends GenerationOptions {
+  /** Whether to generate NL explanations for each step (default: true) */
+  readonly generateStepExplanations?: boolean
+}
+
 /**
  * Error during grounded answer generation
  *
@@ -183,6 +234,22 @@ const GroundedAnswerSchema = Schema.Struct({
   reasoning: Schema.String.annotations({
     title: "Reasoning",
     description: "Brief explanation of how the answer was derived from the knowledge graph"
+  })
+})
+
+/**
+ * Schema for reasoning trace LLM response
+ *
+ * @internal
+ */
+const ReasoningTraceSchema = Schema.Struct({
+  explanation: Schema.String.annotations({
+    title: "Explanation",
+    description: "Natural language explanation of the complete reasoning process"
+  }),
+  stepExplanations: Schema.Array(Schema.String).annotations({
+    title: "Step Explanations",
+    description: "Explanation for each reasoning step in order (one per relationship traversed)"
   })
 })
 
@@ -269,6 +336,22 @@ export interface GraphRAGService {
     query: string,
     options?: Pick<RetrievalOptions, "includeAttributes" | "includeRelations">
   ) => Effect.Effect<string>
+
+  /**
+   * Generate a reasoning trace explaining how an answer was derived
+   *
+   * Extracts paths through the knowledge graph connecting cited entities
+   * and generates natural language explanations for each step.
+   *
+   * @param llm - Language model service
+   * @param answer - Grounded answer to explain
+   * @param options - Explain options
+   */
+  readonly explain: (
+    llm: LanguageModel.Service,
+    answer: GroundedAnswer,
+    options?: ExplainOptions
+  ) => Effect.Effect<ReasoningTrace, GraphRAGGenerationError | AiError.AiError | TimeoutException>
 
   /**
    * Clear the entity index
@@ -637,6 +720,131 @@ Respond with a JSON object containing:
 
           // Generate grounded answer
           return yield* service.generate(llm, query, retrieval, options)
+        }),
+
+      explain: (llm, answer, options = {}) =>
+        Effect.gen(function* () {
+          const timeoutMs = options.timeoutMs ?? 30000
+          const maxAttempts = options.maxAttempts ?? 3
+          const generateStepExplanations = options.generateStepExplanations ?? true
+
+          const { subgraph } = answer.retrieval
+          const entityMap = new Map<string, Entity>(subgraph.nodes.map((e) => [e.id, e]))
+
+          // Extract reasoning steps from edges connecting cited entities
+          // Find all edges where both subject and object are in citations or connected
+          const citedSet = new Set(answer.citations)
+          const relevantEdges: Array<{ from: Entity; relation: Relation; to: Entity }> = []
+
+          for (const edge of subgraph.edges) {
+            const fromEntity = entityMap.get(edge.subjectId)
+            const toEntityId = edge.isEntityReference ? String(edge.object) : null
+            const toEntity = toEntityId ? entityMap.get(toEntityId) : null
+
+            // Include edge if it connects cited entities or spans from cited to relevant
+            if (fromEntity && toEntity) {
+              const fromCited = citedSet.has(edge.subjectId)
+              const toCited = toEntityId && citedSet.has(toEntityId)
+
+              if (fromCited || toCited) {
+                relevantEdges.push({ from: fromEntity, relation: edge, to: toEntity })
+              }
+            }
+          }
+
+          // If no edges found, create steps from individual cited entities
+          const involvedEntities = new Set<string>()
+          for (const edge of relevantEdges) {
+            involvedEntities.add(edge.from.id)
+            involvedEntities.add(edge.to.id)
+          }
+          // Also add any cited entities not in edges
+          for (const citedId of answer.citations) {
+            involvedEntities.add(citedId)
+          }
+
+          // Build reasoning steps (without explanations yet)
+          const steps: Array<ReasoningStep> = relevantEdges.map((edge) => ({
+            from: edge.from,
+            relation: edge.relation,
+            to: edge.to,
+            explanation: "" // Will be filled by LLM
+          }))
+
+          // Generate explanations using LLM
+          if (generateStepExplanations && steps.length > 0) {
+            // Build prompt for step explanations
+            const stepsDescription = steps.map((s, i) => {
+              const predLabel = predicateLabel(s.relation.predicate)
+              return `${i + 1}. ${s.from.mention} → ${predLabel} → ${s.to.mention}`
+            }).join("\n")
+
+            const prompt = `You are explaining how an answer was derived from a knowledge graph.
+
+## Original Question
+${answer.retrieval.query}
+
+## Answer Given
+${answer.answer}
+
+## Reasoning Steps (relationships used)
+${stepsDescription}
+
+## Task
+Generate a natural language explanation of the overall reasoning, plus a brief explanation for each step showing how it contributes to the answer.
+
+For the step explanations:
+- Keep each explanation to 1-2 sentences
+- Explain how the relationship helps answer the question
+- Reference the actual entities involved`
+
+            const response = yield* generateObjectWithFeedback(llm, {
+              prompt,
+              schema: ReasoningTraceSchema,
+              objectName: "reasoning_trace",
+              maxAttempts,
+              serviceName: "GraphRAG.explain",
+              timeoutMs
+            }).pipe(
+              Effect.mapError((e) =>
+                e._tag === "TimeoutException"
+                  ? e
+                  : new GraphRAGGenerationError({
+                      message: `Failed to generate reasoning trace: ${e._tag}`,
+                      query: answer.retrieval.query,
+                      cause: e
+                    })
+              )
+            )
+
+            // Merge explanations into steps
+            const stepsWithExplanations: ReasoningStep[] = steps.map((step, i) => ({
+              ...step,
+              explanation: response.value.stepExplanations[i] || `${step.from.mention} is connected to ${step.to.mention} via ${predicateLabel(step.relation.predicate)}`
+            }))
+
+            return {
+              steps: stepsWithExplanations,
+              explanation: response.value.explanation,
+              confidence: answer.confidence,
+              query: answer.retrieval.query,
+              involvedEntities: Array.from(involvedEntities)
+            }
+          }
+
+          // Return trace without LLM explanations
+          const stepsWithBasicExplanations: ReasoningStep[] = steps.map((step) => ({
+            ...step,
+            explanation: `${step.from.mention} is connected to ${step.to.mention} via ${predicateLabel(step.relation.predicate)}`
+          }))
+
+          return {
+            steps: stepsWithBasicExplanations,
+            explanation: answer.reasoning,
+            confidence: answer.confidence,
+            query: answer.retrieval.query,
+            involvedEntities: Array.from(involvedEntities)
+          }
         }),
 
       clear: () => entityIndex.clear(),
