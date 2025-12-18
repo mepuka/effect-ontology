@@ -12,6 +12,7 @@ import { Schema } from "effect"
 import { ShaclValidationReport, ValidationPolicy } from "../../Service/Shacl.js"
 import { Entity, KnowledgeGraph, Relation } from "./Entity.js"
 import { OntologyRef } from "./Ontology.js"
+import type { ClaimRow } from "../../Repository/schema.js"
 
 /**
  * OntologyAgentConfig - Configuration for OntologyAgent operations
@@ -198,6 +199,122 @@ export class ExtractionResult extends Schema.Class<ExtractionResult>("Extraction
    */
   get hasTurtle(): boolean {
     return this.turtle !== undefined && this.turtle.length > 0
+  }
+}
+
+/**
+ * ExtractWithClaimsOptions - Options for extractWithClaims operation
+ *
+ * @since 2.0.0
+ * @category Domain
+ */
+export interface ExtractWithClaimsOptions {
+  /**
+   * Document/article ID for claim provenance
+   */
+  readonly articleId: string
+
+  /**
+   * Whether to automatically create assertions from claims
+   * @default false
+   */
+  readonly autoCreateAssertions?: boolean
+
+  /**
+   * Default confidence score when not available from extraction
+   * @default 0.8
+   */
+  readonly defaultConfidence?: number
+
+  /**
+   * Agent configuration overrides
+   */
+  readonly agentConfig?: OntologyAgentConfig
+}
+
+/**
+ * ExtractWithClaimsResult - Extraction result with claims
+ *
+ * Extends ExtractionResult with claims created from extracted relations.
+ * Each relation becomes a reified claim with provenance metadata.
+ *
+ * @example
+ * ```typescript
+ * const result = await OntologyAgent.extractWithClaims(text, {
+ *   articleId: "article-001"
+ * })
+ * console.log(`Created ${result.claims.length} claims`)
+ * for (const claim of result.claims) {
+ *   console.log(`${claim.subjectIri} ${claim.predicateIri} ${claim.objectValue}`)
+ * }
+ * ```
+ *
+ * @since 2.0.0
+ * @category Domain
+ */
+export class ExtractWithClaimsResult extends Schema.Class<ExtractWithClaimsResult>("ExtractWithClaimsResult")({
+  /**
+   * Extracted knowledge graph (entities + relations)
+   */
+  graph: KnowledgeGraph,
+
+  /**
+   * Extraction metrics
+   */
+  metrics: ExtractionMetrics,
+
+  /**
+   * Serialized RDF graph as Turtle string
+   */
+  turtle: Schema.optional(Schema.String),
+
+  /**
+   * Validation report if validation was performed
+   */
+  validationReport: Schema.optional(ShaclValidationReport),
+
+  /**
+   * Number of claims created from extraction
+   */
+  claimCount: Schema.Number.pipe(Schema.int(), Schema.nonNegative()).annotations({
+    title: "Claim Count",
+    description: "Number of claims created from extracted relations"
+  }),
+
+  /**
+   * Article ID used for claim provenance
+   */
+  articleId: Schema.String.annotations({
+    title: "Article ID",
+    description: "Source document identifier for provenance"
+  })
+}) {
+  /**
+   * Convenience accessor for entities
+   */
+  get entities(): ReadonlyArray<Entity> {
+    return this.graph.entities
+  }
+
+  /**
+   * Convenience accessor for relations
+   */
+  get relations(): ReadonlyArray<Relation> {
+    return this.graph.relations
+  }
+
+  /**
+   * Whether extraction produced any entities
+   */
+  get isEmpty(): boolean {
+    return this.graph.entities.length === 0
+  }
+
+  /**
+   * Whether claims were created
+   */
+  get hasClaims(): boolean {
+    return this.claimCount > 0
   }
 }
 

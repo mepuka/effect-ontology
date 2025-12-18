@@ -17,6 +17,8 @@ import {
   EnhancedValidationReport,
   ExtractionMetrics,
   ExtractionResult,
+  type ExtractWithClaimsOptions,
+  ExtractWithClaimsResult,
   type OntologyAgentConfig,
   QueryBinding,
   QueryResult,
@@ -25,6 +27,7 @@ import {
 } from "../Domain/Model/OntologyAgent.js"
 import { OntologyRef } from "../Domain/Model/Ontology.js"
 import type { ContentHash, Namespace, OntologyName } from "../Domain/Identity.js"
+import { ClaimService, type CreateClaimInput } from "./Claim.js"
 import { ConfigService } from "./Config.js"
 import { ExtractionWorkflow } from "./ExtractionWorkflow.js"
 import { OntologyService } from "./Ontology.js"
@@ -72,6 +75,7 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
     const config = yield* ConfigService
     const ontologyService = yield* OntologyService
     const extractionWorkflow = yield* ExtractionWorkflow
+    const claimService = yield* ClaimService
     const shaclService = yield* ShaclService
     const rdfBuilder = yield* RdfBuilder
     const sparqlGenerator = yield* SparqlGenerator
@@ -191,6 +195,142 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
             metrics,
             turtle,
             validationReport: undefined
+          })
+        }),
+
+      /**
+       * Extract entities and relations from text, creating claims with provenance
+       *
+       * Performs extraction like `extract`, but additionally creates claims from
+       * each extracted relation. Claims are reified statements with full provenance
+       * including source article, confidence scores, and evidence spans.
+       *
+       * The extraction pipeline:
+       * 1. Performs standard extraction (entities + relations)
+       * 2. Creates claims from relations using ClaimService
+       * 3. Each relation becomes a claim with:
+       *    - Subject/predicate/object from the relation
+       *    - Confidence from relation or default
+       *    - Evidence from relation.evidence field (text, start, end)
+       *    - Article ID for source provenance
+       *
+       * @param text - Source text to extract from
+       * @param options - Options including articleId and agent config overrides
+       * @returns ExtractWithClaimsResult with graph, metrics, and claim count
+       *
+       * @example
+       * ```typescript
+       * const result = yield* agent.extractWithClaims(text, {
+       *   articleId: "article-001",
+       *   defaultConfidence: 0.85
+       * })
+       * console.log(`Created ${result.claimCount} claims from ${result.relations.length} relations`)
+       * ```
+       */
+      extractWithClaims: (
+        text: string,
+        options: ExtractWithClaimsOptions
+      ): Effect.Effect<ExtractWithClaimsResult, unknown> =>
+        Effect.gen(function*() {
+          const startTime = yield* DateTime.now
+
+          // Build RunConfig from OntologyAgentConfig and defaults
+          const runConfig = yield* buildRunConfig(config, options.agentConfig)
+
+          yield* Effect.logInfo("OntologyAgent.extractWithClaims starting", {
+            textLength: text.length,
+            articleId: options.articleId,
+            defaultConfidence: options.defaultConfidence
+          })
+
+          // Execute extraction workflow
+          const graph = yield* extractionWorkflow.extract(text, runConfig)
+
+          yield* Effect.logDebug("Extraction complete, creating claims from relations", {
+            entityCount: graph.entities.length,
+            relationCount: graph.relations.length
+          })
+
+          // Build RDF store from extracted entities and relations
+          const store = yield* rdfBuilder.createStore
+          yield* rdfBuilder.addEntities(store, graph.entities)
+          yield* rdfBuilder.addRelations(store, graph.relations)
+
+          // Serialize to Turtle format
+          const turtle = yield* rdfBuilder.toTurtle(store)
+
+          // Create claims from each relation
+          const defaultConfidence = options.defaultConfidence ?? 0.8
+          let claimCount = 0
+
+          // Build entity ID -> IRI map for resolving subject/object references
+          const entityIriMap = new Map<string, string>()
+          for (const entity of graph.entities) {
+            // Entities get IRIs based on their types - use first type's namespace
+            const baseNamespace = entity.types[0]?.replace(/[^/]+$/, "") ?? "http://example.org/entity/"
+            entityIriMap.set(entity.id, `${baseNamespace}${entity.id}`)
+          }
+
+          for (const relation of graph.relations) {
+            // Resolve subject IRI from entity ID
+            const subjectIri = entityIriMap.get(relation.subjectId) ?? `http://example.org/entity/${relation.subjectId}`
+
+            // Determine if object is entity reference or literal
+            const isEntityRef = typeof relation.object === "string" && relation.isEntityReference
+            const objectValue = isEntityRef
+              ? (entityIriMap.get(relation.object as string) ?? `http://example.org/entity/${relation.object}`)
+              : String(relation.object)
+            const objectType = isEntityRef ? "iri" as const : "literal" as const
+
+            // Get confidence from evidence span if available
+            const confidence = relation.evidence?.confidence ?? defaultConfidence
+
+            // Build claim input from relation
+            const claimInput: CreateClaimInput = {
+              subjectIri,
+              predicateIri: relation.predicate,
+              objectValue,
+              objectType,
+              articleId: options.articleId,
+              confidence,
+              evidence: relation.evidence ? {
+                text: relation.evidence.text,
+                startOffset: relation.evidence.startChar,
+                endOffset: relation.evidence.endChar
+              } : undefined
+            }
+
+            yield* claimService.createClaim(claimInput)
+            claimCount++
+          }
+
+          const endTime = yield* DateTime.now
+          const durationMs = DateTime.distance(startTime, endTime)
+
+          // Build metrics from graph
+          const metrics = new ExtractionMetrics({
+            entityCount: graph.entities.length,
+            relationCount: graph.relations.length,
+            chunkCount: 1,
+            inputTokens: 0,
+            outputTokens: 0,
+            durationMs
+          })
+
+          yield* Effect.logInfo("OntologyAgent.extractWithClaims complete", {
+            entityCount: metrics.entityCount,
+            relationCount: metrics.relationCount,
+            claimCount,
+            durationMs: metrics.durationMs
+          })
+
+          return new ExtractWithClaimsResult({
+            graph,
+            metrics,
+            turtle,
+            validationReport: undefined,
+            claimCount,
+            articleId: options.articleId
           })
         }),
 

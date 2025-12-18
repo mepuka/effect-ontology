@@ -27,6 +27,7 @@ import { ConfigService } from "../../src/Service/Config.js"
 import { Reasoner, ReasoningResult } from "../../src/Service/Reasoner.js"
 import { SparqlGenerator } from "../../src/Service/SparqlGenerator.js"
 import { StorageService } from "../../src/Service/Storage.js"
+import { ClaimService } from "../../src/Service/Claim.js"
 
 describe("OntologyAgent Domain Models", () => {
   describe("OntologyAgentConfig", () => {
@@ -377,6 +378,25 @@ schema:name a owl:DatatypeProperty ;
     exists: (key: string) => Effect.succeed(key.endsWith(".ttl"))
   } as unknown as StorageService)
 
+  // Mock ClaimService for extractWithClaims tests
+  const MockClaimService = Layer.succeed(ClaimService, {
+    createClaim: (input: any) => Effect.succeed({
+      id: `claim-${Date.now().toString(16).slice(-12)}`,
+      ...input,
+      rank: "normal",
+      createdAt: new Date()
+    } as any),
+    getClaim: () => Effect.succeed(Option.none()),
+    getClaims: () => Effect.succeed([]),
+    deprecateClaim: () => Effect.succeed({ claimId: "", deprecatedAt: new Date(), reason: "" }),
+    promoteToPreferred: () => Effect.succeed(undefined),
+    findConflicting: () => Effect.succeed([]),
+    getClaimHistory: () => Effect.succeed([]),
+    toReifiedTriples: () => Effect.succeed([]),
+    addClaimToStore: () => Effect.succeed([]),
+    claimsToTurtle: () => Effect.succeed("")
+  } as unknown as ClaimService)
+
   // Combined test layer
   const TestLayer = Layer.mergeAll(
     MockExtractionWorkflow,
@@ -386,6 +406,7 @@ schema:name a owl:DatatypeProperty ;
     MockSparqlGenerator,
     MockReasoner,
     MockStorageService,
+    MockClaimService,
     ShaclService.Test(),
     RdfBuilder.Default
   ).pipe(
@@ -453,6 +474,104 @@ schema:name a owl:DatatypeProperty ;
         Effect.provide(TestLayer)
       )
     )
+  })
+
+  describe("extractWithClaims", () => {
+    it.effect("extracts entities, relations, and creates claims", () =>
+      Effect.gen(function*() {
+        const agent = yield* OntologyAgent
+
+        const result = yield* agent.extractWithClaims(
+          "Cristiano Ronaldo plays for Al-Nassr.",
+          { articleId: "article-001" }
+        )
+
+        // Check entities
+        expect(result.entities.length).toBe(2)
+        expect(result.entities[0].id).toBe("cristiano_ronaldo")
+        expect(result.entities[1].id).toBe("al_nassr")
+
+        // Check relations
+        expect(result.relations.length).toBe(1)
+        expect(result.relations[0].subjectId).toBe("cristiano_ronaldo")
+
+        // Check claims were created
+        expect(result.claimCount).toBe(1)
+        expect(result.articleId).toBe("article-001")
+        expect(result.hasClaims).toBe(true)
+
+        // Check metrics
+        expect(result.metrics.entityCount).toBe(2)
+        expect(result.metrics.relationCount).toBe(1)
+      }).pipe(
+        Effect.provide(OntologyAgent.Default),
+        Effect.provide(TestLayer)
+      )
+    )
+
+    it.effect("creates claims with custom confidence", () =>
+      Effect.gen(function*() {
+        const agent = yield* OntologyAgent
+
+        const result = yield* agent.extractWithClaims(
+          "Cristiano Ronaldo plays for Al-Nassr.",
+          {
+            articleId: "article-002",
+            defaultConfidence: 0.95
+          }
+        )
+
+        expect(result.claimCount).toBe(1)
+        expect(result.articleId).toBe("article-002")
+      }).pipe(
+        Effect.provide(OntologyAgent.Default),
+        Effect.provide(TestLayer)
+      )
+    )
+
+    it.effect("returns empty claims for empty extraction", () => {
+      // Create a custom layer with empty extraction
+      const EmptyExtractionWorkflow = Layer.succeed(ExtractionWorkflow, {
+        extract: () =>
+          Effect.succeed(
+            new KnowledgeGraph({
+              entities: [],
+              relations: []
+            })
+          )
+      } as unknown as ExtractionWorkflow)
+
+      const EmptyTestLayer = Layer.mergeAll(
+        EmptyExtractionWorkflow,
+        MockConfigService,
+        MockOntologyService,
+        MockLanguageModel,
+        MockSparqlGenerator,
+        MockReasoner,
+        MockStorageService,
+        MockClaimService,
+        ShaclService.Test(),
+        RdfBuilder.Default
+      ).pipe(
+        Layer.provideMerge(MockConfigService)
+      )
+
+      return Effect.gen(function*() {
+        const agent = yield* OntologyAgent
+
+        const result = yield* agent.extractWithClaims(
+          "Some text with no entities.",
+          { articleId: "article-003" }
+        )
+
+        expect(result.isEmpty).toBe(true)
+        expect(result.claimCount).toBe(0)
+        expect(result.hasClaims).toBe(false)
+      }).pipe(
+        Effect.provide(OntologyAgent.Default),
+        Effect.provide(EmptyTestLayer)
+      )
+    })
   })
 
   describe("explainViolations", () => {
