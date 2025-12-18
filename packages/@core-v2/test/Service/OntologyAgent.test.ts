@@ -26,6 +26,7 @@ import { OntologyService } from "../../src/Service/Ontology.js"
 import { ConfigService } from "../../src/Service/Config.js"
 import { Reasoner, ReasoningResult } from "../../src/Service/Reasoner.js"
 import { SparqlGenerator } from "../../src/Service/SparqlGenerator.js"
+import { StorageService } from "../../src/Service/Storage.js"
 
 describe("OntologyAgent Domain Models", () => {
   describe("OntologyAgentConfig", () => {
@@ -339,6 +340,42 @@ describe("OntologyAgent Service", () => {
     getRules: () => []
   } as unknown as Reasoner)
 
+  // Mock StorageService that returns a simple ontology
+  const mockOntologyTurtle = `
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix schema: <http://schema.org/> .
+
+schema:Person a owl:Class ;
+  rdfs:label "Person" ;
+  rdfs:comment "A human being" .
+
+schema:Organization a owl:Class ;
+  rdfs:label "Organization" ;
+  rdfs:comment "An organization" .
+
+schema:name a owl:DatatypeProperty ;
+  rdfs:label "name" ;
+  rdfs:domain schema:Person ;
+  rdfs:range rdfs:Literal .
+`
+
+  const MockStorageService = Layer.succeed(StorageService, {
+    get: (key: string) => {
+      // Return the mock ontology for any path
+      if (key.endsWith(".ttl")) {
+        return Effect.succeed(Option.some(mockOntologyTurtle))
+      }
+      return Effect.succeed(Option.none())
+    },
+    getUint8Array: () => Effect.succeed(Option.none()),
+    set: () => Effect.succeed(undefined),
+    delete: () => Effect.succeed(undefined),
+    list: () => Effect.succeed([]),
+    exists: (key: string) => Effect.succeed(key.endsWith(".ttl"))
+  } as unknown as StorageService)
+
   // Combined test layer
   const TestLayer = Layer.mergeAll(
     MockExtractionWorkflow,
@@ -347,6 +384,7 @@ describe("OntologyAgent Service", () => {
     MockLanguageModel,
     MockSparqlGenerator,
     MockReasoner,
+    MockStorageService,
     ShaclService.Test(),
     RdfBuilder.Default
   ).pipe(

@@ -355,8 +355,15 @@ export const makeExtractionActivity = (input: typeof ExtractionActivityInput.Typ
 
             if (embeddingsJson) {
               const embeddings = yield* Schema.decode(OntologyEmbeddingsJson)(embeddingsJson).pipe(
-                Effect.mapError(() => null),
-                Effect.catchAll(() => Effect.succeed(null as OntologyEmbeddings | null))
+                Effect.catchAll((error) =>
+                  Effect.gen(function*() {
+                    yield* Effect.logWarning("Failed to decode embeddings JSON, falling back to on-the-fly", {
+                      documentId: input.documentId,
+                      error: String(error)
+                    })
+                    return null as OntologyEmbeddings | null
+                  })
+                )
               )
 
               if (embeddings) {
@@ -565,10 +572,12 @@ export const makeResolutionActivity = (input: typeof ResolutionActivityInput.Typ
           const store = yield* rdf.parseTurtle(turtle)
           return yield* storeToKnowledgeGraph(store)
         }).pipe(
-          Effect.catchAll((err) => {
-            Effect.logWarning("Failed to parse document graph, skipping", { error: String(err) })
-            return Effect.succeed(new KnowledgeGraph({ entities: [], relations: [] }))
-          })
+          Effect.catchAll((err) =>
+            Effect.gen(function*() {
+              yield* Effect.logWarning("Failed to parse document graph, skipping", { error: String(err) })
+              return new KnowledgeGraph({ entities: [], relations: [] })
+            })
+          )
         ), { concurrency: 5 })
 
       // Count total entities and relations before resolution
@@ -847,7 +856,17 @@ export const makeIngestionActivity = (input: typeof IngestionActivityInput.Type)
       )
 
       const stats = yield* parseTurtleStats(validatedGraph).pipe(
-        Effect.catchAll(() => Effect.succeed({ entityCount: 0, tripleCount: 0 }))
+        Effect.catchAll((error) =>
+          Effect.gen(function*() {
+            yield* Effect.logError("Ingestion: Failed to parse validated graph for stats", {
+              activity: "ingestion",
+              batchId: input.batchId,
+              error: String(error)
+            })
+            // Return zeros but the error is logged - consider making this fail
+            return { entityCount: 0, tripleCount: 0 }
+          })
+        )
       )
 
       const canonicalPath = PathLayout.batch.canonical(input.batchId)
@@ -1558,7 +1577,16 @@ export const makePreprocessingActivity = (input: typeof PreprocessingActivityInp
             const sourcePath = stripGsPrefix(doc.sourceUri)
             const content = yield* storage.get(sourcePath).pipe(
               Effect.map((opt) => Option.getOrElse(opt, () => "")),
-              Effect.catchAll(() => Effect.succeed(""))
+              Effect.catchAll((error) =>
+                Effect.gen(function*() {
+                  yield* Effect.logWarning("Failed to load document for preview", {
+                    documentId: doc.documentId,
+                    sourcePath,
+                    error: String(error)
+                  })
+                  return ""
+                })
+              )
             )
             return {
               index,

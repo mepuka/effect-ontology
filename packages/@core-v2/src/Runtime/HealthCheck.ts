@@ -7,8 +7,9 @@
  * @module Runtime/HealthCheck
  */
 
-import { Effect } from "effect"
+import { Effect, Duration, Redacted } from "effect"
 import { ConfigService } from "../Service/Config.js"
+import { StorageService } from "../Service/Storage.js"
 
 /**
  * Health check result
@@ -31,6 +32,7 @@ export class HealthCheckService extends Effect.Service<HealthCheckService>()(
   {
     effect: Effect.gen(function*() {
       const config = yield* ConfigService
+      const storage = yield* StorageService
 
       return {
         /**
@@ -83,18 +85,57 @@ export class HealthCheckService extends Effect.Service<HealthCheckService>()(
             const checks: Record<string, "ok" | "error"> = {}
             let overallStatus: "ok" | "degraded" | "error" = "ok"
 
-            // Config check
+            // 1. Config check - LLM provider configured
             checks.config = config.llm.provider ? "ok" : "error"
 
-            // Ontology config check
+            // 2. Ontology config check - path configured
             checks.ontologyConfig = config.ontology.path ? "ok" : "error"
 
-            // Would add: LLM connectivity check, ontology file check, etc.
+            // 3. Ontology file exists and readable via StorageService
+            if (config.ontology.path) {
+              const ontologyResult = yield* storage.get(config.ontology.path).pipe(
+                Effect.timeout(Duration.seconds(5)),
+                Effect.map((opt) => opt._tag === "Some" ? "ok" as const : "error" as const),
+                Effect.catchAll((error) =>
+                  Effect.logWarning("Ontology file health check failed", {
+                    path: config.ontology.path,
+                    error: String(error)
+                  }).pipe(Effect.as("error" as const))
+                )
+              )
+              checks.ontologyFile = ontologyResult
+            } else {
+              checks.ontologyFile = "error"
+            }
 
-            if (Object.values(checks).every((c) => c === "ok")) {
+            // 4. LLM API key present check (verify apiKey is non-empty)
+            const apiKeyValue = Redacted.value(config.llm.apiKey)
+            checks.llmApiKey = apiKeyValue && apiKeyValue.length > 0 ? "ok" : "error"
+
+            // 5. Storage bucket accessibility (if using GCS)
+            if (config.storage.bucket._tag === "Some" && config.storage.type === "gcs") {
+              // Try to list or access the bucket root to verify connectivity
+              const storageResult = yield* storage.list("").pipe(
+                Effect.timeout(Duration.seconds(5)),
+                Effect.map(() => "ok" as const),
+                Effect.catchAll((error) =>
+                  Effect.logWarning("Storage connectivity check failed", {
+                    bucket: config.storage.bucket,
+                    error: String(error)
+                  }).pipe(Effect.as("error" as const))
+                )
+              )
+              checks.storageConnectivity = storageResult
+            }
+
+            // Determine overall status
+            const errorCount = Object.values(checks).filter((c) => c === "error").length
+            if (errorCount === 0) {
               overallStatus = "ok"
-            } else if (Object.values(checks).some((c) => c === "error")) {
+            } else if (errorCount <= 1) {
               overallStatus = "degraded"
+            } else {
+              overallStatus = "error"
             }
 
             return {

@@ -32,6 +32,7 @@ import { RdfBuilder, type RdfStore } from "./Rdf.js"
 import { type ShaclValidationReport, ShaclService, type ShaclViolation, type ValidationPolicy } from "./Shacl.js"
 import { Reasoner, ReasoningConfig, type ReasoningResult, type ReasoningError, type RuleParseError } from "./Reasoner.js"
 import { SparqlGenerator, type SparqlGenerationError } from "./SparqlGenerator.js"
+import { StorageService } from "./Storage.js"
 
 /**
  * OntologyAgent - Unified interface for ontology-guided operations
@@ -76,6 +77,44 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
     const sparqlGenerator = yield* SparqlGenerator
     const reasoner = yield* Reasoner
     const llm = yield* LanguageModel.LanguageModel
+    const storage = yield* StorageService
+
+    // Cache the parsed ontology RDF store for SHACL shape generation
+    // Uses StorageService for cloud-native loading (GCS/local)
+    const getOntologyStore = yield* Effect.cached(
+      Effect.gen(function*() {
+        const ontologyPath = config.ontology.path
+
+        yield* Effect.logDebug("Loading ontology for SHACL shapes", { ontologyPath })
+
+        // Load from storage (GCS or local filesystem via StorageService)
+        const contentOpt = yield* storage.get(ontologyPath).pipe(
+          Effect.mapError((error) =>
+            new Error(`Failed to load ontology from storage: ${error.message}`)
+          )
+        )
+
+        if (contentOpt._tag === "None") {
+          return yield* Effect.fail(
+            new Error(`Ontology file not found at ${ontologyPath}`)
+          )
+        }
+
+        // Parse Turtle to RDF store
+        const ontologyStore = yield* rdfBuilder.parseTurtle(contentOpt.value).pipe(
+          Effect.mapError((error) =>
+            new Error(`Failed to parse ontology: ${error.message}`)
+          )
+        )
+
+        yield* Effect.logInfo("Ontology store loaded for SHACL shapes", {
+          ontologyPath,
+          tripleCount: ontologyStore._store.size
+        })
+
+        return ontologyStore
+      })
+    )
 
     return {
       /**
@@ -190,9 +229,8 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
           // Serialize to Turtle
           const turtle = yield* rdfBuilder.toTurtle(rdfStore)
 
-          // Generate shapes from ontology and validate
-          // TODO: Get actual ontology store instead of empty placeholder
-          const ontologyStore = yield* rdfBuilder.createStore
+          // Load ontology and generate SHACL shapes for validation
+          const ontologyStore = yield* getOntologyStore
           const shapesStore = yield* shaclService.generateShapesFromOntology(ontologyStore._store)
           const report = yield* shaclService.validate(rdfStore._store, shapesStore)
 
@@ -328,13 +366,8 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
             dataTripleCount: dataStore._store.size
           })
 
-          // Load ontology and parse to RDF store for shape generation
-          // TODO: Cache the ontology store to avoid re-parsing
-          const ontologyTurtle = yield* Effect.tryPromise({
-            try: () => import("fs/promises").then((fs) => fs.readFile(config.ontology.path, "utf-8")),
-            catch: (error) => new Error(`Failed to load ontology: ${error}`)
-          })
-          const ontologyStore = yield* rdfBuilder.parseTurtle(ontologyTurtle)
+          // Load ontology from cached store (uses StorageService - GCS/local)
+          const ontologyStore = yield* getOntologyStore
 
           // Generate SHACL shapes from ontology
           const shapesStore = yield* shaclService.generateShapesFromOntology(ontologyStore._store)

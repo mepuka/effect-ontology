@@ -38,7 +38,11 @@ export { type SimilarityResult, SimilarityScorer } from "./Service/SimilaritySco
 
 // Workflows (composable business logic)
 export { ExtractionWorkflow } from "./Service/ExtractionWorkflow.js"
-export { ExtractionWorkflowLive, makeExtractionWorkflow } from "./Workflow/StreamingExtraction.js"
+export {
+  ExtractionWorkflowDefault,
+  ExtractionWorkflowLive,
+  makeExtractionWorkflow
+} from "./Workflow/StreamingExtraction.js"
 
 // Entity Resolution Workflow
 export { buildEntityResolutionGraph, clusterEntities } from "./Workflow/EntityResolutionGraph.js"

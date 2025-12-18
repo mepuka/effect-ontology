@@ -576,3 +576,13 @@ export const ExtractionWorkflowLive = Layer.effect(
   Layer.provideMerge(Grounder.Default),
   Layer.provideMerge(ExtractionRunServiceDefault)
 )
+
+/**
+ * ExtractionWorkflow Default layer
+ *
+ * Alias for ExtractionWorkflowLive, following the Effect.Service convention.
+ *
+ * @since 2.0.0
+ * @category Layers
+ */
+export const ExtractionWorkflowDefault = ExtractionWorkflowLive

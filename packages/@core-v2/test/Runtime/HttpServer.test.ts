@@ -5,10 +5,30 @@
  */
 
 import { describe, expect, it } from "@effect/vitest"
-import { ConfigProvider, Effect, Layer } from "effect"
+import { ConfigProvider, Effect, Layer, Option } from "effect"
 import { ExtractionRouter } from "../../src/Runtime/HttpServer.js"
 import { HealthCheckService } from "../../src/Runtime/HealthCheck.js"
 import { ConfigServiceDefault } from "../../src/Service/Config.js"
+import { StorageService } from "../../src/Service/Storage.js"
+
+// Mock StorageService that returns test data for ontology file
+const MockStorageService = Layer.succeed(StorageService, {
+  get: (key: string) => {
+    if (key.endsWith(".ttl") || key === "/tmp/test.ttl") {
+      return Effect.succeed(Option.some("# Test ontology content"))
+    }
+    return Effect.succeed(Option.none())
+  },
+  put: () => Effect.succeed(undefined),
+  delete: () => Effect.succeed(undefined),
+  list: () => Effect.succeed([]),
+  exists: (key: string) => {
+    if (key.endsWith(".ttl") || key === "/tmp/test.ttl") {
+      return Effect.succeed(true)
+    }
+    return Effect.succeed(false)
+  }
+} as unknown as StorageService)
 
 describe("ExtractionRouter", () => {
   it("exports router with health routes", () => {
@@ -27,6 +47,7 @@ describe("Health Routes Integration", () => {
   )
 
   const TestLayers = HealthCheckService.Default.pipe(
+    Layer.provideMerge(MockStorageService),
     Layer.provideMerge(ConfigServiceDefault),
     Layer.provideMerge(Layer.setConfigProvider(TestConfigProvider))
   )
