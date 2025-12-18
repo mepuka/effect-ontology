@@ -33,7 +33,9 @@ export const ExtractionActivityInput = Schema.Struct({
   batchId: BatchId,
   documentId: DocumentId,
   sourceUri: GcsUri,
-  ontologyUri: GcsUri
+  ontologyUri: GcsUri,
+  /** Pre-computed ontology embeddings URI (optional, speeds up semantic search) */
+  ontologyEmbeddingsUri: Schema.optional(GcsUri)
 })
 
 export const ResolutionActivityInput = Schema.Struct({
@@ -89,6 +91,16 @@ export const BatchWorkflowPayload = Schema.Struct({
   targetNamespace: Namespace,
   shaclUri: Schema.optional(GcsUri),
   documentIds: Schema.Array(DocumentId),
+  /**
+   * Pre-computed ontology embeddings URI (optional)
+   *
+   * When provided, the workflow uses pre-computed embeddings for semantic search
+   * instead of computing embeddings on-the-fly. Significantly speeds up startup
+   * for workflows processing many documents against the same ontology.
+   *
+   * Generate with `makeComputeEmbeddingsActivity()`.
+   */
+  ontologyEmbeddingsUri: Schema.optional(GcsUri),
   /**
    * Preprocessing configuration (optional)
    *

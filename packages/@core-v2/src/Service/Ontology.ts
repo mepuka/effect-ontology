@@ -14,6 +14,7 @@ import { Chunk, Duration, Effect, Schema } from "effect"
 import { OntologyFileNotFound, OntologyParsingFailed } from "../Domain/Error/Ontology.js"
 import type { RdfError } from "../Domain/Error/Rdf.js"
 import { ClassDefinition, OntologyContext, PropertyDefinition } from "../Domain/Model/Ontology.js"
+import type { OntologyEmbeddings } from "../Domain/Model/OntologyEmbeddings.js"
 import {
   OWL_CLASS,
   OWL_DATATYPE_PROPERTY,
@@ -715,6 +716,142 @@ export class OntologyService extends Effect.Service<OntologyService>()(
             }
 
             yield* Effect.logDebug("Hybrid search complete", {
+              query,
+              semanticCount: semanticArray.length,
+              bm25Count: bm25Array.length,
+              fusedCount: fused.length,
+              ontologySize: ontology.classes.length,
+              limit
+            })
+
+            // Return fused results + remaining classes up to limit
+            const results = [...fused.map((r) => {
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+              const { rrfScore: _, ...cls } = r
+              return cls as ClassDefinition
+            }), ...remaining]
+            return Chunk.fromIterable(results.slice(0, limit))
+          }),
+
+        /**
+         * Search for classes using hybrid approach with pre-computed embeddings
+         *
+         * Uses pre-loaded ontology embeddings instead of computing them on-the-fly.
+         * Significantly faster for repeated workflows against the same ontology.
+         *
+         * @param query - Search query string
+         * @param embeddings - Pre-computed ontology embeddings
+         * @param limit - Maximum number of results (default: 100)
+         * @returns Chunk of ClassDefinition objects matching the query
+         *
+         * @example
+         * ```typescript
+         * const embeddings = yield* loadOntologyEmbeddings(embeddingsUri)
+         * const classes = yield* OntologyService.searchClassesHybridWithEmbeddings(
+         *   "player scored goal",
+         *   embeddings,
+         *   100
+         * )
+         * ```
+         */
+        searchClassesHybridWithEmbeddings: (
+          query: string,
+          embeddings: OntologyEmbeddings,
+          limit: number = 100
+        ) =>
+          Effect.gen(function*() {
+            const { classes, hierarchy, properties, propertyHierarchy } = yield* getOntology
+            const ontology = new OntologyContext({
+              classes: Chunk.toReadonlyArray(classes),
+              hierarchy,
+              propertyHierarchy,
+              properties: Chunk.toReadonlyArray(properties)
+            })
+
+            const searchLimit = Math.ceil(limit * 0.7)
+
+            // Create semantic index from pre-computed embeddings
+            const semanticIndex = yield* nlp.createOntologySemanticIndexFromPrecomputed(
+              ontology,
+              embeddings
+            )
+
+            // Run semantic and BM25 searches in parallel
+            const [semanticResults, bm25Results] = yield* Effect.all([
+              Effect.gen(function*() {
+                const results = yield* nlp.searchOntologySemanticIndex(
+                  semanticIndex,
+                  query,
+                  searchLimit
+                )
+                // Map to ClassDefinitions
+                const classesMap = new Map<string, ClassDefinition>()
+                for (const result of results) {
+                  if (result.class) {
+                    classesMap.set(result.class.id, result.class)
+                  }
+                  if (result.property) {
+                    for (const domainLocalName of result.property.domain) {
+                      const domainClass = ontology.classes.find(
+                        (c) => extractLocalName(c.id) === domainLocalName
+                      )
+                      if (domainClass) {
+                        classesMap.set(domainClass.id, domainClass)
+                      }
+                    }
+                  }
+                }
+                return Chunk.fromIterable(classesMap.values())
+              }).pipe(
+                Effect.catchAll((error) =>
+                  Effect.gen(function*() {
+                    yield* Effect.logWarning("Semantic search with embeddings failed, using BM25 fallback", {
+                      error: String(error),
+                      query
+                    })
+                    return Chunk.empty<ClassDefinition>()
+                  })
+                )
+              ),
+              // BM25 search - more reliable, uses local index
+              Effect.gen(function*() {
+                const bm25Index = yield* getBm25Index
+                const results = yield* nlp.searchOntologyIndex(bm25Index, query, searchLimit)
+                const classesMap = new Map<string, ClassDefinition>()
+                for (const result of results) {
+                  if (result.class) {
+                    classesMap.set(result.class.id, result.class)
+                  }
+                  if (result.property) {
+                    for (const domainLocalName of result.property.domain) {
+                      const domainClass = ontology.classes.find(
+                        (c) => extractLocalName(c.id) === domainLocalName
+                      )
+                      if (domainClass) {
+                        classesMap.set(domainClass.id, domainClass)
+                      }
+                    }
+                  }
+                }
+                return Chunk.fromIterable(classesMap.values())
+              })
+            ], { concurrency: 2 })
+
+            // Fuse results using Reciprocal Rank Fusion (RRF)
+            const semanticArray = Chunk.toReadonlyArray(semanticResults)
+            const bm25Array = Chunk.toReadonlyArray(bm25Results)
+            const fused = rrfFusion([semanticArray, bm25Array])
+
+            // If results are sparse, include remaining classes
+            const fusedIds = new Set(fused.map((r) => r.id))
+            const remaining: Array<ClassDefinition> = []
+            if (fused.length < limit && ontology.classes.length <= limit) {
+              for (const cls of ontology.classes) {
+                if (!fusedIds.has(cls.id)) remaining.push(cls)
+              }
+            }
+
+            yield* Effect.logDebug("Hybrid search with pre-computed embeddings complete", {
               query,
               semanticCount: semanticArray.length,
               bm25Count: bm25Array.length,

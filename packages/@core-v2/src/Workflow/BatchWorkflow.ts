@@ -66,7 +66,7 @@ export const BatchWorkflow = Workflow.make({
   )
 })
 
-export const BatchWorkflowLayer = BatchWorkflow.toLayer(({ batchId, manifestUri, ontologyVersion }) =>
+export const BatchWorkflowLayer = BatchWorkflow.toLayer(({ batchId, manifestUri, ontologyVersion, ontologyEmbeddingsUri }) =>
   Effect.gen(function*() {
     const storage = yield* StorageService
     const workflowStart = yield* DateTime.now
@@ -84,7 +84,8 @@ export const BatchWorkflowLayer = BatchWorkflow.toLayer(({ batchId, manifestUri,
           batchId,
           documentId: doc.documentId,
           sourceUri: doc.sourceUri,
-          ontologyUri: manifest.ontologyUri
+          ontologyUri: manifest.ontologyUri,
+          ontologyEmbeddingsUri
         }).execute,
       { concurrency: 5 }
     )

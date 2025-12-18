@@ -341,28 +341,87 @@ export const makeExtractionActivity = (input: typeof ExtractionActivityInput.Typ
         contentLength: sourceContent.length
       })
 
-      // 2. Load ontology candidate classes via hybrid search
-      const candidateClasses = yield* ontologyService.searchClassesHybrid(
-        sourceContent.slice(0, 2000),
-        100
-      ).pipe(
-        Effect.tap((classes) =>
-          Effect.logInfo("Candidate classes loaded", {
-            documentId: input.documentId,
-            candidateCount: Chunk.size(classes)
+      // 2. Load pre-computed embeddings if available
+      const precomputedEmbeddings = yield* (
+        input.ontologyEmbeddingsUri
+          ? Effect.gen(function*() {
+            const embeddingsKey = stripGsPrefix(input.ontologyEmbeddingsUri!)
+            const embeddingsJson = yield* storage.get(embeddingsKey).pipe(
+              Effect.flatMap((opt) =>
+                Option.isSome(opt)
+                  ? Effect.succeed(opt.value)
+                  : Effect.succeed(null as string | null)
+              )
+            )
+
+            if (embeddingsJson) {
+              const embeddings = yield* Schema.decode(OntologyEmbeddingsJson)(embeddingsJson).pipe(
+                Effect.mapError(() => null),
+                Effect.catchAll(() => Effect.succeed(null as OntologyEmbeddings | null))
+              )
+
+              if (embeddings) {
+                yield* Effect.logInfo("Pre-computed embeddings loaded", {
+                  documentId: input.documentId,
+                  classCount: embeddings.classes.length,
+                  propertyCount: embeddings.properties.length
+                })
+                return embeddings
+              }
+            }
+
+            yield* Effect.logWarning("Pre-computed embeddings not found, falling back to on-the-fly computation", {
+              documentId: input.documentId,
+              embeddingsUri: input.ontologyEmbeddingsUri
+            })
+            return null
           })
-        ),
-        Effect.tapErrorCause((cause) =>
-          Effect.logError("Extraction: Failed to search candidate classes", {
-            activity: "extraction",
-            batchId: input.batchId,
-            documentId: input.documentId,
-            cause: String(cause)
-          })
-        )
+          : Effect.succeed(null as OntologyEmbeddings | null)
       )
 
-      // 3. Extract entities from LLM
+      // 3. Load ontology candidate classes via hybrid search
+      const candidateClasses = precomputedEmbeddings
+        ? yield* ontologyService.searchClassesHybridWithEmbeddings(
+          sourceContent.slice(0, 2000),
+          precomputedEmbeddings,
+          100
+        ).pipe(
+          Effect.tap((classes) =>
+            Effect.logInfo("Candidate classes loaded (with pre-computed embeddings)", {
+              documentId: input.documentId,
+              candidateCount: Chunk.size(classes)
+            })
+          ),
+          Effect.tapErrorCause((cause) =>
+            Effect.logError("Extraction: Failed to search candidate classes with embeddings", {
+              activity: "extraction",
+              batchId: input.batchId,
+              documentId: input.documentId,
+              cause: String(cause)
+            })
+          )
+        )
+        : yield* ontologyService.searchClassesHybrid(
+          sourceContent.slice(0, 2000),
+          100
+        ).pipe(
+          Effect.tap((classes) =>
+            Effect.logInfo("Candidate classes loaded", {
+              documentId: input.documentId,
+              candidateCount: Chunk.size(classes)
+            })
+          ),
+          Effect.tapErrorCause((cause) =>
+            Effect.logError("Extraction: Failed to search candidate classes", {
+              activity: "extraction",
+              batchId: input.batchId,
+              documentId: input.documentId,
+              cause: String(cause)
+            })
+          )
+        )
+
+      // 4. Extract entities from LLM
       const entities = yield* entityExtractor.extract(
         sourceContent,
         Chunk.toReadonlyArray(candidateClasses)
@@ -375,7 +434,7 @@ export const makeExtractionActivity = (input: typeof ExtractionActivityInput.Typ
         )
       )
 
-      // 4. Get properties for extracted entity types
+      // 5. Get properties for extracted entity types
       const entityTypes = Chunk.toReadonlyArray(entities).flatMap((e) => e.types)
       const uniqueEntityTypes = Array.from(new Set(entityTypes))
       const properties = yield* ontologyService.getPropertiesFor(uniqueEntityTypes).pipe(
@@ -388,7 +447,7 @@ export const makeExtractionActivity = (input: typeof ExtractionActivityInput.Typ
         )
       )
 
-      // 5. Extract relations from LLM (only if we have 2+ entities and properties)
+      // 6. Extract relations from LLM (only if we have 2+ entities and properties)
       const relations = Chunk.size(entities) >= 2 && Chunk.size(properties) > 0
         ? yield* relationExtractor.extract(
           sourceContent,
@@ -404,7 +463,7 @@ export const makeExtractionActivity = (input: typeof ExtractionActivityInput.Typ
         )
         : Chunk.empty()
 
-      // 6. Create KnowledgeGraph and serialize to Turtle with provenance
+      // 7. Create KnowledgeGraph and serialize to Turtle with provenance
       const graph = new KnowledgeGraph({
         entities: Chunk.toReadonlyArray(entities),
         relations: Chunk.toReadonlyArray(relations),
@@ -430,7 +489,7 @@ export const makeExtractionActivity = (input: typeof ExtractionActivityInput.Typ
         turtleLength: turtleContent.length
       })
 
-      // 7. Save Turtle graph to storage
+      // 8. Save Turtle graph to storage
       const graphPath = PathLayout.document.graph(input.documentId)
       yield* storage.set(graphPath, turtleContent)
 

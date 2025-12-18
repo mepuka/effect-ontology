@@ -15,6 +15,7 @@ import winkNLP from "wink-nlp"
 // @ts-expect-error - wink-bm25-text-search has no type definitions
 import winkBM25 from "wink-bm25-text-search"
 import type { ClassDefinition, OntologyContext, PropertyDefinition } from "../Domain/Model/Ontology.js"
+import type { OntologyEmbeddings } from "../Domain/Model/OntologyEmbeddings.js"
 import { type ChunkingStrategy, defaultChunkingParams } from "../Domain/Schema/DocumentMetadata.js"
 import { enhanceTextForSearch, generateNGrams } from "../Utils/Text.js"
 import { NomicNlpService, NomicNlpServiceDefault } from "./NomicNlp.js"
@@ -1013,6 +1014,66 @@ export class NlpService extends Effect.Service<NlpService>()(
             }
 
             // Create opaque index reference
+            const index: OntologySemanticIndex = {
+              _tag: "OntologySemanticIndex",
+              documentCount: embeddingMap.size,
+              _embeddingMap: embeddingMap,
+              _domainModelMap: domainModelMap,
+              _ontology: ontology
+            }
+
+            return index
+          }),
+
+        /**
+         * Create semantic search index from pre-computed embeddings
+         *
+         * Uses pre-computed embeddings (from OntologyEmbeddings blob) instead of
+         * computing embeddings on-the-fly. Significantly faster for repeated workflows
+         * against the same ontology.
+         *
+         * @param ontology - Ontology context to index
+         * @param embeddings - Pre-computed embeddings blob
+         * @returns Effect yielding opaque OntologySemanticIndex
+         *
+         * @example
+         * ```typescript
+         * const embeddings = yield* loadOntologyEmbeddings(embeddingsUri)
+         * const index = yield* nlp.createOntologySemanticIndexFromPrecomputed(ontology, embeddings)
+         * ```
+         */
+        createOntologySemanticIndexFromPrecomputed: (
+          ontology: OntologyContext,
+          embeddings: OntologyEmbeddings
+        ): Effect.Effect<OntologySemanticIndex, Error> =>
+          Effect.gen(function*() {
+            const embeddingMap = new Map<string, ReadonlyArray<number>>()
+            const domainModelMap = new Map<string, ClassDefinition | PropertyDefinition>()
+
+            // Load class embeddings
+            for (const classEmb of embeddings.classes) {
+              embeddingMap.set(classEmb.iri, classEmb.embedding)
+              const classDef = ontology.getClass(classEmb.iri)
+              if (classDef) {
+                domainModelMap.set(classEmb.iri, classDef)
+              }
+            }
+
+            // Load property embeddings
+            for (const propEmb of embeddings.properties) {
+              embeddingMap.set(propEmb.iri, propEmb.embedding)
+              const propDef = ontology.getProperty(propEmb.iri)
+              if (propDef) {
+                domainModelMap.set(propEmb.iri, propDef)
+              }
+            }
+
+            yield* Effect.logInfo("Created semantic index from pre-computed embeddings", {
+              classCount: embeddings.classes.length,
+              propertyCount: embeddings.properties.length,
+              indexedCount: embeddingMap.size
+            })
+
             const index: OntologySemanticIndex = {
               _tag: "OntologySemanticIndex",
               documentCount: embeddingMap.size,
