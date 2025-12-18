@@ -2,6 +2,7 @@
 
 > **Last Updated**: December 2024
 > **Status**: Living documentation aligned with codebase
+> **See Also**: [`docs/CORE_V2_NEXT_STEPS.md`](../../../docs/CORE_V2_NEXT_STEPS.md) for strategic implementation guide
 
 ## Quick Navigation
 
@@ -13,6 +14,8 @@
 | Implementation roadmap | [ontology_research/synthesis_and_implementation_roadmap.md](./ontology_research/synthesis_and_implementation_roadmap.md) |
 | Debugging extraction runs | [DEBUGGING_GUIDE.md](./DEBUGGING_GUIDE.md) |
 | LLM control reference | [LLM_CONTROL_QUICK_REFERENCE.md](./LLM_CONTROL_QUICK_REFERENCE.md) |
+| Term definitions | [GLOSSARY.md](./GLOSSARY.md) |
+| Doc/research procedures | [.claude/DOC_PROCEDURE.md](../../../.claude/DOC_PROCEDURE.md) |
 
 ---
 

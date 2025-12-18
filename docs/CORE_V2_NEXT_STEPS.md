@@ -1,6 +1,9 @@
 # Core v2 Implementation Guide & Next Steps
 
-Strategic, implementation-focused guide for bringing `packages/@core-v2` to production using Effect patterns. Incorporates: current stubs review, Effect module style (see `docs/EFFECT_MODULE_STYLE_GUIDE.md`), application patterns (see `docs/EFFECT_APPLICATION_PATTERNS.md`), and the N3 wrapping guidance provided.
+> **Role**: Strategic implementation guide for @core-v2 development.
+> **See Also**: [`packages/@core-v2/docs/INDEX.md`](../packages/@core-v2/docs/INDEX.md) for navigation to all technical documentation.
+
+Strategic, implementation-focused guide for bringing `packages/@core-v2` to production using Effect patterns. Incorporates: current stubs review, Effect module style (see `docs/EFFECT_MODULE_STYLE_GUIDE.md`), and the N3 wrapping guidance provided.
 
 ## Scope & Goals
 - Deliver runnable, typed services and workflows (Two-Stage + Streaming extraction) with proper dependency wiring.

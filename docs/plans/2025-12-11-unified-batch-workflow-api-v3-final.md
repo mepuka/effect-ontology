@@ -2,7 +2,7 @@
 
 **Date:** 2025-12-11
 **Status:** Final - Ready for implementation
-**Supersedes:** v1 and v2 plans
+**Supersedes:** v1 and v2 plans (archived at `docs/archive/plans-2025-12/`)
 
 ## Executive Summary
 

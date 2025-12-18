@@ -1,5 +1,7 @@
 # Effect Distributed Architecture for @core-v2
 
+> **⚠️ SUPERSEDED**: This document has been superseded by [effect-distributed-architecture-v2.md](./effect-distributed-architecture-v2.md) which provides an MVP-focused revision with simplified orchestration primitives.
+
 ## Executive Summary
 
 This document synthesizes research from four Effect ecosystem areas to design an idiomatic distributed knowledge extraction architecture:

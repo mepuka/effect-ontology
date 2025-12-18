@@ -1,5 +1,7 @@
 # Implementation Plan: Distributed Extraction Architecture
 
+> **⚠️ SUPERSEDED**: This document has been superseded by [implementation-plan-v2.md](./implementation-plan-v2.md) which provides refined phases with completed items marked.
+
 ## Overview
 
 This plan outlines the phased implementation of distributed knowledge extraction using Effect Cluster, Workflow, RPC, and Persistence patterns. Each phase builds on the previous, allowing incremental validation.

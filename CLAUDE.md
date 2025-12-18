@@ -248,8 +248,33 @@ export const TestConfigProvider = ConfigProvider.fromMap(new Map([
 - **SHACL/RDF Research**: `packages/@core-v2/docs/ontology_research/rdf_shacl_reasoning_research.md`
 
 ### Style & Patterns
-- **Effect Module Style Guide**: `docs/EFFECT_MODULE_STYLE_GUIDE.md` - Module anatomy, documentation, naming
-- **Effect Application Patterns**: `docs/EFFECT_APPLICATION_PATTERNS.md` - Data flow, service composition
+- **Effect Module Style Guide**: `docs/EFFECT_MODULE_STYLE_GUIDE.md` - Module anatomy, documentation, naming, application patterns
+- **Glossary**: `packages/@core-v2/docs/GLOSSARY.md` - Domain terminology quick reference
+
+## Documentation & Research Procedures
+
+Follow `.claude/DOC_PROCEDURE.md` and `.claude/RESEARCH_PROCEDURE.md` for repo organization.
+
+### Quick Reference
+
+**Documentation naming:**
+- Reference docs: `TOPIC_QUALIFIER.md` (uppercase)
+- Doc families: `{TOPIC}_INDEX.md`, `{TOPIC}_QUICKREF.md`, `{TOPIC}_SUMMARY.md`
+- Dated plans: `YYYY-MM-DD-topic-slug.md`
+- Research: `topic_area_research.md` (lowercase)
+
+**When to archive:** Superseded docs, completed plans, delivery snapshots.
+**Archive location:** `docs/archive/{category}-{YYYY-MM}/` with README.md
+
+**Research workflow:** `CONDUCT → DOCUMENT → SYNTHESIZE → PLAN → TRACK → IMPLEMENT → UPDATE`
+
+**Transition research to action when:**
+- Gap is P0 (critical)
+- Effort bounded (< 2 weeks)
+- Dependencies met
+- Evidence strong (multiple sources)
+
+**Always update:** `packages/@core-v2/docs/INDEX.md` when adding/archiving docs.
 
 ## Style Guidelines
 

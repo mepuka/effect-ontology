@@ -2,6 +2,7 @@
 
 **Date**: December 11, 2025
 **Purpose**: Consolidate research findings into actionable implementation priorities for the Effect-TS ontology extraction pipeline.
+**See Also**: [`sota_review.md`](./sota_review.md) for detailed analysis and gap assessment
 
 ---
 

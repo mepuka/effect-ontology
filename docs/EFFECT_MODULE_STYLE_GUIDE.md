@@ -108,3 +108,26 @@ Codifies how we write Effect-style modules in this repo, mirroring upstream `eff
 - [ ] `Default`/`DefaultWithoutDependencies` exported; layering samples added.
 - [ ] `Inspectable`/`toJSON` provided for inspectable types/errors.
 - [ ] Tests cover accessors, layer build, and key behaviors.
+
+---
+
+## Application Patterns
+
+Practical patterns for applying Effect primitives to our application logic.
+
+### Data flow patterns
+- **Parallel + bounded concurrency**: `Effect.all`/`Effect.forEach` with `{ concurrency, batching }`. Use for parallel LLM/embedding calls; set `batching: "inherit"` when nesting.
+- **Batching/deduping requests**: Model external calls as `Request` classes and resolve with `RequestResolver.makeBatched`/`makeWithEntry`. Combine with `Cache.make` to memoize prompt/schema + input.
+- **Streaming**: Use `Stream`/`Channel` for incremental workloads (document chunking, streaming extraction). Compose with `mapEffect`, `tap`, `grouped`, `debounce`, `takeWhile` to control flow and backpressure.
+- **Coordination**: Use `Deferred` for rendezvous and `Queue` for producer/consumer pipelines; `Ref`/`Ref.Synchronized` for shared mutable state; `FiberRef` for contextual defaults.
+- **Retry/timeout policies**: Apply `Effect.timeout`, `Effect.retry` with `Schedule` (exponential/backoff/jitter) for flaky I/O; avoid manual loops.
+- **Tracing/logging**: Attach spans and log annotations via `Effect.withSpan`, `Layer.annotateLogs/annotateSpans`, and `Tracer` so services emit structured telemetry.
+
+### Workflow composition examples
+- **Two-stage extraction**: Use `Effect.gen` + service accessors; guard early exits with `Option`/length checks; wrap RDF building in `Effect.scoped` so stores close.
+- **Streaming extraction**: Build as `Stream` pipeline (chunk text → mapEffect to extraction → tap for metrics → takeWhile on budget).
+- **Batch jobs**: Use `Effect.forEach` with concurrency limits; include `Schedule` retries around external calls; log spans per batch.
+
+### Extended testing expectations
+- Property/fixture tests on pure domain modules; golden tests on workflow outputs.
+- Resolver tests for `RequestResolver` batching/deduping paths with small fixtures.
