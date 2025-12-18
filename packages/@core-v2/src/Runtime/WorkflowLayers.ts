@@ -21,6 +21,7 @@ import { EmbeddingService, EmbeddingServiceDefault } from "../Service/Embedding.
 import { EntityResolutionService } from "../Service/EntityResolution.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { StageTimeoutServiceLive } from "../Service/LlmControl/StageTimeout.js"
+import { TokenBudgetServiceLive } from "../Service/LlmControl/TokenBudget.js"
 import { NlpService } from "../Service/Nlp.js"
 import { OntologyService } from "../Service/Ontology.js"
 import { RdfBuilder } from "../Service/Rdf.js"
@@ -44,11 +45,24 @@ const CoreDependenciesLayer = ConfigServiceDefault
 // =============================================================================
 
 /**
+ * LLM Control services bundle
+ *
+ * Provides fine-grained control over LLM API usage:
+ * - TokenBudgetService: Per-stage token budgets
+ * - StageTimeoutService: Soft/hard timeouts per stage
+ */
+const LlmControlBundle = Layer.mergeAll(
+  TokenBudgetServiceLive,
+  StageTimeoutServiceLive
+)
+
+/**
  * LLM Extraction services: EntityExtractor + RelationExtractor
  *
  * Dependencies:
  * - LanguageModel (provider-specific, selected by ConfigService)
  * - StageTimeoutService (for per-stage timeout enforcement)
+ * - TokenBudgetService (for per-stage token budget tracking)
  * - ConfigService (for LLM settings)
  *
  * Uses Layer.provideMerge for order-independent composition.
@@ -57,7 +71,7 @@ const LlmExtractionBundle = Layer.mergeAll(
   EntityExtractor.Default,
   RelationExtractor.Default
 ).pipe(
-  Layer.provideMerge(StageTimeoutServiceLive),
+  Layer.provideMerge(LlmControlBundle),
   Layer.provideMerge(makeLanguageModelLayer),
   Layer.provideMerge(CoreDependenciesLayer)
 )
