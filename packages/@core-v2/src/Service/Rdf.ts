@@ -131,6 +131,17 @@ const domainTermToN3Term = (term: IRI | BlankNodeType | RdfTerm | null | undefin
 export interface AddTriplesOptions {
   /** Optional named graph URI - triples go to default graph if not specified */
   readonly graphUri?: string
+  /**
+   * Target namespace for entity/relation IRIs
+   *
+   * When provided, overrides config.rdf.baseNamespace for IRI minting.
+   * Use this to ensure extracted entities land in the batch's target namespace
+   * rather than the deployment's default namespace.
+   *
+   * Example: "http://sports.org/football/" will produce IRIs like
+   * "http://sports.org/football/entity123" instead of config default.
+   */
+  readonly targetNamespace?: string
 }
 
 /**
@@ -375,10 +386,12 @@ export class RdfBuilder extends Effect.Service<RdfBuilder>()(
               const graphNode = options?.graphUri
                 ? N3.DataFactory.namedNode(options.graphUri)
                 : undefined
+              // Use targetNamespace from options if provided, otherwise fall back to config
+              const namespace = options?.targetNamespace ?? baseNs
 
               for (const entity of entities) {
                 // Use pure util function for transformation
-                const quads = entityToQuads(entity, baseNs, prefixes, builders)
+                const quads = entityToQuads(entity, namespace, prefixes, builders)
                 for (const quad of quads) {
                   // Add to named graph if specified, otherwise default graph
                   if (graphNode) {
@@ -419,10 +432,12 @@ export class RdfBuilder extends Effect.Service<RdfBuilder>()(
               const graphNode = options?.graphUri
                 ? N3.DataFactory.namedNode(options.graphUri)
                 : undefined
+              // Use targetNamespace from options if provided, otherwise fall back to config
+              const namespace = options?.targetNamespace ?? baseNs
 
               for (const rel of relations) {
                 // Use pure util function for transformation
-                const quad = relationToQuad(rel, baseNs, prefixes, builders)
+                const quad = relationToQuad(rel, namespace, prefixes, builders)
                 // Add to named graph if specified, otherwise default graph
                 if (graphNode) {
                   n3Store.addQuad(N3.DataFactory.quad(

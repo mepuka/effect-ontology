@@ -11,6 +11,7 @@ import { Workflow } from "@effect/workflow"
 import { Context, DateTime, Effect, Hash, Option, Schedule, Schema } from "effect"
 import { BatchState } from "../Domain/Model/BatchWorkflow.js"
 import { BatchManifest, BatchWorkflowPayload } from "../Domain/Schema/Batch.js"
+import { ConfigService } from "../Service/Config.js"
 import { StorageService } from "../Service/Storage.js"
 import {
   makeExtractionActivity,
@@ -18,6 +19,69 @@ import {
   makeResolutionActivity,
   makeValidationActivity
 } from "./DurableActivities.js"
+
+/**
+ * Extract filename from a path (local or GCS URI)
+ */
+const extractFilename = (path: string): string => {
+  // Handle GCS URIs like gs://bucket/path/file.ttl
+  if (path.startsWith("gs://")) {
+    const parts = path.split("/")
+    return parts[parts.length - 1]
+  }
+  // Handle local paths
+  const parts = path.split("/")
+  return parts[parts.length - 1]
+}
+
+/**
+ * Validate that manifest ontologyUri is consistent with config.
+ * Extraction uses config.ontology.path while validation uses manifest.ontologyUri.
+ * This can cause silent mismatches if they point to different ontologies.
+ */
+const validateOntologyConsistency = (
+  manifestOntologyUri: string,
+  configOntologyPath: string,
+  strictValidation: boolean,
+  batchId: string
+) =>
+  Effect.gen(function*() {
+    const manifestFilename = extractFilename(manifestOntologyUri)
+    const configFilename = extractFilename(configOntologyPath)
+
+    if (manifestFilename !== configFilename) {
+      const message = `Ontology mismatch: manifest uses "${manifestOntologyUri}" but extraction uses "${configOntologyPath}". ` +
+        `Extraction will use the configured ontology, not the manifest ontology. ` +
+        `Set ONTOLOGY_STRICT_VALIDATION=true to fail on mismatch.`
+
+      if (strictValidation) {
+        yield* Effect.logError("Ontology validation failed (strict mode)", {
+          batchId,
+          manifestOntologyUri,
+          configOntologyPath,
+          manifestFilename,
+          configFilename
+        })
+        return yield* Effect.fail(
+          `Ontology mismatch: extraction uses "${configOntologyPath}" but manifest specifies "${manifestOntologyUri}". ` +
+          `Either update the manifest or change ONTOLOGY_PATH config.`
+        )
+      }
+
+      yield* Effect.logWarning(message, {
+        batchId,
+        manifestOntologyUri,
+        configOntologyPath
+      })
+    } else {
+      yield* Effect.logDebug("Ontology consistency validated", {
+        batchId,
+        manifestOntologyUri,
+        configOntologyPath,
+        matchedFilename: manifestFilename
+      })
+    }
+  })
 
 // -----------------------------------------------------------------------------
 // Helpers
@@ -69,6 +133,7 @@ export const BatchWorkflow = Workflow.make({
 export const BatchWorkflowLayer = BatchWorkflow.toLayer(({ batchId, manifestUri, ontologyVersion, ontologyEmbeddingsUri }) =>
   Effect.gen(function*() {
     const storage = yield* StorageService
+    const config = yield* ConfigService
     const workflowStart = yield* DateTime.now
 
     const manifestKey = stripGsPrefix(manifestUri)
@@ -76,6 +141,15 @@ export const BatchWorkflowLayer = BatchWorkflow.toLayer(({ batchId, manifestUri,
       Effect.flatMap((opt) => expectValue(opt, manifestKey))
     )
     const manifest = parseManifest(manifestRaw)
+
+    // Validate ontology consistency between manifest and config
+    // Extraction uses config.ontology.path, validation uses manifest.ontologyUri
+    yield* validateOntologyConsistency(
+      manifest.ontologyUri,
+      config.ontology.path,
+      config.ontology.strictValidation,
+      batchId
+    )
 
     const extractionResults = yield* Effect.forEach(
       manifest.documents,
@@ -85,6 +159,7 @@ export const BatchWorkflowLayer = BatchWorkflow.toLayer(({ batchId, manifestUri,
           documentId: doc.documentId,
           sourceUri: doc.sourceUri,
           ontologyUri: manifest.ontologyUri,
+          targetNamespace: manifest.targetNamespace,
           ontologyEmbeddingsUri
         }).execute,
       { concurrency: 5 }

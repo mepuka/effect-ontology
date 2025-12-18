@@ -38,7 +38,12 @@ const StorageConfig = Config.nested("STORAGE")(Config.all({
 
 const OntologyConfig = Config.nested("ONTOLOGY")(Config.all({
   path: Config.string("PATH"),
-  cacheTtlSeconds: Config.integer("CACHE_TTL").pipe(Config.withDefault(3600))
+  cacheTtlSeconds: Config.integer("CACHE_TTL").pipe(Config.withDefault(3600)),
+  /**
+   * When true, workflow fails if manifest.ontologyUri doesn't match the configured ontology path.
+   * This prevents silent mismatches between extraction (uses config) and validation (uses manifest).
+   */
+  strictValidation: Config.boolean("STRICT_VALIDATION").pipe(Config.withDefault(false))
 }))
 
 const RuntimeConfig = Config.nested("RUNTIME")(Config.all({
@@ -110,7 +115,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   },
   ontology: {
     path: "ontology.ttl",
-    cacheTtlSeconds: 3600
+    cacheTtlSeconds: 3600,
+    strictValidation: false
   },
   runtime: {
     concurrency: 4,

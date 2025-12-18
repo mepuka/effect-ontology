@@ -34,6 +34,8 @@ export const ExtractionActivityInput = Schema.Struct({
   documentId: DocumentId,
   sourceUri: GcsUri,
   ontologyUri: GcsUri,
+  /** Target namespace for entity IRI minting (from batch manifest) */
+  targetNamespace: Namespace,
   /** Pre-computed ontology embeddings URI (optional, speeds up semantic search) */
   ontologyEmbeddingsUri: Schema.optional(GcsUri)
 })

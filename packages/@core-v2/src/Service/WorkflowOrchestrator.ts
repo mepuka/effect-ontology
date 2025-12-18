@@ -28,7 +28,52 @@ import {
   makeValidationActivity
 } from "../Workflow/DurableActivities.js"
 import { getBatchStateFromStore, publishState } from "./BatchState.js"
+import { ConfigService } from "./Config.js"
 import { StorageService } from "./Storage.js"
+
+/**
+ * Extract filename from a path (local or GCS URI)
+ */
+const extractFilename = (path: string): string => {
+  if (path.startsWith("gs://")) {
+    const parts = path.split("/")
+    return parts[parts.length - 1]
+  }
+  const parts = path.split("/")
+  return parts[parts.length - 1]
+}
+
+/**
+ * Validate that manifest ontologyUri is consistent with config.
+ */
+const validateOntologyConsistency = (
+  manifestOntologyUri: string,
+  configOntologyPath: string,
+  strictValidation: boolean,
+  batchId: string
+) =>
+  Effect.gen(function*() {
+    const manifestFilename = extractFilename(manifestOntologyUri)
+    const configFilename = extractFilename(configOntologyPath)
+
+    if (manifestFilename !== configFilename) {
+      const message = `Ontology mismatch: manifest uses "${manifestOntologyUri}" but extraction uses "${configOntologyPath}". ` +
+        `Extraction will use the configured ontology, not the manifest ontology.`
+
+      if (strictValidation) {
+        yield* Effect.logError("Ontology validation failed (strict mode)", {
+          batchId,
+          manifestOntologyUri,
+          configOntologyPath
+        })
+        return yield* Effect.fail(
+          `Ontology mismatch: extraction uses "${configOntologyPath}" but manifest specifies "${manifestOntologyUri}".`
+        )
+      }
+
+      yield* Effect.logWarning(message, { batchId, manifestOntologyUri, configOntologyPath })
+    }
+  })
 
 type BatchWorkflowPayloadType = typeof BatchWorkflowPayload.Type
 type PipelineStage = "pending" | "preprocessing" | "extracting" | "resolving" | "validating" | "ingesting"
@@ -233,6 +278,7 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
     Effect.gen(function*() {
       const { batchId, manifestUri, ontologyVersion } = payload
       const storage = yield* StorageService
+      const config = yield* ConfigService
       const workflowStart = yield* DateTime.now
       const progressRef = yield* Ref.make(0)
       let currentStage: PipelineStage = "pending"
@@ -243,6 +289,14 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
         Effect.flatMap((opt) => expectValue(opt, manifestKey))
       )
       const manifest = parseManifest(manifestRaw)
+
+      // Validate ontology consistency between manifest and config
+      yield* validateOntologyConsistency(
+        manifest.ontologyUri,
+        config.ontology.path,
+        config.ontology.strictValidation,
+        batchId
+      )
 
       const emitState = (state: BatchState) =>
         Effect.gen(function*() {
@@ -377,7 +431,8 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
                 batchId,
                 documentId: doc.documentId,
                 sourceUri: doc.sourceUri,
-                ontologyUri: manifest.ontologyUri
+                ontologyUri: manifest.ontologyUri,
+                targetNamespace: manifest.targetNamespace
               }).execute,
               () =>
                 Effect.gen(function*() {

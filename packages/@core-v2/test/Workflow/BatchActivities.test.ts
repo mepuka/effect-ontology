@@ -43,7 +43,8 @@ describe("Activity Input Schemas", () => {
         batchId: testBatchId,
         documentId: testDocId,
         sourceUri: makeGcsUri("input/doc.txt"),
-        ontologyUri: makeGcsUri("ontologies/football/ontology.ttl")
+        ontologyUri: makeGcsUri("ontologies/football/ontology.ttl"),
+        targetNamespace: "sports-football"
       }
 
       const result = Schema.decodeUnknownSync(ExtractionActivityInput)(raw)
@@ -51,6 +52,7 @@ describe("Activity Input Schemas", () => {
       expect(result.batchId).toBe(testBatchId)
       expect(result.documentId).toBe(testDocId)
       expect(result.sourceUri).toContain("gs://")
+      expect(result.targetNamespace).toBe("sports-football")
     })
 
     it("rejects missing required fields", () => {

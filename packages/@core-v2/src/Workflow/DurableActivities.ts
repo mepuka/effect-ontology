@@ -483,10 +483,17 @@ export const makeExtractionActivity = (input: typeof ExtractionActivityInput.Typ
       )
 
       // Serialize with named graph for provenance tracking
+      // Use targetNamespace for entity IRI minting (from batch manifest)
       const rdf = yield* RdfBuilder
       const store = yield* rdf.createStore
-      yield* rdf.addEntities(store, graph.entities, { graphUri: provenanceUri })
-      yield* rdf.addRelations(store, graph.relations, { graphUri: provenanceUri })
+      yield* rdf.addEntities(store, graph.entities, {
+        graphUri: provenanceUri,
+        targetNamespace: input.targetNamespace
+      })
+      yield* rdf.addRelations(store, graph.relations, {
+        graphUri: provenanceUri,
+        targetNamespace: input.targetNamespace
+      })
       const turtleContent = yield* rdf.toTurtle(store)
 
       yield* Effect.logInfo("Graph serialized to Turtle with provenance", {

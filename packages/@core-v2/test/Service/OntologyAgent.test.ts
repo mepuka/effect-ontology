@@ -239,7 +239,8 @@ describe("OntologyAgent Service", () => {
     },
     ontology: {
       path: "/tmp/test.ttl",
-      cacheTtlSeconds: 300
+      cacheTtlSeconds: 300,
+      strictValidation: false
     },
     grounder: {
       enabled: true,
