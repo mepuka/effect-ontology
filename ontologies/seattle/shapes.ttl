@@ -1,0 +1,319 @@
+@prefix : <http://effect-ontology.dev/seattle/shapes#> .
+@prefix seattle: <http://effect-ontology.dev/seattle/> .
+@prefix claims: <http://effect-ontology.dev/claims#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix org: <http://www.w3.org/ns/org#> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix time: <http://www.w3.org/2006/time#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@base <http://effect-ontology.dev/seattle/shapes> .
+
+# =============================================================================
+# SHACL Shapes for Seattle Ontology Pack Validation
+# =============================================================================
+#
+# These shapes enforce data quality for the Seattle timeline knowledge graph.
+# Validation ensures competency questions can be answered correctly.
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Person Shape
+# -----------------------------------------------------------------------------
+
+:PersonShape a sh:NodeShape ;
+    sh:targetClass foaf:Person ;
+    rdfs:label "Person Shape"@en ;
+    rdfs:comment "Validates person instances have required properties."@en ;
+
+    sh:property [
+        sh:path foaf:name ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "Person must have at least one foaf:name"
+    ] .
+
+# -----------------------------------------------------------------------------
+# Membership Shape
+# -----------------------------------------------------------------------------
+
+:MembershipShape a sh:NodeShape ;
+    sh:targetClass org:Membership ;
+    rdfs:label "Membership Shape"@en ;
+    rdfs:comment "Validates membership instances for temporal role assignments."@en ;
+
+    sh:property [
+        sh:path org:member ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class foaf:Person ;
+        sh:message "Membership must have exactly one org:member (a Person)"
+    ] ;
+
+    sh:property [
+        sh:path org:organization ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:or (
+            [ sh:class org:Organization ]
+            [ sh:class org:OrganizationalUnit ]
+        ) ;
+        sh:message "Membership must have exactly one org:organization"
+    ] ;
+
+    sh:property [
+        sh:path org:role ;
+        sh:minCount 1 ;
+        sh:or (
+            [ sh:class org:Post ]
+            [ sh:class org:Role ]
+            [ sh:class skos:Concept ]
+        ) ;
+        sh:message "Membership must have at least one org:role (Post or Role)"
+    ] ;
+
+    sh:property [
+        sh:path org:memberDuring ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class time:Interval ;
+        sh:message "Membership must have exactly one org:memberDuring interval"
+    ] .
+
+# -----------------------------------------------------------------------------
+# Time Interval Shape
+# -----------------------------------------------------------------------------
+
+:IntervalShape a sh:NodeShape ;
+    sh:targetClass time:Interval ;
+    rdfs:label "Interval Shape"@en ;
+    rdfs:comment "Validates time intervals have required beginning."@en ;
+
+    sh:property [
+        sh:path time:hasBeginning ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:message "Interval must have exactly one time:hasBeginning"
+    ] ;
+
+    # Note: time:hasEnd is optional (omitted means ongoing)
+    sh:property [
+        sh:path time:hasEnd ;
+        sh:maxCount 1 ;
+        sh:message "Interval may have at most one time:hasEnd"
+    ] .
+
+# -----------------------------------------------------------------------------
+# Time Instant Shape
+# -----------------------------------------------------------------------------
+
+:InstantShape a sh:NodeShape ;
+    sh:targetClass time:Instant ;
+    rdfs:label "Instant Shape"@en ;
+    rdfs:comment "Validates time instants have a date value."@en ;
+
+    sh:or (
+        [ sh:property [
+            sh:path time:inXSDDate ;
+            sh:minCount 1 ;
+            sh:datatype xsd:date
+        ] ]
+        [ sh:property [
+            sh:path time:inXSDDateTime ;
+            sh:minCount 1 ;
+            sh:datatype xsd:dateTime
+        ] ]
+    ) ;
+    sh:message "Instant must have time:inXSDDate or time:inXSDDateTime" .
+
+# -----------------------------------------------------------------------------
+# Post Shape
+# -----------------------------------------------------------------------------
+
+:PostShape a sh:NodeShape ;
+    sh:targetClass org:Post ;
+    rdfs:label "Post Shape"@en ;
+    rdfs:comment "Validates post instances have required label and organization."@en ;
+
+    sh:property [
+        sh:path skos:prefLabel ;
+        sh:minCount 1 ;
+        sh:message "Post must have at least one skos:prefLabel"
+    ] ;
+
+    sh:property [
+        sh:path org:postIn ;
+        sh:minCount 1 ;
+        sh:message "Post must have at least one org:postIn"
+    ] .
+
+# -----------------------------------------------------------------------------
+# Staff Announcement Event Shape
+# -----------------------------------------------------------------------------
+
+:StaffAnnouncementEventShape a sh:NodeShape ;
+    sh:targetClass seattle:StaffAnnouncementEvent ;
+    rdfs:label "Staff Announcement Event Shape"@en ;
+    rdfs:comment "Validates staff announcement events."@en ;
+
+    sh:property [
+        sh:path seattle:announcedMembership ;
+        sh:minCount 1 ;
+        sh:class org:Membership ;
+        sh:message "Staff announcement must announce at least one membership"
+    ] ;
+
+    sh:property [
+        sh:path time:inXSDDateTime ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:dateTime ;
+        sh:message "Event must have exactly one time:inXSDDateTime"
+    ] ;
+
+    sh:property [
+        sh:path prov:wasDerivedFrom ;
+        sh:minCount 1 ;
+        sh:message "Event must have provenance (prov:wasDerivedFrom source document)"
+    ] .
+
+# -----------------------------------------------------------------------------
+# Claim Shape (from claims.ttl)
+# -----------------------------------------------------------------------------
+
+:ClaimShape a sh:NodeShape ;
+    sh:targetClass claims:Claim ;
+    rdfs:label "Claim Shape"@en ;
+    rdfs:comment "Validates claim instances have required properties."@en ;
+
+    sh:property [
+        sh:path claims:claimSubject ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:message "Claim must have exactly one claimSubject"
+    ] ;
+
+    sh:property [
+        sh:path claims:claimPredicate ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:message "Claim must have exactly one claimPredicate"
+    ] ;
+
+    sh:property [
+        sh:path claims:claimObject ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:message "Claim must have exactly one claimObject"
+    ] ;
+
+    sh:property [
+        sh:path claims:rank ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:in ( claims:Preferred claims:Normal claims:Deprecated ) ;
+        sh:message "Claim must have exactly one rank (Preferred, Normal, or Deprecated)"
+    ] ;
+
+    sh:property [
+        sh:path claims:statedIn ;
+        sh:minCount 1 ;
+        sh:message "Claim must have at least one statedIn source"
+    ] .
+
+# -----------------------------------------------------------------------------
+# Evidence Shape
+# -----------------------------------------------------------------------------
+
+:EvidenceShape a sh:NodeShape ;
+    sh:targetClass claims:Evidence ;
+    rdfs:label "Evidence Shape"@en ;
+    rdfs:comment "Validates evidence instances have text and offsets."@en ;
+
+    sh:property [
+        sh:path claims:evidenceText ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "Evidence must have exactly one evidenceText"
+    ] ;
+
+    sh:property [
+        sh:path claims:startOffset ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:integer ;
+        sh:minInclusive 0 ;
+        sh:message "Evidence must have non-negative startOffset"
+    ] ;
+
+    sh:property [
+        sh:path claims:endOffset ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:integer ;
+        sh:minInclusive 0 ;
+        sh:message "Evidence must have non-negative endOffset"
+    ] ;
+
+    sh:property [
+        sh:path claims:evidenceSource ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:message "Evidence must have exactly one evidenceSource"
+    ] .
+
+# -----------------------------------------------------------------------------
+# Organization Shape
+# -----------------------------------------------------------------------------
+
+:OrganizationShape a sh:NodeShape ;
+    sh:targetClass org:Organization ;
+    rdfs:label "Organization Shape"@en ;
+    rdfs:comment "Validates organization instances."@en ;
+
+    sh:property [
+        sh:path skos:prefLabel ;
+        sh:minCount 1 ;
+        sh:message "Organization must have at least one skos:prefLabel"
+    ] .
+
+# -----------------------------------------------------------------------------
+# Reasoning Activity Shape
+# -----------------------------------------------------------------------------
+
+:ReasoningActivityShape a sh:NodeShape ;
+    sh:targetClass seattle:ReasoningActivity ;
+    rdfs:label "Reasoning Activity Shape"@en ;
+    rdfs:comment "Validates reasoning activities for inference transparency."@en ;
+
+    sh:property [
+        sh:path seattle:appliedRule ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class seattle:InferenceRule ;
+        sh:message "Reasoning activity must specify exactly one appliedRule"
+    ] ;
+
+    sh:property [
+        sh:path prov:used ;
+        sh:minCount 1 ;
+        sh:message "Reasoning activity must use at least one supporting fact"
+    ] ;
+
+    sh:property [
+        sh:path prov:generated ;
+        sh:minCount 1 ;
+        sh:message "Reasoning activity must generate at least one derived fact"
+    ] ;
+
+    sh:property [
+        sh:path prov:endedAtTime ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:dateTime ;
+        sh:message "Reasoning activity must have exactly one endedAtTime"
+    ] .

@@ -1,0 +1,378 @@
+@prefix : <http://effect-ontology.dev/seattle/> .
+@prefix seattle: <http://effect-ontology.dev/seattle/> .
+@prefix claims: <http://effect-ontology.dev/claims#> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix org: <http://www.w3.org/ns/org#> .
+@prefix time: <http://www.w3.org/2006/time#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix oa: <http://www.w3.org/ns/oa#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@base <http://effect-ontology.dev/seattle> .
+
+# =============================================================================
+# Ontology Declaration
+# =============================================================================
+
+<http://effect-ontology.dev/seattle> a owl:Ontology ;
+    dcterms:title "Seattle Mayor Administration Ontology Pack"@en ;
+    dcterms:description """Production ontology for the Seattle mayor administration case study.
+
+    Reuses W3C standard vocabularies:
+    - FOAF for persons
+    - W3C ORG for organizations, posts, memberships
+    - OWL-Time for temporal intervals
+    - PROV-O for provenance
+    - Web Annotation for evidence spans
+    - SKOS for controlled vocabularies
+
+    Extends claims.ttl for conflict-friendly news domain."""@en ;
+    dcterms:creator "Effect Ontology Project" ;
+    dcterms:created "2025-12-18"^^xsd:date ;
+    owl:versionInfo "1.0.0" ;
+    rdfs:seeAlso <http://effect-ontology.dev/claims> ,
+                 <https://www.w3.org/TR/vocab-org/> ,
+                 <https://www.popoloproject.com/specs/> .
+
+# =============================================================================
+# Domain-Specific Classes (Minimal Extensions)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Organization Extensions
+# -----------------------------------------------------------------------------
+
+seattle:BoardOrCommission a owl:Class ;
+    rdfs:subClassOf org:Organization ;
+    rdfs:label "Board or Commission"@en ;
+    rdfs:comment "A board, commission, task force, or advisory body within city government."@en .
+
+# -----------------------------------------------------------------------------
+# Post Extensions
+# -----------------------------------------------------------------------------
+
+seattle:LeadershipPost a owl:Class ;
+    rdfs:subClassOf org:Post ;
+    rdfs:label "Leadership Post"@en ;
+    rdfs:comment "A department head or leadership position."@en .
+
+# -----------------------------------------------------------------------------
+# Event Types (extending prov:Activity)
+# -----------------------------------------------------------------------------
+
+seattle:StaffAnnouncementEvent a owl:Class ;
+    rdfs:subClassOf prov:Activity ;
+    rdfs:label "Staff Announcement Event"@en ;
+    rdfs:comment "An official announcement of staff role changes, appointments, or departures."@en .
+
+seattle:PolicyInitiativeEvent a owl:Class ;
+    rdfs:subClassOf prov:Activity ;
+    rdfs:label "Policy Initiative Event"@en ;
+    rdfs:comment "An announcement of a policy initiative, program, or strategic priority."@en .
+
+seattle:BudgetActionEvent a owl:Class ;
+    rdfs:subClassOf prov:Activity ;
+    rdfs:label "Budget Action Event"@en ;
+    rdfs:comment "A budget allocation, cut, or reallocation action."@en .
+
+seattle:CouncilVoteEvent a owl:Class ;
+    rdfs:subClassOf prov:Activity ;
+    rdfs:label "Council Vote Event"@en ;
+    rdfs:comment "A city council vote on legislation, budget, or appointments."@en .
+
+seattle:ReasoningActivity a owl:Class ;
+    rdfs:subClassOf prov:Activity ;
+    rdfs:label "Reasoning Activity"@en ;
+    rdfs:comment "An inference rule execution that produces derived facts."@en .
+
+seattle:RuleUpdateEvent a owl:Class ;
+    rdfs:subClassOf prov:Activity ;
+    rdfs:label "Rule Update Event"@en ;
+    rdfs:comment "An update to inference rules that may affect derived facts."@en .
+
+# -----------------------------------------------------------------------------
+# Inference Rule (for reasoning transparency)
+# -----------------------------------------------------------------------------
+
+seattle:InferenceRule a owl:Class ;
+    rdfs:label "Inference Rule"@en ;
+    rdfs:comment "A named inference rule used in the reasoning system."@en .
+
+# =============================================================================
+# Domain-Specific Properties
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Event Properties
+# -----------------------------------------------------------------------------
+
+seattle:announcedMembership a owl:ObjectProperty ;
+    rdfs:label "announced membership"@en ;
+    rdfs:comment "Links a staff announcement event to the memberships it announces."@en ;
+    rdfs:domain seattle:StaffAnnouncementEvent ;
+    rdfs:range org:Membership .
+
+seattle:announces a owl:ObjectProperty ;
+    rdfs:label "announces"@en ;
+    rdfs:comment "Links an initiative event to the initiative being announced."@en ;
+    rdfs:domain seattle:PolicyInitiativeEvent .
+
+seattle:impacts a owl:ObjectProperty ;
+    rdfs:label "impacts"@en ;
+    rdfs:comment "Links a budget action to affected organizations or programs."@en ;
+    rdfs:domain seattle:BudgetActionEvent ;
+    rdfs:range org:Organization .
+
+seattle:voteResult a owl:DatatypeProperty ;
+    rdfs:label "vote result"@en ;
+    rdfs:comment "The outcome of a council vote (passed, failed, tabled, etc.)."@en ;
+    rdfs:domain seattle:CouncilVoteEvent ;
+    rdfs:range xsd:string .
+
+seattle:voteTally a owl:DatatypeProperty ;
+    rdfs:label "vote tally"@en ;
+    rdfs:comment "The vote count (e.g., '7-2' or '9-0')."@en ;
+    rdfs:domain seattle:CouncilVoteEvent ;
+    rdfs:range xsd:string .
+
+# -----------------------------------------------------------------------------
+# Reasoning Properties
+# -----------------------------------------------------------------------------
+
+seattle:appliedRule a owl:ObjectProperty ;
+    rdfs:label "applied rule"@en ;
+    rdfs:comment "Links a reasoning activity to the inference rule that fired."@en ;
+    rdfs:domain seattle:ReasoningActivity ;
+    rdfs:range seattle:InferenceRule .
+
+seattle:updatedRule a owl:ObjectProperty ;
+    rdfs:label "updated rule"@en ;
+    rdfs:comment "Links a rule update event to the rule that was modified."@en ;
+    rdfs:domain seattle:RuleUpdateEvent ;
+    rdfs:range seattle:InferenceRule .
+
+seattle:producedFacts a owl:DatatypeProperty ;
+    rdfs:label "produced facts"@en ;
+    rdfs:comment "Count of new facts produced by a rule update."@en ;
+    rdfs:domain seattle:RuleUpdateEvent ;
+    rdfs:range xsd:integer .
+
+seattle:invalidatedFacts a owl:DatatypeProperty ;
+    rdfs:label "invalidated facts"@en ;
+    rdfs:comment "Count of facts invalidated by a rule update."@en ;
+    rdfs:domain seattle:RuleUpdateEvent ;
+    rdfs:range xsd:integer .
+
+seattle:ruleVersion a owl:DatatypeProperty ;
+    rdfs:label "rule version"@en ;
+    rdfs:comment "Version identifier for an inference rule."@en ;
+    rdfs:domain seattle:InferenceRule ;
+    rdfs:range xsd:string .
+
+# =============================================================================
+# SKOS Concept Scheme: Seattle Government Roles
+# =============================================================================
+
+seattle:SeattleRoleScheme a skos:ConceptScheme ;
+    skos:prefLabel "Seattle Government Roles"@en ;
+    dcterms:description "Controlled vocabulary for positions and roles in Seattle city government."@en .
+
+# -----------------------------------------------------------------------------
+# Abstract Role Categories
+# -----------------------------------------------------------------------------
+
+seattle:ExecutiveRole a skos:Concept ;
+    skos:prefLabel "Executive Role"@en ;
+    skos:definition "Senior leadership positions in the mayor's office."@en ;
+    skos:topConceptOf seattle:SeattleRoleScheme ;
+    skos:inScheme seattle:SeattleRoleScheme .
+
+seattle:DirectorRole a skos:Concept ;
+    skos:prefLabel "Director Role"@en ;
+    skos:definition "Department or office director positions."@en ;
+    skos:topConceptOf seattle:SeattleRoleScheme ;
+    skos:inScheme seattle:SeattleRoleScheme .
+
+seattle:CouncilRole a skos:Concept ;
+    skos:prefLabel "Council Role"@en ;
+    skos:definition "City council positions."@en ;
+    skos:topConceptOf seattle:SeattleRoleScheme ;
+    skos:inScheme seattle:SeattleRoleScheme .
+
+# -----------------------------------------------------------------------------
+# Specific Roles
+# -----------------------------------------------------------------------------
+
+seattle:MayorRole a skos:Concept, org:Role ;
+    skos:prefLabel "Mayor"@en ;
+    skos:altLabel "City Mayor"@en ;
+    skos:definition "The chief executive officer of the City of Seattle."@en ;
+    skos:broader seattle:ExecutiveRole ;
+    skos:inScheme seattle:SeattleRoleScheme .
+
+seattle:DeputyMayorRole a skos:Concept, org:Role ;
+    skos:prefLabel "Deputy Mayor"@en ;
+    skos:definition "The second-highest executive position, advising the Mayor on strategic priorities."@en ;
+    skos:broader seattle:ExecutiveRole ;
+    skos:inScheme seattle:SeattleRoleScheme .
+
+seattle:ChiefOfStaffRole a skos:Concept, org:Role ;
+    skos:prefLabel "Chief of Staff"@en ;
+    skos:definition "Senior advisor managing daily operations of the Mayor's Office."@en ;
+    skos:broader seattle:ExecutiveRole ;
+    skos:inScheme seattle:SeattleRoleScheme .
+
+seattle:CommunicationsDirectorRole a skos:Concept, org:Role ;
+    skos:prefLabel "Communications Director"@en ;
+    skos:altLabel "Director of Communications"@en ;
+    skos:definition "Head of communications and public affairs."@en ;
+    skos:broader seattle:DirectorRole ;
+    skos:inScheme seattle:SeattleRoleScheme .
+
+seattle:PolicyDirectorRole a skos:Concept, org:Role ;
+    skos:prefLabel "Policy Director"@en ;
+    skos:altLabel "Director of Policy"@en , "Director of Policy and Innovation"@en ;
+    skos:definition "Head of policy development and strategic initiatives."@en ;
+    skos:broader seattle:DirectorRole ;
+    skos:inScheme seattle:SeattleRoleScheme .
+
+seattle:BudgetDirectorRole a skos:Concept, org:Role ;
+    skos:prefLabel "Budget Director"@en ;
+    skos:altLabel "Director of City Budget Office"@en ;
+    skos:definition "Head of the City Budget Office."@en ;
+    skos:broader seattle:DirectorRole ;
+    skos:inScheme seattle:SeattleRoleScheme .
+
+seattle:DepartmentsDirectorRole a skos:Concept, org:Role ;
+    skos:prefLabel "Director of Departments"@en ;
+    skos:definition "Oversees coordination among city departments."@en ;
+    skos:broader seattle:DirectorRole ;
+    skos:inScheme seattle:SeattleRoleScheme .
+
+seattle:CommunityRelationsDirectorRole a skos:Concept, org:Role ;
+    skos:prefLabel "Director of Community Relations"@en ;
+    skos:definition "Head of community engagement and outreach."@en ;
+    skos:broader seattle:DirectorRole ;
+    skos:inScheme seattle:SeattleRoleScheme .
+
+seattle:CouncilMemberRole a skos:Concept, org:Role ;
+    skos:prefLabel "Council Member"@en ;
+    skos:altLabel "City Council Member"@en ;
+    skos:definition "An elected member of the Seattle City Council."@en ;
+    skos:broader seattle:CouncilRole ;
+    skos:inScheme seattle:SeattleRoleScheme .
+
+seattle:CouncilPresidentRole a skos:Concept, org:Role ;
+    skos:prefLabel "Council President"@en ;
+    skos:altLabel "City Council President"@en ;
+    skos:definition "The presiding officer of the Seattle City Council."@en ;
+    skos:broader seattle:CouncilMemberRole ;
+    skos:inScheme seattle:SeattleRoleScheme .
+
+# =============================================================================
+# ABox: Seattle Government Structure (Instance Data)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Organizations
+# -----------------------------------------------------------------------------
+
+seattle:CityOfSeattle a org:FormalOrganization ;
+    skos:prefLabel "City of Seattle"@en ;
+    skos:altLabel "Seattle City Government"@en ;
+    org:hasUnit seattle:MayorsOffice ,
+                seattle:CityCouncil ,
+                seattle:CityBudgetOffice .
+
+seattle:MayorsOffice a org:OrganizationalUnit ;
+    skos:prefLabel "Office of the Mayor"@en ;
+    skos:altLabel "Mayor's Office"@en ;
+    org:unitOf seattle:CityOfSeattle ;
+    org:hasUnit seattle:CommunicationsOffice ,
+                seattle:PolicyOffice ,
+                seattle:CommunityRelationsOffice .
+
+seattle:CommunicationsOffice a org:OrganizationalUnit ;
+    skos:prefLabel "Communications Office"@en ;
+    org:unitOf seattle:MayorsOffice .
+
+seattle:PolicyOffice a org:OrganizationalUnit ;
+    skos:prefLabel "Policy Office"@en ;
+    org:unitOf seattle:MayorsOffice .
+
+seattle:CommunityRelationsOffice a org:OrganizationalUnit ;
+    skos:prefLabel "Community Relations Office"@en ;
+    org:unitOf seattle:MayorsOffice .
+
+seattle:CityCouncil a org:FormalOrganization ;
+    skos:prefLabel "Seattle City Council"@en ;
+    org:subOrganizationOf seattle:CityOfSeattle .
+
+seattle:CityBudgetOffice a org:OrganizationalUnit ;
+    skos:prefLabel "City Budget Office"@en ;
+    org:unitOf seattle:CityOfSeattle .
+
+# -----------------------------------------------------------------------------
+# Posts (Positions)
+# -----------------------------------------------------------------------------
+
+seattle:MayorPost a org:Post ;
+    skos:prefLabel "Mayor of Seattle"@en ;
+    rdfs:comment "The chief executive officer of the City of Seattle."@en ;
+    org:postIn seattle:CityOfSeattle ;
+    org:role seattle:MayorRole .
+
+seattle:DeputyMayorPost a org:Post, seattle:LeadershipPost ;
+    skos:prefLabel "Deputy Mayor"@en ;
+    org:postIn seattle:MayorsOffice ;
+    org:role seattle:DeputyMayorRole .
+
+seattle:ChiefOfStaffPost a org:Post, seattle:LeadershipPost ;
+    skos:prefLabel "Chief of Staff"@en ;
+    org:postIn seattle:MayorsOffice ;
+    org:role seattle:ChiefOfStaffRole .
+
+seattle:CommunicationsDirectorPost a org:Post, seattle:LeadershipPost ;
+    skos:prefLabel "Communications Director"@en ;
+    org:postIn seattle:CommunicationsOffice ;
+    org:role seattle:CommunicationsDirectorRole .
+
+seattle:PolicyDirectorPost a org:Post, seattle:LeadershipPost ;
+    skos:prefLabel "Policy Director"@en ;
+    org:postIn seattle:PolicyOffice ;
+    org:role seattle:PolicyDirectorRole .
+
+seattle:BudgetDirectorPost a org:Post, seattle:LeadershipPost ;
+    skos:prefLabel "Budget Director"@en ;
+    org:postIn seattle:CityBudgetOffice ;
+    org:role seattle:BudgetDirectorRole .
+
+seattle:DepartmentsDirectorPost a org:Post, seattle:LeadershipPost ;
+    skos:prefLabel "Director of Departments"@en ;
+    org:postIn seattle:MayorsOffice ;
+    org:role seattle:DepartmentsDirectorRole .
+
+seattle:CommunityRelationsDirectorPost a org:Post, seattle:LeadershipPost ;
+    skos:prefLabel "Director of Community Relations"@en ;
+    org:postIn seattle:CommunityRelationsOffice ;
+    org:role seattle:CommunityRelationsDirectorRole .
+
+seattle:CouncilPresidentPost a org:Post ;
+    skos:prefLabel "Council President"@en ;
+    org:postIn seattle:CityCouncil ;
+    org:role seattle:CouncilPresidentRole .
+
+# =============================================================================
+# Named Graph Declarations (for reference)
+# =============================================================================
+#
+# GRAPH seattle:graph/asserted/current - Asserted facts from extraction
+# GRAPH seattle:graph/inferred/current - Inferred facts from reasoning
+# GRAPH seattle:graph/inferred/ruleRun/{id} - Specific rule run results
+# GRAPH seattle:graph/deprecated - Historical/deprecated facts
+#
+# =============================================================================

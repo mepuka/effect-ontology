@@ -1,0 +1,373 @@
+# =============================================================================
+# Seattle Ontology Competency Question Tests
+# =============================================================================
+#
+# These SPARQL queries test that the ontology can answer the MVP competency
+# questions. Run against test data to validate the ontology design.
+#
+# Usage: Each query should return non-empty results when run against
+# properly structured test data.
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# PREFIX DECLARATIONS (include at top of each query when running)
+# -----------------------------------------------------------------------------
+#
+# PREFIX seattle: <http://effect-ontology.dev/seattle/>
+# PREFIX claims: <http://effect-ontology.dev/claims#>
+# PREFIX org: <http://www.w3.org/ns/org#>
+# PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+# PREFIX time: <http://www.w3.org/2006/time#>
+# PREFIX prov: <http://www.w3.org/ns/prov#>
+# PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+# PREFIX dcterms: <http://purl.org/dc/terms/>
+# PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+#
+# -----------------------------------------------------------------------------
+
+# =============================================================================
+# A. ADMINISTRATION/STAFFING QUERIES
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# CQ-A1: Who is the mayor at time T?
+# Expected: Returns person(s) holding Mayor role on specified date
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-A1
+PREFIX seattle: <http://effect-ontology.dev/seattle/>
+PREFIX org: <http://www.w3.org/ns/org#>
+PREFIX time: <http://www.w3.org/2006/time#>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?person ?name WHERE {
+  ?membership a org:Membership ;
+              org:role seattle:MayorPost ;
+              org:member ?person ;
+              org:memberDuring ?interval .
+
+  ?person foaf:name ?name .
+
+  ?interval time:hasBeginning ?begin .
+  ?begin time:inXSDDate ?startDate .
+
+  OPTIONAL {
+    ?interval time:hasEnd ?end .
+    ?end time:inXSDDate ?endDate .
+  }
+
+  FILTER (?startDate <= "2025-01-15"^^xsd:date)
+  FILTER (!BOUND(?endDate) || ?endDate >= "2025-01-15"^^xsd:date)
+}
+
+# -----------------------------------------------------------------------------
+# CQ-A2: What senior staff has been announced, with roles and sources?
+# Expected: Returns announcements with person, role, and source document
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-A2
+PREFIX seattle: <http://effect-ontology.dev/seattle/>
+PREFIX org: <http://www.w3.org/ns/org#>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX time: <http://www.w3.org/2006/time#>
+PREFIX dcterms: <http://purl.org/dc/terms/>
+
+SELECT ?person ?personName ?role ?roleLabel ?source ?sourceTitle ?announcedDate WHERE {
+  ?event a seattle:StaffAnnouncementEvent ;
+         seattle:announcedMembership ?membership ;
+         time:inXSDDateTime ?announcedDate ;
+         prov:wasDerivedFrom ?source .
+
+  ?source dcterms:title ?sourceTitle .
+
+  ?membership org:member ?person ;
+              org:role ?role .
+
+  ?person foaf:name ?personName .
+  ?role skos:prefLabel ?roleLabel .
+}
+ORDER BY DESC(?announcedDate)
+
+# -----------------------------------------------------------------------------
+# CQ-A3: What roles does Person X hold and when did we learn about them?
+# Expected: Returns roles with effective dates and announcement dates
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-A3
+PREFIX seattle: <http://effect-ontology.dev/seattle/>
+PREFIX org: <http://www.w3.org/ns/org#>
+PREFIX time: <http://www.w3.org/2006/time#>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+
+SELECT ?role ?roleLabel ?startDate ?endDate ?announcedAt ?source WHERE {
+  # Bind the person of interest
+  BIND(<http://effect-ontology.dev/seattle/person/TimBurgess> AS ?person)
+
+  ?membership a org:Membership ;
+              org:member ?person ;
+              org:role ?role ;
+              org:memberDuring ?interval .
+
+  ?role skos:prefLabel ?roleLabel .
+
+  ?interval time:hasBeginning/time:inXSDDate ?startDate .
+  OPTIONAL { ?interval time:hasEnd/time:inXSDDate ?endDate }
+
+  OPTIONAL {
+    ?event seattle:announcedMembership ?membership ;
+           time:inXSDDateTime ?announcedAt ;
+           prov:wasDerivedFrom ?source .
+  }
+}
+ORDER BY DESC(?startDate)
+
+# -----------------------------------------------------------------------------
+# CQ-A4: Who is mayor-elect (announced but not yet serving)?
+# Expected: Returns pending mayors whose term hasn't started
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-A4
+PREFIX seattle: <http://effect-ontology.dev/seattle/>
+PREFIX org: <http://www.w3.org/ns/org#>
+PREFIX time: <http://www.w3.org/2006/time#>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?person ?name ?termStart WHERE {
+  ?membership a org:Membership ;
+              org:role seattle:MayorPost ;
+              org:member ?person ;
+              org:memberDuring ?interval .
+
+  ?person foaf:name ?name .
+
+  ?interval time:hasBeginning ?begin .
+  ?begin time:inXSDDate ?termStart .
+
+  # Future start date
+  FILTER (?termStart > NOW())
+}
+
+# =============================================================================
+# B. DEPARTMENTS & GOVERNANCE QUERIES
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# CQ-B1: What departments exist and who leads them?
+# Expected: Returns departments with current leaders
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-B1
+PREFIX seattle: <http://effect-ontology.dev/seattle/>
+PREFIX org: <http://www.w3.org/ns/org#>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX time: <http://www.w3.org/2006/time#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?dept ?deptName ?leader ?leaderName ?roleLabel WHERE {
+  ?dept a org:OrganizationalUnit ;
+        org:unitOf seattle:CityOfSeattle ;
+        skos:prefLabel ?deptName .
+
+  OPTIONAL {
+    ?membership org:organization ?dept ;
+                org:role ?role ;
+                org:member ?leader ;
+                org:memberDuring ?interval .
+
+    ?role a seattle:LeadershipPost .
+    ?leader foaf:name ?leaderName .
+    ?role skos:prefLabel ?roleLabel .
+
+    ?interval time:hasBeginning/time:inXSDDate ?start .
+    OPTIONAL { ?interval time:hasEnd/time:inXSDDate ?end }
+    FILTER (?start <= NOW())
+    FILTER (!BOUND(?end) || ?end >= NOW())
+  }
+}
+
+# =============================================================================
+# C. POLICY/INITIATIVE QUERIES
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# CQ-C1: What initiatives did the mayor announce?
+# Expected: Returns initiatives with titles, descriptions, and sources
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-C1
+PREFIX seattle: <http://effect-ontology.dev/seattle/>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX time: <http://www.w3.org/2006/time#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+
+SELECT ?initiative ?title ?description ?announcedDate ?source WHERE {
+  ?event a seattle:PolicyInitiativeEvent ;
+         seattle:announces ?initiative ;
+         time:inXSDDateTime ?announcedDate ;
+         prov:wasDerivedFrom ?source .
+
+  ?initiative skos:prefLabel ?title .
+  OPTIONAL { ?initiative skos:definition ?description }
+}
+ORDER BY DESC(?announcedDate)
+
+# =============================================================================
+# D. TRUST & PROVENANCE QUERIES
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# CQ-D1: For any displayed fact, what document(s) support it?
+# Expected: Returns claims with their source documents
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-D1
+PREFIX claims: <http://effect-ontology.dev/claims#>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX dcterms: <http://purl.org/dc/terms/>
+
+SELECT ?claim ?subject ?predicate ?object ?source ?sourceTitle ?sourceUrl WHERE {
+  ?claim a claims:Claim ;
+         claims:claimSubject ?subject ;
+         claims:claimPredicate ?predicate ;
+         claims:claimObject ?object ;
+         claims:statedIn ?source .
+
+  ?source dcterms:title ?sourceTitle .
+  OPTIONAL { ?source dcterms:source ?sourceUrl }
+}
+
+# -----------------------------------------------------------------------------
+# CQ-D2: What exact text spans are evidence?
+# Expected: Returns evidence text with character offsets
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-D2
+PREFIX claims: <http://effect-ontology.dev/claims#>
+
+SELECT ?claim ?evidenceText ?startOffset ?endOffset ?source WHERE {
+  ?claim a claims:Claim ;
+         claims:hasEvidence ?evidence .
+
+  ?evidence claims:evidenceText ?evidenceText ;
+            claims:startOffset ?startOffset ;
+            claims:endOffset ?endOffset ;
+            claims:evidenceSource ?source .
+}
+
+# -----------------------------------------------------------------------------
+# CQ-D3: What is the extraction confidence for claims?
+# Expected: Returns claims sorted by confidence score
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-D3
+PREFIX claims: <http://effect-ontology.dev/claims#>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+
+SELECT ?claim ?subject ?predicate ?object ?confidence ?rank WHERE {
+  ?claim a claims:Claim ;
+         claims:claimSubject ?subject ;
+         claims:claimPredicate ?predicate ;
+         claims:claimObject ?object ;
+         claims:confidence ?confidence ;
+         claims:rank ?rank .
+}
+ORDER BY DESC(?confidence)
+
+# =============================================================================
+# E. REASONING/INFERENCE QUERIES
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# CQ-E1: Which inferred facts were produced today?
+# Expected: Returns derived assertions with timestamps
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-E1
+PREFIX claims: <http://effect-ontology.dev/claims#>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?assertion ?subject ?predicate ?object ?derivedAt WHERE {
+  ?assertion a claims:DerivedAssertion ;
+             claims:claimSubject ?subject ;
+             claims:claimPredicate ?predicate ;
+             claims:claimObject ?object ;
+             prov:generatedAtTime ?derivedAt .
+
+  # Today's date (replace with actual date in test)
+  FILTER (?derivedAt >= "2025-12-18T00:00:00Z"^^xsd:dateTime)
+  FILTER (?derivedAt < "2025-12-19T00:00:00Z"^^xsd:dateTime)
+}
+
+# -----------------------------------------------------------------------------
+# CQ-E2: Which rule produced an inference and why?
+# Expected: Returns derived facts with rule and supporting facts
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-E2
+PREFIX seattle: <http://effect-ontology.dev/seattle/>
+PREFIX claims: <http://effect-ontology.dev/claims#>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+
+SELECT ?derivedFact ?rule ?ruleName ?supportingFact WHERE {
+  ?derivedFact a claims:DerivedAssertion ;
+               prov:wasGeneratedBy ?activity .
+
+  ?activity a seattle:ReasoningActivity ;
+            seattle:appliedRule ?rule ;
+            prov:used ?supportingFact .
+
+  ?rule skos:prefLabel ?ruleName .
+}
+
+# =============================================================================
+# VALIDATION QUERIES (for testing data quality)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# VAL-1: Find memberships without intervals (invalid)
+# Expected: Should return empty if data is valid
+# -----------------------------------------------------------------------------
+
+# TEST: VAL-1
+PREFIX org: <http://www.w3.org/ns/org#>
+
+SELECT ?membership WHERE {
+  ?membership a org:Membership .
+  FILTER NOT EXISTS { ?membership org:memberDuring ?interval }
+}
+
+# -----------------------------------------------------------------------------
+# VAL-2: Find claims without rank (invalid)
+# Expected: Should return empty if data is valid
+# -----------------------------------------------------------------------------
+
+# TEST: VAL-2
+PREFIX claims: <http://effect-ontology.dev/claims#>
+
+SELECT ?claim WHERE {
+  ?claim a claims:Claim .
+  FILTER NOT EXISTS { ?claim claims:rank ?rank }
+}
+
+# -----------------------------------------------------------------------------
+# VAL-3: Find evidence without text (invalid)
+# Expected: Should return empty if data is valid
+# -----------------------------------------------------------------------------
+
+# TEST: VAL-3
+PREFIX claims: <http://effect-ontology.dev/claims#>
+
+SELECT ?evidence WHERE {
+  ?evidence a claims:Evidence .
+  FILTER NOT EXISTS { ?evidence claims:evidenceText ?text }
+}
