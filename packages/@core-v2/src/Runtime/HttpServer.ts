@@ -12,6 +12,30 @@ import type { BatchWorkflowPayload } from "../Domain/Schema/Batch.js"
 import { BatchManifest } from "../Domain/Schema/Batch.js"
 import { BatchRequest, type PreprocessingOptions } from "../Domain/Schema/BatchRequest.js"
 import { BatchStatusResponse } from "../Domain/Schema/BatchStatusResponse.js"
+import {
+  TimelineEntityQuery,
+  TimelineEntityResponse,
+  TimelineClaimsQuery,
+  TimelineClaimsResponse,
+  ClaimWithRank,
+  ArticleSummary,
+  CorrectionSummary,
+  ConflictsQuery,
+  ConflictsResponse
+} from "../Domain/Schema/Timeline.js"
+import {
+  ClaimSearchRequest,
+  ClaimSearchResponse,
+  EntitySearchRequest,
+  EntitySearchResponse,
+  SuggestionQuery,
+  SuggestionsResponse,
+  ArticleSearchRequest,
+  ArticleSearchResponse,
+  ArticleSearchResult
+} from "../Domain/Schema/Search.js"
+import { ClaimRepository } from "../Repository/Claim.js"
+import { ArticleRepository } from "../Repository/Article.js"
 import { getBatchStateFromStore } from "../Service/BatchState.js"
 import { ConfigService } from "../Service/Config.js"
 import { StorageService } from "../Service/Storage.js"
@@ -184,6 +208,460 @@ const toPayload = (
   }
 }
 
+// =============================================================================
+// Timeline API Helpers
+// =============================================================================
+
+const claimRowToClaimWithRank = (
+  claim: {
+    id: string
+    subjectIri: string
+    predicateIri: string
+    objectValue: string
+    objectType: string | null
+    rank: string
+    validFrom: Date | null
+    validTo: Date | null
+    confidenceScore: string | null
+    evidenceText: string | null
+  },
+  article: {
+    id: string
+    uri: string
+    headline: string | null
+    sourceName: string | null
+    publishedAt: Date
+  }
+): typeof ClaimWithRank.Type => ({
+  id: claim.id,
+  subjectIri: claim.subjectIri,
+  predicateIri: claim.predicateIri,
+  objectValue: claim.objectValue,
+  objectType: claim.objectType as "iri" | "literal" | "typed_literal" | undefined,
+  rank: claim.rank as "preferred" | "normal" | "deprecated",
+  source: {
+    id: article.id,
+    uri: article.uri,
+    headline: article.headline,
+    sourceName: article.sourceName,
+    publishedAt: DateTime.unsafeFromDate(article.publishedAt)
+  },
+  validFrom: claim.validFrom ? DateTime.unsafeFromDate(claim.validFrom) : null,
+  validTo: claim.validTo ? DateTime.unsafeFromDate(claim.validTo) : null,
+  confidence: claim.confidenceScore ? parseFloat(claim.confidenceScore) : null,
+  evidenceText: claim.evidenceText
+})
+
+// =============================================================================
+// Timeline Router
+// =============================================================================
+
+export const TimelineRouter = HttpRouter.empty.pipe(
+  // GET /v1/timeline/entities/:iri - Get entity state at a time
+  HttpRouter.get(
+    "/v1/timeline/entities/:iri",
+    Effect.gen(function*() {
+      const params = yield* HttpRouter.params
+      const iri = params.iri
+      if (!iri) {
+        return yield* HttpServerResponse.json({
+          error: "VALIDATION_ERROR",
+          message: "IRI parameter is required"
+        }, { status: 400 })
+      }
+      const decodedIri = decodeURIComponent(iri)
+      const queryParams = yield* HttpServerRequest.schemaSearchParams(TimelineEntityQuery).pipe(
+        Effect.catchAll(() => Effect.succeed(new TimelineEntityQuery({})))
+      )
+
+      const claimRepo = yield* ClaimRepository
+      const articleRepo = yield* ArticleRepository
+
+      // Get claims for this entity
+      const claims = yield* claimRepo.getClaims({
+        subjectIri: decodedIri,
+        includeDeprecated: queryParams.includeDeprecated ?? false,
+        limit: 100
+      })
+
+      // Get articles for each claim
+      const claimsWithArticles = yield* Effect.forEach(claims, (claim) =>
+        Effect.gen(function*() {
+          const articleOpt = yield* articleRepo.getArticle(claim.articleId)
+          if (Option.isNone(articleOpt)) {
+            return Option.none<typeof ClaimWithRank.Type>()
+          }
+          return Option.some(claimRowToClaimWithRank(claim, articleOpt.value))
+        })
+      )
+
+      const validClaims = claimsWithArticles
+        .filter(Option.isSome)
+        .map((opt) => opt.value)
+
+      // Get corrections (simplified - would need correction repository)
+      const correctionsList: typeof CorrectionSummary.Type[] = []
+
+      return yield* HttpServerResponse.schemaJson(TimelineEntityResponse)({
+        iri: decodedIri,
+        asOf: queryParams.asOf ?? null,
+        claims: validClaims,
+        corrections: correctionsList
+      })
+    })
+  ),
+
+  // GET /v1/timeline/claims - Search claims with filters
+  HttpRouter.get(
+    "/v1/timeline/claims",
+    Effect.gen(function*() {
+      const queryParams = yield* HttpServerRequest.schemaSearchParams(TimelineClaimsQuery).pipe(
+        Effect.catchAll(() => Effect.succeed(new TimelineClaimsQuery({})))
+      )
+
+      const claimRepo = yield* ClaimRepository
+      const articleRepo = yield* ArticleRepository
+
+      const limit = queryParams.limit ?? 20
+      const offset = queryParams.offset ?? 0
+
+      // Get claims with filters
+      const claims = yield* claimRepo.getClaims({
+        subjectIri: queryParams.subject,
+        predicateIri: queryParams.predicate,
+        rank: queryParams.rank,
+        limit: limit + 1, // Fetch one extra to check hasMore
+        offset
+      })
+
+      const hasMore = claims.length > limit
+      const claimResults = hasMore ? claims.slice(0, limit) : claims
+
+      // Get articles for each claim
+      const claimsWithArticles = yield* Effect.forEach(claimResults, (claim) =>
+        Effect.gen(function*() {
+          const articleOpt = yield* articleRepo.getArticle(claim.articleId)
+          if (Option.isNone(articleOpt)) {
+            return Option.none<typeof ClaimWithRank.Type>()
+          }
+          // Filter by source if specified
+          if (queryParams.source && articleOpt.value.sourceName !== queryParams.source) {
+            return Option.none<typeof ClaimWithRank.Type>()
+          }
+          return Option.some(claimRowToClaimWithRank(claim, articleOpt.value))
+        })
+      )
+
+      const validClaims = claimsWithArticles
+        .filter(Option.isSome)
+        .map((opt) => opt.value)
+
+      // Get total count
+      const total = yield* claimRepo.countClaims({
+        subjectIri: queryParams.subject,
+        predicateIri: queryParams.predicate,
+        rank: queryParams.rank
+      })
+
+      return yield* HttpServerResponse.schemaJson(TimelineClaimsResponse)({
+        claims: validClaims,
+        total,
+        limit,
+        offset,
+        hasMore
+      })
+    })
+  ),
+
+  // GET /v1/timeline/conflicts - Get pending conflicts
+  HttpRouter.get(
+    "/v1/timeline/conflicts",
+    Effect.gen(function*() {
+      const queryParams = yield* HttpServerRequest.schemaSearchParams(ConflictsQuery).pipe(
+        Effect.catchAll(() => Effect.succeed(new ConflictsQuery({})))
+      )
+
+      // For now, return empty conflicts (would need ConflictRepository)
+      return yield* HttpServerResponse.schemaJson(ConflictsResponse)({
+        conflicts: [],
+        total: 0,
+        pendingCount: 0
+      })
+    })
+  )
+)
+
+// =============================================================================
+// Search Router
+// =============================================================================
+
+export const SearchRouter = HttpRouter.empty.pipe(
+  // POST /v1/search/claims - Search claims by text
+  HttpRouter.post(
+    "/v1/search/claims",
+    Effect.gen(function*() {
+      return yield* HttpServerRequest.schemaBodyJson(ClaimSearchRequest).pipe(
+        Effect.matchEffect({
+          onFailure: (error) =>
+            HttpServerResponse.json({
+              error: "VALIDATION_ERROR",
+              message: TreeFormatter.formatErrorSync(error as ParseError)
+            }, { status: 400 }),
+          onSuccess: (request) =>
+            Effect.gen(function*() {
+              const claimRepo = yield* ClaimRepository
+              const articleRepo = yield* ArticleRepository
+
+              const limit = request.limit ?? 20
+              const offset = request.offset ?? 0
+
+              // Get claims with filters
+              // Note: Full-text search would require pg_trgm or ts_vector
+              // For now, we do a simple query and filter in memory
+              const claims = yield* claimRepo.getClaims({
+                rank: request.rank,
+                includeDeprecated: false,
+                limit: 1000 // Get more for filtering
+              })
+
+              // Filter by query text (case-insensitive match)
+              const queryLower = request.query.toLowerCase()
+              const filteredClaims = claims.filter((c) =>
+                c.objectValue.toLowerCase().includes(queryLower)
+              )
+
+              // Apply pagination
+              const paginatedClaims = filteredClaims.slice(offset, offset + limit)
+              const hasMore = filteredClaims.length > offset + limit
+
+              // Get articles
+              const claimsWithArticles = yield* Effect.forEach(paginatedClaims, (claim) =>
+                Effect.gen(function*() {
+                  const articleOpt = yield* articleRepo.getArticle(claim.articleId)
+                  if (Option.isNone(articleOpt)) {
+                    return Option.none<typeof ClaimWithRank.Type>()
+                  }
+                  return Option.some(claimRowToClaimWithRank(claim, articleOpt.value))
+                })
+              )
+
+              const validClaims = claimsWithArticles
+                .filter(Option.isSome)
+                .map((opt) => opt.value)
+
+              return yield* HttpServerResponse.schemaJson(ClaimSearchResponse)({
+                query: request.query,
+                claims: validClaims,
+                total: filteredClaims.length,
+                limit,
+                offset,
+                hasMore
+              })
+            })
+        })
+      )
+    })
+  ),
+
+  // POST /v1/search/entities - Search entities by label
+  HttpRouter.post(
+    "/v1/search/entities",
+    Effect.gen(function*() {
+      return yield* HttpServerRequest.schemaBodyJson(EntitySearchRequest).pipe(
+        Effect.matchEffect({
+          onFailure: (error) =>
+            HttpServerResponse.json({
+              error: "VALIDATION_ERROR",
+              message: TreeFormatter.formatErrorSync(error as ParseError)
+            }, { status: 400 }),
+          onSuccess: (request) =>
+            Effect.gen(function*() {
+              const claimRepo = yield* ClaimRepository
+
+              const limit = request.limit ?? 20
+
+              // Get all claims to find unique subjects
+              const claims = yield* claimRepo.getClaims({
+                includeDeprecated: false,
+                limit: 1000
+              })
+
+              // Group by subject and filter by query
+              const queryLower = request.query.toLowerCase()
+              const subjectMap = new Map<string, { iri: string; claimCount: number; types: Set<string> }>()
+
+              for (const claim of claims) {
+                if (!subjectMap.has(claim.subjectIri)) {
+                  subjectMap.set(claim.subjectIri, {
+                    iri: claim.subjectIri,
+                    claimCount: 0,
+                    types: new Set()
+                  })
+                }
+                const entry = subjectMap.get(claim.subjectIri)!
+                entry.claimCount++
+                // Check for rdf:type predicate to collect types
+                if (claim.predicateIri.endsWith("#type") || claim.predicateIri.endsWith("/type")) {
+                  entry.types.add(claim.objectValue)
+                }
+              }
+
+              // Filter by query (match on IRI or label would be better with a label index)
+              const entities = Array.from(subjectMap.values())
+                .filter((e) => e.iri.toLowerCase().includes(queryLower))
+                .slice(0, limit)
+                .map((e) => ({
+                  iri: e.iri,
+                  label: e.iri.split(/[#/]/).pop() ?? null, // Extract local name as label
+                  types: Array.from(e.types),
+                  claimCount: e.claimCount
+                }))
+
+              return yield* HttpServerResponse.schemaJson(EntitySearchResponse)({
+                query: request.query,
+                entities,
+                total: entities.length
+              })
+            })
+        })
+      )
+    })
+  ),
+
+  // GET /v1/search/suggestions - Typeahead suggestions
+  HttpRouter.get(
+    "/v1/search/suggestions",
+    Effect.gen(function*() {
+      const queryParams = yield* HttpServerRequest.schemaSearchParams(SuggestionQuery).pipe(
+        Effect.matchEffect({
+          onFailure: () => Effect.succeed(null),
+          onSuccess: Effect.succeed
+        })
+      )
+
+      if (!queryParams) {
+        return yield* HttpServerResponse.json({
+          error: "VALIDATION_ERROR",
+          message: "prefix query parameter is required"
+        }, { status: 400 })
+      }
+
+      const claimRepo = yield* ClaimRepository
+      const limit = queryParams.limit ?? 10
+
+      // Get claims and extract unique subjects
+      const claims = yield* claimRepo.getClaims({
+        includeDeprecated: false,
+        limit: 500
+      })
+
+      const prefixLower = queryParams.prefix.toLowerCase()
+      const seen = new Set<string>()
+      const suggestionList: Array<{ label: string; iri: string; type: string | null; description: string | null }> = []
+
+      for (const claim of claims) {
+        if (suggestionList.length >= limit) break
+
+        const localName = claim.subjectIri.split(/[#/]/).pop() ?? ""
+        if (localName.toLowerCase().startsWith(prefixLower) && !seen.has(claim.subjectIri)) {
+          seen.add(claim.subjectIri)
+          suggestionList.push({
+            label: localName,
+            iri: claim.subjectIri,
+            type: null,
+            description: null
+          })
+        }
+      }
+
+      return yield* HttpServerResponse.schemaJson(SuggestionsResponse)({
+        prefix: queryParams.prefix,
+        suggestions: suggestionList
+      })
+    })
+  ),
+
+  // POST /v1/search/articles - Search articles
+  HttpRouter.post(
+    "/v1/search/articles",
+    Effect.gen(function*() {
+      return yield* HttpServerRequest.schemaBodyJson(ArticleSearchRequest).pipe(
+        Effect.matchEffect({
+          onFailure: (error) =>
+            HttpServerResponse.json({
+              error: "VALIDATION_ERROR",
+              message: TreeFormatter.formatErrorSync(error as ParseError)
+            }, { status: 400 }),
+          onSuccess: (request) =>
+            Effect.gen(function*() {
+              const articleRepo = yield* ArticleRepository
+              const claimRepo = yield* ClaimRepository
+
+              const limit = request.limit ?? 20
+              const offset = request.offset ?? 0
+
+              // Get articles with filters
+              const articles = yield* articleRepo.getArticles({
+                sourceName: request.sources?.[0], // Simplified: only first source
+                publishedAfter: request.dateRange?.from ? new Date(DateTime.toEpochMillis(request.dateRange.from)) : undefined,
+                publishedBefore: request.dateRange?.to ? new Date(DateTime.toEpochMillis(request.dateRange.to)) : undefined,
+                limit: limit + 1,
+                offset
+              })
+
+              const hasMore = articles.length > limit
+              const articleResults = hasMore ? articles.slice(0, limit) : articles
+
+              // Filter by query in headline if provided
+              const queryLower = request.query?.toLowerCase()
+              const filtered = queryLower
+                ? articleResults.filter((a) => a.headline?.toLowerCase().includes(queryLower))
+                : articleResults
+
+              // Get claim counts
+              const results = yield* Effect.forEach(filtered, (article) =>
+                Effect.gen(function*() {
+                  const claims = yield* claimRepo.getClaims({
+                    articleId: article.id,
+                    includeDeprecated: true
+                  })
+
+                  return {
+                    article: {
+                      id: article.id,
+                      uri: article.uri,
+                      headline: article.headline,
+                      sourceName: article.sourceName,
+                      publishedAt: DateTime.unsafeFromDate(article.publishedAt)
+                    },
+                    claimCount: claims.length,
+                    conflictCount: 0 // Would need ConflictRepository
+                  } satisfies typeof ArticleSearchResult.Type
+                })
+              )
+
+              const total = yield* articleRepo.countArticles({
+                sourceName: request.sources?.[0]
+              })
+
+              return yield* HttpServerResponse.schemaJson(ArticleSearchResponse)({
+                articles: results,
+                total,
+                limit,
+                offset,
+                hasMore
+              })
+            })
+        })
+      )
+    })
+  )
+)
+
+// =============================================================================
+// Extraction Router
+// =============================================================================
+
 export const ExtractionRouter = HttpRouter.empty.pipe(
   HttpRouter.post(
     "/v1/extract/batch",
@@ -352,10 +830,20 @@ export const ExtractionRouter = HttpRouter.empty.pipe(
   )
 )
 
+// =============================================================================
+// Combined Router
+// =============================================================================
+
+export const ApiRouter = HttpRouter.empty.pipe(
+  HttpRouter.concat(ExtractionRouter),
+  HttpRouter.concat(TimelineRouter),
+  HttpRouter.concat(SearchRouter)
+)
+
 export const HttpServerLive = Layer.unwrapEffect(
   Effect.gen(function*() {
     const shutdownMiddleware = yield* makeShutdownMiddleware
-    return ExtractionRouter.pipe(
+    return ApiRouter.pipe(
       HttpRouter.catchAllCause((cause) =>
         Effect.gen(function*() {
           const requestId = yield* Effect.sync(() => crypto.randomUUID())
