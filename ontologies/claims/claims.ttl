@@ -19,7 +19,10 @@
     dc:creator "Effect Ontology Project" ;
     dcterms:created "2024-12-18"^^xsd:date ;
     owl:versionInfo "1.0.0" ;
-    rdfs:seeAlso <https://www.wikidata.org/wiki/Help:Ranking> .
+    rdfs:seeAlso <https://www.wikidata.org/wiki/Help:Ranking> ;
+    # OWL Imports for proper ontology loading
+    owl:imports <http://www.w3.org/ns/prov#> ;
+    owl:imports <http://www.w3.org/ns/oa#> .
 
 # =============================================================================
 # Claim Ranks (Wikidata Pattern)
@@ -60,6 +63,22 @@
     rdfs:label "Claim"@en ;
     rdfs:comment "A reified RDF statement extracted from a source document. Claims may conflict with other claims and require curation before becoming assertions."@en .
 
+:DerivedAssertion rdf:type owl:Class ;
+    rdfs:subClassOf :Claim ;
+    rdfs:label "Derived Assertion"@en ;
+    rdfs:comment "A reified statement produced by inference rules rather than direct extraction. Used to distinguish computed facts from extracted facts for transparency and explainability."@en .
+
+:derivedBy rdf:type owl:ObjectProperty ;
+    rdfs:label "derived by"@en ;
+    rdfs:comment "The reasoning rule or activity that produced this derived assertion."@en ;
+    rdfs:domain :DerivedAssertion .
+
+:supportedBy rdf:type owl:ObjectProperty ;
+    rdfs:label "supported by"@en ;
+    rdfs:comment "The claims or assertions that served as premises for this inference."@en ;
+    rdfs:domain :DerivedAssertion ;
+    rdfs:range :Claim .
+
 :claimSubject rdf:type owl:ObjectProperty ;
     rdfs:label "claim subject"@en ;
     rdfs:comment "The subject IRI of the reified statement."@en ;
@@ -70,9 +89,14 @@
     rdfs:comment "The predicate IRI of the reified statement."@en ;
     rdfs:domain :Claim .
 
-:claimObject rdf:type owl:DatatypeProperty ;
+:claimObject rdf:type owl:ObjectProperty ;
     rdfs:label "claim object"@en ;
-    rdfs:comment "The object value of the reified statement (IRI or literal)."@en ;
+    rdfs:comment "The object IRI of the reified statement. Use for object properties where the value is a resource/entity."@en ;
+    rdfs:domain :Claim .
+
+:claimLiteral rdf:type owl:DatatypeProperty ;
+    rdfs:label "claim literal"@en ;
+    rdfs:comment "The literal value of the reified statement. Use for datatype properties where the value is a string, number, date, etc."@en ;
     rdfs:domain :Claim .
 
 :rank rdf:type owl:ObjectProperty ;
@@ -164,10 +188,29 @@
 # =============================================================================
 # Evidence (W3C Web Annotation aligned)
 # =============================================================================
+#
+# Design Decision: Evidence subclasses oa:Annotation for W3C compliance.
+# Our custom properties (evidenceText, startOffset, endOffset) provide
+# simplified access while maintaining alignment with oa:TextPositionSelector.
+# Full OA patterns can be used alongside these convenience properties.
+#
+# =============================================================================
 
 :Evidence rdf:type owl:Class ;
+    rdfs:subClassOf oa:Annotation ;
     rdfs:label "Evidence"@en ;
-    rdfs:comment "Text evidence supporting a claim, aligned with W3C Web Annotation model."@en .
+    rdfs:comment """Text evidence supporting a claim, aligned with W3C Web Annotation model.
+
+    As a subclass of oa:Annotation, Evidence instances can use standard Web Annotation
+    properties (oa:hasBody, oa:hasTarget, oa:hasSelector) alongside our convenience
+    properties (evidenceText, startOffset, endOffset).
+
+    The convenience properties map to OA concepts:
+    - evidenceText ≈ oa:exact (from oa:TextQuoteSelector)
+    - startOffset ≈ oa:start (from oa:TextPositionSelector)
+    - endOffset ≈ oa:end (from oa:TextPositionSelector)
+    - evidenceSource ≈ oa:hasSource"""@en ;
+    rdfs:seeAlso <https://www.w3.org/TR/annotation-vocab/> .
 
 :hasEvidence rdf:type owl:ObjectProperty ;
     rdfs:label "has evidence"@en ;

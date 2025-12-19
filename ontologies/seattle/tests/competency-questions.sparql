@@ -44,7 +44,7 @@ PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
 SELECT ?person ?name WHERE {
   ?membership a org:Membership ;
-              org:role seattle:MayorPost ;
+              org:post seattle:MayorPost ;  # W3C ORG: org:post links Membership→Post
               org:member ?person ;
               org:memberDuring ?interval .
 
@@ -85,10 +85,10 @@ SELECT ?person ?personName ?role ?roleLabel ?source ?sourceTitle ?announcedDate 
   ?source dcterms:title ?sourceTitle .
 
   ?membership org:member ?person ;
-              org:role ?role .
+              org:post ?post .  # W3C ORG: org:post links Membership→Post
 
   ?person foaf:name ?personName .
-  ?role skos:prefLabel ?roleLabel .
+  ?post skos:prefLabel ?roleLabel .
 }
 ORDER BY DESC(?announcedDate)
 
@@ -105,16 +105,16 @@ PREFIX prov: <http://www.w3.org/ns/prov#>
 PREFIX foaf: <http://xmlns.com/foaf/0.1/>
 PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
 
-SELECT ?role ?roleLabel ?startDate ?endDate ?announcedAt ?source WHERE {
+SELECT ?post ?roleLabel ?startDate ?endDate ?announcedAt ?source WHERE {
   # Bind the person of interest
   BIND(<http://effect-ontology.dev/seattle/person/TimBurgess> AS ?person)
 
   ?membership a org:Membership ;
               org:member ?person ;
-              org:role ?role ;
+              org:post ?post ;  # W3C ORG: org:post links Membership→Post
               org:memberDuring ?interval .
 
-  ?role skos:prefLabel ?roleLabel .
+  ?post skos:prefLabel ?roleLabel .
 
   ?interval time:hasBeginning/time:inXSDDate ?startDate .
   OPTIONAL { ?interval time:hasEnd/time:inXSDDate ?endDate }
@@ -141,7 +141,7 @@ PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
 SELECT ?person ?name ?termStart WHERE {
   ?membership a org:Membership ;
-              org:role seattle:MayorPost ;
+              org:post seattle:MayorPost ;  # W3C ORG: org:post links Membership→Post
               org:member ?person ;
               org:memberDuring ?interval .
 
@@ -178,13 +178,13 @@ SELECT ?dept ?deptName ?leader ?leaderName ?roleLabel WHERE {
 
   OPTIONAL {
     ?membership org:organization ?dept ;
-                org:role ?role ;
+                org:post ?post ;  # W3C ORG: org:post links Membership→Post
                 org:member ?leader ;
                 org:memberDuring ?interval .
 
-    ?role a seattle:LeadershipPost .
+    ?post a seattle:LeadershipPost .
     ?leader foaf:name ?leaderName .
-    ?role skos:prefLabel ?roleLabel .
+    ?post skos:prefLabel ?roleLabel .
 
     ?interval time:hasBeginning/time:inXSDDate ?start .
     OPTIONAL { ?interval time:hasEnd/time:inXSDDate ?end }
@@ -328,6 +328,523 @@ SELECT ?derivedFact ?rule ?ruleName ?supportingFact WHERE {
 
   ?rule skos:prefLabel ?ruleName .
 }
+
+# =============================================================================
+# MVP P0: TIMELINE & OPERATIONAL QUERIES
+# =============================================================================
+#
+# These queries directly power timeline UX features:
+# - Date-range filtering, as-of views, batch diffs, event navigation
+#
+
+# -----------------------------------------------------------------------------
+# CQ-T1: Staff announcement events in date range
+# Expected: Returns announcements within specified date window
+# Timeline Feature: Date-range filter for timeline navigation
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-T1
+PREFIX seattle: <http://effect-ontology.dev/seattle/>
+PREFIX time: <http://www.w3.org/2006/time#>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX org: <http://www.w3.org/ns/org#>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?event ?membership ?announcedDate ?person ?personName ?post ?postLabel ?source
+WHERE {
+  ?event a seattle:StaffAnnouncementEvent ;
+         seattle:announcedMembership ?membership ;
+         time:inXSDDateTime ?announcedDate ;
+         prov:wasDerivedFrom ?source .
+
+  ?membership org:member ?person ;
+              org:post ?post .
+
+  ?person foaf:name ?personName .
+  ?post skos:prefLabel ?postLabel .
+
+  # Parameterized date range (replace with actual dates)
+  FILTER (?announcedDate >= "2025-12-01T00:00:00Z"^^xsd:dateTime &&
+          ?announcedDate <= "2025-12-15T23:59:59Z"^^xsd:dateTime)
+}
+ORDER BY ?announcedDate
+
+# -----------------------------------------------------------------------------
+# CQ-T2: System belief state on date T (as-of query)
+# Expected: Returns claims that were valid on specified date
+# Timeline Feature: Historical snapshot view ("What did we know on Dec 5?")
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-T2
+PREFIX claims: <http://effect-ontology.dev/claims#>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?claim ?subject ?predicate ?object ?rank ?extractedAt
+WHERE {
+  ?claim a claims:Claim ;
+         claims:claimSubject ?subject ;
+         claims:claimPredicate ?predicate ;
+         claims:claimObject ?object ;
+         claims:rank ?rank ;
+         claims:extractedAt ?extractedAt .
+
+  # Claim must have been extracted by the as-of date
+  FILTER (?extractedAt <= "2025-12-05T23:59:59Z"^^xsd:dateTime)
+
+  # Claim must not have been deprecated by the as-of date
+  FILTER NOT EXISTS {
+    ?claim claims:deprecatedAt ?deprecatedAt .
+    FILTER (?deprecatedAt <= "2025-12-05T23:59:59Z"^^xsd:dateTime)
+  }
+
+  # Only show preferred and normal ranks (not deprecated)
+  FILTER (?rank IN (claims:Preferred, claims:Normal))
+}
+ORDER BY DESC(?extractedAt)
+
+# -----------------------------------------------------------------------------
+# CQ-T3: Batch diff (what changed in batch B)
+# Expected: Returns claims added in a specific processing batch
+# Timeline Feature: Daily "knowledge commits" summary
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-T3
+PREFIX claims: <http://effect-ontology.dev/claims#>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?claim ?subject ?predicate ?object ?rank ?extractedAt ?batchId
+WHERE {
+  ?claim a claims:Claim ;
+         claims:claimSubject ?subject ;
+         claims:claimPredicate ?predicate ;
+         claims:claimObject ?object ;
+         claims:rank ?rank ;
+         claims:extractedAt ?extractedAt ;
+         prov:wasGeneratedBy ?activity .
+
+  ?activity prov:wasAssociatedWith ?batch .
+  ?batch a prov:Activity ;
+         prov:atLocation ?batchId .
+
+  # Filter by specific batch (replace with actual batch ID)
+  FILTER (?batchId = "batch-2025-12-10-001")
+}
+ORDER BY ?extractedAt
+
+# -----------------------------------------------------------------------------
+# CQ-T4: Events between dates D1-D2
+# Expected: Returns all events in date range
+# Timeline Feature: Event timeline navigation
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-T4
+PREFIX seattle: <http://effect-ontology.dev/seattle/>
+PREFIX time: <http://www.w3.org/2006/time#>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?event ?eventType ?eventDate ?source
+WHERE {
+  {
+    ?event a seattle:StaffAnnouncementEvent ;
+           time:inXSDDateTime ?eventDate ;
+           prov:wasDerivedFrom ?source .
+    BIND("StaffAnnouncement" AS ?eventType)
+  }
+  UNION
+  {
+    ?event a seattle:PolicyInitiativeEvent ;
+           time:inXSDDateTime ?eventDate ;
+           prov:wasDerivedFrom ?source .
+    BIND("PolicyInitiative" AS ?eventType)
+  }
+  UNION
+  {
+    ?event a seattle:BudgetActionEvent ;
+           time:inXSDDateTime ?eventDate ;
+           prov:wasDerivedFrom ?source .
+    BIND("BudgetAction" AS ?eventType)
+  }
+  UNION
+  {
+    ?event a seattle:CouncilVoteEvent ;
+           time:inXSDDateTime ?eventDate ;
+           prov:wasDerivedFrom ?source .
+    BIND("CouncilVote" AS ?eventType)
+  }
+
+  # Parameterized date range
+  FILTER (?eventDate >= "2025-12-01T00:00:00Z"^^xsd:dateTime &&
+          ?eventDate <= "2025-12-31T23:59:59Z"^^xsd:dateTime)
+}
+ORDER BY ?eventDate
+
+# =============================================================================
+# MVP P0: CONFLICT & CORRECTION QUERIES
+# =============================================================================
+#
+# These queries power conflict detection UI and correction timeline views
+#
+
+# -----------------------------------------------------------------------------
+# CQ-C1: Conflicting claims for subject/predicate
+# Expected: Returns pairs of claims with same subject/predicate but different objects
+# Timeline Feature: Conflict detection UI, source disagreement highlighting
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-C1
+PREFIX claims: <http://effect-ontology.dev/claims#>
+
+SELECT ?claim1 ?claim2 ?subject ?predicate ?object1 ?object2 ?source1 ?source2
+WHERE {
+  ?claim1 a claims:Claim ;
+          claims:claimSubject ?subject ;
+          claims:claimPredicate ?predicate ;
+          claims:claimObject ?object1 ;
+          claims:statedIn ?source1 ;
+          claims:rank ?rank1 .
+
+  ?claim2 a claims:Claim ;
+          claims:claimSubject ?subject ;
+          claims:claimPredicate ?predicate ;
+          claims:claimObject ?object2 ;
+          claims:statedIn ?source2 ;
+          claims:rank ?rank2 .
+
+  # Different claims with different objects
+  FILTER (?claim1 != ?claim2)
+  FILTER (?object1 != ?object2)
+
+  # Both must be active (not deprecated)
+  FILTER (?rank1 IN (claims:Preferred, claims:Normal))
+  FILTER (?rank2 IN (claims:Preferred, claims:Normal))
+
+  # Avoid duplicate pairs (only show each conflict once)
+  FILTER (STR(?claim1) < STR(?claim2))
+}
+
+# -----------------------------------------------------------------------------
+# CQ-C2: Corrections for entity or role
+# Expected: Returns claims that supersede earlier claims about an entity
+# Timeline Feature: Correction timeline view, amendment history
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-C2
+PREFIX claims: <http://effect-ontology.dev/claims#>
+PREFIX dcterms: <http://purl.org/dc/terms/>
+
+SELECT ?newClaim ?oldClaim ?subject ?predicate ?newValue ?oldValue ?correctionDate ?reason
+WHERE {
+  ?newClaim a claims:Claim ;
+            claims:supersedes ?oldClaim ;
+            claims:claimSubject ?subject ;
+            claims:claimPredicate ?predicate ;
+            claims:claimObject ?newValue ;
+            claims:extractedAt ?correctionDate .
+
+  ?oldClaim claims:claimObject ?oldValue ;
+            claims:rank claims:Deprecated .
+
+  OPTIONAL { ?oldClaim claims:deprecationReason ?reason }
+
+  # Filter by entity (replace with actual entity IRI)
+  # FILTER (?subject = <http://effect-ontology.dev/seattle/person/SomeEntity>)
+}
+ORDER BY DESC(?correctionDate)
+
+# =============================================================================
+# MVP P0: PROVENANCE DEEP DIVE QUERIES
+# =============================================================================
+#
+# These queries support asserted/inferred toggle, evidence highlighting
+#
+
+# -----------------------------------------------------------------------------
+# CQ-P1: Extracted vs inferred fact distinction
+# Expected: Returns claims categorized as extracted or inferred
+# Timeline Feature: "Show only extracted facts" filter
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-P1
+PREFIX claims: <http://effect-ontology.dev/claims#>
+
+SELECT ?claim ?subject ?predicate ?object ?isInferred
+WHERE {
+  ?claim claims:claimSubject ?subject ;
+         claims:claimPredicate ?predicate ;
+         claims:claimObject ?object .
+
+  BIND(EXISTS { ?claim a claims:DerivedAssertion } AS ?isInferred)
+}
+ORDER BY ?isInferred ?claim
+
+# -----------------------------------------------------------------------------
+# CQ-P2: Exact text spans for claim C (evidence highlighting)
+# Expected: Returns evidence text with character offsets for a specific claim
+# Timeline Feature: Click triple → highlight evidence text in document viewer
+# Note: Similar to CQ-D2 but focused on single claim lookup
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-P2
+PREFIX claims: <http://effect-ontology.dev/claims#>
+PREFIX dcterms: <http://purl.org/dc/terms/>
+
+SELECT ?claim ?evidenceText ?startOffset ?endOffset ?sourceDoc ?sourceTitle
+WHERE {
+  # Parameterized claim (replace with actual claim IRI)
+  BIND(<http://effect-ontology.dev/seattle/claim/example-claim-1> AS ?claim)
+
+  ?claim claims:hasEvidence ?evidence .
+
+  ?evidence claims:evidenceText ?evidenceText ;
+            claims:startOffset ?startOffset ;
+            claims:endOffset ?endOffset ;
+            claims:evidenceSource ?sourceDoc .
+
+  OPTIONAL { ?sourceDoc dcterms:title ?sourceTitle }
+}
+ORDER BY ?startOffset
+
+# -----------------------------------------------------------------------------
+# CQ-P3: Sources disagreeing on event timing
+# Expected: Returns claims about same event with different dates
+# Timeline Feature: Temporal conflict detection, date disagreement warnings
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-P3
+PREFIX claims: <http://effect-ontology.dev/claims#>
+PREFIX time: <http://www.w3.org/2006/time#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?claim1 ?claim2 ?subject ?date1 ?date2 ?source1 ?source2
+WHERE {
+  # Find claims about temporal properties
+  VALUES ?temporalPredicate {
+    time:inXSDDateTime
+    time:inXSDDate
+    claims:validFrom
+    claims:eventTime
+  }
+
+  ?claim1 a claims:Claim ;
+          claims:claimSubject ?subject ;
+          claims:claimPredicate ?temporalPredicate ;
+          claims:claimLiteral ?date1 ;
+          claims:statedIn ?source1 ;
+          claims:rank ?rank1 .
+
+  ?claim2 a claims:Claim ;
+          claims:claimSubject ?subject ;
+          claims:claimPredicate ?temporalPredicate ;
+          claims:claimLiteral ?date2 ;
+          claims:statedIn ?source2 ;
+          claims:rank ?rank2 .
+
+  # Different claims with different dates
+  FILTER (?claim1 != ?claim2)
+  FILTER (?date1 != ?date2)
+
+  # Both active
+  FILTER (?rank1 IN (claims:Preferred, claims:Normal))
+  FILTER (?rank2 IN (claims:Preferred, claims:Normal))
+
+  # Avoid duplicate pairs
+  FILTER (STR(?claim1) < STR(?claim2))
+}
+
+# =============================================================================
+# MVP P0: ENTITY-CENTRIC QUERIES
+# =============================================================================
+#
+# These queries support entity profile pages and entity drill-down navigation
+#
+
+# -----------------------------------------------------------------------------
+# CQ-E1: All facts about entity E
+# Expected: Returns all claims where entity is subject or object
+# Timeline Feature: Entity profile page ("Show me everything about Brian Surratt")
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-E1
+PREFIX claims: <http://effect-ontology.dev/claims#>
+
+SELECT ?claim ?predicate ?value ?direction ?rank ?source
+WHERE {
+  # Parameterized entity (replace with actual entity IRI)
+  BIND(<http://effect-ontology.dev/seattle/person/BrianSurratt> AS ?entity)
+
+  {
+    # Entity as subject
+    ?claim a claims:Claim ;
+           claims:claimSubject ?entity ;
+           claims:claimPredicate ?predicate ;
+           claims:claimObject ?value ;
+           claims:rank ?rank ;
+           claims:statedIn ?source .
+    BIND("outgoing" AS ?direction)
+  }
+  UNION
+  {
+    # Entity as object
+    ?claim a claims:Claim ;
+           claims:claimSubject ?value ;
+           claims:claimPredicate ?predicate ;
+           claims:claimObject ?entity ;
+           claims:rank ?rank ;
+           claims:statedIn ?source .
+    BIND("incoming" AS ?direction)
+  }
+
+  # Only active claims
+  FILTER (?rank IN (claims:Preferred, claims:Normal))
+}
+ORDER BY ?predicate ?direction
+
+# -----------------------------------------------------------------------------
+# CQ-E2: Timeline of facts involving entity E
+# Expected: Returns facts about entity ordered by event/extraction time
+# Timeline Feature: Entity-centric timeline view
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-E2
+PREFIX claims: <http://effect-ontology.dev/claims#>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?claim ?predicate ?value ?eventTime ?extractedAt ?source
+WHERE {
+  # Parameterized entity (replace with actual entity IRI)
+  BIND(<http://effect-ontology.dev/seattle/person/BrianSurratt> AS ?entity)
+
+  {
+    ?claim claims:claimSubject ?entity .
+    ?claim claims:claimObject ?value .
+  }
+  UNION
+  {
+    ?claim claims:claimObject ?entity .
+    ?claim claims:claimSubject ?value .
+  }
+
+  ?claim a claims:Claim ;
+         claims:claimPredicate ?predicate ;
+         claims:statedIn ?source ;
+         claims:rank ?rank .
+
+  # Get temporal information
+  OPTIONAL { ?claim claims:eventTime ?eventTime }
+  OPTIONAL { ?claim claims:extractedAt ?extractedAt }
+
+  # Only active claims
+  FILTER (?rank IN (claims:Preferred, claims:Normal))
+}
+ORDER BY COALESCE(?eventTime, ?extractedAt)
+
+# =============================================================================
+# MVP P0: INFERENCE TRANSPARENCY QUERIES
+# =============================================================================
+#
+# These queries support inference explanation panel and rule versioning
+#
+
+# -----------------------------------------------------------------------------
+# CQ-I1: Supporting facts for derived fact D (explain button)
+# Expected: Returns the premises that led to an inference
+# Timeline Feature: "Explain" button functionality
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-I1
+PREFIX claims: <http://effect-ontology.dev/claims#>
+PREFIX seattle: <http://effect-ontology.dev/seattle/>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+
+SELECT ?derivedFact ?rule ?ruleName ?supportingFact ?supportSubject ?supportPredicate ?supportObject
+WHERE {
+  # Parameterized derived fact (replace with actual IRI)
+  BIND(<http://effect-ontology.dev/seattle/derived/example-derived-1> AS ?derivedFact)
+
+  ?derivedFact a claims:DerivedAssertion ;
+               prov:wasGeneratedBy ?activity .
+
+  ?activity a seattle:ReasoningActivity ;
+            seattle:appliedRule ?rule ;
+            prov:used ?supportingFact .
+
+  ?rule skos:prefLabel ?ruleName .
+
+  # Get details of supporting facts
+  ?supportingFact claims:claimSubject ?supportSubject ;
+                  claims:claimPredicate ?supportPredicate ;
+                  claims:claimObject ?supportObject .
+}
+
+# -----------------------------------------------------------------------------
+# CQ-I2: Facts invalidated by rule update
+# Expected: Returns derived facts that would change if rule were modified
+# Timeline Feature: Rule change impact view
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-I2
+PREFIX claims: <http://effect-ontology.dev/claims#>
+PREFIX seattle: <http://effect-ontology.dev/seattle/>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+
+SELECT ?derivedFact ?subject ?predicate ?object ?ruleVersion ?derivedAt
+WHERE {
+  # Parameterized rule (replace with actual rule IRI)
+  BIND(<http://effect-ontology.dev/seattle/rule/role-inheritance> AS ?rule)
+
+  ?derivedFact a claims:DerivedAssertion ;
+               claims:claimSubject ?subject ;
+               claims:claimPredicate ?predicate ;
+               claims:claimObject ?object ;
+               prov:wasGeneratedBy ?activity .
+
+  ?activity a seattle:ReasoningActivity ;
+            seattle:appliedRule ?rule ;
+            prov:endedAtTime ?derivedAt .
+
+  OPTIONAL { ?rule seattle:ruleVersion ?ruleVersion }
+}
+ORDER BY DESC(?derivedAt)
+
+# -----------------------------------------------------------------------------
+# CQ-I3: New facts from rule deployment (backfill timeline entries)
+# Expected: Returns derived facts produced by a specific rule version
+# Timeline Feature: Backfill event cards in timeline
+# -----------------------------------------------------------------------------
+
+# TEST: CQ-I3
+PREFIX claims: <http://effect-ontology.dev/claims#>
+PREFIX seattle: <http://effect-ontology.dev/seattle/>
+PREFIX prov: <http://www.w3.org/ns/prov#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?derivedFact ?subject ?predicate ?object ?rule ?ruleName ?deployedAt
+WHERE {
+  ?derivedFact a claims:DerivedAssertion ;
+               claims:claimSubject ?subject ;
+               claims:claimPredicate ?predicate ;
+               claims:claimObject ?object ;
+               prov:wasGeneratedBy ?activity .
+
+  ?activity a seattle:ReasoningActivity ;
+            seattle:appliedRule ?rule ;
+            prov:endedAtTime ?deployedAt .
+
+  ?rule skos:prefLabel ?ruleName .
+
+  # Filter by deployment date range
+  FILTER (?deployedAt >= "2025-12-18T00:00:00Z"^^xsd:dateTime &&
+          ?deployedAt <= "2025-12-18T23:59:59Z"^^xsd:dateTime)
+}
+ORDER BY ?deployedAt
 
 # =============================================================================
 # VALIDATION QUERIES (for testing data quality)

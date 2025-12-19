@@ -64,15 +64,23 @@
         sh:message "Membership must have exactly one org:organization"
     ] ;
 
+    # W3C ORG: org:post links Membership to Post (the position held)
+    sh:property [
+        sh:path org:post ;
+        sh:minCount 1 ;
+        sh:class org:Post ;
+        sh:message "Membership must have at least one org:post (the position held)"
+    ] ;
+
+    # W3C ORG: org:role optionally classifies the nature of the membership
     sh:property [
         sh:path org:role ;
-        sh:minCount 1 ;
+        sh:minCount 0 ;
         sh:or (
-            [ sh:class org:Post ]
             [ sh:class org:Role ]
             [ sh:class skos:Concept ]
         ) ;
-        sh:message "Membership must have at least one org:role (Post or Role)"
+        sh:message "Membership org:role must be a Role or Concept (not Post)"
     ] ;
 
     sh:property [
@@ -104,6 +112,30 @@
         sh:path time:hasEnd ;
         sh:maxCount 1 ;
         sh:message "Interval may have at most one time:hasEnd"
+    ] ;
+
+    # Temporal consistency: end must be after beginning
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:message "Interval end date must be after beginning date" ;
+        sh:prefixes [
+            sh:declare [
+                sh:prefix "time" ;
+                sh:namespace "http://www.w3.org/2006/time#"^^xsd:anyURI
+            ] ;
+            sh:declare [
+                sh:prefix "xsd" ;
+                sh:namespace "http://www.w3.org/2001/XMLSchema#"^^xsd:anyURI
+            ]
+        ] ;
+        sh:select """
+            SELECT $this ?beginDate ?endDate
+            WHERE {
+                $this time:hasBeginning/time:inXSDDate ?beginDate .
+                $this time:hasEnd/time:inXSDDate ?endDate .
+                FILTER (?endDate <= ?beginDate)
+            }
+        """
     ] .
 
 # -----------------------------------------------------------------------------
@@ -181,6 +213,109 @@
     ] .
 
 # -----------------------------------------------------------------------------
+# Policy Initiative Event Shape
+# -----------------------------------------------------------------------------
+
+:PolicyInitiativeEventShape a sh:NodeShape ;
+    sh:targetClass seattle:PolicyInitiativeEvent ;
+    rdfs:label "Policy Initiative Event Shape"@en ;
+    rdfs:comment "Validates policy initiative announcements."@en ;
+
+    sh:property [
+        sh:path seattle:announces ;
+        sh:minCount 1 ;
+        sh:message "Policy initiative event must announce at least one initiative"
+    ] ;
+
+    sh:property [
+        sh:path time:inXSDDateTime ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:dateTime ;
+        sh:message "Event must have exactly one time:inXSDDateTime"
+    ] ;
+
+    sh:property [
+        sh:path prov:wasDerivedFrom ;
+        sh:minCount 1 ;
+        sh:message "Event must have provenance (prov:wasDerivedFrom source document)"
+    ] .
+
+# -----------------------------------------------------------------------------
+# Budget Action Event Shape
+# -----------------------------------------------------------------------------
+
+:BudgetActionEventShape a sh:NodeShape ;
+    sh:targetClass seattle:BudgetActionEvent ;
+    rdfs:label "Budget Action Event Shape"@en ;
+    rdfs:comment "Validates budget allocation, cut, or reallocation actions."@en ;
+
+    sh:property [
+        sh:path seattle:impacts ;
+        sh:minCount 1 ;
+        sh:or (
+            [ sh:class org:Organization ]
+            [ sh:class org:OrganizationalUnit ]
+        ) ;
+        sh:message "Budget action must impact at least one organization"
+    ] ;
+
+    sh:property [
+        sh:path time:inXSDDateTime ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:dateTime ;
+        sh:message "Event must have exactly one time:inXSDDateTime"
+    ] ;
+
+    sh:property [
+        sh:path prov:wasDerivedFrom ;
+        sh:minCount 1 ;
+        sh:message "Event must have provenance (prov:wasDerivedFrom source document)"
+    ] .
+
+# -----------------------------------------------------------------------------
+# Council Vote Event Shape
+# -----------------------------------------------------------------------------
+
+:CouncilVoteEventShape a sh:NodeShape ;
+    sh:targetClass seattle:CouncilVoteEvent ;
+    rdfs:label "Council Vote Event Shape"@en ;
+    rdfs:comment "Validates city council vote events."@en ;
+
+    sh:property [
+        sh:path seattle:voteResult ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:in ( "passed" "failed" "tabled" "withdrawn" "deferred" ) ;
+        sh:message "Vote must have exactly one result (passed, failed, tabled, withdrawn, or deferred)"
+    ] ;
+
+    sh:property [
+        sh:path seattle:voteTally ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:pattern "^\\d+-\\d+$" ;
+        sh:message "Vote tally must be in format 'X-Y' (e.g., '7-2')"
+    ] ;
+
+    sh:property [
+        sh:path time:inXSDDateTime ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:dateTime ;
+        sh:message "Event must have exactly one time:inXSDDateTime"
+    ] ;
+
+    sh:property [
+        sh:path prov:wasDerivedFrom ;
+        sh:minCount 1 ;
+        sh:message "Event must have provenance (prov:wasDerivedFrom source document)"
+    ] .
+
+# -----------------------------------------------------------------------------
 # Claim Shape (from claims.ttl)
 # -----------------------------------------------------------------------------
 
@@ -222,6 +357,26 @@
         sh:path claims:statedIn ;
         sh:minCount 1 ;
         sh:message "Claim must have at least one statedIn source"
+    ] ;
+
+    # Temporal validity: validUntil must be after validFrom (when both present)
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:message "Claim validUntil must be after validFrom" ;
+        sh:prefixes [
+            sh:declare [
+                sh:prefix "claims" ;
+                sh:namespace "http://effect-ontology.dev/claims#"^^xsd:anyURI
+            ]
+        ] ;
+        sh:select """
+            SELECT $this ?validFrom ?validUntil
+            WHERE {
+                $this claims:validFrom ?validFrom .
+                $this claims:validUntil ?validUntil .
+                FILTER (?validUntil <= ?validFrom)
+            }
+        """
     ] .
 
 # -----------------------------------------------------------------------------
@@ -264,6 +419,26 @@
         sh:minCount 1 ;
         sh:maxCount 1 ;
         sh:message "Evidence must have exactly one evidenceSource"
+    ] ;
+
+    # Offset consistency: endOffset must be greater than startOffset
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:message "Evidence endOffset must be greater than startOffset" ;
+        sh:prefixes [
+            sh:declare [
+                sh:prefix "claims" ;
+                sh:namespace "http://effect-ontology.dev/claims#"^^xsd:anyURI
+            ]
+        ] ;
+        sh:select """
+            SELECT $this ?startOffset ?endOffset
+            WHERE {
+                $this claims:startOffset ?startOffset .
+                $this claims:endOffset ?endOffset .
+                FILTER (?endOffset <= ?startOffset)
+            }
+        """
     ] .
 
 # -----------------------------------------------------------------------------
