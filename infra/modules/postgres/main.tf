@@ -95,6 +95,7 @@ resource "google_compute_instance" "postgres" {
 
   network_interface {
     subnetwork = google_compute_subnetwork.workflow_subnet.self_link
+    network_ip = google_compute_address.postgres_internal.address
 
     # No external IP - access via IAP or VPC only
     # Uncomment for debugging:
@@ -103,6 +104,8 @@ resource "google_compute_instance" "postgres" {
 
   metadata = {
     # Cloud-init script to start PostgreSQL container
+    # Note: Using env var for password as COS doesn't support secret volumes like K8s
+    # The VM is on internal VPC only, so this is reasonably secure
     gce-container-declaration = yamlencode({
       spec = {
         containers = [{
@@ -111,17 +114,16 @@ resource "google_compute_instance" "postgres" {
           env = [
             { name = "POSTGRES_USER", value = "workflow" },
             { name = "POSTGRES_DB", value = "workflow" },
-            { name = "POSTGRES_PASSWORD_FILE", value = "/run/secrets/pg_password" }
+            { name = "POSTGRES_PASSWORD", value = var.postgres_password },
+            { name = "PGDATA", value = "/var/lib/postgresql/data/pgdata" }
           ]
           volumeMounts = [
-            { name = "postgres-data", mountPath = "/var/lib/postgresql/data" },
-            { name = "pg-password", mountPath = "/run/secrets", readOnly = true }
+            { name = "postgres-data", mountPath = "/var/lib/postgresql/data" }
           ]
           ports = [{ containerPort = 5432 }]
         }]
         volumes = [
-          { name = "postgres-data", gcePersistentDisk = { pdName = "postgres-data", fsType = "ext4" } },
-          { name = "pg-password", secret = { secretName = var.postgres_password_secret_id } }
+          { name = "postgres-data", gcePersistentDisk = { pdName = "postgres-data", fsType = "ext4" } }
         ]
         restartPolicy = "Always"
       }
@@ -159,6 +161,45 @@ resource "google_compute_disk" "postgres_data" {
     environment = var.environment
     purpose     = "workflow-persistence"
   }
+}
+
+# -----------------------------------------------------------------------------
+# Backup: Automated Disk Snapshots
+# -----------------------------------------------------------------------------
+
+# Snapshot schedule: Daily at 3 AM UTC, 7-day retention
+resource "google_compute_resource_policy" "postgres_backup" {
+  name   = "postgres-backup-${var.environment}"
+  region = var.region
+
+  snapshot_schedule_policy {
+    schedule {
+      daily_schedule {
+        days_in_cycle = 1
+        start_time    = "03:00" # 3 AM UTC
+      }
+    }
+
+    retention_policy {
+      max_retention_days    = 7
+      on_source_disk_delete = "KEEP_AUTO_SNAPSHOTS"
+    }
+
+    snapshot_properties {
+      labels = {
+        environment = var.environment
+        backup_type = "automated"
+      }
+      storage_locations = [var.region]
+    }
+  }
+}
+
+# Attach snapshot schedule to PostgreSQL data disk
+resource "google_compute_disk_resource_policy_attachment" "postgres_backup_attachment" {
+  name = google_compute_resource_policy.postgres_backup.name
+  disk = google_compute_disk.postgres_data.name
+  zone = "${var.region}-a"
 }
 
 # Static internal IP for consistent DNS

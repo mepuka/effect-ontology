@@ -28,3 +28,13 @@ output "subnet_name" {
   description = "Subnet name"
   value       = google_compute_subnetwork.workflow_subnet.name
 }
+
+output "backup_policy_name" {
+  description = "Snapshot backup policy name"
+  value       = google_compute_resource_policy.postgres_backup.name
+}
+
+output "backup_schedule" {
+  description = "Backup schedule description"
+  value       = "Daily at 03:00 UTC, 7-day retention"
+}

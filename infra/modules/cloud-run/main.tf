@@ -50,6 +50,14 @@ resource "google_cloud_run_v2_service" "main" {
         value = var.ontology_path
       }
       env {
+        name  = "EXTERNAL_VOCABS_PATH"
+        value = var.external_vocabs_path
+      }
+      env {
+        name  = "ONTOLOGY_REGISTRY_PATH"
+        value = var.registry_path
+      }
+      env {
         name = "LLM_API_KEY"
         value_source {
           secret_key_ref {
@@ -117,11 +125,11 @@ resource "google_cloud_run_v2_service" "main" {
     }
 
     scaling {
-      min_instance_count = 0
+      min_instance_count = var.min_instance_count
       max_instance_count = var.environment == "prod" ? 10 : 2
     }
 
-    timeout = "300s"
+    timeout = var.request_timeout
   }
 }
 

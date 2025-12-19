@@ -19,6 +19,12 @@ variable "postgres_password_secret_id" {
   type        = string
 }
 
+variable "postgres_password" {
+  description = "PostgreSQL password (sensitive)"
+  type        = string
+  sensitive   = true
+}
+
 variable "service_account_email" {
   description = "Service account email for the Compute Engine instance"
   type        = string

@@ -33,8 +33,20 @@ variable "allow_unauthenticated" {
 
 variable "ontology_path" {
   type        = string
-  description = "Path to ontology file inside the container (absolute path)"
-  default     = "/app/ontologies/football/ontology_skos.ttl"
+  description = "Path to ontology file in GCS bucket (relative to STORAGE_BUCKET)"
+  default     = "canonical/seattle/ontology.ttl"
+}
+
+variable "external_vocabs_path" {
+  type        = string
+  description = "Path to merged external vocabularies in GCS bucket"
+  default     = "canonical/external/merged.ttl"
+}
+
+variable "registry_path" {
+  type        = string
+  description = "Path to ontology registry manifest (registry.json) in GCS bucket"
+  default     = "registry.json"
 }
 
 # PostgreSQL configuration for @effect/workflow persistence
@@ -60,4 +72,16 @@ variable "postgres_password_secret_id" {
   type        = string
   description = "Secret Manager secret ID for PostgreSQL password"
   default     = null
+}
+
+variable "min_instance_count" {
+  type        = number
+  description = "Minimum number of Cloud Run instances. Set to 1 for SSE streaming to avoid cold starts."
+  default     = 0
+}
+
+variable "request_timeout" {
+  type        = string
+  description = "Maximum request timeout. SSE streaming requires 3600s for long-running batches."
+  default     = "3600s"
 }

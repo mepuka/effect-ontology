@@ -30,3 +30,21 @@ variable "enable_postgres" {
   type        = bool
   default     = false
 }
+
+variable "enable_monitoring" {
+  description = "Enable Cloud Monitoring with uptime checks and alert policies"
+  type        = bool
+  default     = true
+}
+
+variable "notification_email" {
+  description = "Email address for alert notifications (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "min_instance_count" {
+  description = "Minimum Cloud Run instances. Set to 1 for production SSE to avoid cold starts."
+  type        = number
+  default     = 0
+}

@@ -16,6 +16,13 @@ data "google_secret_manager_secret" "postgres_password" {
   secret_id = "POSTGRES_PASSWORD"
 }
 
+# Fetch the latest version of the PostgreSQL password
+data "google_secret_manager_secret_version" "postgres_password" {
+  count   = var.enable_postgres ? 1 : 0
+  secret  = data.google_secret_manager_secret.postgres_password[0].id
+  version = "latest"
+}
+
 # Grant Cloud Run SA access to PostgreSQL password
 resource "google_secret_manager_secret_iam_member" "postgres_access" {
   count     = var.enable_postgres ? 1 : 0
