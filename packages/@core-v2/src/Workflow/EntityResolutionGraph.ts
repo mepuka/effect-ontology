@@ -10,7 +10,6 @@
 
 import { DateTime, Effect, Graph, Option } from "effect"
 import type { Entity, KnowledgeGraph, Relation } from "../Domain/Model/Entity.js"
-import type { EntityId } from "../Domain/Model/shared.js"
 import {
   type EntityResolutionConfig,
   type EREdge,
@@ -27,6 +26,7 @@ import type {
   EntityResolutionInfo,
   SimilarityEdge
 } from "../Domain/Model/EntityResolutionGraph.js"
+import type { EntityId } from "../Domain/Model/shared.js"
 import { EmbeddingService } from "../Service/Embedding.js"
 import { computeEntitySimilarity, detectResolutionMethod, shouldConsiderMerge } from "../Utils/Similarity.js"
 import { simpleTokenize } from "../Utils/String.js"

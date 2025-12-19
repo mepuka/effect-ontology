@@ -8,7 +8,7 @@
  * @module Workflow/EntityResolution
  */
 
-import { Effect } from "effect"
+import { Effect, Option } from "effect"
 import { Entity, KnowledgeGraph, Relation } from "../Domain/Model/Entity.js"
 import { combinedSimilarity, overlapRatio } from "../Utils/String.js"
 
@@ -124,11 +124,11 @@ const findEntityClusters = (
 const mergeEntityCluster = (
   clusterIds: ReadonlyArray<string>,
   entityMap: Map<string, Entity>
-): Entity => {
+): Option.Option<Entity> => {
   const entities = clusterIds.map((id) => entityMap.get(id)!).filter(Boolean)
 
-  if (entities.length === 0) throw new Error("Cannot merge empty cluster")
-  if (entities.length === 1) return entities[0]
+  if (entities.length === 0) return Option.none()
+  if (entities.length === 1) return Option.some(entities[0])
 
   // Select canonical entity (prefer longest mention - usually most complete)
   const sorted = [...entities].sort((a, b) => b.mention.length - a.mention.length)
@@ -158,12 +158,14 @@ const mergeEntityCluster = (
     }
   }
 
-  return new Entity({
-    id: canonical.id,
-    mention: canonical.mention,
-    types: finalTypes as Array<string>,
-    attributes: mergedAttrs
-  })
+  return Option.some(
+    new Entity({
+      id: canonical.id,
+      mention: canonical.mention,
+      types: finalTypes as Array<string>,
+      attributes: mergedAttrs
+    })
+  )
 }
 
 /**
@@ -221,9 +223,11 @@ export const resolveEntities = (
     const idMapping = new Map<string, string>()
 
     for (const [_canonicalId, clusterIds] of clusters) {
-      const merged = mergeEntityCluster(clusterIds, entityMap)
-      mergedEntities.push(merged)
-      for (const oldId of clusterIds) idMapping.set(oldId, merged.id)
+      const mergedOpt = mergeEntityCluster(clusterIds, entityMap)
+      if (Option.isSome(mergedOpt)) {
+        mergedEntities.push(mergedOpt.value)
+        for (const oldId of clusterIds) idMapping.set(oldId, mergedOpt.value.id)
+      }
     }
 
     // Update relations to use canonical entity IDs

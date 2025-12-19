@@ -115,6 +115,8 @@ export const ExtractionActivityOutput = Schema.Struct({
   graphUri: GcsUri,
   entityCount: Schema.Number,
   relationCount: Schema.Number,
+  /** Number of claims extracted (optional for backward compatibility) */
+  claimCount: Schema.optionalWith(Schema.Number, { default: () => 0 }),
   durationMs: Schema.Number
 })
 export type ExtractionActivityOutput = typeof ExtractionActivityOutput.Type
@@ -284,6 +286,7 @@ export const makeExtractionActivity = (input: ExtractionInput): Activity<
       graphUri: toGcsUri(bucket, graphPath),
       entityCount: Chunk.size(entities),
       relationCount: Chunk.size(relations),
+      claimCount: 0, // Legacy activities don't track claims
       durationMs: DateTime.distance(start, end)
     }
   }).pipe(Effect.mapError(toStringError))
@@ -381,9 +384,37 @@ export const makeValidationActivity = (input: ValidationInput): Activity<
 
     const dataStore = yield* rdf.parseTurtle(resolvedGraph)
 
-    const shapesStore = input.shaclUri
-      ? yield* shacl.loadShapesFromUri(input.shaclUri)
-      : yield* shacl.generateShapesFromOntology(dataStore._store)
+    // Load SHACL shapes with auto-discovery:
+    // 1. If shaclUri provided explicitly, use it
+    // 2. Otherwise, try convention-based discovery: shapes.ttl in same directory as ontology
+    // 3. Fall back to auto-generation from ontology if shapes.ttl not found
+    const shapesStore = yield* (input.shaclUri
+      ? shacl.loadShapesFromUri(input.shaclUri)
+      : Effect.gen(function*() {
+        // Try convention-based discovery: shapes.ttl in same directory as ontology
+        const shapesPath = input.ontologyUri.replace(/[^/]+\.ttl$/i, "shapes.ttl")
+        const shapesContent = yield* storage.get(stripGsPrefix(shapesPath))
+
+        if (Option.isSome(shapesContent)) {
+          yield* Effect.logInfo("Validation: Found shapes.ttl via auto-discovery", {
+            batchId: input.batchId,
+            shapesPath
+          })
+          const parsed = yield* rdf.parseTurtle(shapesContent.value)
+          return parsed._store
+        }
+
+        // Fall back to auto-generation from ontology (NOT from data store!)
+        yield* Effect.logInfo("Validation: Auto-generating SHACL shapes from ontology", {
+          batchId: input.batchId,
+          ontologyUri: input.ontologyUri
+        })
+        const ontologyContent = yield* storage.get(stripGsPrefix(input.ontologyUri)).pipe(
+          Effect.flatMap((opt) => requireContent(opt, input.ontologyUri))
+        )
+        const ontologyStore = yield* rdf.parseTurtle(ontologyContent)
+        return yield* shacl.generateShapesFromOntology(ontologyStore._store)
+      }))
 
     const report = yield* shacl.validate(dataStore._store, shapesStore)
 

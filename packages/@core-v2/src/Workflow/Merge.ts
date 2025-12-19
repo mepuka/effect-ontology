@@ -8,7 +8,7 @@
  * @module Workflow/Merge
  */
 
-import { Chunk, HashMap, HashSet, Order } from "effect"
+import { Chunk, HashMap, HashSet, Option, Order } from "effect"
 import type { Relation } from "../Domain/Model/Entity.js"
 import { Entity, KnowledgeGraph } from "../Domain/Model/Entity.js"
 
@@ -178,7 +178,7 @@ export const mergeGraphs = (a: KnowledgeGraph, b: KnowledgeGraph): KnowledgeGrap
   // Merge b's entities into the map
   for (const entity of b.entities) {
     const existing = HashMap.get(entityMap, entity.id)
-    if (existing._tag === "Some") {
+    if (Option.isSome(existing)) {
       // Merge attributes: union with preference for non-empty values
       const mergedAttributes = { ...existing.value.attributes, ...entity.attributes }
       // Select best types using frequency voting (instead of union)
@@ -263,7 +263,7 @@ export const mergeGraphsWithConflicts = (
   // Merge b's entities into the map, detecting conflicts
   for (const entity of b.entities) {
     const existing = HashMap.get(entityMap, entity.id)
-    if (existing._tag === "Some") {
+    if (Option.isSome(existing)) {
       // Check for attribute conflicts
       for (const [key, value] of Object.entries(entity.attributes)) {
         const existingValue = existing.value.attributes[key]

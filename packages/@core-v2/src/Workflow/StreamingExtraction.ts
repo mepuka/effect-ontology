@@ -38,7 +38,10 @@ const isSystemicError = (error: unknown): boolean => {
 
   if (cause instanceof Error) {
     // Check for standard Node.js/Bun system error codes
-    const code = (cause as any).code
+    // Use type guard to safely access .code property on Error subclasses
+    const code = "code" in cause && typeof (cause as { code?: unknown }).code === "string"
+      ? (cause as { code: string }).code
+      : undefined
     if (code === "ECONNREFUSED" || code === "ETIMEDOUT" || code === "ENOTFOUND") {
       return true
     }

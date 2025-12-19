@@ -6,7 +6,6 @@
  */
 
 export * from "./Activities.js"
-export * from "./BatchWorkflow.js"
 export * from "./EntityResolutionGraph.js"
 export * from "./Merge.js"
 export * from "./StreamingExtraction.js"
