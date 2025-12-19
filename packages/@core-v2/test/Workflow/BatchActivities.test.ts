@@ -160,6 +160,7 @@ describe("Activity Output Schemas", () => {
         graphUri: makeGcsUri("graphs/output.ttl"),
         entityCount: 10,
         relationCount: 5,
+        claimCount: 3,
         durationMs: 1234
       }
 
@@ -167,6 +168,7 @@ describe("Activity Output Schemas", () => {
 
       expect(encoded.entityCount).toBe(10)
       expect(encoded.relationCount).toBe(5)
+      expect(encoded.claimCount).toBe(3)
     })
   })
 
@@ -195,7 +197,7 @@ describe("Resolution Activity", () => {
   it("creates activity with correct name", async () => {
     const input = {
       batchId: testBatchId,
-      documentGraphUris: [] as GcsUri[] // Empty for this test
+      documentGraphUris: [] as Array<GcsUri> // Empty for this test
     }
 
     // The activity should be created successfully

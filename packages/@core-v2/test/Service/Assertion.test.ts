@@ -5,13 +5,13 @@
  * @module Test/Service/Assertion
  */
 
-import { describe, expect } from "vitest"
 import { it } from "@effect/vitest"
-import { Effect, Layer, Option, HashMap } from "effect"
-import { AssertionService, type AssertionRow, type CreateAssertionInput } from "../../src/Service/Assertion.js"
+import { Effect, HashMap, Layer, Option } from "effect"
+import { describe, expect } from "vitest"
 import { ClaimRepository } from "../../src/Repository/Claim.js"
-import { RdfBuilder } from "../../src/Service/Rdf.js"
 import type { ClaimRow } from "../../src/Repository/schema.js"
+import { type AssertionRow, AssertionService, type CreateAssertionInput } from "../../src/Service/Assertion.js"
+import { RdfBuilder } from "../../src/Service/Rdf.js"
 import { TestConfigProviderLayer } from "../setup.js"
 
 // =============================================================================
@@ -76,7 +76,7 @@ const makeTestLayer = (claims: Map<string, ClaimRow> = new Map()) =>
 describe("AssertionService", () => {
   describe("createAssertion", () => {
     it.effect("creates assertion from a single claim with accept decision", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const svc = yield* AssertionService
 
         const assertion = yield* svc.createAssertion({
@@ -93,11 +93,10 @@ describe("AssertionService", () => {
       }).pipe(
         Effect.provide(makeTestLayer(new Map([["claim-test123", makeMockClaim()]]))),
         Effect.provide(TestConfigProviderLayer)
-      )
-    )
+      ))
 
     it.effect("creates assertion with override values", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const svc = yield* AssertionService
 
         const assertion = yield* svc.createAssertion({
@@ -114,11 +113,10 @@ describe("AssertionService", () => {
       }).pipe(
         Effect.provide(makeTestLayer(new Map([["claim-test123", makeMockClaim()]]))),
         Effect.provide(TestConfigProviderLayer)
-      )
-    )
+      ))
 
     it.effect("creates assertion with curator info", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const svc = yield* AssertionService
 
         const assertion = yield* svc.createAssertion({
@@ -131,11 +129,10 @@ describe("AssertionService", () => {
       }).pipe(
         Effect.provide(makeTestLayer(new Map([["claim-test123", makeMockClaim()]]))),
         Effect.provide(TestConfigProviderLayer)
-      )
-    )
+      ))
 
     it.effect("fails when no valid claims found", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const svc = yield* AssertionService
 
         const result = yield* svc.createAssertion({
@@ -147,11 +144,10 @@ describe("AssertionService", () => {
       }).pipe(
         Effect.provide(makeTestLayer()),
         Effect.provide(TestConfigProviderLayer)
-      )
-    )
+      ))
 
     it.effect("calculates average confidence from multiple claims", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const svc = yield* AssertionService
 
         const assertion = yield* svc.createAssertion({
@@ -162,18 +158,19 @@ describe("AssertionService", () => {
         // Average of 0.8 and 0.6 = 0.7
         expect(assertion.confidence).toBeCloseTo(0.7, 1)
       }).pipe(
-        Effect.provide(makeTestLayer(new Map([
-          ["claim-1", makeMockClaim({ id: "claim-1", confidenceScore: "0.8" })],
-          ["claim-2", makeMockClaim({ id: "claim-2", confidenceScore: "0.6" })]
-        ]))),
+        Effect.provide(makeTestLayer(
+          new Map([
+            ["claim-1", makeMockClaim({ id: "claim-1", confidenceScore: "0.8" })],
+            ["claim-2", makeMockClaim({ id: "claim-2", confidenceScore: "0.6" })]
+          ])
+        )),
         Effect.provide(TestConfigProviderLayer)
-      )
-    )
+      ))
   })
 
   describe("getAssertion", () => {
     it.effect("retrieves assertion with provenance after creation", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const svc = yield* AssertionService
 
         // Create an assertion first
@@ -193,11 +190,10 @@ describe("AssertionService", () => {
       }).pipe(
         Effect.provide(makeTestLayer(new Map([["claim-test123", makeMockClaim()]]))),
         Effect.provide(TestConfigProviderLayer)
-      )
-    )
+      ))
 
     it.effect("returns None for non-existent assertion", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const svc = yield* AssertionService
 
         const result = yield* svc.getAssertion("nonexistent-id")
@@ -206,13 +202,12 @@ describe("AssertionService", () => {
       }).pipe(
         Effect.provide(makeTestLayer()),
         Effect.provide(TestConfigProviderLayer)
-      )
-    )
+      ))
   })
 
   describe("query", () => {
     it.effect("queries assertions by subject IRI", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const svc = yield* AssertionService
 
         // Create assertions and verify they're created
@@ -232,16 +227,17 @@ describe("AssertionService", () => {
         expect(results.length).toBe(1)
         expect(results[0].subjectIri).toBe("http://example.org/entity/1")
       }).pipe(
-        Effect.provide(makeTestLayer(new Map([
-          ["claim-1", makeMockClaim({ id: "claim-1" })],
-          ["claim-2", makeMockClaim({ id: "claim-2", subjectIri: "http://example.org/entity/2" })]
-        ]))),
+        Effect.provide(makeTestLayer(
+          new Map([
+            ["claim-1", makeMockClaim({ id: "claim-1" })],
+            ["claim-2", makeMockClaim({ id: "claim-2", subjectIri: "http://example.org/entity/2" })]
+          ])
+        )),
         Effect.provide(TestConfigProviderLayer)
-      )
-    )
+      ))
 
     it.effect("applies limit and offset", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const svc = yield* AssertionService
 
         // Create multiple assertions
@@ -258,19 +254,20 @@ describe("AssertionService", () => {
 
         expect(results.length).toBe(2)
       }).pipe(
-        Effect.provide(makeTestLayer(new Map([
-          ["claim-1", makeMockClaim({ id: "claim-1" })],
-          ["claim-2", makeMockClaim({ id: "claim-2" })],
-          ["claim-3", makeMockClaim({ id: "claim-3" })]
-        ]))),
+        Effect.provide(makeTestLayer(
+          new Map([
+            ["claim-1", makeMockClaim({ id: "claim-1" })],
+            ["claim-2", makeMockClaim({ id: "claim-2" })],
+            ["claim-3", makeMockClaim({ id: "claim-3" })]
+          ])
+        )),
         Effect.provide(TestConfigProviderLayer)
-      )
-    )
+      ))
   })
 
   describe("reject", () => {
     it.effect("rejects assertion with reason", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const svc = yield* AssertionService
 
         // Create an assertion first
@@ -293,11 +290,10 @@ describe("AssertionService", () => {
       }).pipe(
         Effect.provide(makeTestLayer(new Map([["claim-test123", makeMockClaim()]]))),
         Effect.provide(TestConfigProviderLayer)
-      )
-    )
+      ))
 
     it.effect("fails when rejecting non-existent assertion", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const svc = yield* AssertionService
 
         const result = yield* svc.reject("nonexistent-id", "reason").pipe(Effect.either)
@@ -306,13 +302,12 @@ describe("AssertionService", () => {
       }).pipe(
         Effect.provide(makeTestLayer()),
         Effect.provide(TestConfigProviderLayer)
-      )
-    )
+      ))
   })
 
   describe("toTriples", () => {
     it.effect("generates RDF quads for assertion", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const svc = yield* AssertionService
 
         // Create an assertion
@@ -328,22 +323,21 @@ describe("AssertionService", () => {
         expect(quads.length).toBeGreaterThan(0)
 
         // Check for type assertion
-        const typeQuad = quads.find(q => q.predicate === "http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
+        const typeQuad = quads.find((q) => q.predicate === "http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
         expect(typeQuad).toBeDefined()
         expect(typeQuad?.object).toBe("http://effect-ontology.dev/assertions#Assertion")
 
         // Check for subject reification
-        const subjectQuad = quads.find(q => q.predicate === "http://www.w3.org/1999/02/22-rdf-syntax-ns#subject")
+        const subjectQuad = quads.find((q) => q.predicate === "http://www.w3.org/1999/02/22-rdf-syntax-ns#subject")
         expect(subjectQuad).toBeDefined()
         expect(subjectQuad?.object).toBe("http://example.org/entity/1")
       }).pipe(
         Effect.provide(makeTestLayer(new Map([["claim-test123", makeMockClaim()]]))),
         Effect.provide(TestConfigProviderLayer)
-      )
-    )
+      ))
 
     it.effect("includes named graph when provided", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const svc = yield* AssertionService
 
         const assertion = yield* svc.createAssertion({
@@ -353,18 +347,17 @@ describe("AssertionService", () => {
 
         const quads = yield* svc.toTriples(assertion, "http://example.org/graph/assertions")
 
-        const quadWithGraph = quads.find(q => q.graph !== undefined)
+        const quadWithGraph = quads.find((q) => q.graph !== undefined)
         expect(quadWithGraph?.graph).toBe("http://example.org/graph/assertions")
       }).pipe(
         Effect.provide(makeTestLayer(new Map([["claim-test123", makeMockClaim()]]))),
         Effect.provide(TestConfigProviderLayer)
-      )
-    )
+      ))
   })
 
   describe("count", () => {
     it.effect("counts assertions matching filter", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const svc = yield* AssertionService
 
         // Create assertions with different subjects
@@ -383,13 +376,14 @@ describe("AssertionService", () => {
         const filtered = yield* svc.count({ subjectIri: "http://example.org/entity/1" })
         expect(filtered).toBe(2)
       }).pipe(
-        Effect.provide(makeTestLayer(new Map([
-          ["claim-1", makeMockClaim({ id: "claim-1" })],
-          ["claim-2", makeMockClaim({ id: "claim-2" })],
-          ["claim-3", makeMockClaim({ id: "claim-3", subjectIri: "http://example.org/entity/2" })]
-        ]))),
+        Effect.provide(makeTestLayer(
+          new Map([
+            ["claim-1", makeMockClaim({ id: "claim-1" })],
+            ["claim-2", makeMockClaim({ id: "claim-2" })],
+            ["claim-3", makeMockClaim({ id: "claim-3", subjectIri: "http://example.org/entity/2" })]
+          ])
+        )),
         Effect.provide(TestConfigProviderLayer)
-      )
-    )
+      ))
   })
 })

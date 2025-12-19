@@ -47,7 +47,7 @@ describe("generateShapesFromOntology", () => {
 
   it("generates NodeShape for each owl:Class", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -67,7 +67,7 @@ describe("generateShapesFromOntology", () => {
 
   it("sets sh:targetClass correctly", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -89,7 +89,7 @@ describe("generateShapesFromOntology", () => {
 
   it("generates PropertyShape for owl:ObjectProperty", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -109,7 +109,7 @@ describe("generateShapesFromOntology", () => {
 
   it("sets sh:class constraint for object properties", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -129,7 +129,7 @@ describe("generateShapesFromOntology", () => {
 
   it("handles ontology with no classes", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -149,7 +149,7 @@ describe("generateShapesFromOntology", () => {
 
   it("handles class with no properties", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -194,7 +194,7 @@ describe("datatype property conversion", () => {
 
   it("generates sh:datatype for owl:DatatypeProperty with xsd:string", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -221,7 +221,7 @@ describe("datatype property conversion", () => {
 
   it("generates sh:datatype for owl:DatatypeProperty with xsd:integer", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -248,7 +248,7 @@ describe("datatype property conversion", () => {
 
   it("generates sh:datatype for owl:DatatypeProperty with xsd:date", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -275,7 +275,7 @@ describe("datatype property conversion", () => {
 
   it("generates sh:datatype for owl:DatatypeProperty with xsd:boolean", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -302,7 +302,7 @@ describe("datatype property conversion", () => {
 
   it("generates sh:datatype for owl:DatatypeProperty with xsd:decimal", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -329,7 +329,7 @@ describe("datatype property conversion", () => {
 
   it("defaults to xsd:string when no range specified", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -354,7 +354,7 @@ describe("datatype property conversion", () => {
 
   it("sets sh:nodeKind to sh:Literal for datatype properties", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -381,7 +381,7 @@ describe("datatype property conversion", () => {
 
   it("handles mixed object and datatype properties on same class", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -439,7 +439,7 @@ describe("domain/range constraint conversion", () => {
 
   it("links property to domain class NodeShape", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -490,7 +490,7 @@ describe("domain/range constraint conversion", () => {
 
   it("sets sh:class from rdfs:range for ObjectProperty", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -523,7 +523,7 @@ describe("domain/range constraint conversion", () => {
 
   it("handles multi-domain property - added to all domain NodeShapes", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -594,7 +594,7 @@ describe("domain/range constraint conversion", () => {
 
   it("handles property with no domain (not added to any NodeShape)", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -630,7 +630,7 @@ describe("cardinality constraint conversion", () => {
 
   it("owl:FunctionalProperty gets sh:maxCount 1", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -657,7 +657,7 @@ describe("cardinality constraint conversion", () => {
 
   it("owl:FunctionalProperty on DatatypeProperty gets sh:maxCount 1", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -685,7 +685,7 @@ describe("cardinality constraint conversion", () => {
 
   it("owl:minCardinality restriction converts to sh:minCount", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -715,7 +715,7 @@ describe("cardinality constraint conversion", () => {
 
   it("owl:maxCardinality restriction converts to sh:maxCount", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -745,7 +745,7 @@ describe("cardinality constraint conversion", () => {
 
   it("owl:cardinality restriction converts to both sh:minCount and sh:maxCount", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -779,7 +779,7 @@ describe("cardinality constraint conversion", () => {
 
   it("handles cardinality with larger values", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 
@@ -814,7 +814,7 @@ describe("cardinality constraint conversion", () => {
 
   it("adds cardinality to existing property shape from domain", () =>
     runWithLayer(
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const shacl = yield* ShaclService
         const rdf = yield* RdfBuilder
 

@@ -6,25 +6,25 @@
  * @module test/Domain/Model/Agent
  */
 
-import { describe, expect, it } from "vitest"
 import { Effect, Schema } from "effect"
+import { describe, expect, it } from "vitest"
 import {
+  type Agent,
+  AgentCompleted,
+  type AgentEvent,
+  AgentFailed,
   AgentId,
   AgentIdSchema,
   AgentMetadata,
-  AgentTypeSchema,
-  type Agent,
-  AgentStarted,
   AgentProgress,
-  AgentCompleted,
-  AgentFailed,
-  PipelineCheckpoint,
-  type AgentEvent,
-  ValidationResult,
+  AgentStarted,
+  AgentTypeSchema,
+  CheckpointConfig,
   IntermediateResult,
+  PipelineCheckpoint,
   PipelineState,
   TerminationCondition,
-  CheckpointConfig
+  ValidationResult
 } from "../../../src/Domain/Model/Agent.js"
 
 describe("Agent Domain Model", () => {
@@ -48,11 +48,11 @@ describe("Agent Domain Model", () => {
 
     it("should reject invalid agent IDs via schema", async () => {
       const invalidIds = [
-        "Extractor",    // Uppercase
-        "123agent",     // Starts with number
-        "_private",     // Starts with underscore
-        "has space",    // Contains space
-        ""              // Empty
+        "Extractor", // Uppercase
+        "123agent", // Starts with number
+        "_private", // Starts with underscore
+        "has space", // Contains space
+        "" // Empty
       ]
 
       for (const id of invalidIds) {
@@ -154,7 +154,9 @@ describe("Agent Domain Model", () => {
 
   describe("Agent Interface", () => {
     it("should allow defining typed agents", () => {
-      interface ParseError { message: string }
+      interface ParseError {
+        message: string
+      }
 
       const numberParser: Agent<string, number, ParseError> = {
         metadata: new AgentMetadata({
@@ -255,7 +257,7 @@ describe("Agent Domain Model", () => {
     })
 
     it("should allow type-safe event handling", () => {
-      const events: AgentEvent[] = [
+      const events: Array<AgentEvent> = [
         new AgentStarted({ agentId, startedAt: now }),
         new AgentProgress({ agentId, progress: 100, timestamp: now }),
         new AgentCompleted({ agentId, completedAt: now, durationMs: 1000 })

@@ -10,9 +10,9 @@
 
 import { Effect, Layer } from "effect"
 import { describe, expect, it } from "vitest"
-import { RdfBuilder } from "../../src/Service/Rdf.js"
-import { ConfigServiceDefault } from "../../src/Service/Config.js"
 import { TestConfigProvider } from "../../src/Runtime/TestRuntime.js"
+import { ConfigServiceDefault } from "../../src/Service/Config.js"
+import { RdfBuilder } from "../../src/Service/Rdf.js"
 
 /**
  * Test layer with proper config provider

@@ -6,22 +6,22 @@
  * @module test/Service/Agent/CorrectorAgent
  */
 
+import { LanguageModel } from "@effect/ai"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Layer, Option, Secret } from "effect"
-import { LanguageModel } from "@effect/ai"
 import * as N3 from "n3"
-import {
-  CorrectorAgent,
-  Correction,
-  CorrectionResult,
-  BatchCorrectionResult,
-  type CorrectionStrategy
-} from "../../../src/Service/Agent/CorrectorAgent.js"
-import { ConfigService } from "../../../src/Service/Config.js"
-import type { ShaclViolation, ShaclValidationReport } from "../../../src/Service/Shacl.js"
 import { ClassDefinition, OntologyContext, PropertyDefinition } from "../../../src/Domain/Model/Ontology.js"
 import type { IRI } from "../../../src/Domain/Rdf/Types.js"
+import {
+  BatchCorrectionResult,
+  Correction,
+  CorrectionResult,
+  type CorrectionStrategy,
+  CorrectorAgent
+} from "../../../src/Service/Agent/CorrectorAgent.js"
+import { ConfigService } from "../../../src/Service/Config.js"
 import type { RdfStore } from "../../../src/Service/Rdf.js"
+import type { ShaclValidationReport, ShaclViolation } from "../../../src/Service/Shacl.js"
 
 // =============================================================================
 // Test Fixtures
@@ -192,6 +192,8 @@ const MockConfigService = Layer.succeed(ConfigService, {
   },
   ontology: {
     path: "/tmp/test.ttl",
+    externalVocabsPath: "ontologies/external/merged-external.ttl",
+    registryPath: Option.none(),
     cacheTtlSeconds: 300,
     strictValidation: false
   },
@@ -206,7 +208,12 @@ const MockConfigService = Layer.succeed(ConfigService, {
     transformersModelId: "Xenova/nomic-embed-text-v1"
   },
   extraction: {
-    runsDir: "/tmp/test-runs"
+    runsDir: "/tmp/test-runs",
+    strictPersistence: false
+  },
+  api: {
+    keys: Option.none(),
+    requireAuth: false
   }
 } as ConfigService)
 
@@ -259,8 +266,7 @@ describe("CorrectorAgent", () => {
           explanation: "Generated email",
           confidence: 0.9
         }))
-      )
-    )
+      ))
 
     it.effect("classifies datatype violations as coerce-datatype", () =>
       Effect.gen(function*() {
@@ -278,8 +284,7 @@ describe("CorrectorAgent", () => {
           explanation: "Type conversion",
           confidence: 0.9
         }))
-      )
-    )
+      ))
 
     it.effect("classifies maxCount violations as remove-excess", () =>
       Effect.gen(function*() {
@@ -297,8 +302,7 @@ describe("CorrectorAgent", () => {
           explanation: "Cannot auto-correct",
           confidence: 0.5
         }))
-      )
-    )
+      ))
 
     it.effect("classifies pattern violations as reformat-value", () =>
       Effect.gen(function*() {
@@ -316,8 +320,7 @@ describe("CorrectorAgent", () => {
           explanation: "Reformatted",
           confidence: 0.8
         }))
-      )
-    )
+      ))
 
     it.effect("classifies type violations as reclassify-entity", () =>
       Effect.gen(function*() {
@@ -336,8 +339,7 @@ describe("CorrectorAgent", () => {
           explanation: "Reclassified",
           confidence: 0.7
         }))
-      )
-    )
+      ))
   })
 
   describe("Correction model", () => {
@@ -402,8 +404,7 @@ describe("CorrectorAgent", () => {
           explanation: "Generated email based on name",
           confidence: 0.85
         }))
-      )
-    )
+      ))
   })
 
   describe("correct", () => {
@@ -428,8 +429,7 @@ describe("CorrectorAgent", () => {
           explanation: "Generated email",
           confidence: 0.9
         }))
-      )
-    )
+      ))
   })
 
   describe("correctAll", () => {
@@ -462,8 +462,7 @@ describe("CorrectorAgent", () => {
           explanation: "Generated value",
           confidence: 0.9
         }))
-      )
-    )
+      ))
 
     it.effect("calculates success rate correctly", () =>
       Effect.gen(function*() {
@@ -477,8 +476,7 @@ describe("CorrectorAgent", () => {
 
         expect(result.successRate).toBe(0.75)
         expect(result.allCorrected).toBe(false)
-      })
-    )
+      }))
   })
 
   describe("asAgent", () => {
@@ -500,8 +498,7 @@ describe("CorrectorAgent", () => {
           explanation: "Test",
           confidence: 0.5
         }))
-      )
-    )
+      ))
   })
 })
 

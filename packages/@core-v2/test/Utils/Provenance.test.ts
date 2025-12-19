@@ -7,11 +7,7 @@
 
 import { describe, expect, it } from "vitest"
 import type { BatchId, DocumentId } from "../../src/Domain/Identity.js"
-import {
-  isProvenanceUri,
-  makeProvenanceUri,
-  parseProvenanceUri
-} from "../../src/Utils/Provenance.js"
+import { isProvenanceUri, makeProvenanceUri, parseProvenanceUri } from "../../src/Utils/Provenance.js"
 
 describe("Provenance URI utilities", () => {
   // Test data with proper branded types

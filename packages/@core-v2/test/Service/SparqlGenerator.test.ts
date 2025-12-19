@@ -4,18 +4,18 @@
  * @since 2.0.0
  */
 
+import { LanguageModel } from "@effect/ai"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Layer, Option, Secret } from "effect"
-import { LanguageModel } from "@effect/ai"
 import { ClassDefinition, OntologyContext, PropertyDefinition } from "../../src/Domain/Model/Ontology.js"
 import type { IRI } from "../../src/Domain/Rdf/Types.js"
-import {
-  SparqlGenerator,
-  SparqlGenerationError,
-  SparqlSyntaxError,
-  SparqlCorrectionError
-} from "../../src/Service/SparqlGenerator.js"
 import { ConfigService } from "../../src/Service/Config.js"
+import {
+  SparqlCorrectionError,
+  SparqlGenerationError,
+  SparqlGenerator,
+  SparqlSyntaxError
+} from "../../src/Service/SparqlGenerator.js"
 
 // =============================================================================
 // Test Fixtures
@@ -128,6 +128,8 @@ const MockConfigService = Layer.succeed(ConfigService, {
   },
   ontology: {
     path: "/tmp/test.ttl",
+    externalVocabsPath: "ontologies/external/merged-external.ttl",
+    registryPath: Option.none(),
     cacheTtlSeconds: 300,
     strictValidation: false
   },
@@ -142,7 +144,12 @@ const MockConfigService = Layer.succeed(ConfigService, {
     transformersModelId: "Xenova/nomic-embed-text-v1"
   },
   extraction: {
-    runsDir: "/tmp/test-runs"
+    runsDir: "/tmp/test-runs",
+    strictPersistence: false
+  },
+  api: {
+    keys: Option.none(),
+    requireAuth: false
   }
 } as ConfigService)
 
@@ -164,7 +171,8 @@ const createMockLlm = (sparql: string, confidence: number = 0.9) =>
           totalTokens: 150
         }
       } as any),
-    generateText: () => Effect.succeed({ text: sparql, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } } as any),
+    generateText: () =>
+      Effect.succeed({ text: sparql, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } } as any),
     generateEmbeddings: () => Effect.succeed({ embeddings: [] } as any),
     stream: () => Effect.succeed({ stream: Effect.succeed([]) } as any),
     streamText: () => Effect.succeed({ stream: Effect.succeed([]) } as any)
@@ -187,8 +195,7 @@ describe("SparqlGenerator Domain Models", () => {
         expect(error.message).toBe("Unbalanced braces")
         expect(error.sparql).toContain("SELECT")
         expect(error.position).toBe(25)
-      })
-    )
+      }))
   })
 
   describe("SparqlGenerationError", () => {
@@ -201,8 +208,7 @@ describe("SparqlGenerator Domain Models", () => {
 
         expect(error.message).toBe("Failed to generate")
         expect(error.question).toBe("Who founded Acme Corp?")
-      })
-    )
+      }))
   })
 
   describe("SparqlCorrectionError", () => {
@@ -216,8 +222,7 @@ describe("SparqlGenerator Domain Models", () => {
 
         expect(error.message).toBe("Correction failed")
         expect(error.originalError).toContain("Syntax error")
-      })
-    )
+      }))
   })
 })
 
@@ -242,8 +247,7 @@ describe("SparqlGenerator Service", () => {
         Effect.provide(SparqlGenerator.Default),
         Effect.provide(MockConfigService),
         Effect.provide(createMockLlm(""))
-      )
-    )
+      ))
 
     it.effect("detects missing WHERE clause", () =>
       Effect.gen(function*() {
@@ -258,8 +262,7 @@ describe("SparqlGenerator Service", () => {
         Effect.provide(SparqlGenerator.Default),
         Effect.provide(MockConfigService),
         Effect.provide(createMockLlm(""))
-      )
-    )
+      ))
 
     it.effect("detects unbalanced braces", () =>
       Effect.gen(function*() {
@@ -274,8 +277,7 @@ describe("SparqlGenerator Service", () => {
         Effect.provide(SparqlGenerator.Default),
         Effect.provide(MockConfigService),
         Effect.provide(createMockLlm(""))
-      )
-    )
+      ))
 
     it.effect("detects unclosed strings", () =>
       Effect.gen(function*() {
@@ -290,8 +292,7 @@ describe("SparqlGenerator Service", () => {
         Effect.provide(SparqlGenerator.Default),
         Effect.provide(MockConfigService),
         Effect.provide(createMockLlm(""))
-      )
-    )
+      ))
 
     it.effect("accepts ASK queries without SELECT", () =>
       Effect.gen(function*() {
@@ -305,8 +306,7 @@ describe("SparqlGenerator Service", () => {
         Effect.provide(SparqlGenerator.Default),
         Effect.provide(MockConfigService),
         Effect.provide(createMockLlm(""))
-      )
-    )
+      ))
   })
 
   describe("formatSchema", () => {
@@ -335,8 +335,7 @@ describe("SparqlGenerator Service", () => {
         Effect.provide(SparqlGenerator.Default),
         Effect.provide(MockConfigService),
         Effect.provide(createMockLlm(""))
-      )
-    )
+      ))
   })
 
   describe("generate", () => {
@@ -367,8 +366,7 @@ describe("SparqlGenerator Service", () => {
         Effect.provide(SparqlGenerator.Default),
         Effect.provide(MockConfigService),
         Effect.provide(createMockLlm(validSparql, 0.85))
-      )
-    )
+      ))
 
     it.effect("includes confidence score in response", () =>
       Effect.gen(function*() {
@@ -386,8 +384,7 @@ describe("SparqlGenerator Service", () => {
         Effect.provide(SparqlGenerator.Default),
         Effect.provide(MockConfigService),
         Effect.provide(createMockLlm("SELECT ?p WHERE { ?p a ex:Person }", 0.95))
-      )
-    )
+      ))
   })
 
   describe("correct", () => {
@@ -411,8 +408,7 @@ describe("SparqlGenerator Service", () => {
         Effect.provide(SparqlGenerator.Default),
         Effect.provide(MockConfigService),
         Effect.provide(createMockLlm("SELECT ?s WHERE { ?s ?p ?o }", 0.9))
-      )
-    )
+      ))
   })
 })
 
@@ -433,8 +429,7 @@ describe("OntologyContext for SPARQL", () => {
       const nameProperty = ontology.getProperty("http://example.org/name")
       expect(nameProperty).toBeDefined()
       expect(nameProperty?.rangeType).toBe("datatype")
-    })
-  )
+    }))
 
   it.effect("distinguishes object and datatype properties", () =>
     Effect.gen(function*() {
@@ -445,6 +440,5 @@ describe("OntologyContext for SPARQL", () => {
 
       expect(objectProps.length).toBe(2) // worksFor, founder
       expect(datatypeProps.length).toBe(2) // name, age
-    })
-  )
+    }))
 })

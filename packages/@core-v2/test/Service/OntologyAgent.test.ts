@@ -4,9 +4,10 @@
  * @since 2.0.0
  */
 
-import { describe, expect, it } from "@effect/vitest"
 import { LanguageModel } from "@effect/ai"
+import { describe, expect, it } from "@effect/vitest"
 import { Chunk, Context, DateTime, Effect, Layer, Option, Secret } from "effect"
+import { Entity, KnowledgeGraph, Relation } from "../../src/Domain/Model/Entity.js"
 import {
   EnhancedValidationReport,
   ExtractionMetrics,
@@ -16,18 +17,18 @@ import {
   ViolationExplanation,
   ViolationsByLevel
 } from "../../src/Domain/Model/OntologyAgent.js"
-import { Entity, KnowledgeGraph, Relation } from "../../src/Domain/Model/Entity.js"
 import { EntityId } from "../../src/Domain/Model/shared.js"
-import { OntologyAgent } from "../../src/Service/OntologyAgent.js"
-import { ExtractionWorkflow } from "../../src/Service/ExtractionWorkflow.js"
-import { ShaclService, type ShaclValidationReport } from "../../src/Service/Shacl.js"
-import { RdfBuilder } from "../../src/Service/Rdf.js"
-import { OntologyService } from "../../src/Service/Ontology.js"
+import { ClaimService } from "../../src/Service/Claim.js"
 import { ConfigService } from "../../src/Service/Config.js"
-import { Reasoner, ReasoningResult, ReasoningConfig } from "../../src/Service/Reasoner.js"
+import { ExtractionWorkflow } from "../../src/Service/ExtractionWorkflow.js"
+import { OntologyService } from "../../src/Service/Ontology.js"
+import { OntologyAgent } from "../../src/Service/OntologyAgent.js"
+import { RdfBuilder } from "../../src/Service/Rdf.js"
+import { Reasoner, ReasoningConfig, ReasoningResult } from "../../src/Service/Reasoner.js"
+import { ShaclService, type ShaclValidationReport } from "../../src/Service/Shacl.js"
+import { SparqlService } from "../../src/Service/Sparql.js"
 import { SparqlGenerator } from "../../src/Service/SparqlGenerator.js"
 import { StorageService } from "../../src/Service/Storage.js"
-import { ClaimService } from "../../src/Service/Claim.js"
 
 describe("OntologyAgent Domain Models", () => {
   describe("OntologyAgentConfig", () => {
@@ -37,8 +38,7 @@ describe("OntologyAgent Domain Models", () => {
         expect(config.ontology).toBeUndefined()
         expect(config.validationPolicy).toBeUndefined()
         expect(config.concurrency).toBeUndefined()
-      })
-    )
+      }))
 
     it.effect("creates config with values", () =>
       Effect.gen(function*() {
@@ -50,8 +50,7 @@ describe("OntologyAgent Domain Models", () => {
         expect(config.concurrency).toBe(8)
         expect(config.validationPolicy?.failOnViolation).toBe(true)
         expect(config.chunking?.maxChunkSize).toBe(3000)
-      })
-    )
+      }))
   })
 
   describe("ExtractionMetrics", () => {
@@ -68,8 +67,7 @@ describe("OntologyAgent Domain Models", () => {
         expect(metrics.totalTokens).toBe(1500)
         expect(metrics.entityCount).toBe(10)
         expect(metrics.durationMs).toBe(2500)
-      })
-    )
+      }))
   })
 
   describe("ExtractionResult", () => {
@@ -97,8 +95,7 @@ describe("OntologyAgent Domain Models", () => {
         expect(result.isValid).toBe(true) // No validation = valid
         expect(result.entities).toEqual([])
         expect(result.relations).toEqual([])
-      })
-    )
+      }))
 
     it.effect("reports invalid when validation fails", () =>
       Effect.gen(function*() {
@@ -134,8 +131,7 @@ describe("OntologyAgent Domain Models", () => {
         })
 
         expect(result.isValid).toBe(false)
-      })
-    )
+      }))
   })
 
   describe("QueryResult", () => {
@@ -150,8 +146,7 @@ describe("OntologyAgent Domain Models", () => {
         expect(result.answer).toContain("Cristiano Ronaldo")
         expect(result.hasResults).toBe(false)
         expect(result.confidence).toBe(0.85)
-      })
-    )
+      }))
   })
 
   describe("ViolationExplanation", () => {
@@ -167,8 +162,7 @@ describe("OntologyAgent Domain Models", () => {
         expect(explanation.focusNode).toBe("http://example.org/entity1")
         expect(explanation.severity).toBe("Violation")
         expect(explanation.suggestion).toContain("Add a name")
-      })
-    )
+      }))
   })
 })
 
@@ -240,6 +234,8 @@ describe("OntologyAgent Service", () => {
     },
     ontology: {
       path: "/tmp/test.ttl",
+      externalVocabsPath: "ontologies/external/merged-external.ttl",
+      registryPath: Option.none(),
       cacheTtlSeconds: 300,
       strictValidation: false
     },
@@ -254,7 +250,12 @@ describe("OntologyAgent Service", () => {
       transformersModelId: "Xenova/nomic-embed-text-v1"
     },
     extraction: {
-      runsDir: "/tmp/test-runs"
+      runsDir: "/tmp/test-runs",
+      strictPersistence: false
+    },
+    api: {
+      keys: Option.none(),
+      requireAuth: false
     }
   } as ConfigService)
 
@@ -383,12 +384,13 @@ schema:name a owl:DatatypeProperty ;
 
   // Mock ClaimService for extractWithClaims tests
   const MockClaimService = Layer.succeed(ClaimService, {
-    createClaim: (input: any) => Effect.succeed({
-      id: `claim-${Date.now().toString(16).slice(-12)}`,
-      ...input,
-      rank: "normal",
-      createdAt: new Date()
-    } as any),
+    createClaim: (input: any) =>
+      Effect.succeed({
+        id: `claim-${Date.now().toString(16).slice(-12)}`,
+        ...input,
+        rank: "normal",
+        createdAt: new Date()
+      } as any),
     getClaim: () => Effect.succeed(Option.none()),
     getClaims: () => Effect.succeed([]),
     deprecateClaim: () => Effect.succeed({ claimId: "", deprecatedAt: new Date(), reason: "" }),
@@ -411,7 +413,8 @@ schema:name a owl:DatatypeProperty ;
     MockStorageService,
     MockClaimService,
     ShaclService.Test(),
-    RdfBuilder.Default
+    RdfBuilder.Default,
+    SparqlService.Default
   ).pipe(
     Layer.provideMerge(MockConfigService)
   )
@@ -448,8 +451,7 @@ schema:name a owl:DatatypeProperty ;
       }).pipe(
         Effect.provide(OntologyAgent.Default),
         Effect.provide(TestLayer)
-      )
-    )
+      ))
 
     it.effect("returns empty result for empty extraction", () =>
       Effect.gen(function*() {
@@ -475,8 +477,7 @@ schema:name a owl:DatatypeProperty ;
       }).pipe(
         Effect.provide(OntologyAgent.Default),
         Effect.provide(TestLayer)
-      )
-    )
+      ))
   })
 
   describe("extractWithClaims", () => {
@@ -509,8 +510,7 @@ schema:name a owl:DatatypeProperty ;
       }).pipe(
         Effect.provide(OntologyAgent.Default),
         Effect.provide(TestLayer)
-      )
-    )
+      ))
 
     it.effect("creates claims with custom confidence", () =>
       Effect.gen(function*() {
@@ -529,8 +529,7 @@ schema:name a owl:DatatypeProperty ;
       }).pipe(
         Effect.provide(OntologyAgent.Default),
         Effect.provide(TestLayer)
-      )
-    )
+      ))
 
     it.effect("returns empty claims for empty extraction", () => {
       // Create a custom layer with empty extraction
@@ -554,7 +553,8 @@ schema:name a owl:DatatypeProperty ;
         MockStorageService,
         MockClaimService,
         ShaclService.Test(),
-        RdfBuilder.Default
+        RdfBuilder.Default,
+        SparqlService.Default
       ).pipe(
         Layer.provideMerge(MockConfigService)
       )
@@ -604,8 +604,7 @@ schema:name a owl:DatatypeProperty ;
       }).pipe(
         Effect.provide(OntologyAgent.Default),
         Effect.provide(TestLayer)
-      )
-    )
+      ))
 
     it.effect("applies reasoning with custom config", () =>
       Effect.gen(function*() {
@@ -623,8 +622,7 @@ schema:name a owl:DatatypeProperty ;
       }).pipe(
         Effect.provide(OntologyAgent.Default),
         Effect.provide(TestLayer)
-      )
-    )
+      ))
   })
 
   describe("extractAndValidate with reasoning", () => {
@@ -649,18 +647,14 @@ schema:name a owl:DatatypeProperty ;
       }).pipe(
         Effect.provide(OntologyAgent.Default),
         Effect.provide(TestLayer)
-      )
-    )
+      ))
 
     it.effect("continues validation even if reasoning fails", () => {
       // Create a reasoner that fails
       const FailingReasoner = Layer.succeed(Reasoner, {
-        reason: () =>
-          Effect.fail(new Error("Reasoning failed")),
-        reasonCopy: () =>
-          Effect.fail(new Error("Reasoning failed")),
-        reasonForValidation: () =>
-          Effect.fail(new Error("Reasoning failed")),
+        reason: () => Effect.fail(new Error("Reasoning failed")),
+        reasonCopy: () => Effect.fail(new Error("Reasoning failed")),
+        reasonForValidation: () => Effect.fail(new Error("Reasoning failed")),
         wouldInfer: () => Effect.succeed(false),
         getRules: () => []
       } as unknown as Reasoner)
@@ -675,7 +669,8 @@ schema:name a owl:DatatypeProperty ;
         MockStorageService,
         MockClaimService,
         ShaclService.Test(),
-        RdfBuilder.Default
+        RdfBuilder.Default,
+        SparqlService.Default
       ).pipe(
         Layer.provideMerge(MockConfigService)
       )
@@ -727,8 +722,7 @@ schema:name a owl:DatatypeProperty ;
       }).pipe(
         Effect.provide(OntologyAgent.Default),
         Effect.provide(TestLayer)
-      )
-    )
+      ))
   })
 
   describe("validate", () => {
@@ -751,8 +745,7 @@ schema:name a owl:DatatypeProperty ;
       }).pipe(
         Effect.provide(OntologyAgent.Default),
         Effect.provide(TestLayer)
-      )
-    )
+      ))
 
     it.effect("validateWithPolicy applies policy to validation", () =>
       Effect.gen(function*() {
@@ -772,8 +765,7 @@ schema:name a owl:DatatypeProperty ;
       }).pipe(
         Effect.provide(OntologyAgent.Default),
         Effect.provide(TestLayer)
-      )
-    )
+      ))
 
     it.effect("generateShapes produces SHACL shapes from ontology store", () =>
       Effect.gen(function*() {
@@ -788,8 +780,7 @@ schema:name a owl:DatatypeProperty ;
       }).pipe(
         Effect.provide(OntologyAgent.Default),
         Effect.provide(TestLayer)
-      )
-    )
+      ))
   })
 
   describe("query", () => {
@@ -823,8 +814,7 @@ schema:name a owl:DatatypeProperty ;
       }).pipe(
         Effect.provide(OntologyAgent.Default),
         Effect.provide(TestLayer)
-      )
-    )
+      ))
 
     it.effect("returns result with bindings for matching triples", () =>
       Effect.gen(function*() {
@@ -855,8 +845,7 @@ schema:name a owl:DatatypeProperty ;
       }).pipe(
         Effect.provide(OntologyAgent.Default),
         Effect.provide(TestLayer)
-      )
-    )
+      ))
   })
 })
 
@@ -875,8 +864,7 @@ describe("Validation Domain Models", () => {
         expect(byLevel.info.length).toBe(0)
         expect(byLevel.totalCount).toBe(3)
         expect(byLevel.hasCritical).toBe(true)
-      })
-    )
+      }))
 
     it.effect("reports no critical when violations array is empty", () =>
       Effect.gen(function*() {
@@ -888,8 +876,7 @@ describe("Validation Domain Models", () => {
 
         expect(byLevel.hasCritical).toBe(false)
         expect(byLevel.totalCount).toBe(3)
-      })
-    )
+      }))
   })
 
   describe("EnhancedValidationReport", () => {
@@ -924,8 +911,7 @@ describe("Validation Domain Models", () => {
         expect(report.hasWarningsOnly).toBe(false)
         expect(report.violationCount).toBe(1)
         expect(report.explanations.length).toBe(1)
-      })
-    )
+      }))
 
     it.effect("hasWarningsOnly is true when conforms with warnings", () =>
       Effect.gen(function*() {
@@ -947,7 +933,6 @@ describe("Validation Domain Models", () => {
 
         expect(report.isValid).toBe(true)
         expect(report.hasWarningsOnly).toBe(true)
-      })
-    )
+      }))
   })
 })

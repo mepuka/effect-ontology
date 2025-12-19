@@ -50,8 +50,7 @@ describe("HealthCheckService", () => {
       const result = yield* health.liveness()
 
       expect(result.status).toBe("ok")
-    }).pipe(Effect.provide(TestLayers))
-  )
+    }).pipe(Effect.provide(TestLayers)))
 
   it.effect("readiness checks config", () =>
     Effect.gen(function*() {
@@ -60,8 +59,7 @@ describe("HealthCheckService", () => {
 
       expect(result.status).toBe("ok")
       expect(result.checks?.config).toBe("ok")
-    }).pipe(Effect.provide(TestLayers))
-  )
+    }).pipe(Effect.provide(TestLayers)))
 
   it.effect("deepCheck verifies all dependencies", () =>
     Effect.gen(function*() {
@@ -70,6 +68,5 @@ describe("HealthCheckService", () => {
 
       expect(result.status).toBe("ok")
       expect(result.checks).toBeDefined()
-    }).pipe(Effect.provide(TestLayers))
-  )
+    }).pipe(Effect.provide(TestLayers)))
 })

@@ -6,11 +6,7 @@
  */
 
 import { describe, expect, it } from "vitest"
-import {
-  buildExpandedQuery,
-  expandQueryWithOntology,
-  type QueryExpansionOptions
-} from "../../src/Utils/Retrieval.js"
+import { buildExpandedQuery, expandQueryWithOntology, type QueryExpansionOptions } from "../../src/Utils/Retrieval.js"
 
 describe("expandQueryWithOntology", () => {
   // Test ontology with classes and properties
@@ -119,9 +115,7 @@ describe("expandQueryWithOntology", () => {
         hierarchyWeight: 0.3
       })
 
-      const hierarchyTerms = result.filter((t) =>
-        t.source === "broader" || t.source === "narrower"
-      )
+      const hierarchyTerms = result.filter((t) => t.source === "broader" || t.source === "narrower")
       expect(hierarchyTerms.every((t) => t.weight === 0.3)).toBe(true)
     })
 

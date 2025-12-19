@@ -25,8 +25,7 @@ describe("MetricsService", () => {
 
       expect(output).toContain("extraction_duration_ms")
       expect(output).toContain("extraction_entity_count")
-    }).pipe(Effect.provide(MetricsService.Default))
-  )
+    }).pipe(Effect.provide(MetricsService.Default)))
 
   it.effect("tracks LLM calls", () =>
     Effect.gen(function*() {
@@ -34,7 +33,7 @@ describe("MetricsService", () => {
 
       yield* metrics.recordLlmCall({
         provider: "anthropic",
-        model: "claude-3-5-sonnet",
+        model: "claude-haiku-4-5",
         durationMs: 500,
         tokensIn: 100,
         tokensOut: 50,
@@ -44,9 +43,8 @@ describe("MetricsService", () => {
       const output = yield* metrics.toPrometheus()
 
       expect(output).toContain("llm_call_duration_ms")
-      expect(output).toContain('provider="anthropic"')
-    }).pipe(Effect.provide(MetricsService.Default))
-  )
+      expect(output).toContain("provider=\"anthropic\"")
+    }).pipe(Effect.provide(MetricsService.Default)))
 
   it.effect("accumulates multiple extractions", () =>
     Effect.gen(function*() {
@@ -73,8 +71,7 @@ describe("MetricsService", () => {
       expect(output).toContain("extraction_total 2")
       expect(output).toContain("extraction_successful_total 1")
       expect(output).toContain("extraction_failed_total 1")
-    }).pipe(Effect.provide(MetricsService.Default))
-  )
+    }).pipe(Effect.provide(MetricsService.Default)))
 
   it.effect("reset clears all metrics", () =>
     Effect.gen(function*() {
@@ -93,6 +90,5 @@ describe("MetricsService", () => {
       const output = yield* metrics.toPrometheus()
 
       expect(output).toContain("extraction_total 0")
-    }).pipe(Effect.provide(MetricsService.Default))
-  )
+    }).pipe(Effect.provide(MetricsService.Default)))
 })

@@ -2,11 +2,12 @@
  * Tests for GraphRAG service
  */
 
-import { describe, it, expect } from "@effect/vitest"
-import { Effect, Layer } from "effect"
 import { LanguageModel } from "@effect/ai"
+import { describe, expect, it } from "@effect/vitest"
+import { Effect, Layer } from "effect"
 import { Entity, KnowledgeGraph, Relation } from "../../src/Domain/Model/Entity.js"
 import { EntityId } from "../../src/Domain/Model/shared.js"
+import type { FindSimilarOptions, ScoredEntity } from "../../src/Service/EntityIndex.js"
 import {
   GraphRAG,
   type GraphRAGService,
@@ -17,7 +18,6 @@ import {
   type ScoredNode
 } from "../../src/Service/GraphRAG.js"
 import type { Subgraph } from "../../src/Service/SubgraphExtractor.js"
-import type { ScoredEntity, FindSimilarOptions } from "../../src/Service/EntityIndex.js"
 
 // Test entities
 const createTestEntities = () => ({
@@ -76,7 +76,7 @@ const mockEmbed = (text: string): ReadonlyArray<number> => {
     hash = (hash << 5) - hash + text.charCodeAt(i)
     hash = hash & hash
   }
-  const result: number[] = []
+  const result: Array<number> = []
   for (let i = 0; i < 8; i++) {
     result.push(Math.sin(hash + i) * 0.5 + 0.5)
   }
@@ -170,13 +170,13 @@ const createTestGraphRAG = () => {
       frontier = next
     }
 
-    const nodes: Entity[] = []
+    const nodes: Array<Entity> = []
     for (const id of visited) {
       const entity = graph.getEntity(id)
       if (entity) nodes.push(entity)
     }
 
-    const edges: Relation[] = []
+    const edges: Array<Relation> = []
     for (const edge of collectedEdges) {
       const hasSubject = visited.has(edge.subjectId)
       const hasObject = !edge.isEntityReference ||
@@ -202,7 +202,7 @@ const createTestGraphRAG = () => {
     includeAttributes: boolean,
     includeRelations: boolean
   ): string => {
-    const lines: string[] = []
+    const lines: Array<string> = []
     lines.push("## Retrieved Knowledge Graph Context")
     lines.push("")
     lines.push(`Query: "${query}"`)
@@ -216,7 +216,7 @@ const createTestGraphRAG = () => {
     lines.push("### Relevant Entities")
     lines.push("")
 
-    for (const { entity, score, isSeed } of scoredNodes) {
+    for (const { entity, isSeed, score } of scoredNodes) {
       const types = entity.types.map((t) => t.split(/[#/]/).pop() || t).join(", ")
       const seedMarker = isSeed ? " [SEED]" : ""
       const scoreStr = (score * 100).toFixed(0)
@@ -295,7 +295,8 @@ const createTestGraphRAG = () => {
           return {
             subgraph: emptySubgraph,
             scoredNodes: [],
-            context: `## Retrieved Knowledge Graph Context\n\nQuery: "${query}"\n\nNo relevant entities found in the knowledge graph.`,
+            context:
+              `## Retrieved Knowledge Graph Context\n\nQuery: "${query}"\n\nNo relevant entities found in the knowledge graph.`,
             query,
             stats: {
               seedCount: 0,
@@ -317,7 +318,7 @@ const createTestGraphRAG = () => {
         const subgraph = extractSubgraph(graph, seedIds, hops, maxNodes)
 
         // Step 3: Score nodes
-        const scoredNodes: ScoredNode[] = subgraph.nodes.map((entity) => {
+        const scoredNodes: Array<ScoredNode> = subgraph.nodes.map((entity) => {
           const isSeed = seedIds.includes(entity.id)
           const embeddingScore = seedScores.get(entity.id) ?? 0
           return {
@@ -356,7 +357,7 @@ const createTestGraphRAG = () => {
         const includeAttributes = options.includeAttributes ?? true
         const includeRelations = options.includeRelations ?? true
 
-        const scoredNodes: ScoredNode[] = subgraph.nodes.map((entity) => ({
+        const scoredNodes: Array<ScoredNode> = subgraph.nodes.map((entity) => ({
           entity,
           score: subgraph.centerNodes.includes(entity.id) ? 1 : 0.5,
           hopDistance: subgraph.centerNodes.includes(entity.id) ? 0 : 1,
@@ -366,18 +367,16 @@ const createTestGraphRAG = () => {
         return formatContext(subgraph, query, scoredNodes, includeAttributes, includeRelations)
       }),
 
-    generate: () =>
-      Effect.die(new Error("generate() not implemented in test mock")),
+    generate: () => Effect.die(new Error("generate() not implemented in test mock")),
 
-    answer: () =>
-      Effect.die(new Error("answer() not implemented in test mock")),
+    answer: () => Effect.die(new Error("answer() not implemented in test mock")),
 
-    explain: () =>
-      Effect.die(new Error("explain() not implemented in test mock")),
+    explain: () => Effect.die(new Error("explain() not implemented in test mock")),
 
-    clear: () => Effect.sync(() => {
-      indexState = { entities: new Map(), embeddings: new Map() }
-    }),
+    clear: () =>
+      Effect.sync(() => {
+        indexState = { entities: new Map(), embeddings: new Map() }
+      }),
 
     size: () => Effect.sync(() => indexState.entities.size)
   }
@@ -388,7 +387,7 @@ const createTestGraphRAG = () => {
 describe("GraphRAG", () => {
   describe("index()", () => {
     it.effect("indexes all entities from a graph", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const rag = createTestGraphRAG()
         const graph = createTestGraph()
 
@@ -397,23 +396,21 @@ describe("GraphRAG", () => {
 
         expect(count).toBe(5)
         expect(size).toBe(5)
-      })
-    )
+      }))
 
     it.effect("handles empty graph", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const rag = createTestGraphRAG()
         const emptyGraph = new KnowledgeGraph({ entities: [], relations: [] })
 
         const count = yield* rag.index(emptyGraph)
         expect(count).toBe(0)
-      })
-    )
+      }))
   })
 
   describe("retrieve()", () => {
     it.effect("retrieves relevant context for a query", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const rag = createTestGraphRAG()
         const graph = createTestGraph()
         yield* rag.index(graph)
@@ -424,11 +421,10 @@ describe("GraphRAG", () => {
         expect(result.stats.seedCount).toBeGreaterThanOrEqual(1)
         expect(result.scoredNodes.length).toBeGreaterThan(0)
         expect(result.context).toContain("Alice Smith")
-      })
-    )
+      }))
 
     it.effect("extracts N-hop neighborhood", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const rag = createTestGraphRAG()
         const graph = createTestGraph()
         yield* rag.index(graph)
@@ -442,11 +438,10 @@ describe("GraphRAG", () => {
         // Should find alice and her 1-hop neighbors (bob, acme_corp)
         expect(result.stats.nodeCount).toBeGreaterThan(1)
         expect(result.subgraph.edges.length).toBeGreaterThan(0)
-      })
-    )
+      }))
 
     it.effect("respects maxNodes limit", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const rag = createTestGraphRAG()
         const graph = createTestGraph()
         yield* rag.index(graph)
@@ -459,11 +454,10 @@ describe("GraphRAG", () => {
         })
 
         expect(result.stats.nodeCount).toBeLessThanOrEqual(3)
-      })
-    )
+      }))
 
     it.effect("filters by type", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const rag = createTestGraphRAG()
         const graph = createTestGraph()
         yield* rag.index(graph)
@@ -479,11 +473,10 @@ describe("GraphRAG", () => {
         for (const node of result.scoredNodes.filter((n) => n.isSeed)) {
           expect(node.entity.types).toContain("http://schema.org/Organization")
         }
-      })
-    )
+      }))
 
     it.effect("returns empty result for no matches", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const rag = createTestGraphRAG()
         const graph = createTestGraph()
         yield* rag.index(graph)
@@ -494,11 +487,10 @@ describe("GraphRAG", () => {
 
         // Should return empty or near-empty since threshold is impossibly high
         expect(result.context).toContain("Retrieved Knowledge Graph Context")
-      })
-    )
+      }))
 
     it.effect("includes scored nodes sorted by relevance", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const rag = createTestGraphRAG()
         const graph = createTestGraph()
         yield* rag.index(graph)
@@ -513,13 +505,12 @@ describe("GraphRAG", () => {
         for (let i = 1; i < result.scoredNodes.length; i++) {
           expect(result.scoredNodes[i].score).toBeLessThanOrEqual(result.scoredNodes[i - 1].score)
         }
-      })
-    )
+      }))
   })
 
   describe("formatContext()", () => {
     it.effect("formats subgraph as readable context", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const rag = createTestGraphRAG()
         const e = createTestEntities()
 
@@ -539,11 +530,10 @@ describe("GraphRAG", () => {
         expect(context).toContain("Bob Jones")
         expect(context).toContain("knows")
         expect(context).toContain("[SEED]")
-      })
-    )
+      }))
 
     it.effect("includes entity attributes when requested", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const rag = createTestGraphRAG()
         const e = createTestEntities()
 
@@ -558,11 +548,10 @@ describe("GraphRAG", () => {
 
         expect(context).toContain("jobTitle")
         expect(context).toContain("Engineer")
-      })
-    )
+      }))
 
     it.effect("excludes relations when requested", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const rag = createTestGraphRAG()
         const e = createTestEntities()
 
@@ -578,11 +567,10 @@ describe("GraphRAG", () => {
         const context = yield* rag.formatContext(subgraph, "test", { includeRelations: false })
 
         expect(context).not.toContain("### Relationships")
-      })
-    )
+      }))
 
     it.effect("handles literal values in relations", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const rag = createTestGraphRAG()
         const e = createTestEntities()
 
@@ -599,13 +587,12 @@ describe("GraphRAG", () => {
 
         expect(context).toContain("age")
         expect(context).toContain("30")
-      })
-    )
+      }))
   })
 
   describe("clear() and size()", () => {
     it.effect("clears the index", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const rag = createTestGraphRAG()
         const graph = createTestGraph()
 
@@ -617,13 +604,12 @@ describe("GraphRAG", () => {
 
         expect(sizeBefore).toBe(5)
         expect(sizeAfter).toBe(0)
-      })
-    )
+      }))
   })
 
   describe("context coherence", () => {
     it.effect("produces coherent context with clear structure", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const rag = createTestGraphRAG()
         const graph = createTestGraph()
         yield* rag.index(graph)
@@ -640,11 +626,10 @@ describe("GraphRAG", () => {
         expect(result.context).toContain("### Relevant Entities")
         expect(result.context).toContain("---")
         expect(result.context).toContain("Use the above knowledge graph context")
-      })
-    )
+      }))
 
     it.effect("marks seed entities clearly", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const rag = createTestGraphRAG()
         const graph = createTestGraph()
         yield* rag.index(graph)
@@ -659,8 +644,7 @@ describe("GraphRAG", () => {
         expect(result.context).toContain("[SEED]")
         const seedNodes = result.scoredNodes.filter((n) => n.isSeed)
         expect(seedNodes.length).toBeGreaterThan(0)
-      })
-    )
+      }))
   })
 })
 
@@ -671,7 +655,7 @@ describe("GraphRAG", () => {
 /**
  * Create a mock LLM service that returns predefined answers
  */
-const createMockLlm = (answer: string, citations: string[], confidence: number) =>
+const createMockLlm = (answer: string, citations: Array<string>, confidence: number) =>
   Layer.succeed(LanguageModel.LanguageModel, {
     generateObject: () =>
       Effect.succeed({
@@ -687,7 +671,8 @@ const createMockLlm = (answer: string, citations: string[], confidence: number) 
           totalTokens: 150
         }
       } as any),
-    generateText: () => Effect.succeed({ text: answer, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } } as any),
+    generateText: () =>
+      Effect.succeed({ text: answer, usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } } as any),
     generateEmbeddings: () => Effect.succeed({ embeddings: [] } as any),
     stream: () => Effect.succeed({ stream: Effect.succeed([]) } as any),
     streamText: () => Effect.succeed({ stream: Effect.succeed([]) } as any)
@@ -705,7 +690,7 @@ const createMockRetrievalResult = (): RetrievalResult => {
         new Relation({
           subjectId: "alice",
           predicate: "http://schema.org/worksFor",
-          object: "acme_corp"  // Entity reference (lowercase snake_case)
+          object: "acme_corp" // Entity reference (lowercase snake_case)
         })
       ],
       centerNodes: ["alice"],
@@ -750,7 +735,7 @@ Cite specific entities and relationships when relevant.`,
 describe("GraphRAG grounded generation", () => {
   describe("generate()", () => {
     it.effect("generates grounded answer from retrieval context", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const mockLlm = yield* LanguageModel.LanguageModel
         const retrieval = createMockRetrievalResult()
 
@@ -765,8 +750,7 @@ describe("GraphRAG grounded generation", () => {
         expect(retrieval.stats.nodeCount).toBe(2)
       }).pipe(
         Effect.provide(createMockLlm("Alice works at ACME Corporation", ["alice", "acme_corp"], 0.95))
-      )
-    )
+      ))
 
     it("GroundedAnswer has correct structure", () => {
       // Type-level test: ensure GroundedAnswer has expected properties
@@ -789,7 +773,7 @@ describe("GraphRAG grounded generation", () => {
 
   describe("answer() pipeline", () => {
     it.effect("orchestrates index → retrieve → generate", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         // This test verifies the pipeline flow conceptually
         // Actual LLM integration would require full service setup
         const rag = createTestGraphRAG()
@@ -811,8 +795,7 @@ describe("GraphRAG grounded generation", () => {
         expect(retrieval.query).toBe("Where does Alice work?")
         expect(retrieval.subgraph).toBeTruthy()
         expect(retrieval.stats).toBeTruthy()
-      })
-    )
+      }))
 
     it("correctly combines retrieval and generation options", () => {
       // Type-level test for AnswerOptions

@@ -6,14 +6,14 @@
  * @module test/Workflow/ResolutionActivity
  */
 
-import { describe, expect, it } from "@effect/vitest"
 import { BunContext } from "@effect/platform-bun"
+import { describe, expect, it } from "@effect/vitest"
 import { ConfigProvider, Effect, Layer, Option } from "effect"
 import { Entity, KnowledgeGraph, Relation } from "../../src/Domain/Model/Entity.js"
-import { EntityId } from "../../src/Domain/Model/shared.js"
-import { EntityResolutionService } from "../../src/Service/EntityResolution.js"
-import { EmbeddingService, EmbeddingServiceDefault } from "../../src/Service/Embedding.js"
 import { defaultEntityResolutionConfig } from "../../src/Domain/Model/EntityResolution.js"
+import { EntityId } from "../../src/Domain/Model/shared.js"
+import { EmbeddingService, EmbeddingServiceDefault } from "../../src/Service/Embedding.js"
+import { EntityResolutionService } from "../../src/Service/EntityResolution.js"
 
 /**
  * Test ConfigProvider
@@ -125,8 +125,7 @@ describe("EntityResolutionService Integration", () => {
 
       // Verify canonicalMap exists
       expect(Object.keys(result.canonicalMap).length).toBe(4)
-    }).pipe(Effect.provide(TestLayers))
-  )
+    }).pipe(Effect.provide(TestLayers)))
 
   it.effect("handles empty graphs gracefully", () =>
     Effect.gen(function*() {
@@ -144,8 +143,7 @@ describe("EntityResolutionService Integration", () => {
 
       expect(result.stats.mentionCount).toBe(0)
       expect(result.stats.clusterCount).toBe(0)
-    }).pipe(Effect.provide(TestLayers))
-  )
+    }).pipe(Effect.provide(TestLayers)))
 
   it.effect("preserves distinct entities when not similar", () =>
     Effect.gen(function*() {
@@ -177,8 +175,7 @@ describe("EntityResolutionService Integration", () => {
       // Both entities should remain distinct
       expect(result.stats.mentionCount).toBe(2)
       expect(result.stats.resolvedCount).toBe(2) // No merging
-    }).pipe(Effect.provide(TestLayers))
-  )
+    }).pipe(Effect.provide(TestLayers)))
 
   it.effect("builds correct canonicalMap for merged entities", () =>
     Effect.gen(function*() {
@@ -222,8 +219,7 @@ describe("EntityResolutionService Integration", () => {
 
       // Verify clustering occurred (fewer unique canonical IDs than entities)
       expect(canonicalIds.size).toBeLessThanOrEqual(result.stats.mentionCount)
-    }).pipe(Effect.provide(TestLayers))
-  )
+    }).pipe(Effect.provide(TestLayers)))
 })
 
 describe("Resolution Activity Helpers", () => {

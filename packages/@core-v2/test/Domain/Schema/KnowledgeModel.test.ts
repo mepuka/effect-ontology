@@ -7,16 +7,16 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { DateTime, Effect, Schema } from "effect"
-import {
-  EventId,
-  EventType,
-  EntityRef,
-  Event,
-  eventIdFromHash,
-  AssertionId
-} from "../../../src/Domain/Schema/KnowledgeModel.js"
 import { GcsUri } from "../../../src/Domain/Identity.js"
 import type { IRI } from "../../../src/Domain/Rdf/Types.js"
+import {
+  AssertionId,
+  EntityRef,
+  Event,
+  EventId,
+  eventIdFromHash,
+  EventType
+} from "../../../src/Domain/Schema/KnowledgeModel.js"
 
 describe("KnowledgeModel Event Schema", () => {
   describe("EventId", () => {
@@ -25,24 +25,22 @@ describe("KnowledgeModel Event Schema", () => {
         const validId = "event-abc123def456"
         const result = Schema.decodeUnknownSync(EventId)(validId)
         expect(result).toBe(validId)
-      })
-    )
+      }))
 
     it.effect("rejects invalid event ID format", () =>
       Effect.gen(function*() {
         const invalidIds = [
-          "event-abc",           // too short
-          "event-ABC123DEF456",  // uppercase
-          "evt-abc123def456",    // wrong prefix
-          "abc123def456",        // no prefix
-          "event-abc123def456g"  // too long
+          "event-abc", // too short
+          "event-ABC123DEF456", // uppercase
+          "evt-abc123def456", // wrong prefix
+          "abc123def456", // no prefix
+          "event-abc123def456g" // too long
         ]
 
         for (const id of invalidIds) {
           expect(() => Schema.decodeUnknownSync(EventId)(id)).toThrow()
         }
-      })
-    )
+      }))
   })
 
   describe("EventType", () => {
@@ -62,15 +60,13 @@ describe("KnowledgeModel Event Schema", () => {
           const result = Schema.decodeUnknownSync(EventType)(type)
           expect(result).toBe(type)
         }
-      })
-    )
+      }))
 
     it.effect("rejects invalid event types", () =>
       Effect.gen(function*() {
         expect(() => Schema.decodeUnknownSync(EventType)("InvalidType")).toThrow()
         expect(() => Schema.decodeUnknownSync(EventType)("")).toThrow()
-      })
-    )
+      }))
   })
 
   describe("EntityRef", () => {
@@ -85,8 +81,7 @@ describe("KnowledgeModel Event Schema", () => {
         expect(result.iri).toBe(ref.iri)
         expect(result.role).toBe(ref.role)
         expect(result.label).toBe(ref.label)
-      })
-    )
+      }))
 
     it.effect("accepts entity reference with only required fields", () =>
       Effect.gen(function*() {
@@ -97,8 +92,7 @@ describe("KnowledgeModel Event Schema", () => {
         expect(result.iri).toBe(ref.iri)
         expect(result.role).toBeUndefined()
         expect(result.label).toBeUndefined()
-      })
-    )
+      }))
   })
 
   describe("Event", () => {
@@ -130,8 +124,7 @@ describe("KnowledgeModel Event Schema", () => {
         expect(result.title).toBe(fullEvent.title)
         expect(result.summary).toBe(fullEvent.summary)
         expect(result.tags).toEqual(fullEvent.tags)
-      })
-    )
+      }))
 
     it.effect("accepts event with minimal required fields", () =>
       Effect.gen(function*() {
@@ -149,8 +142,7 @@ describe("KnowledgeModel Event Schema", () => {
         expect(result.type).toBe("Generic")
         expect(result.title).toBeUndefined()
         expect(result.eventTime).toBeUndefined()
-      })
-    )
+      }))
 
     it.effect("rejects event without source documents", () =>
       Effect.gen(function*() {
@@ -160,12 +152,11 @@ describe("KnowledgeModel Event Schema", () => {
           publishedAt: "2024-01-15T14:30:00Z",
           participants: [],
           factGroup: [],
-          sourceDocuments: []  // NonEmptyArray requires at least one
+          sourceDocuments: [] // NonEmptyArray requires at least one
         }
 
         expect(() => Schema.decodeUnknownSync(Event)(invalidEvent)).toThrow()
-      })
-    )
+      }))
 
     it.effect("accepts event with multiple participants", () =>
       Effect.gen(function*() {
@@ -182,8 +173,7 @@ describe("KnowledgeModel Event Schema", () => {
         expect(result.participants.length).toBe(3)
         expect(result.participants[0].role).toBe("appointee")
         expect(result.participants[1].role).toBe("announcer")
-      })
-    )
+      }))
 
     it.effect("accepts event with fact group", () =>
       Effect.gen(function*() {
@@ -197,8 +187,7 @@ describe("KnowledgeModel Event Schema", () => {
 
         const result = Schema.decodeUnknownSync(Event)(eventWithFacts)
         expect(result.factGroup.length).toBe(2)
-      })
-    )
+      }))
   })
 
   describe("eventIdFromHash", () => {
@@ -211,15 +200,13 @@ describe("KnowledgeModel Event Schema", () => {
         // Verify it's a valid EventId
         const result = Schema.decodeUnknownSync(EventId)(eventId)
         expect(result).toBe(eventId)
-      })
-    )
+      }))
 
     it.effect("truncates long hashes to 12 chars", () =>
       Effect.gen(function*() {
         const longHash = "abcdef123456789abcdef123456789"
         const eventId = eventIdFromHash(longHash)
         expect(eventId).toBe("event-abcdef123456")
-      })
-    )
+      }))
   })
 })

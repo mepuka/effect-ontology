@@ -4,29 +4,31 @@
  * @since 2.0.0
  */
 
-import { describe, expect, it } from "@effect/vitest"
 import { LanguageModel } from "@effect/ai"
+import { describe, expect, it } from "@effect/vitest"
 import { Effect, Layer } from "effect"
-import {
-  ViolationExplainer,
-  ExplanationContext,
-  LlmViolationExplanation,
-  BatchExplanationResult,
-  ExplanationError
-} from "../../src/Service/ViolationExplainer.js"
-import { ConfigServiceDefault } from "../../src/Service/Config.js"
 import { TestConfigProvider } from "../../src/Runtime/TestRuntime.js"
+import { ConfigServiceDefault } from "../../src/Service/Config.js"
+import {
+  BatchExplanationResult,
+  ExplanationContext,
+  ExplanationError,
+  LlmViolationExplanation,
+  ViolationExplainer
+} from "../../src/Service/ViolationExplainer.js"
 
 // =============================================================================
 // Test Fixtures
 // =============================================================================
 
-const createTestViolation = (overrides?: Partial<{
-  focusNode: string
-  path: string
-  message: string
-  severity: "Violation" | "Warning" | "Info"
-}>) => ({
+const createTestViolation = (
+  overrides?: Partial<{
+    focusNode: string
+    path: string
+    message: string
+    severity: "Violation" | "Warning" | "Info"
+  }>
+) => ({
   focusNode: overrides?.focusNode ?? "http://example.org/entity1",
   path: overrides?.path ?? "http://schema.org/name",
   message: overrides?.message ?? "minCount constraint violated",
@@ -76,16 +78,14 @@ describe("ViolationExplainer Domain Models", () => {
         expect(context.neighborhoodTurtle).toBe("")
         expect(context.domainDescription).toBe("")
         expect(context.maxTokens).toBe(500)
-      })
-    )
+      }))
 
     it.effect("creates context with neighborhood", () =>
       Effect.gen(function*() {
         const turtle = "@prefix ex: <http://example.org/> . ex:a ex:b ex:c ."
         const context = ExplanationContext.withNeighborhood(turtle)
         expect(context.neighborhoodTurtle).toContain("@prefix")
-      })
-    )
+      }))
   })
 
   describe("LlmViolationExplanation", () => {
@@ -104,8 +104,7 @@ describe("ViolationExplainer Domain Models", () => {
         expect(explanation.focusNode).toBe("http://example.org/entity1")
         expect(explanation.isCritical).toBe(true)
         expect(explanation.confidence).toBe(0.9)
-      })
-    )
+      }))
 
     it.effect("isCritical is false for warnings", () =>
       Effect.gen(function*() {
@@ -118,8 +117,7 @@ describe("ViolationExplainer Domain Models", () => {
         })
 
         expect(explanation.isCritical).toBe(false)
-      })
-    )
+      }))
   })
 
   describe("BatchExplanationResult", () => {
@@ -140,8 +138,7 @@ describe("ViolationExplainer Domain Models", () => {
           durationMs: 100
         })
         expect(incomplete.isComplete).toBe(false)
-      })
-    )
+      }))
   })
 })
 
@@ -165,8 +162,7 @@ describe("ViolationExplainer Service", () => {
         expect(explanation.explanation).toContain("missing")
         expect(explanation.suggestion).toContain("Add")
         expect(explanation.confidence).toBeGreaterThan(0)
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
 
     it.effect("includes context in explanation", () =>
       Effect.gen(function*() {
@@ -181,8 +177,7 @@ describe("ViolationExplainer Service", () => {
 
         expect(explanation).toBeDefined()
         expect(explanation.severity).toBe("Violation")
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
   })
 
   describe("explainQuick", () => {
@@ -199,8 +194,7 @@ describe("ViolationExplainer Service", () => {
         expect(explanation.explanation).toContain("missing")
         expect(explanation.suggestion).toContain("Add")
         expect(explanation.confidence).toBe(0.6) // Lower for rule-based
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
 
     it.effect("generates rule-based explanation for maxCount", () =>
       Effect.gen(function*() {
@@ -214,8 +208,7 @@ describe("ViolationExplainer Service", () => {
 
         expect(explanation.explanation).toContain("too many")
         expect(explanation.suggestion).toContain("Remove")
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
 
     it.effect("generates rule-based explanation for datatype", () =>
       Effect.gen(function*() {
@@ -228,8 +221,7 @@ describe("ViolationExplainer Service", () => {
         const explanation = explainer.explainQuick(violation)
 
         expect(explanation.explanation).toContain("data type")
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
 
     it.effect("generates fallback for unknown violations", () =>
       Effect.gen(function*() {
@@ -243,8 +235,7 @@ describe("ViolationExplainer Service", () => {
 
         expect(explanation.explanation).toContain("Validation failed")
         expect(explanation.suggestion).toContain("Review")
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
   })
 
   describe("explainBatch", () => {
@@ -267,8 +258,7 @@ describe("ViolationExplainer Service", () => {
         expect(result.explainedCount).toBe(3)
         expect(result.isComplete).toBe(true)
         expect(result.explanations.length).toBe(3)
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
   })
 
   describe("explainWithFallback", () => {
@@ -283,7 +273,6 @@ describe("ViolationExplainer Service", () => {
         )
 
         expect(explanation.confidence).toBeGreaterThan(0.6) // LLM has higher confidence
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
   })
 })

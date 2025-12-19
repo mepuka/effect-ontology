@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Exit, Layer, Option } from "effect"
-import type { BatchId, GcsUri } from "../../src/Domain/Identity.js"
 import { ValidationPolicyError } from "../../src/Domain/Error/Shacl.js"
+import type { BatchId, GcsUri } from "../../src/Domain/Identity.js"
 import type { ValidationActivityInput } from "../../src/Domain/Schema/Batch.js"
 import { TestConfigProvider } from "../../src/Runtime/TestRuntime.js"
 import { ConfigServiceDefault } from "../../src/Service/Config.js"

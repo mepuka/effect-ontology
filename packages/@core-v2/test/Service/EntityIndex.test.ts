@@ -47,8 +47,7 @@ const cosineSimilarity = (a: ReadonlyArray<number>, b: ReadonlyArray<number>): n
  */
 const MockEmbeddingService = Layer.succeed(EmbeddingService, {
   embed: (text: string, _taskType) => Effect.succeed(mockEmbed(text)),
-  embedBatch: (texts: ReadonlyArray<string>, _taskType) =>
-    Effect.succeed(texts.map((t) => mockEmbed(t))),
+  embedBatch: (texts: ReadonlyArray<string>, _taskType) => Effect.succeed(texts.map((t) => mockEmbed(t))),
   cosineSimilarity
 })
 
@@ -214,8 +213,7 @@ const EntityIndexTest = Layer.effect(
 
       clear: () => Ref.set(stateRef, emptyState),
 
-      size: () =>
-        Ref.get(stateRef).pipe(Effect.map((state) => HashMap.size(state.entities)))
+      size: () => Ref.get(stateRef).pipe(Effect.map((state) => HashMap.size(state.entities)))
     }
 
     return service as unknown as EntityIndex
@@ -228,7 +226,7 @@ const EntityIndexTest = Layer.effect(
 const createTestEntity = (
   id: string,
   mention: string,
-  types: string[]
+  types: Array<string>
 ): Entity =>
   new Entity({
     id: EntityId(id),

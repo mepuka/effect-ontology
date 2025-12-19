@@ -6,8 +6,8 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { ConfigProvider, Effect, Layer, Option } from "effect"
-import { ExtractionRouter } from "../../src/Runtime/HttpServer.js"
 import { HealthCheckService } from "../../src/Runtime/HealthCheck.js"
+import { ExtractionRouter } from "../../src/Runtime/HttpServer.js"
 import { ConfigServiceDefault } from "../../src/Service/Config.js"
 import { StorageService } from "../../src/Service/Storage.js"
 
@@ -64,6 +64,5 @@ describe("Health Routes Integration", () => {
       const readiness = yield* health.readiness()
       expect(readiness.status).toBe("ok")
       expect(readiness.checks?.config).toBe("ok")
-    }).pipe(Effect.provide(TestLayers))
-  )
+    }).pipe(Effect.provide(TestLayers)))
 })

@@ -248,7 +248,7 @@ describe("ShaclService.Test", () => {
       const shapesStore = new N3.Store()
 
       // Add some quads to data store
-      const { quad, namedNode } = N3.DataFactory
+      const { namedNode, quad } = N3.DataFactory
       dataStore.addQuad(quad(
         namedNode("http://example.org/subject"),
         namedNode("http://example.org/predicate"),

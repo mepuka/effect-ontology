@@ -7,8 +7,8 @@
 
 import { Effect, Layer } from "effect"
 import { describe, expect, it } from "vitest"
-import { EmbeddingCache } from "../../src/Service/EmbeddingCache.js"
 import { EmbeddingService, EmbeddingServiceLive } from "../../src/Service/Embedding.js"
+import { EmbeddingCache } from "../../src/Service/EmbeddingCache.js"
 import type { NomicTaskType } from "../../src/Service/NomicNlp.js"
 import { NomicNlpService } from "../../src/Service/NomicNlp.js"
 import { MetricsService } from "../../src/Telemetry/Metrics.js"
@@ -118,7 +118,7 @@ describe("EmbeddingService embedBatch", () => {
   })
 
   it("handles partial cache hits correctly", async () => {
-    let batchedTexts: string[] = []
+    let batchedTexts: Array<string> = []
 
     const NomicNlpServiceTest = Layer.succeed(NomicNlpService, {
       embed: (_text: string, _taskType?: NomicTaskType) => Effect.succeed([0.5, 0.5, 0.5]),

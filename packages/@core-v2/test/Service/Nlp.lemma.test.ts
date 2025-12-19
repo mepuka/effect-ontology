@@ -9,8 +9,8 @@
 
 import { Effect, Layer } from "effect"
 import { describe, expect, it } from "vitest"
-import { NlpService } from "../../src/Service/Nlp.js"
 import { EmbeddingCache } from "../../src/Service/EmbeddingCache.js"
+import { NlpService } from "../../src/Service/Nlp.js"
 import type { NomicTaskType } from "../../src/Service/NomicNlp.js"
 import { NomicNlpService } from "../../src/Service/NomicNlp.js"
 

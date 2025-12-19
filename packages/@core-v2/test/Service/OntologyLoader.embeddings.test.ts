@@ -7,11 +7,7 @@
 
 import { DateTime, Effect, Layer, Schema } from "effect"
 import { describe, expect, it } from "vitest"
-import {
-  EmbeddingsNotFound,
-  EmbeddingsVersionMismatch,
-  OntologyFileNotFound
-} from "../../src/Domain/Error/Ontology.js"
+import { EmbeddingsNotFound, EmbeddingsVersionMismatch, OntologyFileNotFound } from "../../src/Domain/Error/Ontology.js"
 import {
   computeOntologyVersion,
   embeddingsPathFromOntology,
@@ -19,11 +15,11 @@ import {
 } from "../../src/Domain/Model/OntologyEmbeddings.js"
 import type { OntologyEmbeddings } from "../../src/Domain/Model/OntologyEmbeddings.js"
 import { ConfigServiceDefault } from "../../src/Service/Config.js"
+import { EmbeddingServiceDefault } from "../../src/Service/Embedding.js"
 import { NlpService } from "../../src/Service/Nlp.js"
 import { OntologyLoader } from "../../src/Service/OntologyLoader.js"
 import { RdfBuilder } from "../../src/Service/Rdf.js"
 import { StorageService, StorageServiceTest } from "../../src/Service/Storage.js"
-import { EmbeddingServiceDefault } from "../../src/Service/Embedding.js"
 import { TestConfigProvider } from "../setup.js"
 
 // Minimal test ontology

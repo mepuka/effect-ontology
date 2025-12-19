@@ -8,12 +8,8 @@
  */
 
 import { describe, expect, it } from "vitest"
-import {
-  EntityPair,
-  LlmVerificationInput,
-  LlmVerificationOutput,
-  VerifiedPair
-} from "../../src/Workflow/DurableActivities.js"
+import type { EntityPair, LlmVerificationInput, LlmVerificationOutput } from "../../src/Workflow/DurableActivities.js"
+import { VerifiedPair } from "../../src/Workflow/DurableActivities.js"
 
 // Type aliases for convenience
 type EntityPairType = typeof EntityPair.Type

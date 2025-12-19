@@ -9,7 +9,7 @@
 
 import { Schema } from "effect"
 import { describe, expect, it } from "vitest"
-import type { DocumentId, GcsUri, Namespace, OntologyVersion, BatchId } from "../../../src/Domain/Identity.js"
+import type { BatchId, DocumentId, GcsUri, Namespace, OntologyVersion } from "../../../src/Domain/Identity.js"
 import {
   ChunkingParams,
   ChunkingStrategy,

@@ -6,13 +6,13 @@
  * @module test/Workflow/ExtractionActivity
  */
 
-import { describe, expect, it } from "@effect/vitest"
 import { BunContext } from "@effect/platform-bun"
+import { describe, expect, it } from "@effect/vitest"
 import { ConfigProvider, DateTime, Effect, Layer, Option } from "effect"
-import { StorageService, StorageServiceLive } from "../../src/Service/Storage.js"
-import { ConfigService, ConfigServiceDefault } from "../../src/Service/Config.js"
+import { type DocumentId, toGcsUri } from "../../src/Domain/Identity.js"
 import { PathLayout } from "../../src/Domain/PathLayout.js"
-import { toGcsUri, type DocumentId } from "../../src/Domain/Identity.js"
+import { ConfigService, ConfigServiceDefault } from "../../src/Service/Config.js"
+import { StorageService, StorageServiceLive } from "../../src/Service/Storage.js"
 
 /**
  * Test ConfigProvider with local storage
@@ -45,8 +45,7 @@ describe("StorageService Integration", () => {
 
       expect(config.storage.type).toBe("local")
       expect(Option.getOrNull(config.storage.localPath)).toBe("/tmp/extraction-test")
-    }).pipe(Effect.provide(TestLayers))
-  )
+    }).pipe(Effect.provide(TestLayers)))
 
   it.effect("can write and read from storage", () =>
     Effect.gen(function*() {
@@ -60,8 +59,7 @@ describe("StorageService Integration", () => {
 
       expect(Option.isSome(content)).toBe(true)
       expect(Option.getOrNull(content)).toBe("Hello, World!")
-    }).pipe(Effect.provide(TestLayers))
-  )
+    }).pipe(Effect.provide(TestLayers)))
 
   it.effect("returns None for missing file", () =>
     Effect.gen(function*() {
@@ -70,8 +68,7 @@ describe("StorageService Integration", () => {
       const content = yield* storage.get("nonexistent/file.txt")
 
       expect(Option.isNone(content)).toBe(true)
-    }).pipe(Effect.provide(TestLayers))
-  )
+    }).pipe(Effect.provide(TestLayers)))
 
   it.effect("can read from nested path", () =>
     Effect.gen(function*() {
@@ -85,8 +82,7 @@ describe("StorageService Integration", () => {
 
       expect(Option.isSome(content)).toBe(true)
       expect(Option.getOrNull(content)).toBe("Document content")
-    }).pipe(Effect.provide(TestLayers))
-  )
+    }).pipe(Effect.provide(TestLayers)))
 })
 
 describe("Extraction Activity Dependencies", () => {
@@ -99,15 +95,13 @@ describe("Extraction Activity Dependencies", () => {
       expect(storage).toBeDefined()
       expect(config).toBeDefined()
       expect(config.storage.type).toBe("local")
-    }).pipe(Effect.provide(TestLayers))
-  )
+    }).pipe(Effect.provide(TestLayers)))
 })
 
 /**
  * Helper to strip gs:// prefix from URI
  */
-const stripGsPrefix = (uri: string): string =>
-  uri.startsWith("gs://") ? uri.replace(/^gs:\/\/[^/]+\//, "") : uri
+const stripGsPrefix = (uri: string): string => uri.startsWith("gs://") ? uri.replace(/^gs:\/\/[^/]+\//, "") : uri
 
 const requireContent = (opt: Option.Option<string>, key: string) =>
   Option.match(opt, {
@@ -164,8 +158,7 @@ describe("Extraction Activity Execute Logic", () => {
 
       expect(result.documentId).toBe("doc-abc123")
       expect(result.entityCount).toBe(0)
-    }).pipe(Effect.provide(TestLayers))
-  )
+    }).pipe(Effect.provide(TestLayers)))
 
   it.effect("fails gracefully when source document is missing", () =>
     Effect.gen(function*() {
@@ -184,6 +177,5 @@ describe("Extraction Activity Execute Logic", () => {
       )
 
       expect(result._tag).toBe("Left")
-    }).pipe(Effect.provide(TestLayers))
-  )
+    }).pipe(Effect.provide(TestLayers)))
 })

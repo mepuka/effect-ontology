@@ -1,8 +1,8 @@
 # Effect-Ontology @core-v2 System Architecture
 
-> **Version:** 2.4.0
+> **Version:** 2.5.0
 > **Last Updated:** December 2025
-> **Status:** GraphRAG Complete - Multi-Agent Next
+> **Status:** Unified Extraction Pipeline - Streaming First
 
 ## Table of Contents
 
@@ -27,11 +27,13 @@ Effect-Ontology is a knowledge graph extraction system that transforms unstructu
 ### Key Capabilities
 
 - **Ontology-Guided Extraction**: Uses SKOS/OWL ontologies to constrain entity types and relation predicates
+- **Unified Streaming Pipeline**: 6-phase extraction (Chunk → Mention → Entity → Property Scope → Relation → Ground)
 - **Durable Workflows**: @effect/workflow-based pipelines with PostgreSQL persistence for crash recovery
 - **SSE Streaming**: Real-time batch state streaming via Server-Sent Events
-- **Batch Processing**: 5-stage pipeline (Preprocess → Extract → Resolve → Validate → Ingest)
+- **Batch Processing**: 5-stage workflow (Preprocess → Extract → Resolve → Validate → Ingest) wrapping 6-phase extraction
 - **Agentic Document Preprocessing**: LLM-based document classification, adaptive chunking strategies, and intelligent batch ordering
 - **Entity Resolution**: Graph-based clustering for entity deduplication
+- **Grounding Verification**: Embedding-based relation filtering for context alignment (confidence ≥ 0.8)
 - **SHACL Validation**: Optional shape-based constraint checking
 - **GraphRAG Querying**: Retrieval-augmented generation with knowledge graph context, grounded answers with citations, and explainable reasoning traces
 
@@ -121,8 +123,8 @@ graph TB
 
     subgraph "Workflow Layer"
         BW[BatchExtractionWorkflow]
-        DA[DurableActivities]
-        SE[StreamingExtraction]
+        SEA[StreamingExtractionActivity<br/>6-phase unified pipeline]
+        SE[StreamingExtraction<br/>Core extraction engine]
         ERA[EntityResolutionActivity]
         VA[ValidationActivity]
         CEA[ComputeEmbeddingsActivity]
@@ -151,15 +153,18 @@ graph TB
     WO --> BSH
     BSH --> BSP
     WE --> BW
-    BW --> DA
+    BW --> SEA
+    SEA --> SE
 
-    DA --> EE
-    DA --> RE
-    DA --> GR
-    DA --> SS
-    DA --> RB
-    DA --> ERS
-    DA --> SHACL
+    SE --> EE
+    SE --> RE
+    SE --> ME
+    SE --> GR
+    SE --> NLP
+    SEA --> SS
+    SEA --> RB
+    SEA --> ERS
+    SEA --> SHACL
 
     EE --> OS
     RE --> OS
@@ -191,6 +196,8 @@ graph TB
 
     style WO fill:#e1f5fe
     style BW fill:#fff3e0
+    style SEA fill:#a5d6a7
+    style SE fill:#c8e6c9
     style ERS fill:#ffe0b2
     style ES fill:#e1bee7
     style GRAG fill:#b2dfdb
@@ -201,9 +208,17 @@ graph TB
 
 ## Workflow Pipeline
 
+### Unified Extraction Architecture
+
+The system uses a **unified streaming extraction pipeline** wrapped in durable workflow stages. The core extraction engine (`StreamingExtraction`) implements a 6-phase pipeline that is:
+
+- **Single source of truth**: One extraction path for both batch and streaming use cases
+- **Durable**: Wrapped in `StreamingExtractionActivity` for crash recovery
+- **Grounded**: Includes embedding-based verification for context alignment
+
 ### Batch Extraction Workflow
 
-The core processing pipeline consists of 5 durable stages:
+The workflow orchestration layer consists of 5 durable stages, with the **Extracting** stage using the 6-phase unified pipeline:
 
 ```mermaid
 stateDiagram-v2
@@ -236,9 +251,10 @@ stateDiagram-v2
     end note
 
     note right of Extracting
-        Parallel execution
-        concurrency: 5
-        Uses preprocessing hints
+        6-phase unified pipeline:
+        Chunk → Mention → Entity →
+        Property Scope → Relation → Ground
+        Parallel execution (concurrency: 5)
     end note
 
     note right of Validating
@@ -246,6 +262,70 @@ stateDiagram-v2
         shapes validation
     end note
 ```
+
+### 6-Phase Unified Extraction Pipeline
+
+The `StreamingExtraction` module implements the core extraction logic used by all extraction paths:
+
+```mermaid
+graph LR
+    subgraph "Phase 1: Chunking"
+        DOC[Document Text]
+        CHUNK[NlpService.chunk]
+        CHUNKS[TextChunk[]]
+    end
+
+    subgraph "Phase 2: Mention Detection"
+        ME[MentionExtractor]
+        MENTIONS[EntityMention[]]
+    end
+
+    subgraph "Phase 3: Entity Extraction"
+        EE[EntityExtractor]
+        CTX[OntologyContext]
+        ENTITIES[ExtractedEntity[]]
+    end
+
+    subgraph "Phase 4: Property Scoping"
+        OS[OntologyService.getPropertiesFor]
+        PROPS[ScopedProperty[]]
+    end
+
+    subgraph "Phase 5: Relation Extraction"
+        RE[RelationExtractor]
+        RELS[ExtractedRelation[]]
+    end
+
+    subgraph "Phase 6: Grounding"
+        GR[Grounder.verifyRelationBatch]
+        FILTER[Filter ≥ 0.8 confidence]
+        GROUNDED[GroundedRelation[]]
+    end
+
+    DOC --> CHUNK --> CHUNKS
+    CHUNKS --> ME --> MENTIONS
+    MENTIONS --> EE
+    CTX --> EE
+    EE --> ENTITIES
+    ENTITIES --> OS --> PROPS
+    ENTITIES --> RE
+    PROPS --> RE
+    RE --> RELS
+    RELS --> GR --> FILTER --> GROUNDED
+
+    style DOC fill:#e3f2fd
+    style GROUNDED fill:#c8e6c9
+    style GR fill:#a5d6a7
+```
+
+| Phase | Service | Input | Output | Purpose |
+|-------|---------|-------|--------|---------|
+| 1. Chunk | NlpService | Document text | TextChunk[] | Split into processable segments |
+| 2. Mention | MentionExtractor | TextChunk[] | EntityMention[] | Detect entity mention spans |
+| 3. Entity | EntityExtractor | Mentions + OntologyContext | ExtractedEntity[] | LLM-based entity typing |
+| 4. Property | OntologyService | Entity types | ScopedProperty[] | Domain/range filtered properties |
+| 5. Relation | RelationExtractor | Entities + Properties | ExtractedRelation[] | LLM-based relation extraction |
+| 6. Ground | Grounder | Relations + Context | GroundedRelation[] | Filter by embedding similarity ≥ 0.8 |
 
 ### Activity Sequence
 
@@ -255,7 +335,8 @@ sequenceDiagram
     participant WO as WorkflowOrchestrator
     participant WE as WorkflowEngine
     participant PA as PreprocessingActivity
-    participant EA as ExtractionActivity
+    participant SEA as StreamingExtractionActivity
+    participant SE as StreamingExtraction
     participant RA as ResolutionActivity
     participant VA as ValidationActivity
     participant IA as IngestionActivity
@@ -267,7 +348,7 @@ sequenceDiagram
     WO->>WE: execute(BatchExtractionWorkflow)
     WE->>PG: Journal workflow start
 
-    Note over WE: Stage 1: Preprocessing (NEW)
+    Note over WE: Stage 1: Preprocessing
     WE->>PA: makePreprocessingActivity
     PA->>S: Load document previews (first 4KB)
     PA->>LLM: Classify documents (batched)
@@ -276,12 +357,15 @@ sequenceDiagram
     PA->>S: Write enriched manifest
     WE->>PG: Journal activity complete
 
-    Note over WE: Stage 2: Extraction
+    Note over WE: Stage 2: Extraction (6-phase pipeline)
     loop For each document (parallel x5, priority order)
-        WE->>EA: makeExtractionActivity
-        EA->>S: Read source document
-        Note over EA: Use preprocessing hints:<br/>chunkSize, overlap, entityDensity
-        EA->>S: Write document graph
+        WE->>SEA: makeStreamingExtractionActivity
+        SEA->>S: Read source document
+        SEA->>SE: extract(text, config)
+        Note over SE: Phase 1: Chunk<br/>Phase 2: Mention<br/>Phase 3: Entity<br/>Phase 4: Property Scope<br/>Phase 5: Relation<br/>Phase 6: Ground (≥0.8)
+        SE-->>SEA: KnowledgeGraph
+        SEA->>SEA: knowledgeGraphToClaims()
+        SEA->>S: Write document graph
         WE->>PG: Journal activity complete
     end
 
@@ -1024,7 +1108,8 @@ const BatchManifest = Schema.Struct({
 | `src/Service/DocumentClassifier.ts` | LLM-based document classification |
 | `src/Workflow/Activities.ts` | @effect/workflow durable activities |
 | `src/Workflow/DurableActivities.ts` | Durable activity implementations |
-| `src/Workflow/StreamingExtraction.ts` | 2-stage extraction pipeline |
+| `src/Workflow/StreamingExtraction.ts` | 6-phase unified extraction engine |
+| `src/Workflow/StreamingExtractionActivity.ts` | Durable activity wrapper for streaming extraction |
 | `src/Workflow/EntityResolution.ts` | Graph-based entity resolution |
 | `src/Runtime/HttpServer.ts` | HTTP routes + SSE streaming |
 | `src/Runtime/ProductionRuntime.ts` | Production layer stack |
@@ -1384,7 +1469,7 @@ resource "google_cloud_run_v2_job" "preprocess" {
 | **1** | `DocumentMetadata` and `EnrichedManifest` schemas | `Domain/Schema/DocumentMetadata.ts` | - |
 | **2** | `PreprocessingActivity` (inline) | `Workflow/DurableActivities.ts` | Phase 1 |
 | **3** | `BatchState.Preprocessing` state | `Domain/Model/BatchWorkflow.ts` | Phase 2 |
-| **4** | Extraction uses preprocessing hints | `Workflow/StreamingExtraction.ts`, `Service/Nlp.ts` | Phase 3 |
+| **4** | Extraction uses preprocessing hints | `Workflow/StreamingExtractionActivity.ts`, `Service/Nlp.ts` | Phase 3 |
 | **5** | Cloud Run Job for large batches | `infra/modules/preprocess-job/` | Phase 4 |
 | **6** | Cloud Tasks fan-out (optional) | Future | Phase 5 |
 

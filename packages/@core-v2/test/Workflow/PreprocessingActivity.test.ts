@@ -8,10 +8,7 @@ import { Schema } from "effect"
 import { describe, expect, it } from "vitest"
 import type { BatchId, GcsUri } from "../../src/Domain/Identity.js"
 import { PathLayout } from "../../src/Domain/PathLayout.js"
-import {
-  PreprocessingActivityInput,
-  PreprocessingActivityOutput
-} from "../../src/Domain/Schema/DocumentMetadata.js"
+import { PreprocessingActivityInput, PreprocessingActivityOutput } from "../../src/Domain/Schema/DocumentMetadata.js"
 import { PreprocessingOutput } from "../../src/Workflow/DurableActivities.js"
 
 // -----------------------------------------------------------------------------

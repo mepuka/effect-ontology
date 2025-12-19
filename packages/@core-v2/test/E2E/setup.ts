@@ -54,8 +54,7 @@ export const getTestMode = (): TestMode => {
  * @since 2.0.0
  * @category Config
  */
-export const allowsRealLlm = (mode: TestMode): boolean =>
-  mode === TestMode.Cheap || mode === TestMode.Production
+export const allowsRealLlm = (mode: TestMode): boolean => mode === TestMode.Cheap || mode === TestMode.Production
 
 /**
  * Get cheap model for the current LLM provider
@@ -85,13 +84,13 @@ export const getCheapModel = (provider: string): string => {
 export const getProductionModel = (provider: string): string => {
   switch (provider) {
     case "anthropic":
-      return "claude-sonnet-4-20250514"
+      return "claude-haiku-4-5"
     case "openai":
       return "gpt-4o"
     case "gemini":
       return "gemini-1.5-pro"
     default:
-      return "claude-sonnet-4-20250514"
+      return "claude-haiku-4-5"
   }
 }
 
@@ -106,8 +105,8 @@ export const createE2EConfigProvider = (mode: TestMode): ConfigProvider.ConfigPr
   const model = mode === TestMode.Cheap
     ? getCheapModel(provider)
     : mode === TestMode.Production
-      ? getProductionModel(provider)
-      : "claude-haiku-4-5" // Pure/Cached don't need real model
+    ? getProductionModel(provider)
+    : "claude-haiku-4-5" // Pure/Cached don't need real model
 
   return ConfigProvider.fromMap(
     new Map([
@@ -269,9 +268,9 @@ export interface LoadedGoldenCase {
   /** Input text */
   input: string
   /** Expected entities */
-  expectedEntities: readonly ExpectedEntity[]
+  expectedEntities: ReadonlyArray<ExpectedEntity>
   /** Expected relations */
-  expectedRelations: readonly ExpectedRelation[]
+  expectedRelations: ReadonlyArray<ExpectedRelation>
   /** Expected RDF graph (Turtle) */
   expectedGraph: Option.Option<string>
 }
@@ -289,7 +288,7 @@ export class GoldenDataLoader {
    * Load a test case by ID
    */
   loadTestCase(caseId: string): Effect.Effect<LoadedGoldenCase, Error> {
-    return Effect.gen(this, function* () {
+    return Effect.gen(this, function*() {
       const casePath = path.join(this.basePath, "golden-set", caseId)
 
       // Load metadata
@@ -327,7 +326,7 @@ export class GoldenDataLoader {
         catch: () => [] // Relations file is optional
       }).pipe(
         Effect.flatMap((data) => Schema.decodeUnknown(Schema.Array(ExpectedRelation))(data)),
-        Effect.catchAll(() => Effect.succeed([] as readonly ExpectedRelation[]))
+        Effect.catchAll(() => Effect.succeed([] as ReadonlyArray<ExpectedRelation>))
       )
 
       // Load expected graph (optional)
@@ -349,7 +348,7 @@ export class GoldenDataLoader {
   /**
    * List all available test case IDs
    */
-  listTestCases(): Effect.Effect<readonly string[], Error> {
+  listTestCases(): Effect.Effect<ReadonlyArray<string>, Error> {
     return Effect.try({
       try: () => {
         const goldenSetPath = path.join(this.basePath, "golden-set")
@@ -382,7 +381,7 @@ export interface TestSignals {
   /** Token usage */
   llmTokensUsed: { input: number; output: number }
   /** LLM call latencies in ms */
-  llmLatencies: readonly number[]
+  llmLatencies: ReadonlyArray<number>
   /** Number of entities extracted */
   entitiesExtracted: number
   /** Number of relations extracted */
@@ -429,8 +428,8 @@ export interface QualityMetrics {
  * @category Metrics
  */
 export const calculateMetrics = (
-  extracted: readonly Entity[],
-  expected: readonly ExpectedEntity[]
+  extracted: ReadonlyArray<Entity>,
+  expected: ReadonlyArray<ExpectedEntity>
 ): QualityMetrics => {
   const extractedIds = new Set(extracted.map((e) => e.id.toLowerCase()))
   const expectedIds = new Set(expected.map((e) => e.id.toLowerCase()))
@@ -594,7 +593,7 @@ export interface E2EReportSummary {
     meanF1: number
   }
   /** Regression status */
-  regressions: RegressionResult[]
+  regressions: Array<RegressionResult>
   /** Run timestamp */
   timestamp: string
 }
@@ -605,10 +604,8 @@ export interface E2EReportSummary {
  * @since 2.0.0
  * @category Metrics
  */
-export const generateReport = (results: readonly E2ETestResult[]): E2EReportSummary => {
-  const passingCases = results.filter((r) =>
-    r.metrics.precision >= 0.7 && r.metrics.recall >= 0.7
-  ).length
+export const generateReport = (results: ReadonlyArray<E2ETestResult>): E2EReportSummary => {
+  const passingCases = results.filter((r) => r.metrics.precision >= 0.7 && r.metrics.recall >= 0.7).length
 
   const meanPrecision = results.length > 0
     ? results.reduce((sum, r) => sum + r.metrics.precision, 0) / results.length
@@ -751,7 +748,7 @@ export const getTestModeDescription = (mode: TestMode): string => {
  */
 export interface RegressionResult {
   status: "pass" | "warn" | "fail"
-  alarms: readonly string[]
+  alarms: ReadonlyArray<string>
   precisionDelta: number
   recallDelta: number
   f1Delta: number
@@ -768,7 +765,7 @@ export const checkRegression = (
   baseline: QualityMetrics,
   thresholds = { precision: 0.03, recall: 0.03, f1: 0.05 }
 ): RegressionResult => {
-  const alarms: string[] = []
+  const alarms: Array<string> = []
 
   const precisionDelta = current.precision - baseline.precision
   const recallDelta = current.recall - baseline.recall

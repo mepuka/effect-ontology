@@ -7,13 +7,16 @@
  * @module test/Repository/Claim.integration.test
  */
 
-import { describe, it, expect } from "@effect/vitest"
-import { Effect, Layer, Option, Config, ConfigProvider } from "effect"
-import { PgClient } from "@effect/sql-pg"
 import * as Pg from "@effect/sql-drizzle/Pg"
-import { ClaimRepository } from "../../src/Repository/Claim.js"
+import { PgClient } from "@effect/sql-pg"
+import { describe, expect, it } from "@effect/vitest"
+import { Config, ConfigProvider, Effect, Layer, Option } from "effect"
 import { ArticleRepository } from "../../src/Repository/Article.js"
-import type { ClaimInsertRow, ArticleInsertRow } from "../../src/Repository/schema.js"
+import { ClaimRepository } from "../../src/Repository/Claim.js"
+import type { ArticleInsertRow, ClaimInsertRow } from "../../src/Repository/schema.js"
+import { ClaimPersistenceService } from "../../src/Service/ClaimPersistence.js"
+import type { ClaimData } from "../../src/Utils/ClaimFactory.js"
+import { generateClaimId } from "../../src/Utils/ClaimFactory.js"
 
 // =============================================================================
 // Test Configuration
@@ -41,6 +44,13 @@ const PgClientLive = PgClient.layerConfig({
 const DrizzleLive = Pg.layer.pipe(Layer.provide(PgClientLive))
 
 const TestLayer = Layer.mergeAll(
+  ClaimRepository.Default,
+  ArticleRepository.Default
+).pipe(Layer.provide(DrizzleLive))
+
+// Layer with ClaimPersistenceService for persistence tests
+const PersistenceTestLayer = Layer.mergeAll(
+  ClaimPersistenceService.Default,
   ClaimRepository.Default,
   ArticleRepository.Default
 ).pipe(Layer.provide(DrizzleLive))
@@ -73,7 +83,7 @@ const makeTestClaim = (articleId: string, suffix: string): ClaimInsertRow => ({
 describe("ClaimRepository Integration", () => {
   describe("CRUD Operations", () => {
     it.effect("should insert and retrieve an article", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const articleRepo = yield* ArticleRepository
 
         const article = makeTestArticle("crud-1")
@@ -88,11 +98,10 @@ describe("ClaimRepository Integration", () => {
         if (Option.isSome(retrieved)) {
           expect(retrieved.value.uri).toBe(article.uri)
         }
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
 
     it.effect("should insert and retrieve a claim", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const articleRepo = yield* ArticleRepository
         const claimRepo = yield* ClaimRepository
 
@@ -106,11 +115,10 @@ describe("ClaimRepository Integration", () => {
 
         const retrieved = yield* claimRepo.getClaim(inserted.id)
         expect(Option.isSome(retrieved)).toBe(true)
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
 
     it.effect("should get claims by article", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const articleRepo = yield* ArticleRepository
         const claimRepo = yield* ClaimRepository
 
@@ -122,13 +130,12 @@ describe("ClaimRepository Integration", () => {
 
         const claims = yield* claimRepo.getClaimsByArticle(article.id)
         expect(claims.length).toBeGreaterThanOrEqual(3)
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
   })
 
   describe("Query Operations", () => {
     it.effect("should get claims by subject IRI", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const articleRepo = yield* ArticleRepository
         const claimRepo = yield* ClaimRepository
 
@@ -141,11 +148,10 @@ describe("ClaimRepository Integration", () => {
         const claims = yield* claimRepo.getClaimsBySubject(subjectIri)
         expect(claims.length).toBeGreaterThanOrEqual(2)
         claims.forEach((c) => expect(c.subjectIri).toBe(subjectIri))
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
 
     it.effect("should get preferred claims only", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const articleRepo = yield* ArticleRepository
         const claimRepo = yield* ClaimRepository
 
@@ -173,11 +179,10 @@ describe("ClaimRepository Integration", () => {
         expect(preferred.length).toBe(1)
         expect(preferred[0].objectValue).toBe("preferred-value")
         expect(preferred[0].rank).toBe("preferred")
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
 
     it.effect("should get claim history including deprecated", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const articleRepo = yield* ArticleRepository
         const claimRepo = yield* ClaimRepository
 
@@ -203,13 +208,12 @@ describe("ClaimRepository Integration", () => {
 
         const history = yield* claimRepo.getClaimHistory(subjectIri, predicateIri)
         expect(history.length).toBe(2)
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
   })
 
   describe("Deprecation Workflow", () => {
     it.effect("should deprecate a claim", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const articleRepo = yield* ArticleRepository
         const claimRepo = yield* ClaimRepository
 
@@ -230,11 +234,10 @@ describe("ClaimRepository Integration", () => {
           expect(updated.value.rank).toBe("deprecated")
           expect(updated.value.deprecatedAt).not.toBeNull()
         }
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
 
     it.effect("should promote claim to preferred", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const articleRepo = yield* ArticleRepository
         const claimRepo = yield* ClaimRepository
 
@@ -251,13 +254,12 @@ describe("ClaimRepository Integration", () => {
         if (Option.isSome(updated)) {
           expect(updated.value.rank).toBe("preferred")
         }
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
   })
 
   describe("Conflict Detection", () => {
     it.effect("should detect position conflicts", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const articleRepo = yield* ArticleRepository
         const claimRepo = yield* ClaimRepository
 
@@ -286,19 +288,18 @@ describe("ClaimRepository Integration", () => {
         const conflicts = yield* claimRepo.findConflictingClaims(newClaim)
         expect(conflicts.length).toBe(1)
         expect(conflicts[0].conflictType).toBe("position")
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
   })
 
   describe("Bulk Operations", () => {
     it.effect("should insert claims in batch", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const articleRepo = yield* ArticleRepository
         const claimRepo = yield* ClaimRepository
 
         const article = yield* articleRepo.insertArticle(makeTestArticle("bulk"))
 
-        const claimBatch: ClaimInsertRow[] = [
+        const claimBatch: Array<ClaimInsertRow> = [
           makeTestClaim(article.id, "bulk-1"),
           makeTestClaim(article.id, "bulk-2"),
           makeTestClaim(article.id, "bulk-3"),
@@ -308,11 +309,10 @@ describe("ClaimRepository Integration", () => {
 
         const inserted = yield* claimRepo.insertClaimsBatch(claimBatch)
         expect(inserted.length).toBe(5)
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
 
     it.effect("should count claims with filters", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const articleRepo = yield* ArticleRepository
         const claimRepo = yield* ClaimRepository
 
@@ -330,15 +330,14 @@ describe("ClaimRepository Integration", () => {
 
         const preferredCount = yield* claimRepo.countClaims({ subjectIri, rank: "preferred" })
         expect(preferredCount).toBe(1)
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
   })
 })
 
 describe("ArticleRepository Integration", () => {
   describe("CRUD Operations", () => {
     it.effect("should get or create article by URI", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const articleRepo = yield* ArticleRepository
 
         const article = makeTestArticle("upsert")
@@ -348,11 +347,10 @@ describe("ArticleRepository Integration", () => {
 
         const existing = yield* articleRepo.getOrCreateArticle(article)
         expect(existing.id).toBe(created.id)
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
 
     it.effect("should update article", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const articleRepo = yield* ArticleRepository
 
         const article = yield* articleRepo.insertArticle(makeTestArticle("update"))
@@ -365,11 +363,10 @@ describe("ArticleRepository Integration", () => {
         if (Option.isSome(updated)) {
           expect(updated.value.headline).toBe("Updated Headline")
         }
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
 
     it.effect("should set graph URI", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const articleRepo = yield* ArticleRepository
 
         const article = yield* articleRepo.insertArticle(makeTestArticle("graph-uri"))
@@ -382,13 +379,12 @@ describe("ArticleRepository Integration", () => {
         if (Option.isSome(updated)) {
           expect(updated.value.graphUri).toBe(graphUri)
         }
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
   })
 
   describe("Query Operations", () => {
     it.effect("should get articles by source", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const articleRepo = yield* ArticleRepository
 
         const sourceName = `Test Source ${Date.now()}`
@@ -399,11 +395,10 @@ describe("ArticleRepository Integration", () => {
         const articles = yield* articleRepo.getArticlesBySource(sourceName)
         expect(articles.length).toBeGreaterThanOrEqual(2)
         articles.forEach((a) => expect(a.sourceName).toBe(sourceName))
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
 
     it.effect("should get articles in date range", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const articleRepo = yield* ArticleRepository
 
         const now = new Date()
@@ -414,11 +409,10 @@ describe("ArticleRepository Integration", () => {
 
         const articles = yield* articleRepo.getArticlesInDateRange(hourAgo, hourFromNow)
         expect(articles.length).toBeGreaterThanOrEqual(1)
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
 
     it.effect("should check article existence", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const articleRepo = yield* ArticleRepository
 
         const article = yield* articleRepo.insertArticle(makeTestArticle("exists"))
@@ -428,7 +422,160 @@ describe("ArticleRepository Integration", () => {
 
         const notExists = yield* articleRepo.articleExists("https://nonexistent.example.com")
         expect(notExists).toBe(false)
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
+  })
+})
+
+// =============================================================================
+// ClaimPersistenceService Tests
+// =============================================================================
+
+const makeTestClaimData = (suffix: string, articleId = "test-article"): ClaimData => {
+  const subjectIri = `http://effect-ontology.dev/seattle/Entity_${suffix}`
+  const predicateIri = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+  const objectValue = "http://effect-ontology.dev/seattle/Person"
+
+  return {
+    claimId: generateClaimId(subjectIri, predicateIri, objectValue, articleId),
+    articleId,
+    subjectIri,
+    predicateIri,
+    objectValue,
+    objectType: "iri" as const,
+    confidence: 0.92,
+    evidence: {
+      text: `Test evidence text for ${suffix}`,
+      startOffset: 0,
+      endOffset: 30
+    }
+  }
+}
+
+describe("ClaimPersistenceService Integration", () => {
+  describe("persistClaims", () => {
+    it.effect("should persist claims and create article", () =>
+      Effect.gen(function*() {
+        const persistence = yield* ClaimPersistenceService
+        const articleRepo = yield* ArticleRepository
+
+        const claims: Array<ClaimData> = [
+          makeTestClaimData("pers-1"),
+          makeTestClaimData("pers-2"),
+          makeTestClaimData("pers-3")
+        ]
+
+        const articleUri = `https://seattletimes.com/article-${Date.now()}`
+        const result = yield* persistence.persistClaims(
+          claims,
+          {
+            uri: articleUri,
+            headline: "Test Article for Persistence",
+            publishedAt: new Date(),
+            sourceName: "Seattle Times"
+          },
+          "gs://test-bucket/graphs/test.trig"
+        )
+
+        expect(result.articleId).toBeDefined()
+        expect(result.claimsInserted).toBe(3)
+        expect(result.claimsTotal).toBe(3)
+
+        // Verify article was created with graph URI
+        const article = yield* articleRepo.getArticle(result.articleId)
+        expect(Option.isSome(article)).toBe(true)
+        if (Option.isSome(article)) {
+          expect(article.value.uri).toBe(articleUri)
+          expect(article.value.graphUri).toBe("gs://test-bucket/graphs/test.trig")
+        }
+      }).pipe(Effect.provide(PersistenceTestLayer)))
+
+    it.effect("should be idempotent - skip duplicate claims on re-run", () =>
+      Effect.gen(function*() {
+        const persistence = yield* ClaimPersistenceService
+
+        const claims: Array<ClaimData> = [
+          makeTestClaimData("idem-1"),
+          makeTestClaimData("idem-2")
+        ]
+
+        const articleUri = `https://seattletimes.com/idempotent-${Date.now()}`
+        const articleMeta = {
+          uri: articleUri,
+          headline: "Idempotency Test",
+          publishedAt: new Date(),
+          sourceName: "Seattle Times"
+        }
+
+        // First run - should insert all claims
+        const result1 = yield* persistence.persistClaims(claims, articleMeta)
+        expect(result1.claimsInserted).toBe(2)
+        expect(result1.claimsTotal).toBe(2)
+
+        // Second run - should skip all claims (duplicates)
+        const result2 = yield* persistence.persistClaims(claims, articleMeta)
+        expect(result2.claimsInserted).toBe(0)
+        expect(result2.claimsTotal).toBe(2)
+
+        // Same article ID should be returned
+        expect(result2.articleId).toBe(result1.articleId)
+      }).pipe(Effect.provide(PersistenceTestLayer)))
+
+    it.effect("should handle empty claims array", () =>
+      Effect.gen(function*() {
+        const persistence = yield* ClaimPersistenceService
+
+        const articleUri = `https://seattletimes.com/empty-${Date.now()}`
+        const result = yield* persistence.persistClaims(
+          [],
+          {
+            uri: articleUri,
+            headline: "Empty Claims Test",
+            publishedAt: new Date()
+          }
+        )
+
+        expect(result.claimsInserted).toBe(0)
+        expect(result.claimsTotal).toBe(0)
+        // Article should still be created
+        expect(result.articleId).toBeDefined()
+      }).pipe(Effect.provide(PersistenceTestLayer)))
+
+    it.effect("should persist claims with temporal validity", () =>
+      Effect.gen(function*() {
+        const persistence = yield* ClaimPersistenceService
+        const claimRepo = yield* ClaimRepository
+
+        const now = new Date()
+        const future = new Date(now.getTime() + 86400000) // +1 day
+
+        const claims: Array<ClaimData> = [
+          {
+            ...makeTestClaimData("temporal"),
+            validFrom: now,
+            validTo: future
+          }
+        ]
+
+        const articleUri = `https://seattletimes.com/temporal-${Date.now()}`
+        const result = yield* persistence.persistClaims(
+          claims,
+          {
+            uri: articleUri,
+            headline: "Temporal Validity Test",
+            publishedAt: new Date()
+          }
+        )
+
+        expect(result.claimsInserted).toBe(1)
+
+        // Verify temporal fields were saved
+        const savedClaims = yield* claimRepo.getClaimsByArticle(result.articleId)
+        const temporalClaim = savedClaims.find(
+          (c) => c.subjectIri.includes("temporal")
+        )
+        expect(temporalClaim).toBeDefined()
+        expect(temporalClaim?.validFrom).toBeDefined()
+        expect(temporalClaim?.validTo).toBeDefined()
+      }).pipe(Effect.provide(PersistenceTestLayer)))
   })
 })

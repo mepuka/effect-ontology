@@ -7,13 +7,11 @@
 
 import { DateTime, Effect, Layer, Option, Schema } from "effect"
 import { describe, expect, it } from "vitest"
-import {
-  OntologyEmbeddings,
-  OntologyEmbeddingsJson
-} from "../../src/Domain/Model/OntologyEmbeddings.js"
+import type { OntologyEmbeddings } from "../../src/Domain/Model/OntologyEmbeddings.js"
+import { OntologyEmbeddingsJson } from "../../src/Domain/Model/OntologyEmbeddings.js"
 import { ConfigServiceDefault } from "../../src/Service/Config.js"
-import { EmbeddingCache } from "../../src/Service/EmbeddingCache.js"
 import { EmbeddingService, EmbeddingServiceLive } from "../../src/Service/Embedding.js"
+import { EmbeddingCache } from "../../src/Service/EmbeddingCache.js"
 import type { NomicTaskType } from "../../src/Service/NomicNlp.js"
 import { NomicNlpService } from "../../src/Service/NomicNlp.js"
 import { parseOntologyFromStore } from "../../src/Service/Ontology.js"
@@ -86,7 +84,7 @@ describe("ComputeEmbeddingsActivity", () => {
   })
 
   it("generates embeddings for classes and properties", async () => {
-    const embeddedTexts: string[] = []
+    const embeddedTexts: Array<string> = []
 
     const NomicNlpServiceTest = Layer.succeed(NomicNlpService, {
       embed: (text: string, _taskType?: NomicTaskType) => {

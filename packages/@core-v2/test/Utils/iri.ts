@@ -7,7 +7,7 @@
  */
 
 import { Schema } from "effect"
-import { IriSchema, type IRI } from "../../src/Domain/Rdf/Types.js"
+import { type IRI, IriSchema } from "../../src/Domain/Rdf/Types.js"
 
 /**
  * Create a branded IRI from a string.
@@ -28,4 +28,4 @@ export const iri = (value: string): IRI => Schema.decodeSync(IriSchema)(value)
  * @param values - Array of IRI string values
  * @returns Array of branded IRI types
  */
-export const iris = (values: readonly string[]): readonly IRI[] => values.map(iri)
+export const iris = (values: ReadonlyArray<string>): ReadonlyArray<IRI> => values.map(iri)

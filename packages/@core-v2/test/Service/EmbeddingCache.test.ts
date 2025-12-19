@@ -12,7 +12,7 @@ import { EmbeddingCache, EmbeddingCacheTest } from "../../src/Service/EmbeddingC
 describe("EmbeddingCache", () => {
   describe("Default (in-memory)", () => {
     it("cache miss returns Option.none()", async () => {
-      const result = await Effect.gen(function* () {
+      const result = await Effect.gen(function*() {
         const cache = yield* EmbeddingCache
         return yield* cache.get("nonexistent")
       }).pipe(Effect.provide(EmbeddingCache.Default), Effect.runPromise)
@@ -23,7 +23,7 @@ describe("EmbeddingCache", () => {
     it("stores and retrieves embeddings", async () => {
       const embedding = [0.1, 0.2, 0.3, 0.4, 0.5]
 
-      const result = await Effect.gen(function* () {
+      const result = await Effect.gen(function*() {
         const cache = yield* EmbeddingCache
         yield* cache.set("test-key", embedding)
         return yield* cache.get("test-key")
@@ -34,7 +34,7 @@ describe("EmbeddingCache", () => {
     })
 
     it("has() returns false for missing keys", async () => {
-      const result = await Effect.gen(function* () {
+      const result = await Effect.gen(function*() {
         const cache = yield* EmbeddingCache
         return yield* cache.has("nonexistent")
       }).pipe(Effect.provide(EmbeddingCache.Default), Effect.runPromise)
@@ -43,7 +43,7 @@ describe("EmbeddingCache", () => {
     })
 
     it("has() returns true for existing keys", async () => {
-      const result = await Effect.gen(function* () {
+      const result = await Effect.gen(function*() {
         const cache = yield* EmbeddingCache
         yield* cache.set("test-key", [0.1, 0.2])
         return yield* cache.has("test-key")
@@ -53,7 +53,7 @@ describe("EmbeddingCache", () => {
     })
 
     it("overwrites existing embeddings", async () => {
-      const result = await Effect.gen(function* () {
+      const result = await Effect.gen(function*() {
         const cache = yield* EmbeddingCache
         yield* cache.set("key", [0.1])
         yield* cache.set("key", [0.2, 0.3])
@@ -64,7 +64,7 @@ describe("EmbeddingCache", () => {
     })
 
     it("size() returns correct count", async () => {
-      const result = await Effect.gen(function* () {
+      const result = await Effect.gen(function*() {
         const cache = yield* EmbeddingCache
         yield* cache.set("key1", [0.1])
         yield* cache.set("key2", [0.2])
@@ -76,7 +76,7 @@ describe("EmbeddingCache", () => {
     })
 
     it("clear() removes all entries", async () => {
-      const result = await Effect.gen(function* () {
+      const result = await Effect.gen(function*() {
         const cache = yield* EmbeddingCache
         yield* cache.set("key1", [0.1])
         yield* cache.set("key2", [0.2])
@@ -93,7 +93,7 @@ describe("EmbeddingCache", () => {
       // Use custom config with short TTL (100ms)
       const shortTtlCache = EmbeddingCache.InMemory({ ttlMs: 100, maxEntries: 100 })
 
-      const result = await Effect.gen(function* () {
+      const result = await Effect.gen(function*() {
         const cache = yield* EmbeddingCache
         yield* cache.set("key", [0.1, 0.2])
 
@@ -118,7 +118,7 @@ describe("EmbeddingCache", () => {
     it("has() returns false for expired entries", async () => {
       const shortTtlCache = EmbeddingCache.InMemory({ ttlMs: 100, maxEntries: 100 })
 
-      const result = await Effect.gen(function* () {
+      const result = await Effect.gen(function*() {
         const cache = yield* EmbeddingCache
         yield* cache.set("key", [0.1])
 
@@ -140,7 +140,7 @@ describe("EmbeddingCache", () => {
       // Small cache with max 3 entries
       const smallCache = EmbeddingCache.InMemory({ ttlMs: 3600000, maxEntries: 3 })
 
-      const result = await Effect.gen(function* () {
+      const result = await Effect.gen(function*() {
         const cache = yield* EmbeddingCache
 
         // Fill cache to capacity
@@ -181,7 +181,7 @@ describe("EmbeddingCache", () => {
 
   describe("EmbeddingCacheTest", () => {
     it("always returns Option.none()", async () => {
-      const result = await Effect.gen(function* () {
+      const result = await Effect.gen(function*() {
         const cache = yield* EmbeddingCache
         yield* cache.set("key", [0.1, 0.2])
         return yield* cache.get("key")
@@ -191,7 +191,7 @@ describe("EmbeddingCache", () => {
     })
 
     it("has() always returns false", async () => {
-      const result = await Effect.gen(function* () {
+      const result = await Effect.gen(function*() {
         const cache = yield* EmbeddingCache
         yield* cache.set("key", [0.1, 0.2])
         return yield* cache.has("key")

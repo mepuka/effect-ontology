@@ -8,13 +8,13 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Layer, Option, Secret } from "effect"
-import { ClaimService, type CreateClaimInput } from "../../src/Service/Claim.js"
-import { ClaimRepository, type ClaimFilter, type ConflictCandidate } from "../../src/Repository/Claim.js"
-import { RdfBuilder, type RdfStore, type RdfBuilderShape } from "../../src/Service/Rdf.js"
-import type { ClaimRow, ClaimInsertRow } from "../../src/Repository/schema.js"
 import { CLAIMS, RDF, XSD } from "../../src/Domain/Rdf/Constants.js"
-import { Quad, Literal, type IRI } from "../../src/Domain/Rdf/Types.js"
+import { type IRI, Literal, Quad } from "../../src/Domain/Rdf/Types.js"
+import { type ClaimFilter, ClaimRepository, type ConflictCandidate } from "../../src/Repository/Claim.js"
+import type { ClaimInsertRow, ClaimRow } from "../../src/Repository/schema.js"
+import { ClaimService, type CreateClaimInput } from "../../src/Service/Claim.js"
 import { ConfigService } from "../../src/Service/Config.js"
+import { RdfBuilder, type RdfBuilderShape, type RdfStore } from "../../src/Service/Rdf.js"
 
 // =============================================================================
 // Test Fixtures
@@ -69,13 +69,9 @@ const makeMockClaimRepository = (claims: Map<string, ClaimRow> = new Map()) =>
     getClaim: (id: string) => Effect.sync(() => Option.fromNullable(claims.get(id))),
     getClaims: (_filter: ClaimFilter) => Effect.sync(() => Array.from(claims.values())),
     getClaimsByArticle: (articleId: string) =>
-      Effect.sync(() =>
-        Array.from(claims.values()).filter((c) => c.articleId === articleId)
-      ),
+      Effect.sync(() => Array.from(claims.values()).filter((c) => c.articleId === articleId)),
     getClaimsBySubject: (subjectIri: string) =>
-      Effect.sync(() =>
-        Array.from(claims.values()).filter((c) => c.subjectIri === subjectIri)
-      ),
+      Effect.sync(() => Array.from(claims.values()).filter((c) => c.subjectIri === subjectIri)),
     getPreferredClaims: (subjectIri: string, predicateIri: string) =>
       Effect.sync(() =>
         Array.from(claims.values()).filter(
@@ -105,15 +101,15 @@ const makeMockClaimRepository = (claims: Map<string, ClaimRow> = new Map()) =>
         if (claim) {
           claim.rank = "preferred"
         }
-        return [] as never[] // Match the Drizzle return type
+        return [] as Array<never> // Match the Drizzle return type
       }),
     insertCorrection: (correction: any) => Effect.sync(() => correction),
     getCorrection: (_id: string) => Effect.sync(() => Option.none()),
     linkClaimsToCorrection: () => Effect.promise(async () => ({} as any)),
     getCorrectionChain: (_claimId: string) => Effect.sync(() => []),
-    findConflictingClaims: (claim: ClaimInsertRow | ClaimRow): Effect.Effect<ConflictCandidate[]> =>
+    findConflictingClaims: (claim: ClaimInsertRow | ClaimRow): Effect.Effect<Array<ConflictCandidate>> =>
       Effect.sync(() => {
-        const conflicts: ConflictCandidate[] = []
+        const conflicts: Array<ConflictCandidate> = []
         for (const existing of claims.values()) {
           if ("id" in claim && existing.id === claim.id) continue
           if (
@@ -127,7 +123,7 @@ const makeMockClaimRepository = (claims: Map<string, ClaimRow> = new Map()) =>
         }
         return conflicts
       }),
-    insertClaimsBatch: (claimList: ClaimInsertRow[]) =>
+    insertClaimsBatch: (claimList: Array<ClaimInsertRow>) =>
       Effect.sync(() =>
         claimList.map((c) => {
           const row = {
@@ -186,51 +182,66 @@ const buildTestClaimServiceLayer = () => {
   // Create the ClaimService layer that depends on the mocks
   const claimServiceLayer = Layer.effect(
     ClaimService,
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const repo = yield* ClaimRepository
       const rdf = yield* RdfBuilder
 
       // Inline the toReifiedTriples implementation for testing
       const toReifiedTriples = (claim: ClaimRow, graphUri?: string) =>
         Effect.sync(() => {
-          const quads: Quad[] = []
+          const quads: Array<Quad> = []
           const claimIri = `${CLAIMS.namespace}${claim.id}` as IRI
           const graph = graphUri as IRI | undefined
 
           // Type assertion
-          quads.push(new Quad({
-            subject: claimIri,
-            predicate: RDF.type,
-            object: CLAIMS.Claim,
-            graph
-          }))
+          quads.push(
+            new Quad({
+              subject: claimIri,
+              predicate: RDF.type,
+              object: CLAIMS.Claim,
+              graph
+            })
+          )
 
-          // RDF reification
-          quads.push(new Quad({
-            subject: claimIri,
-            predicate: RDF.subject,
-            object: claim.subjectIri as IRI,
-            graph
-          }))
+          // Claims vocabulary reification (aligned with ontologies/claims/claims.ttl)
+          quads.push(
+            new Quad({
+              subject: claimIri,
+              predicate: CLAIMS.claimSubject,
+              object: claim.subjectIri as IRI,
+              graph
+            })
+          )
 
-          quads.push(new Quad({
-            subject: claimIri,
-            predicate: RDF.predicate,
-            object: claim.predicateIri as IRI,
-            graph
-          }))
+          quads.push(
+            new Quad({
+              subject: claimIri,
+              predicate: CLAIMS.claimPredicate,
+              object: claim.predicateIri as IRI,
+              graph
+            })
+          )
 
-          // Object (IRI or Literal)
-          const objectTerm = claim.objectType === "iri"
-            ? claim.objectValue as IRI
-            : new Literal({ value: claim.objectValue })
-
-          quads.push(new Quad({
-            subject: claimIri,
-            predicate: RDF.object,
-            object: objectTerm,
-            graph
-          }))
+          // Object: use claimObject for IRIs, claimLiteral for literals
+          if (claim.objectType === "iri") {
+            quads.push(
+              new Quad({
+                subject: claimIri,
+                predicate: CLAIMS.claimObject,
+                object: claim.objectValue as IRI,
+                graph
+              })
+            )
+          } else {
+            quads.push(
+              new Quad({
+                subject: claimIri,
+                predicate: CLAIMS.claimLiteral,
+                object: new Literal({ value: claim.objectValue }),
+                graph
+              })
+            )
+          }
 
           // Rank
           const rankIri = claim.rank === "preferred"
@@ -239,132 +250,156 @@ const buildTestClaimServiceLayer = () => {
             ? CLAIMS.Deprecated
             : CLAIMS.Normal
 
-          quads.push(new Quad({
-            subject: claimIri,
-            predicate: CLAIMS.rank,
-            object: rankIri,
-            graph
-          }))
+          quads.push(
+            new Quad({
+              subject: claimIri,
+              predicate: CLAIMS.rank,
+              object: rankIri,
+              graph
+            })
+          )
 
           // Confidence
           if (claim.confidenceScore) {
-            quads.push(new Quad({
-              subject: claimIri,
-              predicate: CLAIMS.confidence,
-              object: new Literal({
-                value: claim.confidenceScore,
-                datatype: XSD.double
-              }),
-              graph
-            }))
+            quads.push(
+              new Quad({
+                subject: claimIri,
+                predicate: CLAIMS.confidence,
+                object: new Literal({
+                  value: claim.confidenceScore,
+                  datatype: XSD.double
+                }),
+                graph
+              })
+            )
           }
 
           // Extracted at
           if (claim.createdAt) {
-            quads.push(new Quad({
-              subject: claimIri,
-              predicate: CLAIMS.extractedAt,
-              object: new Literal({
-                value: claim.createdAt.toISOString(),
-                datatype: XSD.dateTime
-              }),
-              graph
-            }))
+            quads.push(
+              new Quad({
+                subject: claimIri,
+                predicate: CLAIMS.extractedAt,
+                object: new Literal({
+                  value: claim.createdAt.toISOString(),
+                  datatype: XSD.dateTime
+                }),
+                graph
+              })
+            )
           }
 
           // Source article
-          quads.push(new Quad({
-            subject: claimIri,
-            predicate: CLAIMS.statedIn,
-            object: `${CLAIMS.namespace}article/${claim.articleId}` as IRI,
-            graph
-          }))
+          quads.push(
+            new Quad({
+              subject: claimIri,
+              predicate: CLAIMS.statedIn,
+              object: `${CLAIMS.namespace}article/${claim.articleId}` as IRI,
+              graph
+            })
+          )
 
           // Temporal validity
           if (claim.validFrom) {
-            quads.push(new Quad({
-              subject: claimIri,
-              predicate: CLAIMS.validFrom,
-              object: new Literal({
-                value: claim.validFrom.toISOString(),
-                datatype: XSD.dateTime
-              }),
-              graph
-            }))
+            quads.push(
+              new Quad({
+                subject: claimIri,
+                predicate: CLAIMS.validFrom,
+                object: new Literal({
+                  value: claim.validFrom.toISOString(),
+                  datatype: XSD.dateTime
+                }),
+                graph
+              })
+            )
           }
 
           if (claim.validTo) {
-            quads.push(new Quad({
-              subject: claimIri,
-              predicate: CLAIMS.validUntil,
-              object: new Literal({
-                value: claim.validTo.toISOString(),
-                datatype: XSD.dateTime
-              }),
-              graph
-            }))
+            quads.push(
+              new Quad({
+                subject: claimIri,
+                predicate: CLAIMS.validUntil,
+                object: new Literal({
+                  value: claim.validTo.toISOString(),
+                  datatype: XSD.dateTime
+                }),
+                graph
+              })
+            )
           }
 
           // Deprecation info
           if (claim.deprecatedAt) {
-            quads.push(new Quad({
-              subject: claimIri,
-              predicate: CLAIMS.deprecatedAt,
-              object: new Literal({
-                value: claim.deprecatedAt.toISOString(),
-                datatype: XSD.dateTime
-              }),
-              graph
-            }))
+            quads.push(
+              new Quad({
+                subject: claimIri,
+                predicate: CLAIMS.deprecatedAt,
+                object: new Literal({
+                  value: claim.deprecatedAt.toISOString(),
+                  datatype: XSD.dateTime
+                }),
+                graph
+              })
+            )
           }
 
           // Evidence
           if (claim.evidenceText) {
             const evidenceIri = `${claimIri}/evidence` as IRI
 
-            quads.push(new Quad({
-              subject: claimIri,
-              predicate: CLAIMS.hasEvidence,
-              object: evidenceIri,
-              graph
-            }))
+            quads.push(
+              new Quad({
+                subject: claimIri,
+                predicate: CLAIMS.hasEvidence,
+                object: evidenceIri,
+                graph
+              })
+            )
 
-            quads.push(new Quad({
-              subject: evidenceIri,
-              predicate: RDF.type,
-              object: CLAIMS.Evidence,
-              graph
-            }))
+            quads.push(
+              new Quad({
+                subject: evidenceIri,
+                predicate: RDF.type,
+                object: CLAIMS.Evidence,
+                graph
+              })
+            )
 
-            quads.push(new Quad({
-              subject: evidenceIri,
-              predicate: CLAIMS.evidenceText,
-              object: new Literal({ value: claim.evidenceText }),
-              graph
-            }))
+            quads.push(
+              new Quad({
+                subject: evidenceIri,
+                predicate: CLAIMS.evidenceText,
+                object: new Literal({ value: claim.evidenceText }),
+                graph
+              })
+            )
 
             if (claim.evidenceStartOffset !== null) {
-              quads.push(new Quad({
-                subject: evidenceIri,
-                predicate: CLAIMS.startOffset,
-                object: new Literal({
-                  value: claim.evidenceStartOffset.toString(),
-                  datatype: XSD.integer
-                }),
-                graph
-              }))
+              quads.push(
+                new Quad({
+                  subject: evidenceIri,
+                  predicate: CLAIMS.startOffset,
+                  object: new Literal({
+                    value: claim.evidenceStartOffset.toString(),
+                    datatype: XSD.integer
+                  }),
+                  graph
+                })
+              )
             }
 
             if (claim.evidenceEndOffset !== null) {
-              quads.push(new Quad({
-                subject: evidenceIri,
-                predicate: CLAIMS.endOffset,
-                object: new Literal({
-                  value: claim.evidenceEndOffset.toString(),
-                  datatype: XSD.integer
-                }),
-                graph
-              }))
+              quads.push(
+                new Quad({
+                  subject: evidenceIri,
+                  predicate: CLAIMS.endOffset,
+                  object: new Literal({
+                    value: claim.evidenceEndOffset.toString(),
+                    datatype: XSD.integer
+                  }),
+                  graph
+                })
+              )
             }
           }
 
@@ -399,7 +434,7 @@ const TestClaimServiceLayer = buildTestClaimServiceLayer()
 describe("ClaimService", () => {
   describe("toReifiedTriples", () => {
     it.effect("generates correct RDF quads for a basic claim", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const service = yield* ClaimService
         const claim = createTestClaimRow()
 
@@ -415,18 +450,18 @@ describe("ClaimService", () => {
         expect(typeQuad).toBeDefined()
         expect(typeQuad?.subject).toBe(`${CLAIMS.namespace}${claim.id}`)
 
-        // Find subject reification
-        const subjectQuad = quads.find((q) => q.predicate === RDF.subject)
+        // Find subject reification (using claims:claimSubject)
+        const subjectQuad = quads.find((q) => q.predicate === CLAIMS.claimSubject)
         expect(subjectQuad).toBeDefined()
         expect(subjectQuad?.object).toBe(claim.subjectIri)
 
-        // Find predicate reification
-        const predicateQuad = quads.find((q) => q.predicate === RDF.predicate)
+        // Find predicate reification (using claims:claimPredicate)
+        const predicateQuad = quads.find((q) => q.predicate === CLAIMS.claimPredicate)
         expect(predicateQuad).toBeDefined()
         expect(predicateQuad?.object).toBe(claim.predicateIri)
 
-        // Find object reification
-        const objectQuad = quads.find((q) => q.predicate === RDF.object)
+        // Find object reification (using claims:claimLiteral for literals)
+        const objectQuad = quads.find((q) => q.predicate === CLAIMS.claimLiteral)
         expect(objectQuad).toBeDefined()
         expect(objectQuad?.object).toBeInstanceOf(Literal)
         expect((objectQuad?.object as Literal).value).toBe(claim.objectValue)
@@ -442,11 +477,10 @@ describe("ClaimService", () => {
         expect(confidenceQuad?.object).toBeInstanceOf(Literal)
         expect((confidenceQuad?.object as Literal).value).toBe("0.95")
         expect((confidenceQuad?.object as Literal).datatype).toBe(XSD.double)
-      }).pipe(Effect.provide(TestClaimServiceLayer))
-    )
+      }).pipe(Effect.provide(TestClaimServiceLayer)))
 
     it.effect("includes evidence quads when evidence is present", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const service = yield* ClaimService
         const claim = createTestClaimRow({
           evidenceText: "Evidence text here",
@@ -480,11 +514,10 @@ describe("ClaimService", () => {
         const endQuad = quads.find((q) => q.predicate === CLAIMS.endOffset)
         expect(endQuad).toBeDefined()
         expect((endQuad?.object as Literal).value).toBe("30")
-      }).pipe(Effect.provide(TestClaimServiceLayer))
-    )
+      }).pipe(Effect.provide(TestClaimServiceLayer)))
 
     it.effect("uses correct rank IRI for preferred claims", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const service = yield* ClaimService
         const claim = createTestClaimRow({ rank: "preferred" })
 
@@ -493,11 +526,10 @@ describe("ClaimService", () => {
         const rankQuad = quads.find((q) => q.predicate === CLAIMS.rank)
         expect(rankQuad).toBeDefined()
         expect(rankQuad?.object).toBe(CLAIMS.Preferred)
-      }).pipe(Effect.provide(TestClaimServiceLayer))
-    )
+      }).pipe(Effect.provide(TestClaimServiceLayer)))
 
     it.effect("uses correct rank IRI for deprecated claims", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const service = yield* ClaimService
         const claim = createTestClaimRow({
           rank: "deprecated",
@@ -513,11 +545,10 @@ describe("ClaimService", () => {
         // Should have deprecatedAt
         const deprecatedQuad = quads.find((q) => q.predicate === CLAIMS.deprecatedAt)
         expect(deprecatedQuad).toBeDefined()
-      }).pipe(Effect.provide(TestClaimServiceLayer))
-    )
+      }).pipe(Effect.provide(TestClaimServiceLayer)))
 
     it.effect("includes temporal validity when specified", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const service = yield* ClaimService
         const validFrom = new Date("2025-01-01T00:00:00Z")
         const validTo = new Date("2025-12-31T23:59:59Z")
@@ -532,11 +563,10 @@ describe("ClaimService", () => {
 
         const validToQuad = quads.find((q) => q.predicate === CLAIMS.validUntil)
         expect(validToQuad).toBeDefined()
-      }).pipe(Effect.provide(TestClaimServiceLayer))
-    )
+      }).pipe(Effect.provide(TestClaimServiceLayer)))
 
-    it.effect("handles IRI objects correctly", () =>
-      Effect.gen(function* () {
+    it.effect("handles IRI objects correctly (uses claimObject)", () =>
+      Effect.gen(function*() {
         const service = yield* ClaimService
         const claim = createTestClaimRow({
           objectType: "iri",
@@ -545,16 +575,20 @@ describe("ClaimService", () => {
 
         const quads = yield* service.toReifiedTriples(claim)
 
-        const objectQuad = quads.find((q) => q.predicate === RDF.object)
+        // For IRI objects, should use claims:claimObject (not claims:claimLiteral)
+        const objectQuad = quads.find((q) => q.predicate === CLAIMS.claimObject)
         expect(objectQuad).toBeDefined()
         // Should be IRI, not Literal
         expect(typeof objectQuad?.object).toBe("string")
         expect(objectQuad?.object).toBe("http://example.org/org/acme")
-      }).pipe(Effect.provide(TestClaimServiceLayer))
-    )
+
+        // Should NOT have claimLiteral
+        const literalQuad = quads.find((q) => q.predicate === CLAIMS.claimLiteral)
+        expect(literalQuad).toBeUndefined()
+      }).pipe(Effect.provide(TestClaimServiceLayer)))
 
     it.effect("adds quads to named graph when specified", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const service = yield* ClaimService
         const claim = createTestClaimRow()
         const graphUri = "http://example.org/graph/article-001"
@@ -565,13 +599,12 @@ describe("ClaimService", () => {
         for (const quad of quads) {
           expect(quad.graph).toBe(graphUri)
         }
-      }).pipe(Effect.provide(TestClaimServiceLayer))
-    )
+      }).pipe(Effect.provide(TestClaimServiceLayer)))
   })
 
   describe("findConflicting", () => {
     it.effect("detects position conflicts", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const service = yield* ClaimService
 
         // First, we need to insert a claim
@@ -585,7 +618,6 @@ describe("ClaimService", () => {
         // Since we're using the mock which starts empty, no conflicts expected
         // In real usage, conflicts would be detected
         expect(conflicts).toHaveLength(0)
-      }).pipe(Effect.provide(TestClaimServiceLayer))
-    )
+      }).pipe(Effect.provide(TestClaimServiceLayer)))
   })
 })

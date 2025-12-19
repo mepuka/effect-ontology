@@ -98,21 +98,15 @@ describe("PreprocessingOptions Schema", () => {
     })
 
     it("rejects zero", () => {
-      expect(() =>
-        Schema.decodeUnknownSync(PreprocessingOptions)({ classificationBatchSize: 0 })
-      ).toThrow()
+      expect(() => Schema.decodeUnknownSync(PreprocessingOptions)({ classificationBatchSize: 0 })).toThrow()
     })
 
     it("rejects values above 50", () => {
-      expect(() =>
-        Schema.decodeUnknownSync(PreprocessingOptions)({ classificationBatchSize: 51 })
-      ).toThrow()
+      expect(() => Schema.decodeUnknownSync(PreprocessingOptions)({ classificationBatchSize: 51 })).toThrow()
     })
 
     it("rejects negative values", () => {
-      expect(() =>
-        Schema.decodeUnknownSync(PreprocessingOptions)({ classificationBatchSize: -1 })
-      ).toThrow()
+      expect(() => Schema.decodeUnknownSync(PreprocessingOptions)({ classificationBatchSize: -1 })).toThrow()
     })
   })
 
@@ -136,9 +130,7 @@ describe("PreprocessingOptions Schema", () => {
     }
 
     it("rejects invalid strategy", () => {
-      expect(() =>
-        Schema.decodeUnknownSync(PreprocessingOptions)({ chunkingStrategyOverride: "invalid" })
-      ).toThrow()
+      expect(() => Schema.decodeUnknownSync(PreprocessingOptions)({ chunkingStrategyOverride: "invalid" })).toThrow()
     })
 
     it("accepts undefined (optional field)", () => {

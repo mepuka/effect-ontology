@@ -6,16 +6,16 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Layer } from "effect"
+import { TestConfigProvider } from "../../src/Runtime/TestRuntime.js"
+import { ConfigServiceDefault } from "../../src/Service/Config.js"
+import { RdfBuilder } from "../../src/Service/Rdf.js"
 import {
   Reasoner,
   ReasoningConfig,
-  ReasoningResult,
   ReasoningError,
+  ReasoningResult,
   RuleParseError
 } from "../../src/Service/Reasoner.js"
-import { RdfBuilder } from "../../src/Service/Rdf.js"
-import { ConfigServiceDefault } from "../../src/Service/Config.js"
-import { TestConfigProvider } from "../../src/Runtime/TestRuntime.js"
 
 // =============================================================================
 // Test Layer
@@ -41,15 +41,13 @@ describe("Reasoner Domain Models", () => {
         expect(config.profile).toBe("rdfs")
         expect(config.customRules.length).toBe(0)
         expect(config.maxIterations).toBe(100)
-      })
-    )
+      }))
 
     it.effect("creates subclass-only config", () =>
       Effect.gen(function*() {
         const config = ReasoningConfig.subclassOnly()
         expect(config.profile).toBe("rdfs-subclass")
-      })
-    )
+      }))
 
     it.effect("creates custom rules config", () =>
       Effect.gen(function*() {
@@ -58,8 +56,7 @@ describe("Reasoner Domain Models", () => {
         expect(config.profile).toBe("custom")
         expect(config.customRules.length).toBe(1)
         expect(config.customRules[0]).toContain("=>")
-      })
-    )
+      }))
   })
 
   describe("ReasoningResult", () => {
@@ -80,8 +77,7 @@ describe("Reasoner Domain Models", () => {
           durationMs: 30
         })
         expect(noInferences.hasInferences).toBe(false)
-      })
-    )
+      }))
   })
 })
 
@@ -101,8 +97,7 @@ describe("Reasoner Service", () => {
         expect(rules.some((r) => r.includes("subClassOf"))).toBe(true)
         expect(rules.some((r) => r.includes("domain"))).toBe(true)
         expect(rules.some((r) => r.includes("range"))).toBe(true)
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
 
     it.effect("returns subclass rules only for rdfs-subclass profile", () =>
       Effect.gen(function*() {
@@ -112,8 +107,7 @@ describe("Reasoner Service", () => {
 
         expect(rules.length).toBe(2) // subclass type inference + chain
         expect(rules.every((r) => r.includes("subClassOf"))).toBe(true)
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
 
     it.effect("returns empty array for custom profile", () =>
       Effect.gen(function*() {
@@ -122,8 +116,7 @@ describe("Reasoner Service", () => {
         const rules = reasoner.getRules("custom")
 
         expect(rules.length).toBe(0)
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
   })
 
   describe("reason", () => {
@@ -165,8 +158,7 @@ describe("Reasoner Service", () => {
           null
         )
         expect(types.length).toBeGreaterThanOrEqual(1) // At least FootballPlayer
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
 
     it.effect("returns zero inferences when no rules match", () =>
       Effect.gen(function*() {
@@ -186,8 +178,7 @@ describe("Reasoner Service", () => {
 
         expect(result.inferredTripleCount).toBe(0)
         expect(result.hasInferences).toBe(false)
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
 
     it.effect("handles custom profile with no rules", () =>
       Effect.gen(function*() {
@@ -205,8 +196,7 @@ describe("Reasoner Service", () => {
 
         expect(result.inferredTripleCount).toBe(0)
         expect(result.rulesApplied).toBe(0)
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
   })
 
   describe("reasonCopy", () => {
@@ -228,7 +218,7 @@ describe("Reasoner Service", () => {
         const originalSize = store._store.size
 
         // Apply reasoning on a copy
-        const { store: reasonedStore, result } = yield* reasoner.reasonCopy(
+        const { result, store: reasonedStore } = yield* reasoner.reasonCopy(
           store,
           ReasoningConfig.rdfs()
         )
@@ -239,8 +229,7 @@ describe("Reasoner Service", () => {
         // Copy should have new triples
         expect(reasonedStore._store.size).toBeGreaterThanOrEqual(originalSize)
         expect(result.inferredTripleCount).toBeGreaterThanOrEqual(0)
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
   })
 
   describe("reasonForValidation", () => {
@@ -263,8 +252,7 @@ describe("Reasoner Service", () => {
 
         // Should only apply subclass rules
         expect(result.rulesApplied).toBe(2) // subclass type + chain
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
   })
 
   describe("wouldInfer", () => {
@@ -290,8 +278,7 @@ describe("Reasoner Service", () => {
         expect(store._store.size).toBe(originalSize)
         // The prediction should be accurate
         expect(typeof would).toBe("boolean")
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
 
     it.effect("returns false when no inferences would be added", () =>
       Effect.gen(function*() {
@@ -308,8 +295,7 @@ describe("Reasoner Service", () => {
         const would = yield* reasoner.wouldInfer(store, ReasoningConfig.subclassOnly())
 
         expect(would).toBe(false)
-      }).pipe(Effect.provide(TestLayer))
-    )
+      }).pipe(Effect.provide(TestLayer)))
   })
 })
 
@@ -353,6 +339,5 @@ describe("OWL sameAs Reasoning", () => {
     }).pipe(
       Effect.provide(Reasoner.Default),
       Effect.provide(TestLayer)
-    )
-  )
+    ))
 })

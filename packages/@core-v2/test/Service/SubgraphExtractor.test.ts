@@ -2,12 +2,12 @@
  * Tests for SubgraphExtractor service
  */
 
-import { describe, it, expect } from "@effect/vitest"
+import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import { Entity, KnowledgeGraph, Relation } from "../../src/Domain/Model/Entity.js"
 import { EntityId } from "../../src/Domain/Model/shared.js"
-import type { SubgraphExtractorService, Subgraph } from "../../src/Service/SubgraphExtractor.js"
-import type { ScoredEntity, FindSimilarOptions } from "../../src/Service/EntityIndex.js"
+import type { FindSimilarOptions, ScoredEntity } from "../../src/Service/EntityIndex.js"
+import type { Subgraph, SubgraphExtractorService } from "../../src/Service/SubgraphExtractor.js"
 
 // Test entities for building graphs
 const createTestEntities = () => ({
@@ -99,7 +99,7 @@ const mockEmbed = (text: string): ReadonlyArray<number> => {
     hash = hash & hash
   }
   // Generate 8-dimensional embedding from hash
-  const result: number[] = []
+  const result: Array<number> = []
   for (let i = 0; i < 8; i++) {
     result.push(Math.sin(hash + i) * 0.5 + 0.5)
   }
@@ -229,17 +229,16 @@ const createTestExtractor = () => {
     centerNodes: ReadonlyArray<string>,
     depth: number
   ): Subgraph => {
-    const nodes: Entity[] = []
+    const nodes: Array<Entity> = []
     for (const nodeId of nodeIds) {
       const entity = graph.getEntity(nodeId)
       if (entity) nodes.push(entity)
     }
 
-    const filteredEdges: Relation[] = []
+    const filteredEdges: Array<Relation> = []
     for (const edge of edges) {
       const hasSubject = nodeIds.has(edge.subjectId)
-      const hasObject =
-        !edge.isEntityReference ||
+      const hasObject = !edge.isEntityReference ||
         (typeof edge.object === "string" && nodeIds.has(edge.object))
       if (hasSubject && hasObject) {
         filteredEdges.push(edge)
@@ -256,7 +255,7 @@ const createTestExtractor = () => {
         if (validSeeds.length === 0) {
           return { nodes: [], edges: [], centerNodes: seeds, depth: 0 }
         }
-        const { nodes, edges } = traverseHops(graph, validSeeds, hops, options)
+        const { edges, nodes } = traverseHops(graph, validSeeds, hops, options)
         return buildSubgraph(graph, nodes, edges, validSeeds, hops)
       }),
 
@@ -280,7 +279,7 @@ const createTestExtractor = () => {
         }
 
         const seeds = similar.map((s) => s.entity.id)
-        const { nodes, edges } = traverseHops(graph, seeds, hops, { maxNodes })
+        const { edges, nodes } = traverseHops(graph, seeds, hops, { maxNodes })
         return buildSubgraph(graph, nodes, edges, seeds, hops)
       })
   }
@@ -291,7 +290,7 @@ const createTestExtractor = () => {
 describe("SubgraphExtractor", () => {
   describe("extract - N-hop traversal", () => {
     it.effect("extracts 0-hop subgraph (seeds only)", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const extractor = createTestExtractor()
         const graph = createChainGraph()
 
@@ -302,11 +301,10 @@ describe("SubgraphExtractor", () => {
         expect(subgraph.edges.length).toBe(0)
         expect(subgraph.centerNodes).toEqual(["alice"])
         expect(subgraph.depth).toBe(0)
-      })
-    )
+      }))
 
     it.effect("extracts 1-hop subgraph from chain", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const extractor = createTestExtractor()
         const graph = createChainGraph()
 
@@ -318,11 +316,10 @@ describe("SubgraphExtractor", () => {
         expect(nodeIds).toEqual(["alice", "bob", "carol"])
         expect(subgraph.edges.length).toBe(2)
         expect(subgraph.depth).toBe(1)
-      })
-    )
+      }))
 
     it.effect("extracts 2-hop subgraph from chain", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const extractor = createTestExtractor()
         const graph = createChainGraph()
 
@@ -334,11 +331,10 @@ describe("SubgraphExtractor", () => {
         expect(nodeIds).toEqual(["alice", "bob", "carol", "dave"])
         expect(subgraph.edges.length).toBe(3)
         expect(subgraph.depth).toBe(2)
-      })
-    )
+      }))
 
     it.effect("extracts star graph from center", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const extractor = createTestExtractor()
         const graph = createStarGraph()
 
@@ -348,11 +344,10 @@ describe("SubgraphExtractor", () => {
         expect(subgraph.nodes.length).toBe(4)
         expect(subgraph.edges.length).toBe(3)
         expect(subgraph.centerNodes).toEqual(["alice"])
-      })
-    )
+      }))
 
     it.effect("respects maxNodes limit", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const extractor = createTestExtractor()
         const graph = createStarGraph()
 
@@ -361,11 +356,10 @@ describe("SubgraphExtractor", () => {
         // Should only get alice + 1 neighbor
         expect(subgraph.nodes.length).toBe(2)
         expect(subgraph.nodes.some((n) => n.id === "alice")).toBe(true)
-      })
-    )
+      }))
 
     it.effect("respects followOutgoing=false", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const extractor = createTestExtractor()
         const graph = createChainGraph()
 
@@ -376,11 +370,10 @@ describe("SubgraphExtractor", () => {
         expect(subgraph.nodes.length).toBe(2)
         const nodeIds = subgraph.nodes.map((n) => n.id).sort()
         expect(nodeIds).toEqual(["alice", "bob"])
-      })
-    )
+      }))
 
     it.effect("respects followIncoming=false", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const extractor = createTestExtractor()
         const graph = createChainGraph()
 
@@ -391,11 +384,10 @@ describe("SubgraphExtractor", () => {
         expect(subgraph.nodes.length).toBe(2)
         const nodeIds = subgraph.nodes.map((n) => n.id).sort()
         expect(nodeIds).toEqual(["bob", "carol"])
-      })
-    )
+      }))
 
     it.effect("handles multiple seeds", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const extractor = createTestExtractor()
         const graph = createChainGraph()
 
@@ -404,11 +396,10 @@ describe("SubgraphExtractor", () => {
         // alice -> bob, carol -> dave
         expect(subgraph.nodes.length).toBe(4)
         expect(subgraph.centerNodes).toEqual(["alice", "dave"])
-      })
-    )
+      }))
 
     it.effect("handles invalid seeds gracefully", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const extractor = createTestExtractor()
         const graph = createChainGraph()
 
@@ -416,11 +407,10 @@ describe("SubgraphExtractor", () => {
 
         expect(subgraph.nodes.length).toBe(0)
         expect(subgraph.edges.length).toBe(0)
-      })
-    )
+      }))
 
     it.effect("filters invalid seeds but uses valid ones", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const extractor = createTestExtractor()
         const graph = createChainGraph()
 
@@ -428,11 +418,10 @@ describe("SubgraphExtractor", () => {
 
         expect(subgraph.nodes.length).toBe(1)
         expect(subgraph.nodes[0].id).toBe("alice")
-      })
-    )
+      }))
 
     it.effect("handles empty seeds array", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const extractor = createTestExtractor()
         const graph = createChainGraph()
 
@@ -440,13 +429,12 @@ describe("SubgraphExtractor", () => {
 
         expect(subgraph.nodes.length).toBe(0)
         expect(subgraph.edges.length).toBe(0)
-      })
-    )
+      }))
   })
 
   describe("extractRelevant - relevance-based extraction", () => {
     it.effect("finds entities similar to query", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const extractor = createTestExtractor()
         const graph = createOrgGraph()
 
@@ -459,11 +447,10 @@ describe("SubgraphExtractor", () => {
         // Should find alice as most similar
         expect(subgraph.nodes.length).toBeGreaterThanOrEqual(1)
         expect(subgraph.centerNodes.includes("alice")).toBe(true)
-      })
-    )
+      }))
 
     it.effect("extracts N-hop neighborhood from relevant seeds", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const extractor = createTestExtractor()
         const graph = createOrgGraph()
 
@@ -475,11 +462,10 @@ describe("SubgraphExtractor", () => {
         // Should find alice and her neighbors (bob, acme_corp)
         expect(subgraph.nodes.length).toBeGreaterThan(1)
         expect(subgraph.depth).toBe(1)
-      })
-    )
+      }))
 
     it.effect("respects maxNodes limit", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const extractor = createTestExtractor()
         const graph = createOrgGraph()
 
@@ -489,11 +475,10 @@ describe("SubgraphExtractor", () => {
         })
 
         expect(subgraph.nodes.length).toBeLessThanOrEqual(2)
-      })
-    )
+      }))
 
     it.effect("respects type filter", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const extractor = createTestExtractor()
         const graph = createOrgGraph()
 
@@ -511,11 +496,10 @@ describe("SubgraphExtractor", () => {
             expect(entity.types).toContain("http://schema.org/Organization")
           }
         }
-      })
-    )
+      }))
 
     it.effect("respects minSimilarity threshold", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const extractor = createTestExtractor()
         const graph = createOrgGraph()
 
@@ -528,11 +512,10 @@ describe("SubgraphExtractor", () => {
 
         // With such a high threshold, likely no matches
         expect(subgraph.centerNodes.length).toBeLessThanOrEqual(5)
-      })
-    )
+      }))
 
     it.effect("returns empty subgraph when no matches", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const extractor = createTestExtractor()
         const graph = createOrgGraph()
 
@@ -545,11 +528,10 @@ describe("SubgraphExtractor", () => {
 
         expect(subgraph.nodes.length).toBe(0)
         expect(subgraph.edges.length).toBe(0)
-      })
-    )
+      }))
 
     it.effect("handles empty graph", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const extractor = createTestExtractor()
         const emptyGraph = new KnowledgeGraph({ entities: [], relations: [] })
 
@@ -557,13 +539,12 @@ describe("SubgraphExtractor", () => {
 
         expect(subgraph.nodes.length).toBe(0)
         expect(subgraph.edges.length).toBe(0)
-      })
-    )
+      }))
   })
 
   describe("edge cases", () => {
     it.effect("handles graph with literal-only relations", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const extractor = createTestExtractor()
         const e = createTestEntities()
         const graph = new KnowledgeGraph({
@@ -578,11 +559,10 @@ describe("SubgraphExtractor", () => {
 
         expect(subgraph.nodes.length).toBe(1)
         expect(subgraph.edges.length).toBe(2) // Literal relations should be included
-      })
-    )
+      }))
 
     it.effect("handles self-referential relations", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const extractor = createTestExtractor()
         const e = createTestEntities()
         const graph = new KnowledgeGraph({
@@ -596,11 +576,10 @@ describe("SubgraphExtractor", () => {
 
         expect(subgraph.nodes.length).toBe(1)
         expect(subgraph.edges.length).toBe(1)
-      })
-    )
+      }))
 
     it.effect("handles disconnected graph components", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const extractor = createTestExtractor()
         const e = createTestEntities()
         const graph = new KnowledgeGraph({
@@ -619,7 +598,6 @@ describe("SubgraphExtractor", () => {
         expect(subgraph.nodes.length).toBe(2)
         const nodeIds = subgraph.nodes.map((n) => n.id).sort()
         expect(nodeIds).toEqual(["alice", "bob"])
-      })
-    )
+      }))
   })
 })

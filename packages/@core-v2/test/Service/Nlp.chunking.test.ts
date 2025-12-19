@@ -14,7 +14,8 @@ import { NlpService } from "../../src/Service/Nlp.js"
 // Test Fixtures
 // -----------------------------------------------------------------------------
 
-const ARTICLE_TEXT = `This is the first paragraph of an article. It contains multiple sentences. The topic is very interesting.
+const ARTICLE_TEXT =
+  `This is the first paragraph of an article. It contains multiple sentences. The topic is very interesting.
 
 This is the second paragraph. It continues the discussion from before. More details are provided here.
 
@@ -192,9 +193,9 @@ describe("NlpService Chunking - Section Strategy", () => {
 
     // Should split on ## headers
     expect(result.length).toBeGreaterThanOrEqual(3)
-    expect(result.some(c => c.text.includes("Executive Summary"))).toBe(true)
-    expect(result.some(c => c.text.includes("Introduction"))).toBe(true)
-    expect(result.some(c => c.text.includes("Findings"))).toBe(true)
+    expect(result.some((c) => c.text.includes("Executive Summary"))).toBe(true)
+    expect(result.some((c) => c.text.includes("Introduction"))).toBe(true)
+    expect(result.some((c) => c.text.includes("Findings"))).toBe(true)
   })
 
   it("handles numbered sections", async () => {

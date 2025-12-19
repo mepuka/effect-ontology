@@ -5,14 +5,14 @@
  */
 
 import { describe, expect, it } from "vitest"
+import type { BatchStage } from "../../../src/Domain/Model/BatchWorkflow.js"
 import {
-  BatchStage,
   canFail,
   getValidNextStates,
-  isValidTransition,
   isValidStateTransition,
-  validateTransition,
-  VALID_TRANSITIONS
+  isValidTransition,
+  VALID_TRANSITIONS,
+  validateTransition
 } from "../../../src/Domain/Model/BatchWorkflow.js"
 
 describe("BatchWorkflow State Transitions", () => {

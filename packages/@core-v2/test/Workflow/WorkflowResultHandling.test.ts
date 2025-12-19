@@ -1,7 +1,7 @@
-import { Cause, Effect, Exit, Option } from "effect"
 import { Complete, Suspended } from "@effect/workflow/Workflow"
+import { Cause, Effect, Exit, Option } from "effect"
 import { expect, test } from "vitest"
-import { WorkflowSuspendedError, WorkflowNotFoundError } from "../../src/Domain/Error/Workflow.js"
+import { WorkflowNotFoundError, WorkflowSuspendedError } from "../../src/Domain/Error/Workflow.js"
 import { handleWorkflowResult } from "../../src/Service/WorkflowOrchestrator.js"
 
 test("handleWorkflowResult unwraps successful completion", async () => {

@@ -14,10 +14,10 @@
  * @module test/E2E/Extraction
  */
 
-import { Effect, Layer, Option, pipe } from "effect"
-import { describe, expect } from "vitest"
 import { it } from "@effect/vitest"
+import { Effect, Layer, Option, pipe } from "effect"
 import * as path from "node:path"
+import { describe, expect } from "vitest"
 import { Entity } from "../../src/Domain/Model/Entity.js"
 import { EntityId } from "../../src/Domain/Model/shared.js"
 import { TestLayers } from "../../src/Runtime/TestRuntime.js"
@@ -47,17 +47,16 @@ const skipRealLlm = testMode === TestMode.Pure || testMode === TestMode.Cached
 
 describe("E2E: Golden Data Loading", () => {
   it.effect("lists available test cases", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const cases = yield* loader.listTestCases()
       expect(cases.length).toBeGreaterThanOrEqual(3)
       expect(cases).toContain("001-arsenal-tottenham")
       expect(cases).toContain("002-player-transfer")
       expect(cases).toContain("003-match-simple")
-    })
-  )
+    }))
 
   it.effect("loads test case metadata and input", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const testCase = yield* loader.loadTestCase("001-arsenal-tottenham")
 
       // Metadata
@@ -84,11 +83,10 @@ describe("E2E: Golden Data Loading", () => {
 
       // Expected relations
       expect(testCase.expectedRelations.length).toBe(8)
-    })
-  )
+    }))
 
   it.effect("loads all test cases without errors", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const caseIds = yield* loader.listTestCases()
 
       for (const caseId of caseIds) {
@@ -97,8 +95,7 @@ describe("E2E: Golden Data Loading", () => {
         expect(testCase.input.length).toBeGreaterThan(0)
         expect(testCase.expectedEntities.length).toBeGreaterThan(0)
       }
-    })
-  )
+    }))
 })
 
 // =============================================================================
@@ -176,7 +173,7 @@ describe("E2E: Quality Metrics Calculation", () => {
   })
 
   it("handles empty results", () => {
-    const extracted: Entity[] = []
+    const extracted: Array<Entity> = []
     const expected = [
       { id: "arsenal", mention: "Arsenal", primaryType: "Team", types: ["Team"] }
     ]
@@ -194,12 +191,11 @@ describe("E2E: Quality Metrics Calculation", () => {
 
 describe("E2E: Extraction Pipeline (Pure Mode)", () => {
   it.effect("validates test layer composition", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       // This test validates that TestLayers compose correctly
       // The mocked extractors return empty results by design
       yield* Effect.succeed(true)
-    }).pipe(Effect.provide(TestLayers))
-  )
+    }).pipe(Effect.provide(TestLayers)))
 
   // Future: Add extraction tests here when wiring is complete
   // These will run with mocked LLM in CI and real LLM on schedule
@@ -211,7 +207,7 @@ describe("E2E: Extraction Pipeline (Pure Mode)", () => {
 
 describe("E2E: Test Case Schema Validation", () => {
   it.effect("validates 001-arsenal-tottenham structure", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const testCase = yield* loader.loadTestCase("001-arsenal-tottenham")
 
       // Validate entity structure
@@ -233,11 +229,10 @@ describe("E2E: Test Case Schema Validation", () => {
         expect(entityIds.has(relation.subject)).toBe(true)
         expect(entityIds.has(relation.object)).toBe(true)
       }
-    })
-  )
+    }))
 
   it.effect("validates threshold consistency across test cases", () =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const caseIds = yield* loader.listTestCases()
 
       for (const caseId of caseIds) {
@@ -253,8 +248,7 @@ describe("E2E: Test Case Schema Validation", () => {
         expect(testCase.expectedEntities.length).toBe(testCase.metadata.expected.entities)
         expect(testCase.expectedRelations.length).toBe(testCase.metadata.expected.relations)
       }
-    })
-  )
+    }))
 })
 
 // =============================================================================
@@ -265,8 +259,22 @@ describe("E2E: Regression Detection", () => {
   it("detects precision degradation", async () => {
     const { checkRegression } = await import("./setup.js")
 
-    const baseline = { precision: 0.90, recall: 0.85, f1Score: 0.87, truePositives: 10, falsePositives: 1, falseNegatives: 2 }
-    const current = { precision: 0.85, recall: 0.85, f1Score: 0.85, truePositives: 9, falsePositives: 2, falseNegatives: 2 }
+    const baseline = {
+      precision: 0.90,
+      recall: 0.85,
+      f1Score: 0.87,
+      truePositives: 10,
+      falsePositives: 1,
+      falseNegatives: 2
+    }
+    const current = {
+      precision: 0.85,
+      recall: 0.85,
+      f1Score: 0.85,
+      truePositives: 9,
+      falsePositives: 2,
+      falseNegatives: 2
+    }
 
     const result = checkRegression(current, baseline)
     expect(result.status).toBe("warn")
@@ -277,8 +285,22 @@ describe("E2E: Regression Detection", () => {
   it("passes when metrics improve", async () => {
     const { checkRegression } = await import("./setup.js")
 
-    const baseline = { precision: 0.85, recall: 0.80, f1Score: 0.82, truePositives: 8, falsePositives: 2, falseNegatives: 2 }
-    const current = { precision: 0.90, recall: 0.85, f1Score: 0.87, truePositives: 9, falsePositives: 1, falseNegatives: 1 }
+    const baseline = {
+      precision: 0.85,
+      recall: 0.80,
+      f1Score: 0.82,
+      truePositives: 8,
+      falsePositives: 2,
+      falseNegatives: 2
+    }
+    const current = {
+      precision: 0.90,
+      recall: 0.85,
+      f1Score: 0.87,
+      truePositives: 9,
+      falsePositives: 1,
+      falseNegatives: 1
+    }
 
     const result = checkRegression(current, baseline)
     expect(result.status).toBe("pass")

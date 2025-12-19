@@ -325,7 +325,7 @@ describe("StorageService GCS Configuration", () => {
     // Check detection
     const hasCredsBefore = Boolean(
       (process.env.GCS_BUCKET ?? process.env.STORAGE_BUCKET)
-      && (process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.GOOGLE_CLOUD_PROJECT)
+        && (process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.GOOGLE_CLOUD_PROJECT)
     )
 
     // Restore env

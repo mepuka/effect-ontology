@@ -10,8 +10,8 @@
 
 import { Effect, Layer } from "effect"
 import { describe, expect, it } from "vitest"
-import { StorageService, StorageServiceLive } from "../../src/Service/Storage.js"
 import { ConfigServiceDefault } from "../../src/Service/Config.js"
+import { StorageService, StorageServiceLive } from "../../src/Service/Storage.js"
 
 describe("StorageService Resource Management", () => {
   it("should clean up resources when scope closes", () =>
@@ -24,9 +24,11 @@ describe("StorageService Resource Management", () => {
         StorageService,
         Effect.gen(function*() {
           // Register a finalizer that will be called when scope closes
-          yield* Effect.addFinalizer(() => Effect.sync(() => {
-            cleanupCalled = true
-          }))
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => {
+              cleanupCalled = true
+            })
+          )
 
           // Return a minimal mock implementation
           return {
@@ -64,9 +66,11 @@ describe("StorageService Resource Management", () => {
         Effect.gen(function*() {
           acquisitionCount++
 
-          yield* Effect.addFinalizer(() => Effect.sync(() => {
-            releaseCount++
-          }))
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => {
+              releaseCount++
+            })
+          )
 
           return {
             get: () => Effect.succeed(null),
@@ -110,9 +114,11 @@ describe("StorageService Resource Management", () => {
       const TestStorageLayer = Layer.scoped(
         StorageService,
         Effect.gen(function*() {
-          yield* Effect.addFinalizer(() => Effect.sync(() => {
-            cleanupCalled = true
-          }))
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => {
+              cleanupCalled = true
+            })
+          )
 
           return {
             get: () => Effect.fail(new Error("Intentional failure")),

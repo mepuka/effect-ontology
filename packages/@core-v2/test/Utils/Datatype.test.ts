@@ -5,8 +5,10 @@
  * @module test/Utils/Datatype
  */
 
+import * as fc from "fast-check"
 import { describe, expect, it } from "vitest"
 import { XSD } from "../../src/Domain/Rdf/Constants.js"
+import type { IRI } from "../../src/Domain/Rdf/Types.js"
 import { isBoolean, isDate, isDateTime, isNumeric, normalizeDatatype } from "../../src/Utils/Datatype.js"
 
 describe("normalizeDatatype", () => {
@@ -241,6 +243,189 @@ describe("predicate functions", () => {
     it("returns false for non-boolean", () => {
       expect(isBoolean("yes")).toBe(false)
       expect(isBoolean("1")).toBe(false)
+    })
+  })
+})
+
+// =============================================================================
+// Property Tests - Critical invariants for rock-solid normalization
+// =============================================================================
+
+describe("Property Tests", () => {
+  describe("determinism", () => {
+    it("same input always produces same output", () => {
+      fc.assert(
+        fc.property(fc.string(), (value) => {
+          const result1 = normalizeDatatype(value)
+          const result2 = normalizeDatatype(value)
+          expect(result1.value).toBe(result2.value)
+          expect(result1.datatype).toBe(result2.datatype)
+        }),
+        { numRuns: 1000 }
+      )
+    })
+  })
+
+  describe("idempotency", () => {
+    it("normalizing the output value gives same datatype", () => {
+      fc.assert(
+        fc.property(fc.string(), (value) => {
+          const first = normalizeDatatype(value)
+          const second = normalizeDatatype(first.value)
+          // Normalized value should produce same or compatible datatype
+          expect(second.value).toBe(first.value)
+          expect(second.datatype).toBe(first.datatype)
+        }),
+        { numRuns: 1000 }
+      )
+    })
+  })
+
+  describe("expected type override", () => {
+    it("always uses expected type when provided", () => {
+      const arbType = fc.constantFrom(
+        XSD.string,
+        XSD.integer,
+        XSD.decimal,
+        XSD.boolean,
+        XSD.date,
+        XSD.dateTime,
+        XSD.anyURI
+      ) as fc.Arbitrary<IRI>
+
+      fc.assert(
+        fc.property(fc.string(), arbType, (value, expectedType) => {
+          const result = normalizeDatatype(value, expectedType)
+          expect(result.datatype).toBe(expectedType)
+        }),
+        { numRuns: 500 }
+      )
+    })
+  })
+
+  describe("value trimming", () => {
+    it("output value never has leading/trailing whitespace", () => {
+      fc.assert(
+        fc.property(fc.string(), (value) => {
+          const result = normalizeDatatype(value)
+          expect(result.value).toBe(result.value.trim())
+        }),
+        { numRuns: 500 }
+      )
+    })
+  })
+
+  describe("type detection consistency", () => {
+    it("integer pattern always yields xsd:integer", () => {
+      const arbInt = fc.integer({ min: -1000000, max: 1000000 }).map(String)
+
+      fc.assert(
+        fc.property(arbInt, (intStr) => {
+          const result = normalizeDatatype(intStr)
+          expect(result.datatype).toBe(XSD.integer)
+        }),
+        { numRuns: 500 }
+      )
+    })
+
+    it("decimal pattern always yields xsd:decimal", () => {
+      const arbDecimal = fc
+        .tuple(fc.integer({ min: -1000, max: 1000 }), fc.integer({ min: 0, max: 999999 }))
+        .map(([int, frac]) => `${int}.${Math.abs(frac)}`)
+
+      fc.assert(
+        fc.property(arbDecimal, (decStr) => {
+          const result = normalizeDatatype(decStr)
+          expect(result.datatype).toBe(XSD.decimal)
+        }),
+        { numRuns: 500 }
+      )
+    })
+
+    it("boolean pattern normalizes to lowercase", () => {
+      const arbBool = fc.constantFrom("true", "false", "TRUE", "FALSE", "True", "False")
+
+      fc.assert(
+        fc.property(arbBool, (boolStr) => {
+          const result = normalizeDatatype(boolStr)
+          expect(result.datatype).toBe(XSD.boolean)
+          expect(result.value).toMatch(/^(true|false)$/)
+        }),
+        { numRuns: 100 }
+      )
+    })
+
+    it("ISO date always yields xsd:date", () => {
+      const arbDate = fc
+        .tuple(
+          fc.integer({ min: 1000, max: 9999 }),
+          fc.integer({ min: 1, max: 12 }),
+          fc.integer({ min: 1, max: 28 }) // Safe for all months
+        )
+        .map(([y, m, d]) => `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`)
+
+      fc.assert(
+        fc.property(arbDate, (dateStr) => {
+          const result = normalizeDatatype(dateStr)
+          expect(result.datatype).toBe(XSD.date)
+        }),
+        { numRuns: 500 }
+      )
+    })
+  })
+
+  describe("predicate consistency", () => {
+    it("isNumeric returns true only for numeric types", () => {
+      fc.assert(
+        fc.property(fc.string(), (value) => {
+          const result = normalizeDatatype(value)
+          const numericTypes = [XSD.integer, XSD.decimal, XSD.double]
+
+          if (isNumeric(value)) {
+            expect(numericTypes).toContain(result.datatype)
+          }
+        }),
+        { numRuns: 500 }
+      )
+    })
+
+    it("isBoolean returns true only for xsd:boolean type", () => {
+      fc.assert(
+        fc.property(fc.string(), (value) => {
+          const result = normalizeDatatype(value)
+
+          if (isBoolean(value)) {
+            expect(result.datatype).toBe(XSD.boolean)
+          }
+        }),
+        { numRuns: 500 }
+      )
+    })
+
+    it("isDate returns true only for xsd:date type", () => {
+      fc.assert(
+        fc.property(fc.string(), (value) => {
+          const result = normalizeDatatype(value)
+
+          if (isDate(value)) {
+            expect(result.datatype).toBe(XSD.date)
+          }
+        }),
+        { numRuns: 500 }
+      )
+    })
+
+    it("isDateTime returns true only for xsd:dateTime type", () => {
+      fc.assert(
+        fc.property(fc.string(), (value) => {
+          const result = normalizeDatatype(value)
+
+          if (isDateTime(value)) {
+            expect(result.datatype).toBe(XSD.dateTime)
+          }
+        }),
+        { numRuns: 500 }
+      )
     })
   })
 })

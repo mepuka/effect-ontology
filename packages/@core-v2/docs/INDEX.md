@@ -1,6 +1,6 @@
 # @core-v2 Documentation Index
 
-> **Last Updated**: December 2024
+> **Last Updated**: December 2025
 > **Status**: Living documentation aligned with codebase
 > **See Also**: [`docs/CORE_V2_NEXT_STEPS.md`](../../../docs/CORE_V2_NEXT_STEPS.md) for strategic implementation guide
 
@@ -23,12 +23,13 @@
 ## Architecture Documentation
 
 ### System Architecture
-**[architecture/system-architecture.md](./architecture/system-architecture.md)** (v2.1.0)
+**[architecture/system-architecture.md](./architecture/system-architecture.md)** (v2.5.0)
 
 Comprehensive system documentation including:
 - System context (C4 diagram)
 - Component architecture (Mermaid)
-- Workflow pipeline (4-stage batch extraction)
+- **6-phase unified extraction pipeline** (Chunk → Mention → Entity → Property Scope → Relation → Ground)
+- 5-stage batch workflow (Preprocess → Extract → Resolve → Validate → Ingest)
 - Service layer dependency graph
 - Data model (branded types, BatchState union)
 - Storage path layout
@@ -123,6 +124,7 @@ Comprehensive state-of-the-art review with implementation priorities:
 ## Implementation Plans
 
 ### Active Plans
+- [plans/2025-12-19-unified-extraction-pipeline.md](./plans/2025-12-19-unified-extraction-pipeline.md) - **NEW (2025-12-19)** Unified 6-phase streaming extraction pipeline
 - [plans/shacl-activity-implementation-plan.md](./plans/shacl-activity-implementation-plan.md) - SHACL validation activity
 - [plans/postgres-workflow-engine-investigation.md](./plans/postgres-workflow-engine-investigation.md) - Workflow persistence
 - [plans/local-postgres-dev-setup.md](./plans/local-postgres-dev-setup.md) - Local development setup
@@ -173,8 +175,9 @@ Historical documents moved to `archive/` directory:
 
 | Area | Status | Last Updated |
 |------|--------|--------------|
-| System Architecture | Current | Dec 2024 |
+| System Architecture | Current | Dec 2025 |
 | Effect Patterns | Current | Dec 2024 |
 | SOTA Research | Current | Dec 2025 |
 | LLM Control | Current | Dec 2024 |
-| Implementation Plans | Active | Dec 2024 |
+| Implementation Plans | Active | Dec 2025 |
+| Unified Extraction | **NEW** | Dec 2025 |

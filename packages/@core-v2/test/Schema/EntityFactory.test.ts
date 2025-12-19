@@ -13,7 +13,7 @@ import { iri } from "../Utils/iri.js"
 // Helper to decode with dynamically generated schemas
 // The complex type from makeEntitySchema doesn't perfectly match S.Schema<A, I, never>
 // so we use runtime decoding which is what we're actually testing
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 const decode = (schema: any) => S.decodeUnknownSync(schema)
 
 // Type for decoded entity results (used for test assertions)
@@ -21,7 +21,7 @@ interface DecodedEntityGraph {
   entities: Array<{
     id: string
     mention: string
-    types: readonly string[]
+    types: ReadonlyArray<string>
     attributes?: Record<string, unknown>
   }>
 }

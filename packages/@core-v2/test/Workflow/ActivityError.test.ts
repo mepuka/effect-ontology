@@ -1,12 +1,7 @@
 // packages/@core-v2/test/Workflow/ActivityError.test.ts
 import { describe, expect, it } from "@effect/vitest"
 import { Schema } from "effect"
-import {
-  ActivityError,
-  toActivityError,
-  serviceError,
-  notFoundError
-} from "../../src/Domain/Error/Activity.js"
+import { ActivityError, notFoundError, serviceError, toActivityError } from "../../src/Domain/Error/Activity.js"
 
 describe("ActivityError", () => {
   it("should serialize and deserialize correctly", () => {

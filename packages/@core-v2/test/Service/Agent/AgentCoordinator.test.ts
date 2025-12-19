@@ -8,17 +8,9 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Layer, Option, Secret } from "effect"
-import {
-  AgentCoordinator,
-  type ExecutionResult
-} from "../../../src/Service/Agent/AgentCoordinator.js"
-import {
-  Agent,
-  AgentId,
-  AgentMetadata,
-  TerminationCondition,
-  ValidationResult
-} from "../../../src/Domain/Model/Agent.js"
+import type { Agent } from "../../../src/Domain/Model/Agent.js"
+import { AgentId, AgentMetadata, TerminationCondition, ValidationResult } from "../../../src/Domain/Model/Agent.js"
+import { AgentCoordinator, type ExecutionResult } from "../../../src/Service/Agent/AgentCoordinator.js"
 import { AgentTask, PipelineConfig, RefinementConfig } from "../../../src/Service/Agent/types.js"
 import { ConfigService } from "../../../src/Service/Config.js"
 
@@ -42,7 +34,10 @@ const createEchoAgent = (id: string): Agent<unknown, unknown, never> => ({
 /**
  * Transformer agent that adds a marker to output
  */
-const createTransformerAgent = (id: string, marker: string): Agent<unknown, { data: unknown; marker: string }, never> => ({
+const createTransformerAgent = (
+  id: string,
+  marker: string
+): Agent<unknown, { data: unknown; marker: string }, never> => ({
   metadata: new AgentMetadata({
     id: AgentId(id),
     name: `Transformer ${id}`,
@@ -62,10 +57,11 @@ const createCounterAgent = (id: string): Agent<{ count: number }, { count: numbe
     description: "Increments count",
     type: "validator"
   }),
-  execute: (input) => Effect.succeed({
-    count: (input.count ?? 0) + 1,
-    conforms: (input.count ?? 0) >= 2 // Conform after 3 iterations
-  })
+  execute: (input) =>
+    Effect.succeed({
+      count: (input.count ?? 0) + 1,
+      conforms: (input.count ?? 0) >= 2 // Conform after 3 iterations
+    })
 })
 
 /**
@@ -103,7 +99,10 @@ const createValidatingAgent = (id: string): Agent<{ text?: string }, string, nev
 /**
  * Mock validator agent that decreases violations each call
  */
-const createMockValidatorAgent = (): { agent: Agent<unknown, { conforms: boolean; violations: unknown[] }, never>; callCount: { value: number } } => {
+const createMockValidatorAgent = (): {
+  agent: Agent<unknown, { conforms: boolean; violations: Array<unknown> }, never>
+  callCount: { value: number }
+} => {
   const callCount = { value: 0 }
   return {
     callCount,
@@ -130,7 +129,10 @@ const createMockValidatorAgent = (): { agent: Agent<unknown, { conforms: boolean
 /**
  * Mock corrector agent that returns corrected graph with decreasing confidence
  */
-const createMockCorrectorAgent = (): { agent: Agent<unknown, { correctedGraph: unknown; confidence: number; correctedCount: number }, never>; callCount: { value: number } } => {
+const createMockCorrectorAgent = (): {
+  agent: Agent<unknown, { correctedGraph: unknown; confidence: number; correctedCount: number }, never>
+  callCount: { value: number }
+} => {
   const callCount = { value: 0 }
   return {
     callCount,
@@ -143,7 +145,7 @@ const createMockCorrectorAgent = (): { agent: Agent<unknown, { correctedGraph: u
       }),
       execute: (input: unknown) => {
         callCount.value++
-        const graphInput = input as { graph: { entities: unknown[] } }
+        const graphInput = input as { graph: { entities: Array<unknown> } }
         return Effect.succeed({
           correctedGraph: graphInput.graph ?? { entities: [] },
           confidence: 1 - (callCount.value * 0.2), // Decreasing confidence: 0.8, 0.6, 0.4, ...
@@ -157,7 +159,11 @@ const createMockCorrectorAgent = (): { agent: Agent<unknown, { correctedGraph: u
 /**
  * Mock validator that always returns conformant
  */
-const createConformantValidatorAgent = (): Agent<unknown, { conforms: boolean; violations: unknown[] }, never> => ({
+const createConformantValidatorAgent = (): Agent<
+  unknown,
+  { conforms: boolean; violations: Array<unknown> },
+  never
+> => ({
   metadata: new AgentMetadata({
     id: AgentId("validator"),
     name: "Conformant Validator",
@@ -170,7 +176,11 @@ const createConformantValidatorAgent = (): Agent<unknown, { conforms: boolean; v
 /**
  * Mock corrector for testing (won't be called if validator conforms)
  */
-const createPassthroughCorrectorAgent = (): Agent<unknown, { correctedGraph: unknown; confidence: number; correctedCount: number }, never> => ({
+const createPassthroughCorrectorAgent = (): Agent<
+  unknown,
+  { correctedGraph: unknown; confidence: number; correctedCount: number },
+  never
+> => ({
   metadata: new AgentMetadata({
     id: AgentId("corrector"),
     name: "Passthrough Corrector",
@@ -230,6 +240,8 @@ const MockConfigService = Layer.succeed(ConfigService, {
   },
   ontology: {
     path: "/tmp/test.ttl",
+    externalVocabsPath: "ontologies/external/merged-external.ttl",
+    registryPath: Option.none(),
     cacheTtlSeconds: 300,
     strictValidation: false
   },
@@ -244,7 +256,12 @@ const MockConfigService = Layer.succeed(ConfigService, {
     transformersModelId: "Xenova/nomic-embed-text-v1"
   },
   extraction: {
-    runsDir: "/tmp/test-runs"
+    runsDir: "/tmp/test-runs",
+    strictPersistence: false
+  },
+  api: {
+    keys: Option.none(),
+    requireAuth: false
   }
 } as ConfigService)
 
@@ -267,8 +284,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
 
     it.effect("unregisters an agent", () =>
       Effect.gen(function*() {
@@ -283,8 +299,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
 
     it.effect("fails when getting unregistered agent", () =>
       Effect.gen(function*() {
@@ -298,8 +313,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
   })
 
   describe("Sequential Execution", () => {
@@ -324,8 +338,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
 
     it.effect("passes output from one agent to the next", () =>
       Effect.gen(function*() {
@@ -341,14 +354,16 @@ describe("AgentCoordinator", () => {
         )
 
         // Second agent should receive output from first
-        const secondOutput = result.outputs.get(AgentId("second")) as { data: { data: unknown; marker: string }; marker: string }
+        const secondOutput = result.outputs.get(AgentId("second")) as {
+          data: { data: unknown; marker: string }
+          marker: string
+        }
         expect(secondOutput.marker).toBe("B")
         expect(secondOutput.data.marker).toBe("A")
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
 
     it.effect("emits AgentStarted and AgentCompleted events", () =>
       Effect.gen(function*() {
@@ -369,8 +384,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
   })
 
   describe("Loop Execution", () => {
@@ -397,8 +411,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
 
     it.effect("stops when conformance is reached", () =>
       Effect.gen(function*() {
@@ -425,8 +438,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
 
     it.effect("emits progress events per iteration", () =>
       Effect.gen(function*() {
@@ -450,8 +462,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
   })
 
   describe("Parallel Execution", () => {
@@ -476,8 +487,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
 
     it.effect("all agents receive the same input", () =>
       Effect.gen(function*() {
@@ -501,8 +511,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
   })
 
   describe("Pipeline Configuration", () => {
@@ -523,8 +532,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
 
     it.effect("executes from PipelineConfig - loop", () =>
       Effect.gen(function*() {
@@ -548,8 +556,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
   })
 
   describe("Error Handling", () => {
@@ -567,8 +574,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
 
     it.effect("continues on error when configured", () =>
       Effect.gen(function*() {
@@ -589,8 +595,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
 
     it.effect("emits AgentFailed events on error", () =>
       Effect.gen(function*() {
@@ -610,8 +615,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
   })
 
   describe("Validation", () => {
@@ -635,8 +639,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
   })
 
   describe("runUntil", () => {
@@ -658,8 +661,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
   })
 
   describe("Event Callbacks", () => {
@@ -686,8 +688,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
 
     it.effect("calls onCheckpoint callback at end", () =>
       Effect.gen(function*() {
@@ -712,8 +713,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
   })
 
   describe("refineUntilConformant", () => {
@@ -736,8 +736,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
 
     it.effect("refines until conformant", () =>
       Effect.gen(function*() {
@@ -765,8 +764,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
 
     it.effect("stops at max iterations", () =>
       Effect.gen(function*() {
@@ -793,8 +791,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
 
     it.effect("stops when confidence drops below threshold", () =>
       Effect.gen(function*() {
@@ -820,13 +817,12 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
 
     it.effect("emits checkpoint events at intervals", () =>
       Effect.gen(function*() {
         const coordinator = yield* AgentCoordinator
-        const checkpoints: unknown[] = []
+        const checkpoints: Array<unknown> = []
 
         const { agent: validatorAgent } = createMockValidatorAgent()
         const { agent: correctorAgent } = createMockCorrectorAgent()
@@ -853,8 +849,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
 
     it.effect("tracks violations fixed per iteration", () =>
       Effect.gen(function*() {
@@ -877,8 +872,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
 
     it.effect("fails when validator agent is not registered", () =>
       Effect.gen(function*() {
@@ -898,8 +892,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
 
     it.effect("fails when corrector agent is not registered", () =>
       Effect.gen(function*() {
@@ -928,13 +921,12 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
 
     it.effect("emits progress events", () =>
       Effect.gen(function*() {
         const coordinator = yield* AgentCoordinator
-        const progressEvents: unknown[] = []
+        const progressEvents: Array<unknown> = []
 
         const { agent: validatorAgent } = createMockValidatorAgent()
         const { agent: correctorAgent } = createMockCorrectorAgent()
@@ -959,8 +951,7 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
 
     it.effect("returns duration in result", () =>
       Effect.gen(function*() {
@@ -978,7 +969,6 @@ describe("AgentCoordinator", () => {
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
         Effect.provide(MockConfigService)
-      )
-    )
+      ))
   })
 })

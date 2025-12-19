@@ -8,8 +8,8 @@
 import { describe, expect, it } from "vitest"
 
 import { Entity, Relation } from "../../src/Domain/Model/Entity.js"
-import { EntityId } from "../../src/Domain/Model/shared.js"
 import { defaultEntityResolutionConfig } from "../../src/Domain/Model/EntityResolution.js"
+import { EntityId } from "../../src/Domain/Model/shared.js"
 import { computeEntitySimilarity, getNeighbors } from "../../src/Utils/Similarity.js"
 
 // =============================================================================
