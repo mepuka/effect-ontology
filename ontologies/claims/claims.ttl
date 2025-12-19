@@ -7,6 +7,7 @@
 @prefix dcterms: <http://purl.org/dc/terms/> .
 @prefix prov: <http://www.w3.org/ns/prov#> .
 @prefix oa: <http://www.w3.org/ns/oa#> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
 @base <http://effect-ontology.dev/claims> .
 
 # =============================================================================
@@ -50,9 +51,20 @@
 
 :rankOrder rdf:type owl:DatatypeProperty ;
     rdfs:label "rank order"@en ;
-    rdfs:comment "Numeric ordering for ranks (lower = higher priority)."@en ;
+    rdfs:comment "Numeric ordering for ranks (lower = higher priority). Valid values: 1 (Preferred), 2 (Normal), 3 (Deprecated)."@en ;
     rdfs:domain :ClaimRank ;
-    rdfs:range xsd:integer .
+    rdfs:range [
+        rdf:type rdfs:Datatype ;
+        owl:onDatatype xsd:integer ;
+        owl:withRestrictions (
+            [ xsd:minInclusive 1 ]
+            [ xsd:maxInclusive 3 ]
+        )
+    ] .
+
+# Explicit disjointness for rank individuals
+[] rdf:type owl:AllDifferent ;
+    owl:distinctMembers ( :Preferred :Normal :Deprecated ) .
 
 # =============================================================================
 # Claim Class (Reified Statement)
@@ -82,12 +94,14 @@
 :claimSubject rdf:type owl:ObjectProperty ;
     rdfs:label "claim subject"@en ;
     rdfs:comment "The subject IRI of the reified statement."@en ;
-    rdfs:domain :Claim .
+    rdfs:domain :Claim ;
+    rdfs:range rdfs:Resource .
 
 :claimPredicate rdf:type owl:ObjectProperty ;
     rdfs:label "claim predicate"@en ;
     rdfs:comment "The predicate IRI of the reified statement."@en ;
-    rdfs:domain :Claim .
+    rdfs:domain :Claim ;
+    rdfs:range rdf:Property .
 
 :claimObject rdf:type owl:ObjectProperty ;
     rdfs:label "claim object"@en ;
@@ -141,20 +155,22 @@
     rdfs:subPropertyOf prov:wasDerivedFrom ;
     rdfs:label "stated in"@en ;
     rdfs:comment "The source article/document where this claim was stated."@en ;
-    rdfs:domain :Claim .
+    rdfs:domain :Claim ;
+    rdfs:range foaf:Document .
 
 :extractedAt rdf:type owl:DatatypeProperty ;
+    rdfs:subPropertyOf prov:generatedAtTime ;
     rdfs:label "extracted at"@en ;
-    rdfs:comment "System timestamp when this claim was extracted."@en ;
+    rdfs:comment "System timestamp when this claim was extracted. Aligned with PROV-O prov:generatedAtTime."@en ;
     rdfs:domain :Claim ;
     rdfs:range xsd:dateTime .
 
 :extractedBy rdf:type owl:ObjectProperty ;
     rdfs:subPropertyOf prov:wasAttributedTo ;
     rdfs:label "extracted by"@en ;
-    rdfs:comment "The extraction agent/pipeline that produced this claim."@en ;
+    rdfs:comment "The extraction agent/pipeline that produced this claim. Range narrowed to SoftwareAgent since extraction is always automated."@en ;
     rdfs:domain :Claim ;
-    rdfs:range prov:Agent .
+    rdfs:range prov:SoftwareAgent .
 
 # =============================================================================
 # Deprecation and Supersession

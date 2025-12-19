@@ -34,9 +34,16 @@
     dcterms:creator "Effect Ontology Project" ;
     dcterms:created "2025-12-18"^^xsd:date ;
     owl:versionInfo "1.0.0" ;
-    rdfs:seeAlso <http://effect-ontology.dev/claims> ,
-                 <https://www.w3.org/TR/vocab-org/> ,
-                 <https://www.popoloproject.com/specs/> .
+    rdfs:seeAlso <https://www.w3.org/TR/vocab-org/> ,
+                 <https://www.popoloproject.com/specs/> ;
+    # OWL Imports for proper ontology loading
+    owl:imports <http://xmlns.com/foaf/0.1/> ;
+    owl:imports <http://www.w3.org/ns/org#> ;
+    owl:imports <http://www.w3.org/2006/time#> ;
+    owl:imports <http://www.w3.org/ns/prov#> ;
+    owl:imports <http://www.w3.org/ns/oa#> ;
+    owl:imports <http://www.w3.org/2004/02/skos/core#> ;
+    owl:imports <http://effect-ontology.dev/claims> .
 
 # =============================================================================
 # Domain-Specific Classes (Minimal Extensions)
@@ -87,12 +94,47 @@ seattle:CouncilVoteEvent a owl:Class ;
 seattle:ReasoningActivity a owl:Class ;
     rdfs:subClassOf prov:Activity ;
     rdfs:label "Reasoning Activity"@en ;
-    rdfs:comment "An inference rule execution that produces derived facts."@en .
+    rdfs:comment """An inference rule execution that produces derived facts.
+
+    Design Decision: Custom class rather than plain prov:Activity because:
+    1. Enables typed queries for rule-based inferences (SELECT ?x WHERE { ?x a seattle:ReasoningActivity })
+    2. Links to InferenceRule via seattle:appliedRule for rule versioning and impact analysis
+    3. Supports fact invalidation tracking when rules change
+    4. Integrates with claims:DerivedAssertion for inference transparency
+
+    Usage Pattern:
+    - Created when reasoner fires rules during batch processing
+    - Links supporting facts via prov:used
+    - Links derived facts via prov:generated
+    - Timestamps via prov:endedAtTime for audit trail
+
+    Example:
+    ```turtle
+    :reasoning-001 a seattle:ReasoningActivity ;
+        seattle:appliedRule :role-inheritance-rule ;
+        prov:used :claim-person-holds-post ;
+        prov:generated :derived-person-works-for-org ;
+        prov:endedAtTime "2025-12-18T10:00:00Z"^^xsd:dateTime .
+    ```"""@en .
 
 seattle:RuleUpdateEvent a owl:Class ;
     rdfs:subClassOf prov:Activity ;
     rdfs:label "Rule Update Event"@en ;
-    rdfs:comment "An update to inference rules that may affect derived facts."@en .
+    rdfs:comment """An update to inference rules that may affect derived facts.
+
+    Design Decision: Separate from ReasoningActivity because rule updates:
+    1. Represent schema/logic changes, not data derivation
+    2. May invalidate previously derived facts (tracked via invalidatedFacts)
+    3. Trigger backfill of new facts (tracked via producedFacts)
+    4. Require version tracking for reproducibility
+
+    Usage Pattern:
+    - Created when inference rules are deployed or modified
+    - Links to affected rule via seattle:updatedRule
+    - Tracks impact metrics (producedFacts, invalidatedFacts)
+    - Timestamps via prov:endedAtTime
+
+    This enables the timeline UX to show "backfill" events when rules change."""@en .
 
 # -----------------------------------------------------------------------------
 # Inference Rule (for reasoning transparency)
@@ -100,7 +142,26 @@ seattle:RuleUpdateEvent a owl:Class ;
 
 seattle:InferenceRule a owl:Class ;
     rdfs:label "Inference Rule"@en ;
-    rdfs:comment "A named inference rule used in the reasoning system."@en .
+    rdfs:comment """A named inference rule used in the reasoning system.
+
+    Design Decision: Explicit class for rules rather than inline SPARQL CONSTRUCT because:
+    1. Enables rule versioning via seattle:ruleVersion
+    2. Supports impact analysis ("what facts did this rule produce?")
+    3. Allows rule provenance ("who authored this rule, when?")
+    4. Facilitates rule lifecycle management (deprecation, replacement)
+
+    Typical Properties:
+    - skos:prefLabel: Human-readable rule name
+    - seattle:ruleVersion: Semantic version string
+    - rdfs:comment: Rule description and logic explanation
+
+    Example:
+    ```turtle
+    :role-inheritance-rule a seattle:InferenceRule ;
+        skos:prefLabel "Role Inheritance Rule"@en ;
+        seattle:ruleVersion "1.2.0" ;
+        rdfs:comment "Derives org:memberOf from org:Membership via org:organization" .
+    ```"""@en .
 
 # =============================================================================
 # Domain-Specific Properties
@@ -114,18 +175,41 @@ seattle:announcedMembership a owl:ObjectProperty ;
     rdfs:label "announced membership"@en ;
     rdfs:comment "Links a staff announcement event to the memberships it announces."@en ;
     rdfs:domain seattle:StaffAnnouncementEvent ;
-    rdfs:range org:Membership .
+    rdfs:range org:Membership ;
+    owl:inverseOf seattle:wasAnnouncedBy .
+
+seattle:wasAnnouncedBy a owl:ObjectProperty ;
+    rdfs:label "was announced by"@en ;
+    rdfs:comment "Links a membership to the staff announcement event that announced it."@en ;
+    rdfs:domain org:Membership ;
+    rdfs:range seattle:StaffAnnouncementEvent ;
+    owl:inverseOf seattle:announcedMembership .
 
 seattle:announces a owl:ObjectProperty ;
     rdfs:label "announces"@en ;
     rdfs:comment "Links an initiative event to the initiative being announced."@en ;
-    rdfs:domain seattle:PolicyInitiativeEvent .
+    rdfs:domain seattle:PolicyInitiativeEvent ;
+    owl:inverseOf seattle:wasAnnouncedIn .
+
+seattle:wasAnnouncedIn a owl:ObjectProperty ;
+    rdfs:label "was announced in"@en ;
+    rdfs:comment "Links an initiative to the event that announced it."@en ;
+    rdfs:range seattle:PolicyInitiativeEvent ;
+    owl:inverseOf seattle:announces .
 
 seattle:impacts a owl:ObjectProperty ;
     rdfs:label "impacts"@en ;
     rdfs:comment "Links a budget action to affected organizations or programs."@en ;
     rdfs:domain seattle:BudgetActionEvent ;
-    rdfs:range org:Organization .
+    rdfs:range org:Organization ;
+    owl:inverseOf seattle:impactedBy .
+
+seattle:impactedBy a owl:ObjectProperty ;
+    rdfs:label "impacted by"@en ;
+    rdfs:comment "Links an organization to budget actions that affect it."@en ;
+    rdfs:domain org:Organization ;
+    rdfs:range seattle:BudgetActionEvent ;
+    owl:inverseOf seattle:impacts .
 
 seattle:voteResult a owl:DatatypeProperty ;
     rdfs:label "vote result"@en ;

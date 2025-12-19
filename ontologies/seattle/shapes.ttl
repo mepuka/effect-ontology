@@ -492,3 +492,85 @@
         sh:datatype xsd:dateTime ;
         sh:message "Reasoning activity must have exactly one endedAtTime"
     ] .
+
+# -----------------------------------------------------------------------------
+# Inference Rule Shape
+# -----------------------------------------------------------------------------
+
+:InferenceRuleShape a sh:NodeShape ;
+    sh:targetClass seattle:InferenceRule ;
+    rdfs:label "Inference Rule Shape"@en ;
+    rdfs:comment "Validates inference rule instances have required properties."@en ;
+
+    sh:property [
+        sh:path skos:prefLabel ;
+        sh:minCount 1 ;
+        sh:message "Inference rule must have at least one skos:prefLabel"
+    ] ;
+
+    sh:property [
+        sh:path seattle:ruleVersion ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "Inference rule must have exactly one ruleVersion"
+    ] .
+
+# -----------------------------------------------------------------------------
+# Rule Update Event Shape
+# -----------------------------------------------------------------------------
+
+:RuleUpdateEventShape a sh:NodeShape ;
+    sh:targetClass seattle:RuleUpdateEvent ;
+    rdfs:label "Rule Update Event Shape"@en ;
+    rdfs:comment "Validates rule update events for tracking rule lifecycle."@en ;
+
+    sh:property [
+        sh:path seattle:updatedRule ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:class seattle:InferenceRule ;
+        sh:message "Rule update must specify exactly one updatedRule"
+    ] ;
+
+    sh:property [
+        sh:path seattle:producedFacts ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:integer ;
+        sh:minInclusive 0 ;
+        sh:message "producedFacts must be a non-negative integer"
+    ] ;
+
+    sh:property [
+        sh:path seattle:invalidatedFacts ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:integer ;
+        sh:minInclusive 0 ;
+        sh:message "invalidatedFacts must be a non-negative integer"
+    ] ;
+
+    sh:property [
+        sh:path prov:endedAtTime ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:dateTime ;
+        sh:message "Rule update must have exactly one endedAtTime"
+    ] .
+
+# -----------------------------------------------------------------------------
+# Claim Rank Shape (for rankOrder validation)
+# -----------------------------------------------------------------------------
+
+:ClaimRankShape a sh:NodeShape ;
+    sh:targetClass claims:ClaimRank ;
+    rdfs:label "Claim Rank Shape"@en ;
+    rdfs:comment "Validates claim rank instances."@en ;
+
+    sh:property [
+        sh:path claims:rankOrder ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:integer ;
+        sh:in ( 1 2 3 ) ;
+        sh:message "rankOrder must be 1, 2, or 3 (Preferred, Normal, or Deprecated)"
+    ] .
