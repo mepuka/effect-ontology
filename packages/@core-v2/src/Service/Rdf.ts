@@ -303,6 +303,37 @@ export interface RdfBuilderShape {
     store: RdfStore,
     graphIri: IRI
   ) => Effect.Effect<number, RdfError, never>
+  /**
+   * Merge source store into target store (union semantics)
+   *
+   * Adds all quads from source to target. Duplicate quads are ignored
+   * (RDF set semantics). This is the core operation for incremental
+   * knowledge base building.
+   *
+   * @param target - Store to merge into (modified in place)
+   * @param source - Store to merge from (unchanged)
+   * @returns Number of new quads added
+   *
+   * @since 2.0.0
+   */
+  readonly mergeStores: (
+    target: RdfStore,
+    source: RdfStore
+  ) => Effect.Effect<number, RdfError, never>
+  /**
+   * Clone an RDF store
+   *
+   * Creates a new store with copies of all quads from the source.
+   * Useful when you need to modify a store without affecting the original.
+   *
+   * @param source - Store to clone
+   * @returns New RdfStore with same quads
+   *
+   * @since 2.0.0
+   */
+  readonly cloneStore: (
+    source: RdfStore
+  ) => Effect.Effect<RdfStore, RdfError, never>
   readonly validate: (
     store: RdfStore,
     shapesGraph: string
@@ -939,6 +970,57 @@ export class RdfBuilder extends Effect.Service<RdfBuilder>()(
             catch: (error) =>
               new RdfError({
                 message: `Failed to delete graph ${graphIri}: ${error}`,
+                cause: error
+              })
+          }),
+
+        /**
+         * Merge source store into target store (union semantics)
+         *
+         * Uses RDF set semantics - duplicate quads are ignored.
+         * Returns count of new quads added (not total quads).
+         */
+        mergeStores: (target: RdfStore, source: RdfStore) =>
+          Effect.try({
+            try: () => {
+              const targetStore = target._store
+              const sourceStore = source._store
+
+              // Get initial count
+              const initialCount = targetStore.size
+
+              // Get all quads from source
+              const sourceQuads = sourceStore.getQuads(null, null, null, null)
+
+              // Add all quads to target (N3.Store handles deduplication)
+              targetStore.addQuads(sourceQuads)
+
+              // Return number of new quads added
+              return targetStore.size - initialCount
+            },
+            catch: (error) =>
+              new RdfError({
+                message: `Failed to merge stores: ${error}`,
+                cause: error
+              })
+          }),
+
+        /**
+         * Clone an RDF store
+         *
+         * Creates a new store with copies of all quads from the source.
+         */
+        cloneStore: (source: RdfStore) =>
+          Effect.try({
+            try: () => {
+              const newStore = new N3.Store()
+              const sourceQuads = source._store.getQuads(null, null, null, null)
+              newStore.addQuads(sourceQuads)
+              return { _tag: "RdfStore" as const, _store: newStore } satisfies RdfStore
+            },
+            catch: (error) =>
+              new RdfError({
+                message: `Failed to clone store: ${error}`,
                 cause: error
               })
           }),

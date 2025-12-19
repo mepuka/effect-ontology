@@ -169,4 +169,162 @@ describe("RdfBuilder", () => {
         expect(result.report).toContain("not yet implemented")
       }).pipe(Effect.provide(testLayer), Effect.runPromise))
   })
+
+  describe("mergeStores", () => {
+    it("should merge two stores with union semantics", () =>
+      Effect.gen(function*() {
+        // Create two stores with different content
+        const store1 = yield* RdfBuilder.createStore
+        const store2 = yield* RdfBuilder.createStore
+
+        // Add entity to store1
+        yield* RdfBuilder.addEntities(store1, [
+          new Entity({
+            id: EntityId("alice"),
+            mention: "Alice",
+            types: ["http://schema.org/Person"],
+            attributes: {}
+          })
+        ])
+
+        // Add different entity to store2
+        yield* RdfBuilder.addEntities(store2, [
+          new Entity({
+            id: EntityId("bob"),
+            mention: "Bob",
+            types: ["http://schema.org/Person"],
+            attributes: {}
+          })
+        ])
+
+        const store1SizeBefore = store1._store.size
+        const store2Size = store2._store.size
+
+        // Merge store2 into store1
+        const addedCount = yield* RdfBuilder.mergeStores(store1, store2)
+
+        // Store1 should now have quads from both
+        expect(store1._store.size).toBe(store1SizeBefore + store2Size)
+        expect(addedCount).toBe(store2Size)
+
+        // Verify both entities are in merged store
+        const turtle = yield* RdfBuilder.toTurtle(store1)
+        expect(turtle).toContain("alice")
+        expect(turtle).toContain("bob")
+      }).pipe(Effect.provide(testLayer), Effect.runPromise))
+
+    it("should ignore duplicate quads (set semantics)", () =>
+      Effect.gen(function*() {
+        // Create two stores with same content
+        const store1 = yield* RdfBuilder.createStore
+        const store2 = yield* RdfBuilder.createStore
+
+        const entity = new Entity({
+          id: EntityId("same_entity"),
+          mention: "Same",
+          types: ["http://schema.org/Thing"],
+          attributes: {}
+        })
+
+        yield* RdfBuilder.addEntities(store1, [entity])
+        yield* RdfBuilder.addEntities(store2, [entity])
+
+        const sizeBefore = store1._store.size
+
+        // Merge - should not add duplicates
+        const addedCount = yield* RdfBuilder.mergeStores(store1, store2)
+
+        expect(addedCount).toBe(0) // No new quads added
+        expect(store1._store.size).toBe(sizeBefore)
+      }).pipe(Effect.provide(testLayer), Effect.runPromise))
+
+    it("should handle partial overlap correctly", () =>
+      Effect.gen(function*() {
+        const store1 = yield* RdfBuilder.createStore
+        const store2 = yield* RdfBuilder.createStore
+
+        // Same entity in both
+        const sharedEntity = new Entity({
+          id: EntityId("shared"),
+          mention: "Shared",
+          types: ["http://schema.org/Thing"],
+          attributes: {}
+        })
+
+        // Unique to store1
+        const entity1 = new Entity({
+          id: EntityId("only_in_store1"),
+          mention: "Only1",
+          types: ["http://schema.org/Thing"],
+          attributes: {}
+        })
+
+        // Unique to store2
+        const entity2 = new Entity({
+          id: EntityId("only_in_store2"),
+          mention: "Only2",
+          types: ["http://schema.org/Thing"],
+          attributes: {}
+        })
+
+        yield* RdfBuilder.addEntities(store1, [sharedEntity, entity1])
+        yield* RdfBuilder.addEntities(store2, [sharedEntity, entity2])
+
+        const sizeBefore = store1._store.size
+        const addedCount = yield* RdfBuilder.mergeStores(store1, store2)
+
+        // Should only add the unique quads from store2
+        const turtle = yield* RdfBuilder.toTurtle(store1)
+        expect(turtle).toContain("shared")
+        expect(turtle).toContain("only_in_store1")
+        expect(turtle).toContain("only_in_store2")
+
+        // Added count should be > 0 (entity2 quads)
+        expect(addedCount).toBeGreaterThan(0)
+        expect(store1._store.size).toBeGreaterThan(sizeBefore)
+      }).pipe(Effect.provide(testLayer), Effect.runPromise))
+  })
+
+  describe("cloneStore", () => {
+    it("should create independent copy of store", () =>
+      Effect.gen(function*() {
+        const original = yield* RdfBuilder.createStore
+
+        yield* RdfBuilder.addEntities(original, [
+          new Entity({
+            id: EntityId("original_entity"),
+            mention: "Original",
+            types: ["http://schema.org/Thing"],
+            attributes: {}
+          })
+        ])
+
+        const originalSize = original._store.size
+
+        // Clone the store
+        const cloned = yield* RdfBuilder.cloneStore(original)
+
+        // Cloned store should have same content
+        expect(cloned._store.size).toBe(originalSize)
+
+        // Modify original
+        yield* RdfBuilder.addEntities(original, [
+          new Entity({
+            id: EntityId("new_entity"),
+            mention: "New",
+            types: ["http://schema.org/Thing"],
+            attributes: {}
+          })
+        ])
+
+        // Clone should not be affected
+        expect(cloned._store.size).toBe(originalSize)
+        expect(original._store.size).toBeGreaterThan(cloned._store.size)
+
+        // Verify content
+        const clonedTurtle = yield* RdfBuilder.toTurtle(cloned)
+        expect(clonedTurtle).toContain("original_entity")
+        expect(clonedTurtle).not.toContain("new_entity")
+      }).pipe(Effect.provide(testLayer), Effect.runPromise))
+  })
 })

@@ -845,6 +845,7 @@ export const makeIngestionActivity = (input: typeof IngestionActivityInput.Type)
       const start = yield* DateTime.now
       const storage = yield* StorageService
       const config = yield* ConfigService
+      const rdf = yield* RdfBuilder
       const bucket = resolveBucket(config)
 
       yield* Effect.logInfo("Ingestion activity starting", {
@@ -877,11 +878,60 @@ export const makeIngestionActivity = (input: typeof IngestionActivityInput.Type)
         )
       )
 
+      // Save batch-specific canonical graph (always overwrite - one batch = one file)
       const canonicalPath = PathLayout.batch.canonical(input.batchId)
       yield* storage.set(canonicalPath, validatedGraph)
 
+      // Namespace canonical graph: read-merge-write pattern for incremental KB building
       const namespaceCanonicalPath = PathLayout.canonical(input.targetNamespace).entities
-      yield* storage.set(namespaceCanonicalPath, validatedGraph)
+
+      // Parse the new graph we want to merge
+      const newStore = yield* rdf.parseTurtle(validatedGraph).pipe(
+        Effect.mapError((error) => new Error(`Failed to parse new graph: ${error.message}`))
+      )
+      const newTripleCount = newStore._store.size
+
+      // Try to load existing namespace canonical graph
+      const existingGraphOpt = yield* storage.get(namespaceCanonicalPath)
+
+      let mergedGraph: string
+      const mergedStats = { existingTriples: 0, newTriples: newTripleCount, addedTriples: 0 }
+
+      if (Option.isSome(existingGraphOpt)) {
+        // Merge with existing graph
+        const existingStore = yield* rdf.parseTurtle(existingGraphOpt.value).pipe(
+          Effect.mapError((error) => new Error(`Failed to parse existing graph: ${error.message}`))
+        )
+        mergedStats.existingTriples = existingStore._store.size
+
+        // Merge new into existing (union semantics)
+        mergedStats.addedTriples = yield* rdf.mergeStores(existingStore, newStore)
+
+        // Serialize merged graph
+        mergedGraph = yield* rdf.toTurtle(existingStore)
+
+        yield* Effect.logInfo("Ingestion: Merged with existing namespace graph", {
+          batchId: input.batchId,
+          namespace: input.targetNamespace,
+          existingTriples: mergedStats.existingTriples,
+          newTriples: mergedStats.newTriples,
+          addedTriples: mergedStats.addedTriples,
+          totalTriples: existingStore._store.size
+        })
+      } else {
+        // No existing graph - use new graph as-is
+        mergedGraph = validatedGraph
+        mergedStats.addedTriples = newTripleCount
+
+        yield* Effect.logInfo("Ingestion: Creating new namespace graph", {
+          batchId: input.batchId,
+          namespace: input.targetNamespace,
+          tripleCount: newTripleCount
+        })
+      }
+
+      // Write merged/new graph to namespace canonical path
+      yield* storage.set(namespaceCanonicalPath, mergedGraph)
 
       const end = yield* DateTime.now
 
