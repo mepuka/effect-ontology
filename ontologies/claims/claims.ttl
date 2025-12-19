@@ -3,7 +3,6 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
-@prefix dc: <http://purl.org/dc/elements/1.1/> .
 @prefix dcterms: <http://purl.org/dc/terms/> .
 @prefix prov: <http://www.w3.org/ns/prov#> .
 @prefix oa: <http://www.w3.org/ns/oa#> .
@@ -15,9 +14,9 @@
 # =============================================================================
 
 <http://effect-ontology.dev/claims> rdf:type owl:Ontology ;
-    dc:title "Effect Ontology Claims Vocabulary"@en ;
-    dc:description "Vocabulary for reified claims with Wikidata-style ranks, temporal validity, and provenance tracking."@en ;
-    dc:creator "Effect Ontology Project" ;
+    dcterms:title "Effect Ontology Claims Vocabulary"@en ;
+    dcterms:description "Vocabulary for reified claims with Wikidata-style ranks, temporal validity, and provenance tracking."@en ;
+    dcterms:creator "Effect Ontology Project" ;
     dcterms:created "2024-12-18"^^xsd:date ;
     owl:versionInfo "1.0.0" ;
     rdfs:seeAlso <https://www.wikidata.org/wiki/Help:Ranking> ;
@@ -83,7 +82,8 @@
 :derivedBy rdf:type owl:ObjectProperty ;
     rdfs:label "derived by"@en ;
     rdfs:comment "The reasoning rule or activity that produced this derived assertion."@en ;
-    rdfs:domain :DerivedAssertion .
+    rdfs:domain :DerivedAssertion ;
+    rdfs:range prov:Activity .
 
 :supportedBy rdf:type owl:ObjectProperty ;
     rdfs:label "supported by"@en ;
@@ -106,12 +106,14 @@
 :claimObject rdf:type owl:ObjectProperty ;
     rdfs:label "claim object"@en ;
     rdfs:comment "The object IRI of the reified statement. Use for object properties where the value is a resource/entity."@en ;
-    rdfs:domain :Claim .
+    rdfs:domain :Claim ;
+    rdfs:range rdfs:Resource .
 
 :claimLiteral rdf:type owl:DatatypeProperty ;
     rdfs:label "claim literal"@en ;
     rdfs:comment "The literal value of the reified statement. Use for datatype properties where the value is a string, number, date, etc."@en ;
-    rdfs:domain :Claim .
+    rdfs:domain :Claim ;
+    rdfs:range rdfs:Literal .
 
 :rank rdf:type owl:ObjectProperty, owl:FunctionalProperty ;
     rdfs:label "rank"@en ;
@@ -196,6 +198,22 @@
 
     Distinct from eventTime (when the real-world event occurred) and validFrom
     (when the fact became true)."""@en ;
+    rdfs:domain :Claim ;
+    rdfs:range xsd:dateTime .
+
+:retractedAt rdf:type owl:DatatypeProperty ;
+    rdfs:subPropertyOf prov:invalidatedAtTime ;
+    rdfs:label "retracted at"@en ;
+    rdfs:comment """System timestamp when this claim was retracted from the knowledge base.
+
+    Transaction time dimension for claim retraction. Records when the KB learned
+    the claim was no longer valid (distinct from when the fact ceased to be true
+    in the world, which is validUntil).
+
+    Enables bitemporal queries: 'what did we believe at time T?' requires checking
+    both assertedAt <= T and (retractedAt is null OR retractedAt > T).
+
+    Null/absent means the claim is still active in the KB."""@en ;
     rdfs:domain :Claim ;
     rdfs:range xsd:dateTime .
 
@@ -306,7 +324,8 @@
     rdfs:subPropertyOf oa:hasSource ;
     rdfs:label "evidence source"@en ;
     rdfs:comment "The source document containing the evidence."@en ;
-    rdfs:domain :Evidence .
+    rdfs:domain :Evidence ;
+    rdfs:range foaf:Document .
 
 :evidenceText rdf:type owl:DatatypeProperty ;
     rdfs:label "evidence text"@en ;
@@ -365,4 +384,5 @@
 :sourceArticle rdf:type owl:ObjectProperty ;
     rdfs:label "source article"@en ;
     rdfs:comment "The article this claim set was extracted from."@en ;
-    rdfs:domain :ArticleClaimSet .
+    rdfs:domain :ArticleClaimSet ;
+    rdfs:range foaf:Document .

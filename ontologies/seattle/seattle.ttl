@@ -189,6 +189,7 @@ seattle:announces a owl:ObjectProperty ;
     rdfs:label "announces"@en ;
     rdfs:comment "Links an initiative event to the initiative being announced."@en ;
     rdfs:domain seattle:PolicyInitiativeEvent ;
+    rdfs:range skos:Concept ;
     owl:inverseOf seattle:wasAnnouncedIn .
 
 seattle:wasAnnouncedIn a owl:ObjectProperty ;
@@ -231,13 +232,29 @@ seattle:appliedRule a owl:ObjectProperty ;
     rdfs:label "applied rule"@en ;
     rdfs:comment "Links a reasoning activity to the inference rule that fired."@en ;
     rdfs:domain seattle:ReasoningActivity ;
-    rdfs:range seattle:InferenceRule .
+    rdfs:range seattle:InferenceRule ;
+    owl:inverseOf seattle:ruleAppliedIn .
+
+seattle:ruleAppliedIn a owl:ObjectProperty ;
+    rdfs:label "rule applied in"@en ;
+    rdfs:comment "Links an inference rule to the reasoning activities where it was applied. Enables efficient querying of which activities used a given rule."@en ;
+    rdfs:domain seattle:InferenceRule ;
+    rdfs:range seattle:ReasoningActivity ;
+    owl:inverseOf seattle:appliedRule .
 
 seattle:updatedRule a owl:ObjectProperty ;
     rdfs:label "updated rule"@en ;
     rdfs:comment "Links a rule update event to the rule that was modified."@en ;
     rdfs:domain seattle:RuleUpdateEvent ;
-    rdfs:range seattle:InferenceRule .
+    rdfs:range seattle:InferenceRule ;
+    owl:inverseOf seattle:ruleUpdatedBy .
+
+seattle:ruleUpdatedBy a owl:ObjectProperty ;
+    rdfs:label "rule updated by"@en ;
+    rdfs:comment "Links an inference rule to the events that updated it. Enables tracking rule modification history."@en ;
+    rdfs:domain seattle:InferenceRule ;
+    rdfs:range seattle:RuleUpdateEvent ;
+    owl:inverseOf seattle:updatedRule .
 
 seattle:producedFacts a owl:DatatypeProperty ;
     rdfs:label "produced facts"@en ;
@@ -256,6 +273,28 @@ seattle:ruleVersion a owl:DatatypeProperty ;
     rdfs:comment "Version identifier for an inference rule."@en ;
     rdfs:domain seattle:InferenceRule ;
     rdfs:range xsd:string .
+
+# -----------------------------------------------------------------------------
+# Budget and Temporal Properties
+# -----------------------------------------------------------------------------
+
+seattle:allocatedBudget a owl:DatatypeProperty ;
+    rdfs:label "allocated budget"@en ;
+    rdfs:comment "Budget amount allocated to an entity (department, program, etc.)."@en ;
+    rdfs:domain org:Organization ;
+    rdfs:range xsd:integer .
+
+seattle:startDate a owl:DatatypeProperty ;
+    rdfs:label "start date"@en ;
+    rdfs:comment "Effective start date for a membership, role, or position."@en ;
+    rdfs:domain [ owl:unionOf ( org:Membership org:Post ) ] ;
+    rdfs:range xsd:date .
+
+seattle:endDate a owl:DatatypeProperty ;
+    rdfs:label "end date"@en ;
+    rdfs:comment "Effective end date for a membership, role, or position."@en ;
+    rdfs:domain [ owl:unionOf ( org:Membership org:Post ) ] ;
+    rdfs:range xsd:date .
 
 # =============================================================================
 # SKOS Concept Scheme: Seattle Government Roles

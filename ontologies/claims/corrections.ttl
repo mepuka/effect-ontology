@@ -4,7 +4,6 @@
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
-@prefix dc: <http://purl.org/dc/elements/1.1/> .
 @prefix dcterms: <http://purl.org/dc/terms/> .
 @prefix prov: <http://www.w3.org/ns/prov#> .
 @base <http://effect-ontology.dev/corrections> .
@@ -14,9 +13,9 @@
 # =============================================================================
 
 <http://effect-ontology.dev/corrections> rdf:type owl:Ontology ;
-    dc:title "Effect Ontology Corrections Vocabulary"@en ;
-    dc:description "PROV-O based vocabulary for tracking corrections, retractions, and updates to claims."@en ;
-    dc:creator "Effect Ontology Project" ;
+    dcterms:title "Effect Ontology Corrections Vocabulary"@en ;
+    dcterms:description "PROV-O based vocabulary for tracking corrections, retractions, and updates to claims."@en ;
+    dcterms:creator "Effect Ontology Project" ;
     dcterms:created "2024-12-18"^^xsd:date ;
     owl:versionInfo "1.0.0" ;
     owl:imports <http://www.w3.org/ns/prov-o#> ;
@@ -77,7 +76,8 @@
 :sourceDocument rdf:type owl:ObjectProperty ;
     rdfs:label "source document"@en ;
     rdfs:comment "The article/document that published this correction."@en ;
-    rdfs:domain :Correction .
+    rdfs:domain :Correction ;
+    rdfs:range foaf:Document .
 
 # =============================================================================
 # Correction Relationships
@@ -124,9 +124,9 @@
     rdfs:domain :CorrectionChain ;
     rdfs:range :Correction .
 
-:followsCorrection rdf:type owl:ObjectProperty ;
+:followsCorrection rdf:type owl:ObjectProperty, owl:TransitiveProperty ;
     rdfs:label "follows correction"@en ;
-    rdfs:comment "Temporal ordering of corrections in a chain."@en ;
+    rdfs:comment "Temporal ordering of corrections in a chain. Transitive: if A follows B and B follows C, then A follows C."@en ;
     rdfs:domain :Correction ;
     rdfs:range :Correction .
 

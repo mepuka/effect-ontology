@@ -338,12 +338,28 @@
         sh:message "Claim must have exactly one claimPredicate"
     ] ;
 
-    sh:property [
-        sh:path claims:claimObject ;
-        sh:minCount 1 ;
-        sh:maxCount 1 ;
-        sh:message "Claim must have exactly one claimObject"
-    ] ;
+    # Object value: must have EITHER claimObject (for IRIs) OR claimLiteral (for literals)
+    # Uses sh:xone to enforce exactly one of the two options
+    sh:xone (
+        [
+            sh:property [
+                sh:path claims:claimObject ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                sh:nodeKind sh:IRI ;
+                sh:message "claimObject must be an IRI"
+            ]
+        ]
+        [
+            sh:property [
+                sh:path claims:claimLiteral ;
+                sh:minCount 1 ;
+                sh:maxCount 1 ;
+                sh:nodeKind sh:Literal ;
+                sh:message "claimLiteral must be a literal value"
+            ]
+        ]
+    ) ;
 
     sh:property [
         sh:path claims:rank ;
@@ -375,6 +391,27 @@
                 $this claims:validFrom ?validFrom .
                 $this claims:validUntil ?validUntil .
                 FILTER (?validUntil <= ?validFrom)
+            }
+        """
+    ] ;
+
+    # Temporal ordering: eventTime must be before or equal to validFrom
+    # A claim's real-world event must occur before the validity period begins
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:message "Claim eventTime must be before or equal to validFrom (event occurs before validity starts)" ;
+        sh:prefixes [
+            sh:declare [
+                sh:prefix "claims" ;
+                sh:namespace "http://effect-ontology.dev/claims#"^^xsd:anyURI
+            ]
+        ] ;
+        sh:select """
+            SELECT $this ?eventTime ?validFrom
+            WHERE {
+                $this claims:eventTime ?eventTime .
+                $this claims:validFrom ?validFrom .
+                FILTER (?eventTime > ?validFrom)
             }
         """
     ] .
