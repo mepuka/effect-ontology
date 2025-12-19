@@ -12,6 +12,7 @@
 | Effect patterns & templates | [architecture/effect-patterns-guide.md](./architecture/effect-patterns-guide.md) |
 | SOTA research & priorities | [ontology_research/sota_review.md](./ontology_research/sota_review.md) |
 | Implementation roadmap | [ontology_research/synthesis_and_implementation_roadmap.md](./ontology_research/synthesis_and_implementation_roadmap.md) |
+| **MVP blocker audit** | [audits/AUDIT_SUMMARY.md](./audits/AUDIT_SUMMARY.md) |
 | Debugging extraction runs | [DEBUGGING_GUIDE.md](./DEBUGGING_GUIDE.md) |
 | LLM control reference | [LLM_CONTROL_QUICK_REFERENCE.md](./LLM_CONTROL_QUICK_REFERENCE.md) |
 | Term definitions | [GLOSSARY.md](./GLOSSARY.md) |
@@ -130,6 +131,21 @@ Comprehensive state-of-the-art review with implementation priorities:
 - [plans/domain_model_architecture.md](./plans/domain_model_architecture.md) - Domain model design
 - [plans/2025-12-11-config-layer-unification.md](./plans/2025-12-11-config-layer-unification.md) - Config unification
 - [plans/2025-12-11-workflow-layer-composition-fix.md](./plans/2025-12-11-workflow-layer-composition-fix.md) - Layer composition fix
+
+---
+
+## Code Audits
+
+### Active Audits
+- [audits/2025-12-18-medium-severity-modeling-audit.md](./audits/2025-12-18-medium-severity-modeling-audit.md) - **NEW (2025-12-18)** Comprehensive audit of MEDIUM and LOW severity modeling issues
+- [audits/ACTION_ITEMS.md](./audits/ACTION_ITEMS.md) - **NEW (2025-12-18)** Concrete action items from modeling audit (5-8 day timeline)
+- [audits/AUDIT_SUMMARY.md](./audits/AUDIT_SUMMARY.md) - **NEW (2025-12-18)** Executive summary and MVP blocker analysis
+
+**Key Findings**:
+- 3 MEDIUM issues are MVP-blocking for timeline queries
+- Bitemporal timestamps missing from ontology (publishedAt, ingestedAt, assertedAt, derivedAt)
+- Event time modeling uses incorrect OWL-Time pattern
+- 5-8 days effort required for P0 fixes
 
 ---
 

@@ -1,0 +1,47 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    @apply antialiased;
+  }
+
+  body {
+    @apply bg-gray-950 text-gray-300;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    @apply w-2 h-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-gray-900;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-700 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-600;
+  }
+
+  /* Selection */
+  ::selection {
+    @apply bg-cyan-500/30 text-white;
+  }
+}
+
+@layer components {
+  /* Focus states */
+  input:focus,
+  textarea:focus,
+  button:focus-visible {
+    @apply outline-none ring-1 ring-cyan-500/50;
+  }
+}

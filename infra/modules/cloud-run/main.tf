@@ -100,6 +100,20 @@ resource "google_cloud_run_v2_service" "main" {
           }
         }
       }
+      dynamic "env" {
+        for_each = var.enable_postgres ? [1] : []
+        content {
+          name  = "POSTGRES_SSL"
+          value = "false" # Internal VPC traffic, SSL not required
+        }
+      }
+      dynamic "env" {
+        for_each = var.enable_postgres ? [1] : []
+        content {
+          name  = "WORKFLOW_PERSISTENCE"
+          value = "postgres"
+        }
+      }
     }
 
     scaling {

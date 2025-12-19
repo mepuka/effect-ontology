@@ -34,4 +34,19 @@
   <uri name="http://www.w3.org/2004/02/skos/core#" uri="skos.rdf"/>
   <uri name="http://www.w3.org/2004/02/skos/core" uri="skos.rdf"/>
 
+  <!-- W3C Organization Ontology -->
+  <!-- Version: 0.8 -->
+  <uri name="http://www.w3.org/ns/org#" uri="org.ttl"/>
+  <uri name="http://www.w3.org/ns/org" uri="org.ttl"/>
+
+  <!-- OWL-Time Ontology -->
+  <!-- Version: 2017-04-06 (W3C Recommendation) -->
+  <uri name="http://www.w3.org/2006/time#" uri="owl-time.ttl"/>
+  <uri name="http://www.w3.org/2006/time" uri="owl-time.ttl"/>
+
+  <!-- FOAF (Friend of a Friend) -->
+  <!-- Version: 0.99-subset (Paddington) -->
+  <uri name="http://xmlns.com/foaf/0.1/" uri="foaf.ttl"/>
+  <uri name="http://xmlns.com/foaf/0.1" uri="foaf.ttl"/>
+
 </catalog>

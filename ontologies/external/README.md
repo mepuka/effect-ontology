@@ -10,6 +10,9 @@ Bundled reference ontologies for local resolution and version pinning.
 | `web-annotation.ttl` | W3C Web Annotation | 2017-02-23 | http://www.w3.org/ns/oa# |
 | `dcterms.ttl` | Dublin Core Terms | Current | http://purl.org/dc/terms/ |
 | `skos.rdf` | SKOS | 2009-08-18 | http://www.w3.org/2004/02/skos/core# |
+| `org.ttl` | W3C Organization | 0.8 | http://www.w3.org/ns/org# |
+| `owl-time.ttl` | OWL-Time | 2017-04-06 | http://www.w3.org/2006/time# |
+| `foaf.ttl` | FOAF (subset) | 0.99-subset | http://xmlns.com/foaf/0.1/ |
 
 ## Usage
 

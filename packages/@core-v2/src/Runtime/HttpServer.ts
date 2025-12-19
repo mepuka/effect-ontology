@@ -224,6 +224,9 @@ const claimRowToClaimWithRank = (
     validTo: Date | null
     confidenceScore: string | null
     evidenceText: string | null
+    // Transaction time (bitemporal)
+    createdAt: Date | null
+    deprecatedAt: Date | null
   },
   article: {
     id: string
@@ -231,6 +234,9 @@ const claimRowToClaimWithRank = (
     headline: string | null
     sourceName: string | null
     publishedAt: Date
+    // Transaction time (bitemporal)
+    ingestedAt: Date | null
+    createdAt: Date | null
   }
 ): typeof ClaimWithRank.Type => ({
   id: claim.id,
@@ -244,10 +250,16 @@ const claimRowToClaimWithRank = (
     uri: article.uri,
     headline: article.headline,
     sourceName: article.sourceName,
-    publishedAt: DateTime.unsafeFromDate(article.publishedAt)
+    publishedAt: DateTime.unsafeFromDate(article.publishedAt),
+    ingestedAt: DateTime.unsafeFromDate(article.ingestedAt ?? article.createdAt ?? new Date())
   },
+  // Valid time
   validFrom: claim.validFrom ? DateTime.unsafeFromDate(claim.validFrom) : null,
   validTo: claim.validTo ? DateTime.unsafeFromDate(claim.validTo) : null,
+  // Transaction time
+  assertedAt: DateTime.unsafeFromDate(claim.createdAt ?? new Date()),
+  derivedAt: null, // TODO: populate from derived_at column when available
+  deprecatedAt: claim.deprecatedAt ? DateTime.unsafeFromDate(claim.deprecatedAt) : null,
   confidence: claim.confidenceScore ? parseFloat(claim.confidenceScore) : null,
   evidenceText: claim.evidenceText
 })
@@ -632,7 +644,8 @@ export const SearchRouter = HttpRouter.empty.pipe(
                       uri: article.uri,
                       headline: article.headline,
                       sourceName: article.sourceName,
-                      publishedAt: DateTime.unsafeFromDate(article.publishedAt)
+                      publishedAt: DateTime.unsafeFromDate(article.publishedAt),
+                      ingestedAt: DateTime.unsafeFromDate(article.ingestedAt ?? article.createdAt ?? new Date())
                     },
                     claimCount: claims.length,
                     conflictCount: 0 // Would need ConflictRepository

@@ -148,6 +148,74 @@
     rdfs:range xsd:dateTime .
 
 # =============================================================================
+# Transaction Time (Bitemporal: Knowledge Base Timestamps)
+# =============================================================================
+#
+# These properties track WHEN the knowledge base learned/recorded information,
+# distinct from valid time (when facts were true in the world). This enables
+# "what did we know when?" queries essential for timeline visualization and
+# audit trails.
+#
+# Aligned with W3C PROV-O for transaction time semantics.
+# =============================================================================
+
+:publishedAt rdf:type owl:DatatypeProperty ;
+    rdfs:label "published at"@en ;
+    rdfs:comment """Publisher timestamp for the source document.
+
+    Transaction time dimension tracking when the original publisher released
+    the content. Distinct from ingestedAt (when our system received it).
+
+    Example: News article published 2024-12-03T09:00:00Z, ingested by our
+    system 2024-12-03T10:15:00Z."""@en ;
+    rdfs:domain foaf:Document ;
+    rdfs:range xsd:dateTime .
+
+:ingestedAt rdf:type owl:DatatypeProperty ;
+    rdfs:label "ingested at"@en ;
+    rdfs:comment """System ingestion timestamp for the source document.
+
+    Transaction time dimension tracking when the document entered our knowledge
+    base pipeline. Used for timeline queries: 'show me documents we received today'.
+
+    Typically later than publishedAt due to processing delays."""@en ;
+    rdfs:domain foaf:Document ;
+    rdfs:range xsd:dateTime .
+
+:assertedAt rdf:type owl:DatatypeProperty ;
+    rdfs:subPropertyOf prov:generatedAtTime ;
+    rdfs:label "asserted at"@en ;
+    rdfs:comment """System timestamp when this claim was asserted to the knowledge base.
+
+    Transaction time dimension for claim creation. For extracted claims, this is
+    semantically equivalent to extractedAt (both represent when the claim entered
+    the KB via LLM extraction).
+
+    Enables competency query: 'show me claims asserted in batch X' or 'what claims
+    were added today?'
+
+    Distinct from eventTime (when the real-world event occurred) and validFrom
+    (when the fact became true)."""@en ;
+    rdfs:domain :Claim ;
+    rdfs:range xsd:dateTime .
+
+:derivedAt rdf:type owl:DatatypeProperty ;
+    rdfs:subPropertyOf prov:generatedAtTime ;
+    rdfs:label "derived at"@en ;
+    rdfs:comment """System timestamp when this derived assertion was produced by inference.
+
+    Transaction time dimension for reasoning events. Only present on DerivedAssertion
+    instances (claims produced by rules rather than extraction).
+
+    Enables competency query: 'show me facts inferred today' or 'which inferred facts
+    were produced in batch X?'
+
+    Example: Rule fires at 2024-12-03T10:20:00Z deriving membership from role
+    assignment extracted at 2024-12-03T10:15:00Z."""@en ;
+    rdfs:domain :DerivedAssertion ;
+    rdfs:range xsd:dateTime .
+
+# =============================================================================
 # Provenance Properties
 # =============================================================================
 

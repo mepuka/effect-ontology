@@ -7,12 +7,13 @@
  * @module test/Repository/Claim.integration.test
  */
 
-import { describe, it } from "@effect/vitest"
+import { describe, it, expect } from "@effect/vitest"
 import { Effect, Layer, Option, Config, ConfigProvider } from "effect"
 import { PgClient } from "@effect/sql-pg"
 import * as Pg from "@effect/sql-drizzle/Pg"
-import { ClaimRepository, type ClaimInsertRow } from "../../src/Repository/Claim.js"
-import { ArticleRepository, type ArticleInsertRow } from "../../src/Repository/Article.js"
+import { ClaimRepository } from "../../src/Repository/Claim.js"
+import { ArticleRepository } from "../../src/Repository/Article.js"
+import type { ClaimInsertRow, ArticleInsertRow } from "../../src/Repository/schema.js"
 
 // =============================================================================
 // Test Configuration

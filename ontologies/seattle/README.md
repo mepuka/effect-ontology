@@ -79,10 +79,11 @@ seattle:TimBurgess a foaf:Person ;
 Use `org:Membership` with `org:memberDuring` and `time:Interval`:
 
 ```turtle
+# W3C ORG pattern: org:post links Membership→Post, org:role links Post→Role
 seattle:Membership_Burgess_Deputy a org:Membership ;
     org:member seattle:TimBurgess ;
     org:organization seattle:MayorsOffice ;
-    org:role seattle:DeputyMayorPost ;
+    org:post seattle:DeputyMayorPost ;  # NOT org:role - Post links via org:post
     org:memberDuring [
         a time:Interval ;
         time:hasBeginning [
@@ -161,7 +162,7 @@ shacl validate --shapes shapes.ttl --data your-data.ttl
 ```
 
 Key constraints:
-- Memberships must have member, organization, role, and interval
+- Memberships must have member, organization, post (via org:post), and interval
 - Intervals must have beginning (end optional for ongoing)
 - Events must have timestamp and provenance
 - Claims must have rank and source

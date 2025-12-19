@@ -47,7 +47,7 @@ PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
 SELECT ?person ?name WHERE {
   ?membership a org:Membership ;
-              org:role seattle:MayorPost ;
+              org:post seattle:MayorPost ;  # W3C ORG: org:post links Membership→Post
               org:member ?person ;
               org:memberDuring ?interval .
 
@@ -87,10 +87,10 @@ SELECT ?person ?personName ?role ?roleLabel ?source ?sourceTitle ?announcedDate 
   ?source dcterms:title ?sourceTitle .
 
   ?membership org:member ?person ;
-              org:role ?role .
+              org:post ?post .  # W3C ORG: org:post links Membership→Post
 
   ?person foaf:name ?personName .
-  ?role skos:prefLabel ?roleLabel .
+  ?post skos:prefLabel ?roleLabel .
 }
 ORDER BY DESC(?announcedDate)
 ```
@@ -107,15 +107,15 @@ PREFIX foaf: <http://xmlns.com/foaf/0.1/>
 PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
 PREFIX seattle: <http://effect-ontology.dev/seattle/>
 
-SELECT ?role ?roleLabel ?startDate ?endDate ?announcedAt ?source WHERE {
+SELECT ?post ?roleLabel ?startDate ?endDate ?announcedAt ?source WHERE {
   ?person foaf:name "Tim Burgess" .
 
   ?membership a org:Membership ;
               org:member ?person ;
-              org:role ?role ;
+              org:post ?post ;  # W3C ORG: org:post links Membership→Post
               org:memberDuring ?interval .
 
-  ?role skos:prefLabel ?roleLabel .
+  ?post skos:prefLabel ?roleLabel .
 
   ?interval time:hasBeginning/time:inXSDDate ?startDate .
   OPTIONAL { ?interval time:hasEnd/time:inXSDDate ?endDate }
@@ -143,7 +143,7 @@ PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
 SELECT ?person ?name ?termStart WHERE {
   ?membership a org:Membership ;
-              org:role seattle:MayorPost ;
+              org:post seattle:MayorPost ;  # W3C ORG: org:post links Membership→Post
               org:member ?person ;
               org:memberDuring ?interval .
 
@@ -173,10 +173,10 @@ SELECT ?dept ?deptName ?leader ?leaderName ?role WHERE {
 
   OPTIONAL {
     ?membership org:organization ?dept ;
-                org:role ?role ;
+                org:post ?post ;  # W3C ORG: org:post links Membership→Post
                 org:member ?leader .
 
-    ?role a seattle:LeadershipPost .
+    ?post a seattle:LeadershipPost .
     ?leader foaf:name ?leaderName .
 
     # Currently active

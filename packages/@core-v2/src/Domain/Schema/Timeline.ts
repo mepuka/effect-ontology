@@ -26,11 +26,17 @@ export class ArticleSummary extends Schema.Class<ArticleSummary>("ArticleSummary
   uri: Schema.String,
   headline: Schema.NullOr(Schema.String),
   sourceName: Schema.NullOr(Schema.String),
-  publishedAt: Schema.DateTimeUtc
+  /** Publisher timestamp (transaction time) */
+  publishedAt: Schema.DateTimeUtc,
+  /** System ingestion timestamp (transaction time) */
+  ingestedAt: Schema.DateTimeUtc
 }) {}
 
 /**
  * Claim with rank and source information
+ *
+ * Includes both valid time (when fact was true) and transaction time
+ * (when KB learned/recorded the fact) for bitemporal queries.
  */
 export class ClaimWithRank extends Schema.Class<ClaimWithRank>("ClaimWithRank")({
   id: Schema.String,
@@ -40,8 +46,19 @@ export class ClaimWithRank extends Schema.Class<ClaimWithRank>("ClaimWithRank")(
   objectType: Schema.optional(Schema.Literal("iri", "literal", "typed_literal")),
   rank: ClaimRank,
   source: ArticleSummary,
+
+  // Valid time (when fact was true in the world)
   validFrom: Schema.NullOr(Schema.DateTimeUtc),
   validTo: Schema.NullOr(Schema.DateTimeUtc),
+
+  // Transaction time (when KB learned/recorded the fact)
+  /** When claim was asserted to KB (transaction time) */
+  assertedAt: Schema.DateTimeUtc,
+  /** When derived assertion was produced by inference (null for extracted claims) */
+  derivedAt: Schema.NullOr(Schema.DateTimeUtc),
+  /** When claim was deprecated (null if not deprecated) */
+  deprecatedAt: Schema.NullOr(Schema.DateTimeUtc),
+
   confidence: Schema.NullOr(Schema.Number),
   evidenceText: Schema.NullOr(Schema.String)
 }) {}
