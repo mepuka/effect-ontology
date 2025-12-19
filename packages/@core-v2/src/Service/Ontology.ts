@@ -363,8 +363,8 @@ export class OntologyService extends Effect.Service<OntologyService>()(
         })
       )
 
-      // Cache BM25 index
-      const getBm25Index = yield* Effect.cached(
+      // Cache BM25 index with same TTL as ontology to stay in sync
+      const getBm25Index = yield* Effect.cachedWithTTL(cacheTtl)(
         Effect.gen(function*() {
           const { classes, hierarchy, properties, propertyHierarchy } = yield* getOntology
           const ontology = new OntologyContext({
@@ -377,8 +377,8 @@ export class OntologyService extends Effect.Service<OntologyService>()(
         })
       )
 
-      // Cache Semantic index
-      const getSemanticIndex = yield* Effect.cached(
+      // Cache Semantic index with same TTL as ontology to stay in sync
+      const getSemanticIndex = yield* Effect.cachedWithTTL(cacheTtl)(
         Effect.gen(function*() {
           const { classes, hierarchy, properties, propertyHierarchy } = yield* getOntology
           const ontology = new OntologyContext({

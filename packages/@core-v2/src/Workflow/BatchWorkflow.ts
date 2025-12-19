@@ -35,9 +35,17 @@ const extractFilename = (path: string): string => {
 }
 
 /**
+ * Compute a simple content hash for comparison
+ */
+const computeContentHash = (content: string): number => Hash.string(content)
+
+/**
  * Validate that manifest ontologyUri is consistent with config.
  * Extraction uses config.ontology.path while validation uses manifest.ontologyUri.
  * This can cause silent mismatches if they point to different ontologies.
+ *
+ * In strict mode: Compares content hashes to detect schema drift
+ * In non-strict mode: Compares filenames only (with warning on mismatch)
  */
 const validateOntologyConsistency = (
   manifestOntologyUri: string,
@@ -49,6 +57,7 @@ const validateOntologyConsistency = (
     const manifestFilename = extractFilename(manifestOntologyUri)
     const configFilename = extractFilename(configOntologyPath)
 
+    // Quick check: if filenames differ, we know they're different
     if (manifestFilename !== configFilename) {
       const message = `Ontology mismatch: manifest uses "${manifestOntologyUri}" but extraction uses "${configOntologyPath}". ` +
         `Extraction will use the configured ontology, not the manifest ontology. ` +
@@ -73,8 +82,56 @@ const validateOntologyConsistency = (
         manifestOntologyUri,
         configOntologyPath
       })
+      return
+    }
+
+    // Filenames match - in strict mode, also verify content hashes
+    if (strictValidation) {
+      const storage = yield* StorageService
+
+      // Load both ontology files
+      const manifestPath = stripGsPrefix(manifestOntologyUri)
+      const configPath = configOntologyPath
+
+      const [manifestContentOpt, configContentOpt] = yield* Effect.all([
+        storage.get(manifestPath).pipe(Effect.catchAll(() => Effect.succeed(Option.none<string>()))),
+        storage.get(configPath).pipe(Effect.catchAll(() => Effect.succeed(Option.none<string>())))
+      ])
+
+      if (Option.isNone(manifestContentOpt) || Option.isNone(configContentOpt)) {
+        yield* Effect.logWarning("Could not load ontologies for content comparison", {
+          batchId,
+          manifestLoaded: Option.isSome(manifestContentOpt),
+          configLoaded: Option.isSome(configContentOpt)
+        })
+        return
+      }
+
+      const manifestHash = computeContentHash(manifestContentOpt.value)
+      const configHash = computeContentHash(configContentOpt.value)
+
+      if (manifestHash !== configHash) {
+        yield* Effect.logError("Ontology content mismatch (strict mode)", {
+          batchId,
+          manifestOntologyUri,
+          configOntologyPath,
+          manifestHash,
+          configHash
+        })
+        return yield* Effect.fail(
+          `Ontology content mismatch: "${configOntologyPath}" and "${manifestOntologyUri}" have the same filename but different content. ` +
+          `This indicates schema drift between batches. Ensure both point to the same ontology version.`
+        )
+      }
+
+      yield* Effect.logDebug("Ontology content validated (strict mode)", {
+        batchId,
+        manifestOntologyUri,
+        configOntologyPath,
+        contentHash: manifestHash
+      })
     } else {
-      yield* Effect.logDebug("Ontology consistency validated", {
+      yield* Effect.logDebug("Ontology consistency validated (filename only)", {
         batchId,
         manifestOntologyUri,
         configOntologyPath,
