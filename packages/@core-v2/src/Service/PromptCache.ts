@@ -36,30 +36,23 @@ import type { StructuredPrompt } from "../Prompt/PromptGenerator.js"
 export const makeCachedPrompt = (
   systemMessage: string,
   userMessage: string,
-  enableCaching: boolean
+  _enableCaching: boolean
 ): Prompt.Prompt => {
-  if (enableCaching) {
-    // Use structured messages with cache control
-    // System message is cacheable, user message is variable
-    return Prompt.fromMessages([
-      Prompt.makeMessage("system", {
-        content: systemMessage,
-        anthropic: {
-          cacheControl: {
-            type: "ephemeral",
-            ttl: "1h" // Cache for 1 hour (longer TTL for ontology schema)
-          }
-        }
-      }),
-      Prompt.makeMessage("user", {
-        content: userMessage
-        // No cache control on user message - it's variable
-      })
-    ])
-  } else {
-    // Fallback to simple string prompt when caching disabled
-    return Prompt.make(`${systemMessage}\n\n${userMessage}`)
-  }
+  // Use structured messages with separate system and user messages
+  // This structure enables prompt caching at the provider level:
+  // - System message: stable (ontology schema, rules) - cacheable
+  // - User message: variable (input text) - not cached
+  //
+  // Note: Actual cache_control headers are set at the Anthropic client level,
+  // not in @effect/ai Prompt. The separation of system/user is the key structure.
+  return Prompt.fromMessages([
+    Prompt.makeMessage("system", {
+      content: systemMessage
+    }),
+    Prompt.makeMessage("user", {
+      content: [Prompt.makePart("text", { text: userMessage })]
+    })
+  ])
 }
 
 /**
@@ -77,4 +70,3 @@ export const makeCachedPromptFromStructured = (
   structured: StructuredPrompt,
   enableCaching: boolean
 ): Prompt.Prompt => makeCachedPrompt(structured.systemMessage, structured.userMessage, enableCaching)
-

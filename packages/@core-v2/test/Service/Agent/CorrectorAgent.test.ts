@@ -163,7 +163,8 @@ const MockConfigService = Layer.succeed(ConfigService, {
     apiKey: Secret.fromString("test-key"),
     temperature: 0,
     maxTokens: 4096,
-    timeoutMs: 30000
+    timeoutMs: 30000,
+    enablePromptCaching: true
   },
   runtime: {
     concurrency: 4,
