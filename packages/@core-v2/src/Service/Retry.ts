@@ -76,8 +76,11 @@ export const isRetryableError = (error: unknown): boolean => {
   }
 
   // Check for HTTP status codes
-  const status = (error as unknown as Record<string, unknown>).status
-  if (typeof status === "number") {
+  // Use type guard to safely access .status property (HTTP errors have numeric status codes)
+  const status = "status" in error && typeof (error as { status?: unknown }).status === "number"
+    ? (error as { status: number }).status
+    : undefined
+  if (status !== undefined) {
     // 429 Too Many Requests is retryable
     if (status === 429) return true
 
@@ -89,8 +92,11 @@ export const isRetryableError = (error: unknown): boolean => {
   }
 
   // Check for network error codes
-  const code = (error as unknown as Record<string, unknown>).code
-  if (typeof code === "string") {
+  // Use type guard to safely access .code property (network errors have string codes)
+  const code = "code" in error && typeof (error as { code?: unknown }).code === "string"
+    ? (error as { code: string }).code
+    : undefined
+  if (code !== undefined) {
     const retryableCodes = ["ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "ECONNRESET", "EPIPE"]
     if (retryableCodes.includes(code)) return true
   }

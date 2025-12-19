@@ -15,6 +15,17 @@ import { buildCaseInsensitiveIriMap } from "../Utils/Iri.js"
 import { ExtractionRule, type ExtractionStage, RuleExample } from "./ExtractionRule.js"
 
 /**
+ * Coerce string array to IRI array.
+ *
+ * ClassDefinition.id and PropertyDefinition.id are typed as `string` from Schema parsing,
+ * but the values are valid IRIs from ontology. This helper documents
+ * the intentional type coercion from string to branded IRI type.
+ *
+ * @internal
+ */
+const asIriArray = (ids: ReadonlyArray<string>): ReadonlyArray<IRI> => ids as ReadonlyArray<IRI>
+
+/**
  * AllowedIriSet - Type-safe IRI constraints with case-insensitive lookups
  *
  * Stores the canonical IRIs and pre-built lookup maps for validation.
@@ -54,8 +65,8 @@ export class AllowedIriSet extends Data.Class<{
       objectPropertyIris,
       datatypePropertyIris,
       entityIds,
-      classIriMap: buildCaseInsensitiveIriMap(classIris as unknown as ReadonlyArray<IRI>),
-      propertyIriMap: buildCaseInsensitiveIriMap(allPropertyIris as unknown as ReadonlyArray<IRI>)
+      classIriMap: buildCaseInsensitiveIriMap(asIriArray(classIris)),
+      propertyIriMap: buildCaseInsensitiveIriMap(asIriArray(allPropertyIris))
     })
   }
 

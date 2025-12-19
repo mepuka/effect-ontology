@@ -38,6 +38,20 @@ const StorageConfig = Config.nested("STORAGE")(Config.all({
 
 const OntologyConfig = Config.nested("ONTOLOGY")(Config.all({
   path: Config.string("PATH"),
+  /**
+   * Path to bundled external vocabularies (PROV-O, W3C ORG, OWL-Time, etc.)
+   * This file is loaded alongside the main ontology and merged for domain/range
+   * constraint enforcement. Defaults to ontologies/external/merged-external.ttl.
+   */
+  externalVocabsPath: Config.string("EXTERNAL_VOCABS_PATH").pipe(
+    Config.withDefault("ontologies/external/merged-external.ttl")
+  ),
+  /**
+   * Path to ontology registry manifest (registry.json).
+   * When set, enables multi-ontology support via OntologyRegistryService.
+   * Defaults to "registry.json" at bucket root.
+   */
+  registryPath: Config.option(Config.string("REGISTRY_PATH")),
   cacheTtlSeconds: Config.integer("CACHE_TTL").pipe(Config.withDefault(3600)),
   /**
    * When true, workflow fails if manifest.ontologyUri doesn't match the configured ontology path.
@@ -72,7 +86,23 @@ const EmbeddingConfig = Config.nested("EMBEDDING")(Config.all({
 
 const ExtractionConfig = Config.nested("EXTRACTION")(Config.all({
   /** Base directory for extraction run artifacts */
-  runsDir: Config.string("RUNS_DIR").pipe(Config.withDefault("./output/runs"))
+  runsDir: Config.string("RUNS_DIR").pipe(Config.withDefault("./output/runs")),
+  /** Whether claim persistence failures should fail the workflow (true) or just log warning (false) */
+  strictPersistence: Config.boolean("STRICT_PERSISTENCE").pipe(Config.withDefault(true))
+}))
+
+const ApiConfig = Config.nested("API")(Config.all({
+  /**
+   * API keys for authentication (comma-separated list).
+   * When set, all /v1/* endpoints require X-API-Key header.
+   * Health endpoints (/health/*) are always public.
+   */
+  keys: Config.option(Config.redacted("KEYS")),
+  /**
+   * Whether to require authentication for API endpoints.
+   * Defaults to false for backwards compatibility.
+   */
+  requireAuth: Config.boolean("REQUIRE_AUTH").pipe(Config.withDefault(false))
 }))
 
 const RdfConfig = Config.nested("RDF")(Config.all({
@@ -102,6 +132,7 @@ export interface AppConfig {
   readonly embedding: Config.Config.Success<typeof EmbeddingConfig>
   readonly extraction: Config.Config.Success<typeof ExtractionConfig>
   readonly rdf: Config.Config.Success<typeof RdfConfig>
+  readonly api: Config.Config.Success<typeof ApiConfig>
 }
 
 export const DEFAULT_CONFIG: AppConfig = {
@@ -121,6 +152,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   },
   ontology: {
     path: "ontology.ttl",
+    externalVocabsPath: "ontologies/external/merged-external.ttl",
+    registryPath: Option.none(),
     cacheTtlSeconds: 3600,
     strictValidation: false
   },
@@ -143,7 +176,8 @@ export const DEFAULT_CONFIG: AppConfig = {
     transformersModelId: "Xenova/nomic-embed-text-v1"
   },
   extraction: {
-    runsDir: "./output/runs"
+    runsDir: "./output/runs",
+    strictPersistence: true
   },
   rdf: {
     baseNamespace: "http://example.org/kg/",
@@ -155,6 +189,10 @@ export const DEFAULT_CONFIG: AppConfig = {
       "owl": "http://www.w3.org/2002/07/owl#",
       "xsd": "http://www.w3.org/2001/XMLSchema#"
     }
+  },
+  api: {
+    keys: Option.none(),
+    requireAuth: false
   }
 }
 
@@ -163,7 +201,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 // =============================================================================
 
 const makeConfigService = Effect.gen(function*() {
-  const [llm, storage, ontology, runtime, grounder, embedding, extraction, rdf] = yield* Effect.all([
+  const [llm, storage, ontology, runtime, grounder, embedding, extraction, rdf, api] = yield* Effect.all([
     LlmConfig,
     StorageConfig,
     OntologyConfig,
@@ -171,7 +209,8 @@ const makeConfigService = Effect.gen(function*() {
     GrounderConfig,
     EmbeddingConfig,
     ExtractionConfig,
-    RdfConfig
+    RdfConfig,
+    ApiConfig
   ])
 
   return {
@@ -182,7 +221,8 @@ const makeConfigService = Effect.gen(function*() {
     grounder,
     embedding,
     extraction,
-    rdf
+    rdf,
+    api
   } satisfies AppConfig
 })
 

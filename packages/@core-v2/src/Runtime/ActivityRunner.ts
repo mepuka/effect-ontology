@@ -22,18 +22,15 @@ import {
 } from "../Domain/Schema/Batch.js"
 import { ConfigServiceDefault } from "../Service/Config.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
+import { StageTimeoutServiceLive } from "../Service/LlmControl/StageTimeout.js"
 import { NlpService } from "../Service/Nlp.js"
 import { OntologyService } from "../Service/Ontology.js"
 import { RdfBuilder } from "../Service/Rdf.js"
-import { StageTimeoutServiceLive } from "../Service/LlmControl/StageTimeout.js"
 import { ShaclService } from "../Service/Shacl.js"
 import { StorageServiceLive } from "../Service/Storage.js"
-import {
-  makeExtractionActivity,
-  makeIngestionActivity,
-  makeResolutionActivity,
-  makeValidationActivity
-} from "../Workflow/Activities.js"
+import { makeIngestionActivity, makeResolutionActivity, makeValidationActivity } from "../Workflow/Activities.js"
+import { ExtractionWorkflowLive } from "../Workflow/StreamingExtraction.js"
+import { makeStreamingExtractionActivity } from "../Workflow/StreamingExtractionActivity.js"
 import { makeLanguageModelLayer } from "./ProductionRuntime.js"
 
 // -----------------------------------------------------------------------------
@@ -71,8 +68,9 @@ const dispatchActivity = (name: ActivityName, payloadJson: string) =>
     Match.when("extraction", () =>
       Effect.gen(function*() {
         const payload = yield* Schema.decodeUnknown(ExtractionActivityInput)(JSON.parse(payloadJson))
-        // ExtractionActivityInput has: batchId, documentId, sourceUri, ontologyUri
-        const activity = makeExtractionActivity(payload)
+        // ExtractionActivityInput has: batchId, documentId, sourceUri, ontologyUri, targetNamespace
+        // Use unified 6-phase streaming extraction activity
+        const activity = makeStreamingExtractionActivity(payload)
         return yield* activity.execute
       })),
     Match.when("resolution", () =>
@@ -168,7 +166,8 @@ const ActivityRunnerLive = Layer.mergeAll(
   RelationExtractor.Default,
   OntologyService.Default,
   NlpService.Default,
-  StageTimeoutServiceLive
+  StageTimeoutServiceLive,
+  ExtractionWorkflowLive // For unified streaming extraction activity
 ).pipe(
   Layer.provideMerge(makeLanguageModelLayer),
   Layer.provideMerge(ConfigServiceDefault),
@@ -185,7 +184,8 @@ const ActivityRunnerLive = Layer.mergeAll(
   | import("../Service/LlmControl/StageTimeout.js").StageTimeoutService
   | import("@effect/ai").LanguageModel.LanguageModel
   | import("../Service/Config.js").ConfigService
-  | import("../Service/Shacl.js").ShaclService,
+  | import("../Service/Shacl.js").ShaclService
+  | import("../Service/ExtractionWorkflow.js").ExtractionWorkflow,
   // Error type (E)
   never,
   // Requirements (RIn) - none, all satisfied

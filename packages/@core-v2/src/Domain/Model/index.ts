@@ -5,10 +5,10 @@
  * @module Domain/Model
  */
 
-export * from "./shared.js"
 export * from "./Agent.js"
+export * from "./BatchWorkflow.js"
 export * from "./Entity.js"
 export * from "./EntityResolution.js"
 export * from "./Ontology.js"
-export * from "./BatchWorkflow.js"
 export * from "./OntologyAgent.js"
+export * from "./shared.js"

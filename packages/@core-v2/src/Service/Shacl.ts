@@ -10,8 +10,9 @@
 
 import { Context, DateTime, Effect, Layer, Option, Ref, Schema } from "effect"
 import * as N3 from "n3"
-// @ts-expect-error shacl-engine types are incorrect - uses named export not default
 import { Validator as ShaclValidator } from "shacl-engine"
+// @ts-expect-error - shacl-engine/sparql.js has no type declarations
+import { validations as sparqlValidations } from "shacl-engine/sparql.js"
 import {
   ShaclValidationError,
   ShapesLoadError,
@@ -28,6 +29,41 @@ const mapSeverity = (severity: { value?: string } | undefined): "Violation" | "W
   if (severity.value.endsWith("Violation")) return "Violation"
   if (severity.value.endsWith("Warning")) return "Warning"
   return "Info"
+}
+
+/**
+ * Extract a string message from SHACL validation result message.
+ * Messages can be:
+ * - A string directly
+ * - An array of strings
+ * - An array of RDF literal objects with .value property
+ * - An RDF literal object with .value property
+ */
+const extractMessage = (message: unknown): string => {
+  if (!message) return "Constraint violation"
+
+  // Handle string directly
+  if (typeof message === "string") return message
+
+  // Handle array
+  if (Array.isArray(message)) {
+    const firstMsg = message[0]
+    if (!firstMsg) return "Constraint violation"
+    // Array element could be string or object with .value
+    if (typeof firstMsg === "string") return firstMsg
+    if (typeof firstMsg === "object" && firstMsg !== null && "value" in firstMsg) {
+      return String((firstMsg as { value: unknown }).value)
+    }
+    return String(firstMsg)
+  }
+
+  // Handle object with .value property (RDF literal)
+  if (typeof message === "object" && message !== null && "value" in message) {
+    return String((message as { value: unknown }).value)
+  }
+
+  // Fallback
+  return String(message)
 }
 
 const stripGsPrefix = (uri: string): string => uri.startsWith("gs://") ? uri.replace(/^gs:\/\/[^/]+\//, "") : uri
@@ -322,7 +358,9 @@ export class ShaclService extends Context.Tag("@core-v2/ShaclService")<
                 new ShaclValidator(shapesStore, {
                   factory: N3.DataFactory,
                   debug: false,
-                  coverage: false
+                  coverage: false,
+                  // Enable SPARQL-based constraints (sh:sparql)
+                  validations: sparqlValidations
                 }),
               catch: (cause) =>
                 new ShaclValidationError({
@@ -348,7 +386,7 @@ export class ShaclService extends Context.Tag("@core-v2/ShaclService")<
                 focusNode: result.focusNode?.value ?? "unknown",
                 path: result.path?.value,
                 value: result.value?.value,
-                message: Array.isArray(result.message) ? result.message[0] : (result.message ?? "Constraint violation"),
+                message: extractMessage(result.message),
                 severity: mapSeverity(result.severity),
                 sourceShape: result.sourceShape?.value
               })) ?? [],
@@ -627,7 +665,9 @@ export class ShaclService extends Context.Tag("@core-v2/ShaclService")<
                 new ShaclValidator(shapesStore, {
                   factory: N3.DataFactory,
                   debug: false,
-                  coverage: false
+                  coverage: false,
+                  // Enable SPARQL-based constraints (sh:sparql)
+                  validations: sparqlValidations
                 }),
               catch: (cause) =>
                 new ShaclValidationError({
@@ -654,7 +694,7 @@ export class ShaclService extends Context.Tag("@core-v2/ShaclService")<
               focusNode: result.focusNode?.value ?? "unknown",
               path: result.path?.value,
               value: result.value?.value,
-              message: Array.isArray(result.message) ? result.message[0] : (result.message ?? "Constraint violation"),
+              message: extractMessage(result.message),
               severity: mapSeverity(result.severity),
               sourceShape: result.sourceShape?.value
             })) ?? []

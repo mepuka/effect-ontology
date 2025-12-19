@@ -157,12 +157,14 @@ export class SparqlGenerator extends Effect.Service<SparqlGenerator>()("SparqlGe
           const schemaContext = formatSchemaContext(ontology)
 
           // Build prefix declarations
-          const prefixDeclarations = formatPrefixes(prefixes ?? {
-            "": config.rdf.baseNamespace,
-            "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-            "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
-            "xsd": "http://www.w3.org/2001/XMLSchema#"
-          })
+          const prefixDeclarations = formatPrefixes(
+            prefixes ?? {
+              "": config.rdf.baseNamespace,
+              "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+              "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+              "xsd": "http://www.w3.org/2001/XMLSchema#"
+            }
+          )
 
           // Build the prompt
           const prompt = buildGenerationPrompt(question, schemaContext, prefixDeclarations)

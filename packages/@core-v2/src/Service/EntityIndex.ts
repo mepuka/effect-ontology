@@ -8,10 +8,11 @@
  * @module Service/EntityIndex
  */
 
-import { Effect, HashMap, HashSet, Layer, Option, Order, Ref } from "effect"
+import type { Layer } from "effect"
+import { Effect, HashMap, HashSet, Option, Order, Ref } from "effect"
 import type { Entity, KnowledgeGraph } from "../Domain/Model/Entity.js"
-import type { Embedding } from "./EmbeddingCache.js"
 import { EmbeddingService, EmbeddingServiceDefault } from "./Embedding.js"
+import type { Embedding } from "./EmbeddingCache.js"
 import type { NomicNlpError } from "./NomicNlp.js"
 
 /**
@@ -333,8 +334,7 @@ export class EntityIndex extends Effect.Service<EntityIndex>()("@core-v2/EntityI
 
       clear: () => Ref.set(stateRef, emptyState),
 
-      size: () =>
-        Ref.get(stateRef).pipe(Effect.map((state) => HashMap.size(state.entities)))
+      size: () => Ref.get(stateRef).pipe(Effect.map((state) => HashMap.size(state.entities)))
     }
 
     return service

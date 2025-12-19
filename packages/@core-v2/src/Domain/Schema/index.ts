@@ -4,20 +4,21 @@ export * from "./BatchRequest.js"
 export * from "./BatchStatusResponse.js"
 export * from "./DocumentMetadata.js"
 export * from "./KnowledgeModel.js"
+export * from "./OntologyRegistry.js"
 // Note: Timeline.ts re-exports ClaimRank from KnowledgeModel, use explicit exports to avoid conflict
+export * from "./Search.js"
 export {
   ArticleSummary,
+  ClaimConflict,
   ClaimWithRank,
+  ConflictsQuery,
+  ConflictsResponse,
+  CorrectionHistoryQuery,
+  CorrectionHistoryResponse,
   CorrectionSummary,
-  TimelineEntityQuery,
-  TimelineEntityResponse,
+  CorrectionWithClaims,
   TimelineClaimsQuery,
   TimelineClaimsResponse,
-  CorrectionHistoryQuery,
-  CorrectionWithClaims,
-  CorrectionHistoryResponse,
-  ConflictsQuery,
-  ClaimConflict,
-  ConflictsResponse
+  TimelineEntityQuery,
+  TimelineEntityResponse
 } from "./Timeline.js"
-export * from "./Search.js"

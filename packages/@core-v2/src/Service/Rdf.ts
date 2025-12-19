@@ -8,7 +8,7 @@
  * @module Service/Rdf
  */
 
-import { Chunk, Effect, type Scope } from "effect"
+import { Chunk, Duration, Effect, type Scope } from "effect"
 import * as N3 from "n3"
 import { ParsingFailed, RdfError, SerializationFailed } from "../Domain/Error/Rdf.js"
 import type { Entity, Relation } from "../Domain/Model/Entity.js"
@@ -398,9 +398,11 @@ export class RdfBuilder extends Effect.Service<RdfBuilder>()(
               const quads = store._store.getQuads(null, null, null, null)
               store._store.removeQuads(quads)
             }).pipe(
-              Effect.tap(() => Effect.logDebug("RDF store cleared", {
-                finalQuadCount: store._store.size
-              }))
+              Effect.tap(() =>
+                Effect.logDebug("RDF store cleared", {
+                  finalQuadCount: store._store.size
+                })
+              )
             )
         ),
 
@@ -535,7 +537,15 @@ export class RdfBuilder extends Effect.Service<RdfBuilder>()(
                 ? N3.DataFactory.namedNode(options.graphUri)
                 : undefined
               // Use targetNamespace from options if provided, otherwise fall back to config
-              const namespace = options?.targetNamespace ?? baseNs
+              // Convert Namespace identifier to full IRI if targetNamespace is provided
+              const namespace = options?.targetNamespace
+                ? (() => {
+                  // Extract protocol://domain/ from baseNs
+                  const match = baseNs.match(/^https?:\/\/[^/]+\//)
+                  const baseDomain = match ? match[0] : "http://example.org/"
+                  return `${baseDomain}${options.targetNamespace}/`
+                })()
+                : baseNs
 
               for (const entity of entities) {
                 // Use pure util function for transformation
@@ -581,7 +591,15 @@ export class RdfBuilder extends Effect.Service<RdfBuilder>()(
                 ? N3.DataFactory.namedNode(options.graphUri)
                 : undefined
               // Use targetNamespace from options if provided, otherwise fall back to config
-              const namespace = options?.targetNamespace ?? baseNs
+              // Convert Namespace identifier to full IRI if targetNamespace is provided
+              const namespace = options?.targetNamespace
+                ? (() => {
+                  // Extract protocol://domain/ from baseNs
+                  const match = baseNs.match(/^https?:\/\/[^/]+\//)
+                  const baseDomain = match ? match[0] : "http://example.org/"
+                  return `${baseDomain}${options.targetNamespace}/`
+                })()
+                : baseNs
 
               for (const rel of relations) {
                 // Use pure util function for transformation
@@ -766,12 +784,13 @@ export class RdfBuilder extends Effect.Service<RdfBuilder>()(
 
               // Create object node (IRI or literal)
               const objectNode = typeof triple.object === "string"
-                ? (triple.object.startsWith("http://") || triple.object.startsWith("https://") || triple.object.startsWith("urn:"))
+                ? (triple.object.startsWith("http://") || triple.object.startsWith("https://") ||
+                    triple.object.startsWith("urn:"))
                   ? N3.DataFactory.namedNode(triple.object)
                   : N3.DataFactory.literal(triple.object)
                 : typeof triple.object === "number"
-                  ? N3.DataFactory.literal(triple.object.toString(), N3.DataFactory.namedNode(XSD.double))
-                  : N3.DataFactory.literal(triple.object.toString(), N3.DataFactory.namedNode(XSD.boolean))
+                ? N3.DataFactory.literal(triple.object.toString(), N3.DataFactory.namedNode(XSD.double))
+                : N3.DataFactory.literal(triple.object.toString(), N3.DataFactory.namedNode(XSD.boolean))
 
               // Create the original quad (triple)
               const originalQuad = N3.DataFactory.quad(
@@ -835,7 +854,16 @@ export class RdfBuilder extends Effect.Service<RdfBuilder>()(
                 resume(Effect.succeed(result))
               }
             })
-          }),
+          }).pipe(
+            Effect.timeoutFail({
+              duration: Duration.seconds(30),
+              onTimeout: () =>
+                new SerializationFailed({
+                  message: "Turtle serialization timed out after 30 seconds",
+                  format: "Turtle"
+                })
+            })
+          ),
 
         /**
          * Serialize store to TriG format with named graphs
@@ -870,7 +898,16 @@ export class RdfBuilder extends Effect.Service<RdfBuilder>()(
                 resume(Effect.succeed(result))
               }
             })
-          }),
+          }).pipe(
+            Effect.timeoutFail({
+              duration: Duration.seconds(30),
+              onTimeout: () =>
+                new SerializationFailed({
+                  message: "TriG serialization timed out after 30 seconds",
+                  format: "TriG"
+                })
+            })
+          ),
 
         /**
          * Get all named graphs in the store

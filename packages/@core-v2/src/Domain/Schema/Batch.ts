@@ -18,6 +18,17 @@ export const ManifestDocument = Schema.Struct({
   sizeBytes: Schema.Number
 })
 
+/**
+ * Validation policy for controlling workflow behavior based on severity
+ */
+export const ValidationPolicy = Schema.Struct({
+  /** Fail if any Violation-level results are present (default: true) */
+  failOnViolation: Schema.optional(Schema.Boolean),
+  /** Fail if any Warning-level results are present (default: false) */
+  failOnWarning: Schema.optional(Schema.Boolean)
+})
+export type ValidationPolicy = typeof ValidationPolicy.Type
+
 export const BatchManifest = Schema.Struct({
   batchId: BatchId,
   ontologyUri: GcsUri,
@@ -25,7 +36,17 @@ export const BatchManifest = Schema.Struct({
   shaclUri: Schema.optional(GcsUri),
   targetNamespace: Namespace,
   documents: Schema.Array(ManifestDocument),
-  createdAt: Schema.DateTimeUtc
+  createdAt: Schema.DateTimeUtc,
+  /**
+   * Validation policy for controlling failure behavior based on severity.
+   *
+   * - failOnViolation: true (default) - Fail workflow if any Violation-level results found
+   * - failOnWarning: false (default) - Do not fail on Warning-level results
+   *
+   * Set failOnViolation: false to allow ingestion of graphs with violations
+   * (useful for development/debugging or when violations are acceptable).
+   */
+  validationPolicy: Schema.optional(ValidationPolicy)
 })
 export type BatchManifest = typeof BatchManifest.Type
 
@@ -37,24 +58,39 @@ export const ExtractionActivityInput = Schema.Struct({
   /** Target namespace for entity IRI minting (from batch manifest) */
   targetNamespace: Namespace,
   /** Pre-computed ontology embeddings URI (optional, speeds up semantic search) */
-  ontologyEmbeddingsUri: Schema.optional(GcsUri)
+  ontologyEmbeddingsUri: Schema.optional(GcsUri),
+
+  // === Document metadata for provenance ===
+  /**
+   * When the real-world event described in the document occurred
+   *
+   * Inherited from DocumentMetadata.eventTime. Used to set Entity.eventTime.
+   */
+  eventTime: Schema.optional(Schema.DateTimeUtc),
+  /**
+   * When the source document was published
+   *
+   * Inherited from DocumentMetadata.publishedAt. Used for temporal queries.
+   */
+  publishedAt: Schema.optional(Schema.DateTimeUtc),
+  /**
+   * Document title (extracted or inferred)
+   *
+   * Useful for context in extraction prompts.
+   */
+  title: Schema.optional(Schema.String),
+  /**
+   * Document language (ISO 639-1)
+   *
+   * Helps with language-specific extraction.
+   */
+  language: Schema.optional(Schema.String)
 })
 
 export const ResolutionActivityInput = Schema.Struct({
   batchId: BatchId,
   documentGraphUris: Schema.Array(GcsUri)
 })
-
-/**
- * Validation policy for controlling workflow behavior based on severity
- */
-export const ValidationPolicy = Schema.Struct({
-  /** Fail if any Violation-level results are present (default: true) */
-  failOnViolation: Schema.optional(Schema.Boolean),
-  /** Fail if any Warning-level results are present (default: false) */
-  failOnWarning: Schema.optional(Schema.Boolean)
-})
-export type ValidationPolicy = typeof ValidationPolicy.Type
 
 export const ValidationActivityInput = Schema.Struct({
   batchId: BatchId,

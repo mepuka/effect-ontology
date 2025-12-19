@@ -316,9 +316,11 @@ export const makeEntitySchema = (
     attributes: S.optional(AttributesSchema).annotations({
       description: `Entity attributes - use allowed property names${propList}`
     }),
-    mentions: S.optional(S.Array(EvidenceSpan).pipe(
-      S.minItems(1)
-    )).annotations({
+    mentions: S.optional(
+      S.Array(EvidenceSpan).pipe(
+        S.minItems(1)
+      )
+    ).annotations({
       description: "Text spans where this entity appears in source (include startChar/endChar offsets)"
     })
   }).annotations({

@@ -30,5 +30,4 @@ import { ENTITY_ID_PATTERN } from "../Domain/Model/shared.js"
  * @since 2.0.0
  * @category Entity
  */
-export const isEntityReference = (value: string): boolean =>
-  ENTITY_ID_PATTERN.test(value)
+export const isEntityReference = (value: string): boolean => ENTITY_ID_PATTERN.test(value)

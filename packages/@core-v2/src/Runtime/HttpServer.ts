@@ -3,45 +3,53 @@ import { HttpRouter, HttpServer, HttpServerRequest, HttpServerResponse } from "@
 import { Cause, DateTime, Deferred, Duration, Effect, Layer, Option, Schedule, Schema, Stream } from "effect"
 import { type ParseError, TreeFormatter } from "effect/ParseResult"
 import { WorkflowNotFoundError, WorkflowSuspendedError } from "../Domain/Error/Workflow.js"
-import type { DocumentId } from "../Domain/Identity.js"
-import { BatchId, documentIdFromHash, GcsUri, toGcsUri } from "../Domain/Identity.js"
-import { embeddingsPathFromOntology } from "../Domain/Model/OntologyEmbeddings.js"
+import type { DocumentId, GcsUri } from "../Domain/Identity.js"
+import { BatchId, documentIdFromHash, toGcsUri } from "../Domain/Identity.js"
 import { BatchState } from "../Domain/Model/BatchWorkflow.js"
+import { embeddingsPathFromOntology } from "../Domain/Model/OntologyEmbeddings.js"
 import { PathLayout } from "../Domain/PathLayout.js"
 import type { BatchWorkflowPayload } from "../Domain/Schema/Batch.js"
 import { BatchManifest } from "../Domain/Schema/Batch.js"
 import { BatchRequest, type PreprocessingOptions } from "../Domain/Schema/BatchRequest.js"
 import { BatchStatusResponse } from "../Domain/Schema/BatchStatusResponse.js"
+import type { OntologySummary } from "../Domain/Schema/OntologyBrowser.js"
 import {
-  TimelineEntityQuery,
-  TimelineEntityResponse,
-  TimelineClaimsQuery,
-  TimelineClaimsResponse,
-  ClaimWithRank,
-  ArticleSummary,
-  CorrectionSummary,
-  ConflictsQuery,
-  ConflictsResponse
-} from "../Domain/Schema/Timeline.js"
+  OntologyClassesResponse,
+  OntologyDetailResponse,
+  OntologyListResponse,
+  OntologyPropertiesResponse
+} from "../Domain/Schema/OntologyBrowser.js"
+import type { ArticleSearchResult } from "../Domain/Schema/Search.js"
 import {
+  ArticleSearchRequest,
+  ArticleSearchResponse,
   ClaimSearchRequest,
   ClaimSearchResponse,
   EntitySearchRequest,
   EntitySearchResponse,
   SuggestionQuery,
-  SuggestionsResponse,
-  ArticleSearchRequest,
-  ArticleSearchResponse,
-  ArticleSearchResult
+  SuggestionsResponse
 } from "../Domain/Schema/Search.js"
-import { ClaimRepository } from "../Repository/Claim.js"
+import type { ClaimWithRank, CorrectionSummary } from "../Domain/Schema/Timeline.js"
+import {
+  ArticleSummary,
+  ConflictsQuery,
+  ConflictsResponse,
+  TimelineClaimsQuery,
+  TimelineClaimsResponse,
+  TimelineEntityQuery,
+  TimelineEntityResponse
+} from "../Domain/Schema/Timeline.js"
 import { ArticleRepository } from "../Repository/Article.js"
+import { ClaimRepository } from "../Repository/Claim.js"
 import { getBatchStateFromStore } from "../Service/BatchState.js"
 import { ConfigService } from "../Service/Config.js"
+import { OntologyService } from "../Service/Ontology.js"
 import { StorageService } from "../Service/Storage.js"
+import { extractLocalNameFromIri } from "../Utils/Iri.js"
 import { pollToBatchState, WorkflowOrchestrator } from "../Service/WorkflowOrchestrator.js"
 import { HealthCheckService } from "./HealthCheck.js"
-import { makeShutdownMiddleware } from "./HttpMiddleware.js"
+import { makeAuthMiddleware, makeShutdownMiddleware } from "./HttpMiddleware.js"
 
 type BatchWorkflowPayloadType = typeof BatchWorkflowPayload.Type
 
@@ -91,7 +99,7 @@ const streamBatchState = (executionId: string, abort: Deferred.Deferred<void>) =
     ),
     Schedule.spaced("500 millis")
   ).pipe(
-    Stream.mapConcat((opt) => opt._tag === "Some" ? [opt.value] : []),
+    Stream.mapConcat((opt) => Option.isSome(opt) ? [opt.value] : []),
     Stream.tap((state) =>
       isTerminalState(state)
         ? Deferred.succeed(abort, void 0)
@@ -304,15 +312,14 @@ export const TimelineRouter = HttpRouter.empty.pipe(
             return Option.none<typeof ClaimWithRank.Type>()
           }
           return Option.some(claimRowToClaimWithRank(claim, articleOpt.value))
-        })
-      )
+        }))
 
       const validClaims = claimsWithArticles
         .filter(Option.isSome)
         .map((opt) => opt.value)
 
       // Get corrections (simplified - would need correction repository)
-      const correctionsList: typeof CorrectionSummary.Type[] = []
+      const correctionsList: Array<typeof CorrectionSummary.Type> = []
 
       return yield* HttpServerResponse.schemaJson(TimelineEntityResponse)({
         iri: decodedIri,
@@ -322,7 +329,6 @@ export const TimelineRouter = HttpRouter.empty.pipe(
       })
     })
   ),
-
   // GET /v1/timeline/claims - Search claims with filters
   HttpRouter.get(
     "/v1/timeline/claims",
@@ -361,8 +367,7 @@ export const TimelineRouter = HttpRouter.empty.pipe(
             return Option.none<typeof ClaimWithRank.Type>()
           }
           return Option.some(claimRowToClaimWithRank(claim, articleOpt.value))
-        })
-      )
+        }))
 
       const validClaims = claimsWithArticles
         .filter(Option.isSome)
@@ -384,7 +389,6 @@ export const TimelineRouter = HttpRouter.empty.pipe(
       })
     })
   ),
-
   // GET /v1/timeline/conflicts - Get pending conflicts
   HttpRouter.get(
     "/v1/timeline/conflicts",
@@ -438,9 +442,7 @@ export const SearchRouter = HttpRouter.empty.pipe(
 
               // Filter by query text (case-insensitive match)
               const queryLower = request.query.toLowerCase()
-              const filteredClaims = claims.filter((c) =>
-                c.objectValue.toLowerCase().includes(queryLower)
-              )
+              const filteredClaims = claims.filter((c) => c.objectValue.toLowerCase().includes(queryLower))
 
               // Apply pagination
               const paginatedClaims = filteredClaims.slice(offset, offset + limit)
@@ -454,8 +456,7 @@ export const SearchRouter = HttpRouter.empty.pipe(
                     return Option.none<typeof ClaimWithRank.Type>()
                   }
                   return Option.some(claimRowToClaimWithRank(claim, articleOpt.value))
-                })
-              )
+                }))
 
               const validClaims = claimsWithArticles
                 .filter(Option.isSome)
@@ -474,7 +475,6 @@ export const SearchRouter = HttpRouter.empty.pipe(
       )
     })
   ),
-
   // POST /v1/search/entities - Search entities by label
   HttpRouter.post(
     "/v1/search/entities",
@@ -539,7 +539,6 @@ export const SearchRouter = HttpRouter.empty.pipe(
       )
     })
   ),
-
   // GET /v1/search/suggestions - Typeahead suggestions
   HttpRouter.get(
     "/v1/search/suggestions",
@@ -592,7 +591,6 @@ export const SearchRouter = HttpRouter.empty.pipe(
       })
     })
   ),
-
   // POST /v1/search/articles - Search articles
   HttpRouter.post(
     "/v1/search/articles",
@@ -615,8 +613,12 @@ export const SearchRouter = HttpRouter.empty.pipe(
               // Get articles with filters
               const articles = yield* articleRepo.getArticles({
                 sourceName: request.sources?.[0], // Simplified: only first source
-                publishedAfter: request.dateRange?.from ? new Date(DateTime.toEpochMillis(request.dateRange.from)) : undefined,
-                publishedBefore: request.dateRange?.to ? new Date(DateTime.toEpochMillis(request.dateRange.to)) : undefined,
+                publishedAfter: request.dateRange?.from
+                  ? new Date(DateTime.toEpochMillis(request.dateRange.from))
+                  : undefined,
+                publishedBefore: request.dateRange?.to
+                  ? new Date(DateTime.toEpochMillis(request.dateRange.to))
+                  : undefined,
                 limit: limit + 1,
                 offset
               })
@@ -650,8 +652,7 @@ export const SearchRouter = HttpRouter.empty.pipe(
                     claimCount: claims.length,
                     conflictCount: 0 // Would need ConflictRepository
                   } satisfies typeof ArticleSearchResult.Type
-                })
-              )
+                }))
 
               const total = yield* articleRepo.countArticles({
                 sourceName: request.sources?.[0]
@@ -844,17 +845,375 @@ export const ExtractionRouter = HttpRouter.empty.pipe(
 )
 
 // =============================================================================
+// Ontology Router
+// =============================================================================
+
+// Hardcoded ontology metadata for MVP
+// In production, this would be loaded from OntologyRegistry
+const SEATTLE_ONTOLOGY: typeof OntologyDetailResponse.Type = {
+  id: "seattle",
+  iri: "http://effect-ontology.dev/seattle",
+  title: "Seattle Mayor Administration Ontology",
+  description:
+    "Production ontology for tracking Seattle city government staffing, policy, and council decisions. Extends W3C standard vocabularies for persons, organizations, and provenance.",
+  version: "1.0.0",
+  creator: "Effect Ontology Project",
+  created: "2025-12-18",
+  targetNamespace: "http://effect-ontology.dev/seattle/",
+  imports: [
+    {
+      iri: "http://xmlns.com/foaf/0.1/",
+      prefix: "foaf",
+      name: "FOAF",
+      publisher: "FOAF Project",
+      specUrl: "http://xmlns.com/foaf/spec/"
+    },
+    {
+      iri: "http://www.w3.org/ns/org#",
+      prefix: "org",
+      name: "W3C Organization Ontology",
+      publisher: "W3C",
+      specUrl: "https://www.w3.org/TR/vocab-org/"
+    },
+    {
+      iri: "http://www.w3.org/2006/time#",
+      prefix: "time",
+      name: "OWL-Time",
+      publisher: "W3C",
+      specUrl: "https://www.w3.org/TR/owl-time/"
+    },
+    {
+      iri: "http://www.w3.org/ns/prov#",
+      prefix: "prov",
+      name: "PROV-O",
+      publisher: "W3C",
+      specUrl: "https://www.w3.org/TR/prov-o/"
+    },
+    {
+      iri: "http://www.w3.org/ns/oa#",
+      prefix: "oa",
+      name: "Web Annotation",
+      publisher: "W3C",
+      specUrl: "https://www.w3.org/TR/annotation-model/"
+    },
+    {
+      iri: "http://www.w3.org/2004/02/skos/core#",
+      prefix: "skos",
+      name: "SKOS",
+      publisher: "W3C",
+      specUrl: "https://www.w3.org/TR/skos-reference/"
+    }
+  ],
+  classes: [
+    {
+      iri: "http://effect-ontology.dev/seattle/BoardOrCommission",
+      localName: "BoardOrCommission",
+      label: "Board or Commission",
+      comment: "A board, commission, task force, or advisory body within city government.",
+      superClass: "http://www.w3.org/ns/org#Organization"
+    },
+    {
+      iri: "http://effect-ontology.dev/seattle/LeadershipPost",
+      localName: "LeadershipPost",
+      label: "Leadership Post",
+      comment: "A department head or leadership position.",
+      superClass: "http://www.w3.org/ns/org#Post"
+    },
+    {
+      iri: "http://effect-ontology.dev/seattle/StaffAnnouncementEvent",
+      localName: "StaffAnnouncementEvent",
+      label: "Staff Announcement",
+      comment: "An official announcement of staff role changes, appointments, or departures.",
+      superClass: "http://www.w3.org/ns/prov#Activity"
+    },
+    {
+      iri: "http://effect-ontology.dev/seattle/PolicyInitiativeEvent",
+      localName: "PolicyInitiativeEvent",
+      label: "Policy Initiative",
+      comment: "An announcement of a policy initiative, program, or strategic priority.",
+      superClass: "http://www.w3.org/ns/prov#Activity"
+    },
+    {
+      iri: "http://effect-ontology.dev/seattle/BudgetActionEvent",
+      localName: "BudgetActionEvent",
+      label: "Budget Action",
+      comment: "A budget allocation, cut, or reallocation action.",
+      superClass: "http://www.w3.org/ns/prov#Activity"
+    },
+    {
+      iri: "http://effect-ontology.dev/seattle/CouncilVoteEvent",
+      localName: "CouncilVoteEvent",
+      label: "Council Vote",
+      comment: "A city council vote on legislation, budget, or appointments.",
+      superClass: "http://www.w3.org/ns/prov#Activity"
+    }
+  ],
+  properties: [],
+  seeAlso: ["https://www.w3.org/TR/vocab-org/", "https://www.popoloproject.com/specs/"]
+}
+
+const CLAIMS_ONTOLOGY: typeof OntologyDetailResponse.Type = {
+  id: "claims",
+  iri: "http://effect-ontology.dev/claims",
+  title: "Claims Vocabulary",
+  description:
+    "Base vocabulary for news-domain claims with provenance, evidence, and conflict-friendly modeling. Extends W3C Annotation and PROV-O.",
+  version: "1.0.0",
+  creator: "Effect Ontology Project",
+  created: "2025-12-18",
+  targetNamespace: "http://effect-ontology.dev/claims#",
+  imports: [
+    {
+      iri: "http://www.w3.org/ns/prov#",
+      prefix: "prov",
+      name: "PROV-O",
+      publisher: "W3C",
+      specUrl: "https://www.w3.org/TR/prov-o/"
+    },
+    {
+      iri: "http://www.w3.org/ns/oa#",
+      prefix: "oa",
+      name: "Web Annotation",
+      publisher: "W3C",
+      specUrl: "https://www.w3.org/TR/annotation-model/"
+    }
+  ],
+  classes: [
+    {
+      iri: "http://effect-ontology.dev/claims#Claim",
+      localName: "Claim",
+      label: "Claim",
+      comment: "A reified statement with provenance and evidence."
+    },
+    {
+      iri: "http://effect-ontology.dev/claims#Evidence",
+      localName: "Evidence",
+      label: "Evidence",
+      comment: "Text span evidence for a claim."
+    },
+    {
+      iri: "http://effect-ontology.dev/claims#Correction",
+      localName: "Correction",
+      label: "Correction",
+      comment: "A correction that supersedes a previous claim."
+    }
+  ],
+  properties: [
+    {
+      iri: "http://effect-ontology.dev/claims#subject",
+      localName: "subject",
+      label: "subject",
+      comment: "The subject of the claim.",
+      isObjectProperty: true
+    },
+    {
+      iri: "http://effect-ontology.dev/claims#predicate",
+      localName: "predicate",
+      label: "predicate",
+      comment: "The predicate of the claim.",
+      isObjectProperty: true
+    },
+    {
+      iri: "http://effect-ontology.dev/claims#object",
+      localName: "object",
+      label: "object",
+      comment: "The object of the claim.",
+      isObjectProperty: true
+    },
+    {
+      iri: "http://effect-ontology.dev/claims#rank",
+      localName: "rank",
+      label: "rank",
+      comment: "Claim rank: preferred, normal, or deprecated.",
+      isObjectProperty: false
+    },
+    {
+      iri: "http://effect-ontology.dev/claims#confidence",
+      localName: "confidence",
+      label: "confidence",
+      comment: "Extraction confidence score.",
+      isObjectProperty: false
+    }
+  ],
+  seeAlso: ["https://www.wikidata.org/wiki/Help:Ranking"]
+}
+
+const ONTOLOGIES: Record<string, typeof OntologyDetailResponse.Type> = {
+  seattle: SEATTLE_ONTOLOGY,
+  claims: CLAIMS_ONTOLOGY
+}
+
+export const OntologyRouter = HttpRouter.empty.pipe(
+  // GET /v1/ontologies - List available ontologies
+  HttpRouter.get(
+    "/v1/ontologies",
+    Effect.gen(function*() {
+      const summaries: Array<typeof OntologySummary.Type> = Object.values(ONTOLOGIES).map((ont) => ({
+        id: ont.id,
+        iri: ont.iri,
+        title: ont.title,
+        description: ont.description,
+        version: ont.version,
+        classCount: ont.classes.length,
+        propertyCount: ont.properties.length,
+        importCount: ont.imports.length
+      }))
+
+      return yield* HttpServerResponse.schemaJson(OntologyListResponse)({
+        ontologies: summaries
+      })
+    })
+  ),
+  // GET /v1/ontologies/:id - Get ontology details
+  HttpRouter.get(
+    "/v1/ontologies/:id",
+    Effect.gen(function*() {
+      const params = yield* HttpRouter.params
+      const id = params.id
+
+      if (!id) {
+        return yield* HttpServerResponse.json({
+          error: "INVALID_REQUEST",
+          message: "Ontology ID is required"
+        }, { status: 400 })
+      }
+
+      const ontology = ONTOLOGIES[id]
+      if (!ontology) {
+        return yield* HttpServerResponse.json({
+          error: "NOT_FOUND",
+          message: `Ontology "${id}" not found`
+        }, { status: 404 })
+      }
+
+      return yield* HttpServerResponse.schemaJson(OntologyDetailResponse)(ontology)
+    })
+  ),
+  // GET /v1/ontologies/:id/classes - Get classes from parsed ontology
+  // Uses OntologyService.resolveAndLoad which handles:
+  // 1. Registry lookup by ID/IRI (if registry configured)
+  // 2. Direct path loading (fallback)
+  HttpRouter.get(
+    "/v1/ontologies/:id/classes",
+    Effect.gen(function*() {
+      const params = yield* HttpRouter.params
+      const id = params.id
+
+      if (!id) {
+        return yield* HttpServerResponse.json({
+          error: "INVALID_REQUEST",
+          message: "Ontology ID is required"
+        }, { status: 400 })
+      }
+
+      // Check if it's a known ontology in our static metadata first
+      if (!ONTOLOGIES[id]) {
+        return yield* HttpServerResponse.json({
+          error: "NOT_FOUND",
+          message: `Ontology "${id}" not found`
+        }, { status: 404 })
+      }
+
+      // Use OntologyService.resolveAndLoad which handles:
+      // - Registry lookup by ID if ONTOLOGY_REGISTRY_PATH is configured
+      // - Direct path loading as fallback
+      const ontologyContext = yield* OntologyService.resolveAndLoad(id)
+
+      // Transform ClassDefinition to ClassSummary for API response
+      const classSummaries = ontologyContext.classes.map((cls) => ({
+        iri: cls.id,
+        localName: extractLocalNameFromIri(cls.id),
+        label: cls.label || undefined,
+        comment: cls.comment || undefined,
+        superClass: ontologyContext.hierarchy[cls.id]?.[0]
+      }))
+
+      return yield* HttpServerResponse.schemaJson(OntologyClassesResponse)({
+        ontologyId: id,
+        total: classSummaries.length,
+        classes: classSummaries
+      })
+    }).pipe(
+      Effect.catchAll((error) =>
+        Effect.gen(function*() {
+          yield* Effect.logError("Error loading ontology classes", { error })
+          return yield* HttpServerResponse.json({
+            error: "INTERNAL_ERROR",
+            message: "Failed to load ontology classes"
+          }, { status: 500 })
+        })
+      )
+    )
+  ),
+  // GET /v1/ontologies/:id/properties - Get properties from parsed ontology
+  HttpRouter.get(
+    "/v1/ontologies/:id/properties",
+    Effect.gen(function*() {
+      const params = yield* HttpRouter.params
+      const id = params.id
+
+      if (!id) {
+        return yield* HttpServerResponse.json({
+          error: "INVALID_REQUEST",
+          message: "Ontology ID is required"
+        }, { status: 400 })
+      }
+
+      // Check if it's a known ontology in our static metadata first
+      if (!ONTOLOGIES[id]) {
+        return yield* HttpServerResponse.json({
+          error: "NOT_FOUND",
+          message: `Ontology "${id}" not found`
+        }, { status: 404 })
+      }
+
+      // Use OntologyService.resolveAndLoad which handles registry lookup
+      const ontologyContext = yield* OntologyService.resolveAndLoad(id)
+
+      // Transform PropertyDefinition to PropertySummary for API response
+      const propertySummaries = ontologyContext.properties.map((prop) => ({
+        iri: prop.id,
+        localName: extractLocalNameFromIri(prop.id),
+        label: prop.label || undefined,
+        comment: prop.comment || undefined,
+        domain: prop.domain[0],
+        range: prop.range[0],
+        isObjectProperty: prop.rangeType === "object"
+      }))
+
+      return yield* HttpServerResponse.schemaJson(OntologyPropertiesResponse)({
+        ontologyId: id,
+        total: propertySummaries.length,
+        properties: propertySummaries
+      })
+    }).pipe(
+      Effect.catchAll((error) =>
+        Effect.gen(function*() {
+          yield* Effect.logError("Error loading ontology properties", { error })
+          return yield* HttpServerResponse.json({
+            error: "INTERNAL_ERROR",
+            message: "Failed to load ontology properties"
+          }, { status: 500 })
+        })
+      )
+    )
+  )
+)
+
+// =============================================================================
 // Combined Router
 // =============================================================================
 
 export const ApiRouter = HttpRouter.empty.pipe(
   HttpRouter.concat(ExtractionRouter),
   HttpRouter.concat(TimelineRouter),
-  HttpRouter.concat(SearchRouter)
+  HttpRouter.concat(SearchRouter),
+  HttpRouter.concat(OntologyRouter)
 )
 
 export const HttpServerLive = Layer.unwrapEffect(
   Effect.gen(function*() {
+    const authMiddleware = yield* makeAuthMiddleware
     const shutdownMiddleware = yield* makeShutdownMiddleware
     return ApiRouter.pipe(
       HttpRouter.catchAllCause((cause) =>
@@ -889,6 +1248,7 @@ export const HttpServerLive = Layer.unwrapEffect(
           }, { status: 500 })
         })
       ),
+      authMiddleware,
       shutdownMiddleware,
       HttpServer.serve(),
       HttpServer.withLogAddress

@@ -9,7 +9,7 @@
  */
 
 import { Schema } from "effect"
-import { ClaimRank, ClaimWithRank, ArticleSummary } from "./Timeline.js"
+import { ArticleSummary, ClaimRank, ClaimWithRank } from "./Timeline.js"
 
 // =============================================================================
 // Claim Search

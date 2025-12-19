@@ -9,7 +9,7 @@
  * @module Service/Ontology
  */
 
-import { Chunk, Duration, Effect, Option, Schema } from "effect"
+import { Chunk, Duration, Effect, HashMap, Option, Ref } from "effect"
 import { OntologyFileNotFound, OntologyParsingFailed } from "../Domain/Error/Ontology.js"
 import type { RdfError } from "../Domain/Error/Rdf.js"
 import { ClassDefinition, OntologyContext, PropertyDefinition } from "../Domain/Model/Ontology.js"
@@ -41,10 +41,12 @@ import {
   SKOS_SCOPENOTE
 } from "../Domain/Rdf/Constants.js"
 import { type IRI, Literal, type Quad } from "../Domain/Rdf/Types.js"
+import type { OntologyEntry } from "../Domain/Schema/OntologyRegistry.js"
 import { extractLocalName } from "../Utils/Rdf.js"
 import { rrfFusion } from "../Utils/Retrieval.js"
 import { ConfigService } from "./Config.js"
 import { NlpService } from "./Nlp.js"
+import { OntologyRegistryService } from "./OntologyRegistry.js"
 import { RdfBuilder, type RdfStore } from "./Rdf.js"
 import { StorageService } from "./Storage.js"
 
@@ -267,7 +269,7 @@ export const parseOntologyFromStore = (
       if ((labels.get(id)?.[0] || prefLabels.get(id)?.[0])) {
         finalProperties.push(
           new PropertyDefinition({
-            id: id,  // PropertyDefinition.id is Schema.String, not IRI
+            id, // PropertyDefinition.id is Schema.String, not IRI
             label: labels.get(id)?.[0] || prefLabels.get(id)?.[0] || "",
             comment: comments.get(id)?.[0] || "",
             // domain/range expect string[] (full IRIs as strings)
@@ -327,12 +329,16 @@ export class OntologyService extends Effect.Service<OntologyService>()(
       const storage = yield* StorageService
       const rdf = yield* RdfBuilder
       const nlp = yield* NlpService
+      // Registry is optional - only available when ONTOLOGY.REGISTRY_PATH is configured
+      const registryOpt = yield* Effect.serviceOption(OntologyRegistryService)
 
       // Cache ontology with configurable TTL to allow refresh without restart
       const cacheTtl = Duration.seconds(config.ontology.cacheTtlSeconds)
       const getOntology = yield* Effect.cachedWithTTL(cacheTtl)(
         Effect.gen(function*() {
           const ontologyPath = config.ontology.path
+
+          // Load main ontology
           const contentOpt = yield* storage.get(ontologyPath).pipe(
             Effect.mapError(
               (error) =>
@@ -354,10 +360,52 @@ export class OntologyService extends Effect.Service<OntologyService>()(
           }
 
           const turtleContent = contentOpt.value
-          const store = yield* rdf.parseTurtle(turtleContent)
+          const mainStore = yield* rdf.parseTurtle(turtleContent)
+
+          // Load and merge external vocabularies (PROV-O, W3C ORG, etc.)
+          // Now always attempted since externalVocabsPath has a default
+          const externalPath = config.ontology.externalVocabsPath
+          {
+            const externalContentOpt = yield* storage.get(externalPath).pipe(
+              Effect.catchAll((error) =>
+                Effect.gen(function*() {
+                  yield* Effect.logWarning("Failed to load external vocabularies, continuing with main ontology only", {
+                    path: externalPath,
+                    error: String(error)
+                  })
+                  return Option.none<string>()
+                })
+              )
+            )
+
+            if (Option.isSome(externalContentOpt)) {
+              const externalStore = yield* rdf.parseTurtle(externalContentOpt.value).pipe(
+                Effect.catchAll((error) =>
+                  Effect.gen(function*() {
+                    yield* Effect.logWarning(
+                      "Failed to parse external vocabularies, continuing with main ontology only",
+                      {
+                        path: externalPath,
+                        error: String(error)
+                      }
+                    )
+                    return yield* rdf.createStore
+                  })
+                )
+              )
+
+              // Merge external vocabularies into main store
+              const mergedCount = yield* rdf.mergeStores(mainStore, externalStore)
+              yield* Effect.logInfo("Merged external vocabularies into ontology", {
+                externalPath,
+                newQuadsAdded: mergedCount
+              })
+            }
+          }
+
           return yield* parseOntologyFromStore(
             rdf,
-            store,
+            mainStore,
             ontologyPath
           )
         })
@@ -391,7 +439,671 @@ export class OntologyService extends Effect.Service<OntologyService>()(
         })
       )
 
+      // Per-URI ontology cache for multi-ontology support
+      // Each ontology is cached with timestamp for TTL-based expiration
+      type CachedOntology = {
+        readonly data: {
+          readonly classes: Chunk.Chunk<ClassDefinition>
+          readonly properties: Chunk.Chunk<PropertyDefinition>
+          readonly hierarchy: Record<string, Array<string>>
+          readonly propertyHierarchy: Record<string, Array<string>>
+        }
+        readonly loadedAt: number
+      }
+      const ontologyCacheRef = yield* Ref.make(HashMap.empty<string, CachedOntology>())
+      const cacheTtlMs = Duration.toMillis(cacheTtl)
+
+      /**
+       * Load ontology from a specific URI with per-URI caching.
+       * This enables multi-ontology deployments where each request
+       * can specify its own ontology (e.g., Seattle, Wikipedia, etc.)
+       */
+      const loadOntologyFromUri = (uri: string) =>
+        Effect.gen(function*() {
+          // Normalize URI - strip gs:// prefix if present for storage access
+          const storagePath = uri.startsWith("gs://")
+            ? uri.replace(/^gs:\/\/[^/]+\//, "")
+            : uri
+
+          // Check cache first
+          const cache = yield* Ref.get(ontologyCacheRef)
+          const cached = HashMap.get(cache, uri)
+          const now = Date.now()
+
+          if (Option.isSome(cached) && (now - cached.value.loadedAt) < cacheTtlMs) {
+            yield* Effect.logDebug("Using cached ontology", { uri, age: now - cached.value.loadedAt })
+            return cached.value.data
+          }
+
+          // Load from storage
+          yield* Effect.logInfo("Loading ontology from URI", { uri, storagePath })
+          const contentOpt = yield* storage.get(storagePath).pipe(
+            Effect.mapError(
+              (error) =>
+                new OntologyFileNotFound({
+                  message: `Failed to read ontology from storage at ${uri}`,
+                  path: uri,
+                  cause: error
+                })
+            )
+          )
+
+          if (Option.isNone(contentOpt)) {
+            return yield* Effect.fail(
+              new OntologyFileNotFound({
+                message: `Ontology file not found at ${uri}`,
+                path: uri
+              })
+            )
+          }
+
+          const turtleContent = contentOpt.value
+          const mainStore = yield* rdf.parseTurtle(turtleContent)
+
+          // Merge external vocabularies (PROV-O, W3C ORG, FOAF, etc.)
+          // Now always attempted since externalVocabsPath has a default
+          const externalPath = config.ontology.externalVocabsPath
+          {
+            const externalContentOpt = yield* storage.get(externalPath).pipe(
+              Effect.catchAll((error) =>
+                Effect.gen(function*() {
+                  yield* Effect.logWarning(
+                    "Failed to load external vocabularies for URI-based load, continuing with main ontology only",
+                    {
+                      uri,
+                      path: externalPath,
+                      error: String(error)
+                    }
+                  )
+                  return Option.none<string>()
+                })
+              )
+            )
+
+            if (Option.isSome(externalContentOpt)) {
+              const externalStore = yield* rdf.parseTurtle(externalContentOpt.value).pipe(
+                Effect.catchAll((error) =>
+                  Effect.gen(function*() {
+                    yield* Effect.logWarning(
+                      "Failed to parse external vocabularies, continuing with main ontology only",
+                      {
+                        uri,
+                        path: externalPath,
+                        error: String(error)
+                      }
+                    )
+                    return yield* rdf.createStore
+                  })
+                )
+              )
+
+              // Merge external vocabularies into main store
+              const mergedCount = yield* rdf.mergeStores(mainStore, externalStore)
+              yield* Effect.logInfo("Merged external vocabularies into URI-loaded ontology", {
+                uri,
+                externalPath,
+                newQuadsAdded: mergedCount
+              })
+            }
+          }
+
+          const parsed = yield* parseOntologyFromStore(rdf, mainStore, uri)
+
+          // Update cache
+          yield* Ref.update(ontologyCacheRef, (cache) => HashMap.set(cache, uri, { data: parsed, loadedAt: now }))
+
+          yield* Effect.logInfo("Ontology loaded and cached", {
+            uri,
+            classCount: Chunk.size(parsed.classes),
+            propertyCount: Chunk.size(parsed.properties)
+          })
+
+          return parsed
+        })
+
+      /**
+       * Load ontology from a registry entry with proper external vocab handling
+       */
+      const loadOntologyFromEntry = (entry: OntologyEntry) =>
+        Effect.gen(function*() {
+          const cacheKey = entry.iri // Use IRI as cache key for registry-based loads
+
+          // Check cache first
+          const cache = yield* Ref.get(ontologyCacheRef)
+          const cached = HashMap.get(cache, cacheKey)
+          const now = Date.now()
+
+          if (Option.isSome(cached) && (now - cached.value.loadedAt) < cacheTtlMs) {
+            yield* Effect.logDebug("Using cached ontology from registry", {
+              id: entry.id,
+              iri: entry.iri,
+              age: now - cached.value.loadedAt
+            })
+            return cached.value.data
+          }
+
+          // Load main ontology
+          yield* Effect.logInfo("Loading ontology from registry entry", {
+            id: entry.id,
+            iri: entry.iri,
+            storagePath: entry.storagePath
+          })
+          const contentOpt = yield* storage.get(entry.storagePath).pipe(
+            Effect.mapError(
+              (error) =>
+                new OntologyFileNotFound({
+                  message: `Failed to read ontology from storage at ${entry.storagePath}`,
+                  path: entry.storagePath,
+                  cause: error
+                })
+            )
+          )
+
+          if (Option.isNone(contentOpt)) {
+            return yield* Effect.fail(
+              new OntologyFileNotFound({
+                message: `Ontology file not found at ${entry.storagePath}`,
+                path: entry.storagePath
+              })
+            )
+          }
+
+          const turtleContent = contentOpt.value
+          const mainStore = yield* rdf.parseTurtle(turtleContent)
+
+          // Merge external vocabularies if specified in entry
+          if (entry.externalVocabsPath) {
+            const externalPath = entry.externalVocabsPath
+            const externalContentOpt = yield* storage.get(externalPath).pipe(
+              Effect.catchAll((error) =>
+                Effect.gen(function*() {
+                  yield* Effect.logWarning(
+                    "Failed to load external vocabularies from entry, continuing with main ontology only",
+                    {
+                      entryId: entry.id,
+                      path: externalPath,
+                      error: String(error)
+                    }
+                  )
+                  return Option.none<string>()
+                })
+              )
+            )
+
+            if (Option.isSome(externalContentOpt)) {
+              const externalStore = yield* rdf.parseTurtle(externalContentOpt.value).pipe(
+                Effect.catchAll((error) =>
+                  Effect.gen(function*() {
+                    yield* Effect.logWarning(
+                      "Failed to parse external vocabularies, continuing with main ontology only",
+                      {
+                        entryId: entry.id,
+                        path: externalPath,
+                        error: String(error)
+                      }
+                    )
+                    return yield* rdf.createStore
+                  })
+                )
+              )
+
+              const mergedCount = yield* rdf.mergeStores(mainStore, externalStore)
+              yield* Effect.logInfo("Merged external vocabularies into ontology", {
+                entryId: entry.id,
+                externalPath,
+                newQuadsAdded: mergedCount
+              })
+            }
+          }
+
+          const parsed = yield* parseOntologyFromStore(rdf, mainStore, entry.storagePath)
+
+          // Update cache
+          yield* Ref.update(ontologyCacheRef, (cache) => HashMap.set(cache, cacheKey, { data: parsed, loadedAt: now }))
+
+          yield* Effect.logInfo("Ontology loaded from registry and cached", {
+            id: entry.id,
+            iri: entry.iri,
+            classCount: Chunk.size(parsed.classes),
+            propertyCount: Chunk.size(parsed.properties)
+          })
+
+          return parsed
+        })
+
       return {
+        /**
+         * Load ontology from a specific URI with caching
+         *
+         * Enables multi-ontology deployments where each request can specify
+         * its own ontology. Caches per-URI with TTL-based expiration.
+         *
+         * @param uri - Ontology URI (gs:// or storage-relative path)
+         * @returns Parsed ontology context
+         *
+         * @example
+         * ```typescript
+         * const ontology = yield* OntologyService.loadFromUri("gs://bucket/seattle/ontology.ttl")
+         * ```
+         */
+        loadFromUri: (uri: string) =>
+          loadOntologyFromUri(uri).pipe(
+            Effect.map(({ classes, hierarchy, properties, propertyHierarchy }) =>
+              new OntologyContext({
+                classes: Chunk.toReadonlyArray(classes),
+                hierarchy,
+                propertyHierarchy,
+                properties: Chunk.toReadonlyArray(properties)
+              })
+            )
+          ),
+
+        /**
+         * Load ontology from a registry entry
+         *
+         * Uses the registry entry's metadata to load the ontology with proper
+         * external vocabulary handling. Caches by IRI with TTL-based expiration.
+         *
+         * @param entry - OntologyEntry from the registry
+         * @returns Parsed ontology context
+         *
+         * @example
+         * ```typescript
+         * const entry = yield* OntologyRegistryService.getById("seattle")
+         * if (Option.isSome(entry)) {
+         *   const ontology = yield* OntologyService.loadFromRegistryEntry(entry.value)
+         * }
+         * ```
+         */
+        loadFromRegistryEntry: (entry: OntologyEntry) =>
+          loadOntologyFromEntry(entry).pipe(
+            Effect.map(({ classes, hierarchy, properties, propertyHierarchy }) =>
+              new OntologyContext({
+                classes: Chunk.toReadonlyArray(classes),
+                hierarchy,
+                propertyHierarchy,
+                properties: Chunk.toReadonlyArray(properties)
+              })
+            )
+          ),
+
+        /**
+         * Resolve ontology identifier via registry and load
+         *
+         * Accepts ontology ID, IRI, or direct path. Uses registry to resolve
+         * to storage path and loads with proper external vocab handling.
+         *
+         * @param identifier - Ontology ID ("seattle"), IRI ("http://..."), or path
+         * @returns Parsed ontology context
+         *
+         * @example
+         * ```typescript
+         * // By ID
+         * const ontology = yield* OntologyService.resolveAndLoad("seattle")
+         * // By IRI
+         * const ontology = yield* OntologyService.resolveAndLoad("http://effect-ontology.dev/seattle")
+         * // By path (falls back to direct load)
+         * const ontology = yield* OntologyService.resolveAndLoad("canonical/seattle/ontology.ttl")
+         * ```
+         */
+        resolveAndLoad: (identifier: string) =>
+          Effect.gen(function*() {
+            // Try registry first if available
+            if (Option.isSome(registryOpt)) {
+              const registry = registryOpt.value
+              const entryOpt = yield* registry.resolveToEntry(identifier).pipe(
+                Effect.catchAll((error) =>
+                  Effect.gen(function*() {
+                    yield* Effect.logDebug("Registry resolution failed, falling back to direct load", {
+                      identifier,
+                      error: String(error)
+                    })
+                    return Option.none<OntologyEntry>()
+                  })
+                )
+              )
+
+              if (Option.isSome(entryOpt)) {
+                const { classes, hierarchy, properties, propertyHierarchy } = yield* loadOntologyFromEntry(
+                  entryOpt.value
+                )
+                return new OntologyContext({
+                  classes: Chunk.toReadonlyArray(classes),
+                  hierarchy,
+                  propertyHierarchy,
+                  properties: Chunk.toReadonlyArray(properties)
+                })
+              }
+            }
+
+            // Fall back to direct URI loading
+            const { classes, hierarchy, properties, propertyHierarchy } = yield* loadOntologyFromUri(identifier)
+            return new OntologyContext({
+              classes: Chunk.toReadonlyArray(classes),
+              hierarchy,
+              propertyHierarchy,
+              properties: Chunk.toReadonlyArray(properties)
+            })
+          }),
+
+        /**
+         * Get registry entry for an ontology identifier
+         *
+         * Returns the registry entry if registry is available and the identifier
+         * resolves to an entry. Returns None if registry is not configured or
+         * identifier is not found.
+         *
+         * @param identifier - Ontology ID, IRI, or path
+         * @returns Option<OntologyEntry>
+         */
+        getRegistryEntry: (identifier: string) =>
+          Effect.gen(function*() {
+            if (Option.isNone(registryOpt)) {
+              return Option.none<OntologyEntry>()
+            }
+            const registry = registryOpt.value
+            return yield* registry.resolveToEntry(identifier).pipe(
+              Effect.catchAll(() => Effect.succeed(Option.none<OntologyEntry>()))
+            )
+          }),
+
+        /**
+         * Check if registry is available
+         *
+         * @returns true if OntologyRegistryService is configured and available
+         */
+        hasRegistry: Effect.succeed(Option.isSome(registryOpt)),
+
+        /**
+         * Search for classes in a specific ontology using hybrid approach
+         *
+         * Loads ontology from URI, then performs hybrid search (semantic + BM25).
+         * For multi-ontology deployments where each request specifies its own ontology.
+         *
+         * @param uri - Ontology URI (gs:// or storage-relative path)
+         * @param query - Search query string
+         * @param limit - Maximum number of results (default: 100)
+         * @returns Chunk of ClassDefinition objects matching the query
+         *
+         * @example
+         * ```typescript
+         * const classes = yield* OntologyService.searchClassesHybridFromUri(
+         *   "gs://bucket/seattle/ontology.ttl",
+         *   "mayor city official",
+         *   50
+         * )
+         * ```
+         */
+        searchClassesHybridFromUri: (uri: string, query: string, limit: number = 100) =>
+          Effect.gen(function*() {
+            const { classes, hierarchy, properties, propertyHierarchy } = yield* loadOntologyFromUri(uri)
+            const ontology = new OntologyContext({
+              classes: Chunk.toReadonlyArray(classes),
+              hierarchy,
+              propertyHierarchy,
+              properties: Chunk.toReadonlyArray(properties)
+            })
+
+            // Create indexes for this specific ontology
+            const [bm25Index, semanticIndex] = yield* Effect.all([
+              nlp.createOntologyIndex(ontology),
+              nlp.createOntologySemanticIndex(ontology).pipe(
+                Effect.catchAll((error) =>
+                  Effect.gen(function*() {
+                    yield* Effect.logWarning("Failed to create semantic index, using BM25 only", {
+                      uri,
+                      error: String(error)
+                    })
+                    return null
+                  })
+                )
+              )
+            ], { concurrency: 2 })
+
+            const searchLimit = Math.ceil(limit * 0.7)
+
+            // Run searches in parallel
+            const [semanticResults, bm25Results] = yield* Effect.all([
+              // Semantic search (if index available)
+              semanticIndex
+                ? Effect.gen(function*() {
+                  const results = yield* nlp.searchOntologySemanticIndex(
+                    semanticIndex,
+                    query,
+                    searchLimit
+                  )
+                  const classesMap = new Map<string, ClassDefinition>()
+                  for (const result of results) {
+                    if (result.class) {
+                      classesMap.set(result.class.id, result.class)
+                    }
+                    if (result.property) {
+                      for (const domainIri of result.property.domain) {
+                        const domainClass = ontology.classes.find((c) => c.id === domainIri)
+                        if (domainClass) {
+                          classesMap.set(domainClass.id, domainClass)
+                        }
+                      }
+                    }
+                  }
+                  return Chunk.fromIterable(classesMap.values())
+                }).pipe(
+                  Effect.catchAll(() => Effect.succeed(Chunk.empty<ClassDefinition>()))
+                )
+                : Effect.succeed(Chunk.empty<ClassDefinition>()),
+              // BM25 search
+              Effect.gen(function*() {
+                const results = yield* nlp.searchOntologyIndex(bm25Index, query, searchLimit)
+                const classesMap = new Map<string, ClassDefinition>()
+                for (const result of results) {
+                  if (result.class) {
+                    classesMap.set(result.class.id, result.class)
+                  }
+                  if (result.property) {
+                    for (const domainIri of result.property.domain) {
+                      const domainClass = ontology.classes.find((c) => c.id === domainIri)
+                      if (domainClass) {
+                        classesMap.set(domainClass.id, domainClass)
+                      }
+                    }
+                  }
+                }
+                return Chunk.fromIterable(classesMap.values())
+              })
+            ], { concurrency: 2 })
+
+            // Fuse results using RRF
+            const semanticArray = Chunk.toReadonlyArray(semanticResults)
+            const bm25Array = Chunk.toReadonlyArray(bm25Results)
+            const fused = rrfFusion([semanticArray, bm25Array])
+
+            // Include remaining classes if sparse results
+            const fusedIds = new Set(fused.map((r) => r.id))
+            const remaining: Array<ClassDefinition> = []
+            if (fused.length < limit && ontology.classes.length <= limit) {
+              for (const cls of ontology.classes) {
+                if (!fusedIds.has(cls.id)) remaining.push(cls)
+              }
+            }
+
+            yield* Effect.logDebug("URI-specific hybrid search complete", {
+              uri,
+              query,
+              semanticCount: semanticArray.length,
+              bm25Count: bm25Array.length,
+              fusedCount: fused.length,
+              ontologySize: ontology.classes.length
+            })
+
+            const results = [
+              ...fused.map((r) => {
+                const { rrfScore: _, ...cls } = r
+                return cls as ClassDefinition
+              }),
+              ...remaining
+            ]
+            return Chunk.fromIterable(results.slice(0, limit))
+          }),
+
+        /**
+         * Get properties for given class IRIs from a specific ontology
+         *
+         * @param uri - Ontology URI (gs:// or storage-relative path)
+         * @param classIris - Array of class IRIs to get properties for
+         * @returns Chunk of PropertyDefinition objects
+         */
+        getPropertiesForFromUri: (uri: string, classIris: ReadonlyArray<string>) =>
+          Effect.gen(function*() {
+            const { classes, hierarchy, properties, propertyHierarchy } = yield* loadOntologyFromUri(uri)
+            const ontology = new OntologyContext({
+              classes: Chunk.toReadonlyArray(classes),
+              hierarchy,
+              propertyHierarchy,
+              properties: Chunk.toReadonlyArray(properties)
+            })
+            const props: Array<PropertyDefinition> = []
+            for (const classIri of classIris) {
+              const classProps = ontology.getPropertiesForClass(classIri)
+              for (const prop of classProps) {
+                props.push(prop)
+              }
+            }
+            const uniqueProps = new Map<string, PropertyDefinition>()
+            for (const prop of props) {
+              uniqueProps.set(prop.id, prop)
+            }
+            return Chunk.fromIterable(uniqueProps.values())
+          }),
+
+        /**
+         * Search for classes in a specific ontology using hybrid approach with pre-computed embeddings
+         *
+         * Loads ontology from URI, uses pre-computed embeddings for semantic search.
+         * Combines with BM25 search for improved recall.
+         *
+         * @param uri - Ontology URI (gs:// or storage-relative path)
+         * @param query - Search query string
+         * @param embeddings - Pre-computed ontology embeddings
+         * @param limit - Maximum number of results (default: 100)
+         * @returns Chunk of ClassDefinition objects matching the query
+         */
+        searchClassesHybridFromUriWithEmbeddings: (
+          uri: string,
+          query: string,
+          embeddings: OntologyEmbeddings,
+          limit: number = 100
+        ) =>
+          Effect.gen(function*() {
+            const { classes, hierarchy, properties, propertyHierarchy } = yield* loadOntologyFromUri(uri)
+            const ontology = new OntologyContext({
+              classes: Chunk.toReadonlyArray(classes),
+              hierarchy,
+              propertyHierarchy,
+              properties: Chunk.toReadonlyArray(properties)
+            })
+
+            const searchLimit = Math.ceil(limit * 0.7)
+
+            // Create semantic index from pre-computed embeddings
+            const semanticIndex = yield* nlp.createOntologySemanticIndexFromPrecomputed(
+              ontology,
+              embeddings
+            ).pipe(
+              Effect.catchAll((error) =>
+                Effect.gen(function*() {
+                  yield* Effect.logWarning("Failed to create semantic index from embeddings, using BM25 only", {
+                    uri,
+                    error: String(error)
+                  })
+                  return null
+                })
+              )
+            )
+
+            // Create BM25 index for this ontology
+            const bm25Index = yield* nlp.createOntologyIndex(ontology)
+
+            // Run searches in parallel
+            const [semanticResults, bm25Results] = yield* Effect.all([
+              semanticIndex
+                ? Effect.gen(function*() {
+                  const results = yield* nlp.searchOntologySemanticIndex(
+                    semanticIndex,
+                    query,
+                    searchLimit
+                  )
+                  const classesMap = new Map<string, ClassDefinition>()
+                  for (const result of results) {
+                    if (result.class) {
+                      classesMap.set(result.class.id, result.class)
+                    }
+                    if (result.property) {
+                      for (const domainIri of result.property.domain) {
+                        const domainClass = ontology.classes.find((c) => c.id === domainIri)
+                        if (domainClass) {
+                          classesMap.set(domainClass.id, domainClass)
+                        }
+                      }
+                    }
+                  }
+                  return Chunk.fromIterable(classesMap.values())
+                }).pipe(
+                  Effect.catchAll(() => Effect.succeed(Chunk.empty<ClassDefinition>()))
+                )
+                : Effect.succeed(Chunk.empty<ClassDefinition>()),
+              Effect.gen(function*() {
+                const results = yield* nlp.searchOntologyIndex(bm25Index, query, searchLimit)
+                const classesMap = new Map<string, ClassDefinition>()
+                for (const result of results) {
+                  if (result.class) {
+                    classesMap.set(result.class.id, result.class)
+                  }
+                  if (result.property) {
+                    for (const domainIri of result.property.domain) {
+                      const domainClass = ontology.classes.find((c) => c.id === domainIri)
+                      if (domainClass) {
+                        classesMap.set(domainClass.id, domainClass)
+                      }
+                    }
+                  }
+                }
+                return Chunk.fromIterable(classesMap.values())
+              })
+            ], { concurrency: 2 })
+
+            // Fuse results using RRF
+            const semanticArray = Chunk.toReadonlyArray(semanticResults)
+            const bm25Array = Chunk.toReadonlyArray(bm25Results)
+            const fused = rrfFusion([semanticArray, bm25Array])
+
+            // Include remaining classes if sparse results
+            const fusedIds = new Set(fused.map((r) => r.id))
+            const remaining: Array<ClassDefinition> = []
+            if (fused.length < limit && ontology.classes.length <= limit) {
+              for (const cls of ontology.classes) {
+                if (!fusedIds.has(cls.id)) remaining.push(cls)
+              }
+            }
+
+            yield* Effect.logDebug("URI-specific hybrid search with embeddings complete", {
+              uri,
+              query,
+              semanticCount: semanticArray.length,
+              bm25Count: bm25Array.length,
+              fusedCount: fused.length,
+              ontologySize: ontology.classes.length
+            })
+
+            const results = [
+              ...fused.map((r) => {
+                const { rrfScore: _, ...cls } = r
+                return cls as ClassDefinition
+              }),
+              ...remaining
+            ]
+            return Chunk.fromIterable(results.slice(0, limit))
+          }),
+
         /**
          * Get the ontology context
          *
@@ -663,9 +1375,9 @@ export class OntologyService extends Effect.Service<OntologyService>()(
                     classesMap.set(result.class.id, result.class)
                   }
                   if (result.property) {
-                    for (const domainLocalName of result.property.domain) {
+                    for (const domainIri of result.property.domain) {
                       const domainClass = ontology.classes.find(
-                        (c) => extractLocalName(c.id) === domainLocalName
+                        (c) => c.id === domainIri
                       )
                       if (domainClass) {
                         classesMap.set(domainClass.id, domainClass)
@@ -695,9 +1407,9 @@ export class OntologyService extends Effect.Service<OntologyService>()(
                     classesMap.set(result.class.id, result.class)
                   }
                   if (result.property) {
-                    for (const domainLocalName of result.property.domain) {
+                    for (const domainIri of result.property.domain) {
                       const domainClass = ontology.classes.find(
-                        (c) => extractLocalName(c.id) === domainLocalName
+                        (c) => c.id === domainIri
                       )
                       if (domainClass) {
                         classesMap.set(domainClass.id, domainClass)
@@ -735,11 +1447,13 @@ export class OntologyService extends Effect.Service<OntologyService>()(
             })
 
             // Return fused results + remaining classes up to limit
-            const results = [...fused.map((r) => {
-              // eslint-disable-next-line @typescript-eslint/no-unused-vars
-              const { rrfScore: _, ...cls } = r
-              return cls as ClassDefinition
-            }), ...remaining]
+            const results = [
+              ...fused.map((r) => {
+                const { rrfScore: _, ...cls } = r
+                return cls as ClassDefinition
+              }),
+              ...remaining
+            ]
             return Chunk.fromIterable(results.slice(0, limit))
           }),
 
@@ -801,9 +1515,9 @@ export class OntologyService extends Effect.Service<OntologyService>()(
                     classesMap.set(result.class.id, result.class)
                   }
                   if (result.property) {
-                    for (const domainLocalName of result.property.domain) {
+                    for (const domainIri of result.property.domain) {
                       const domainClass = ontology.classes.find(
-                        (c) => extractLocalName(c.id) === domainLocalName
+                        (c) => c.id === domainIri
                       )
                       if (domainClass) {
                         classesMap.set(domainClass.id, domainClass)
@@ -833,9 +1547,9 @@ export class OntologyService extends Effect.Service<OntologyService>()(
                     classesMap.set(result.class.id, result.class)
                   }
                   if (result.property) {
-                    for (const domainLocalName of result.property.domain) {
+                    for (const domainIri of result.property.domain) {
                       const domainClass = ontology.classes.find(
-                        (c) => extractLocalName(c.id) === domainLocalName
+                        (c) => c.id === domainIri
                       )
                       if (domainClass) {
                         classesMap.set(domainClass.id, domainClass)
@@ -871,11 +1585,13 @@ export class OntologyService extends Effect.Service<OntologyService>()(
             })
 
             // Return fused results + remaining classes up to limit
-            const results = [...fused.map((r) => {
-              // eslint-disable-next-line @typescript-eslint/no-unused-vars
-              const { rrfScore: _, ...cls } = r
-              return cls as ClassDefinition
-            }), ...remaining]
+            const results = [
+              ...fused.map((r) => {
+                const { rrfScore: _, ...cls } = r
+                return cls as ClassDefinition
+              }),
+              ...remaining
+            ]
             return Chunk.fromIterable(results.slice(0, limit))
           })
       }

@@ -60,5 +60,4 @@ export const hashEmbeddingKeySync = (text: string, taskType: string): string =>
  * @since 2.0.0
  * @category Hash
  */
-export const sha256Sync = (input: string): string =>
-  createHash("sha256").update(input).digest("hex").slice(0, 16)
+export const sha256Sync = (input: string): string => createHash("sha256").update(input).digest("hex").slice(0, 16)

@@ -54,10 +54,10 @@ export class RuleParseError extends Data.TaggedError("RuleParseError")<{
  * @category Models
  */
 export const ReasoningProfile = Schema.Literal(
-  "rdfs",           // Full RDFS entailment
-  "rdfs-subclass",  // Only rdfs:subClassOf transitivity
-  "owl-sameas",     // Only owl:sameAs transitivity
-  "custom"          // Custom rules only
+  "rdfs", // Full RDFS entailment
+  "rdfs-subclass", // Only rdfs:subClassOf transitivity
+  "owl-sameas", // Only owl:sameAs transitivity
+  "custom" // Custom rules only
 )
 export type ReasoningProfile = Schema.Schema.Type<typeof ReasoningProfile>
 

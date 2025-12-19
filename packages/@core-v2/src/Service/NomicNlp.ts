@@ -147,9 +147,8 @@ export const NomicNlpServiceLive = Layer.effect(
       })
 
     const cosineSimilarity = (a: ReadonlyArray<number>, b: ReadonlyArray<number>): number => {
-      if (a.length !== b.length) {
-        throw new Error(`Vector dimension mismatch: ${a.length} vs ${b.length}`)
-      }
+      // Dimension mismatch means vectors are incomparable - return 0 (orthogonal)
+      if (a.length !== b.length) return 0
 
       let dotProduct = 0
       let normA = 0

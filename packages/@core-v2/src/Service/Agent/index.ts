@@ -7,6 +7,6 @@
  * @module Service/Agent
  */
 
-export * from "./types.js"
-export * from "./CorrectorAgent.js"
 export * from "./AgentCoordinator.js"
+export * from "./CorrectorAgent.js"
+export * from "./types.js"

@@ -8,8 +8,8 @@
  * @module Domain/Model/OntologyEmbeddings
  */
 
-import { createHash } from "node:crypto"
 import { Schema } from "effect"
+import { createHash } from "node:crypto"
 
 /**
  * Embedding for a single ontology element (class or property)

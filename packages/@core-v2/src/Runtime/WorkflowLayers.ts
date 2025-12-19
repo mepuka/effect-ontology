@@ -20,14 +20,17 @@ import { ConfigService, ConfigServiceDefault } from "../Service/Config.js"
 import { EmbeddingService, EmbeddingServiceDefault } from "../Service/Embedding.js"
 import { EntityResolutionService } from "../Service/EntityResolution.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
+import { GraphRAG } from "../Service/GraphRAG.js"
 import { StageTimeoutServiceLive } from "../Service/LlmControl/StageTimeout.js"
 import { TokenBudgetServiceLive } from "../Service/LlmControl/TokenBudget.js"
 import { NlpService } from "../Service/Nlp.js"
 import { OntologyService } from "../Service/Ontology.js"
+import { OntologyRegistryService } from "../Service/OntologyRegistry.js"
 import { RdfBuilder } from "../Service/Rdf.js"
 import { ShaclService } from "../Service/Shacl.js"
 import { StorageServiceLive } from "../Service/Storage.js"
 import { BatchExtractionWorkflowLayer, WorkflowOrchestratorLive } from "../Service/WorkflowOrchestrator.js"
+import { ExtractionWorkflowLive } from "../Workflow/StreamingExtraction.js"
 import { makeLanguageModelLayer } from "./ProductionRuntime.js"
 
 // =============================================================================
@@ -95,24 +98,6 @@ const RdfBuilderBundle = RdfBuilder.Default.pipe(
 )
 
 /**
- * Ontology services: OntologyService + RdfBuilder
- *
- * Dependencies:
- * - NlpService (for text processing)
- * - ConfigService (for RDF namespace settings)
- *
- * CRITICAL: Each service that requires ConfigService must have it provided
- * before being merged. Layer.provideMerge provides to the LEFT operand.
- */
-const OntologyBundle = Layer.mergeAll(
-  OntologyService.Default,
-  RdfBuilderBundle
-).pipe(
-  Layer.provideMerge(NlpBundle),
-  Layer.provideMerge(CoreDependenciesLayer)
-)
-
-/**
  * Platform layer: FileSystem, Path from BunContext
  *
  * Required by StorageServiceLive when using local storage.
@@ -132,6 +117,49 @@ const StorageBundle = StorageServiceLive.pipe(
 )
 
 /**
+ * OntologyRegistry service bundle
+ *
+ * Provides multi-ontology registry support when ONTOLOGY_REGISTRY_PATH is configured.
+ * Required by OntologyService.resolveAndLoad() for dynamic ontology resolution.
+ *
+ * Dependencies:
+ * - ConfigService (for registry path setting)
+ * - StorageService (for loading registry.json)
+ */
+const OntologyRegistryBundle = OntologyRegistryService.Default.pipe(
+  Layer.provideMerge(StorageBundle),
+  Layer.provideMerge(CoreDependenciesLayer)
+)
+
+/**
+ * Ontology services: OntologyService + OntologyRegistryService + RdfBuilder
+ *
+ * Dependencies:
+ * - StorageService (for loading ontology from storage)
+ * - NlpService (for text processing)
+ * - RdfBuilder (for parsing Turtle)
+ * - OntologyRegistryService (for resolveAndLoad with registry lookup)
+ * - ConfigService (for RDF namespace settings)
+ *
+ * CRITICAL: OntologyRegistryBundle must be PROVIDED to OntologyService.Default
+ * (not merged) because OntologyService uses Effect.serviceOption to access it.
+ * When merged, layers build in parallel so serviceOption can't find the service.
+ * With provideMerge, the registry is available when OntologyService effect runs.
+ */
+const OntologyServiceWithRegistry = OntologyService.Default.pipe(
+  Layer.provideMerge(OntologyRegistryBundle) // Registry must be available BEFORE OntologyService constructs
+)
+
+const OntologyBundle = Layer.mergeAll(
+  OntologyServiceWithRegistry,
+  RdfBuilderBundle
+).pipe(
+  Layer.provideMerge(StorageBundle),
+  Layer.provideMerge(NlpBundle),
+  Layer.provideMerge(CoreDependenciesLayer)
+)
+
+/**
  * SHACL validation services
  *
  * Dependencies:
@@ -143,6 +171,16 @@ const ShaclBundle = ShaclService.Default.pipe(
   Layer.provideMerge(RdfBuilderBundle),
   Layer.provideMerge(StorageBundle)
 )
+
+/**
+ * Embedding services for vector similarity operations
+ *
+ * EmbeddingService provides text-to-embedding conversion used by:
+ * - Entity resolution (clustering similar entities)
+ * - Ontology embeddings (semantic class/property matching)
+ * - GraphRAG (query embedding for retrieval)
+ */
+const EmbeddingBundle = EmbeddingServiceDefault
 
 /**
  * Entity Resolution services with cached embeddings
@@ -157,6 +195,40 @@ const ShaclBundle = ShaclService.Default.pipe(
  * caching behavior. Without this, embeddings are recomputed for every entity.
  */
 const EntityResolutionBundle = EntityResolutionService.Live
+
+/**
+ * GraphRAG services for intelligent query retrieval
+ *
+ * Dependencies:
+ * - EntityIndex (entity embedding index)
+ * - SubgraphExtractor (N-hop subgraph extraction)
+ * - EmbeddingService (for embedding queries)
+ *
+ * Provides retrieval-augmented generation capabilities:
+ * - Multi-hop subgraph extraction around query-relevant entities
+ * - RRF score fusion for ranking
+ * - Formatted context generation for LLM prompts
+ */
+const GraphRAGBundle = GraphRAG.Default
+
+/**
+ * ExtractionWorkflow service bundle
+ *
+ * Provides the unified streaming extraction workflow with all dependencies.
+ * ExtractionWorkflowLive internally provides:
+ * - NlpService, OntologyService, MentionExtractor
+ * - EntityExtractor, RelationExtractor, Grounder
+ * - ExtractionRunService
+ *
+ * We provide additional dependencies it needs from other bundles.
+ */
+const ExtractionWorkflowBundle = ExtractionWorkflowLive.pipe(
+  Layer.provideMerge(OntologyBundle),
+  Layer.provideMerge(LlmExtractionBundle),
+  Layer.provideMerge(NlpBundle),
+  Layer.provideMerge(StorageBundle),
+  Layer.provideMerge(CoreDependenciesLayer)
+)
 
 // =============================================================================
 // Activity Dependencies (complete bundle for workflow activities)
@@ -183,7 +255,10 @@ export const ActivityDependenciesLayer = Layer.mergeAll(
   LlmExtractionBundle,
   OntologyBundle,
   ShaclBundle,
-  EntityResolutionBundle
+  EmbeddingBundle,
+  EntityResolutionBundle,
+  GraphRAGBundle,
+  ExtractionWorkflowBundle
 )
 
 // =============================================================================

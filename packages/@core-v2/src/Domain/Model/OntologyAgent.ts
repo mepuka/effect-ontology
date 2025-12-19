@@ -9,10 +9,11 @@
  */
 
 import { Schema } from "effect"
-import { ShaclValidationReport, ValidationPolicy } from "../../Service/Shacl.js"
-import { Entity, KnowledgeGraph, Relation } from "./Entity.js"
-import { OntologyRef } from "./Ontology.js"
 import type { ClaimRow } from "../../Repository/schema.js"
+import { ShaclValidationReport, ValidationPolicy } from "../../Service/Shacl.js"
+import type { Entity, Relation } from "./Entity.js"
+import { KnowledgeGraph } from "./Entity.js"
+import { OntologyRef } from "./Ontology.js"
 
 /**
  * OntologyAgentConfig - Configuration for OntologyAgent operations
@@ -225,6 +226,18 @@ export interface ExtractWithClaimsOptions {
    * @default 0.8
    */
   readonly defaultConfidence?: number
+
+  /**
+   * Target namespace for minting entity IRIs
+   *
+   * Entities will be minted in this namespace instead of borrowing from
+   * class namespaces (e.g., foaf:, org:). This ensures all extracted
+   * instances belong to the local ontology namespace.
+   *
+   * @example "http://effect-ontology.dev/seattle/"
+   * @default Uses config.rdf.baseNamespace
+   */
+  readonly targetNamespace?: string
 
   /**
    * Agent configuration overrides

@@ -141,7 +141,8 @@ export const RateLimitedLanguageModelLayer = Layer.scoped(
                 new AiError.UnknownError({
                   module: "RateLimitedLanguageModel",
                   method: `${method} (circuit breaker)`,
-                  description: `Circuit breaker is open. Last failure: ${lastFailureStr}. Reset timeout: ${circuitErr.resetTimeoutMs}ms`,
+                  description:
+                    `Circuit breaker is open. Last failure: ${lastFailureStr}. Reset timeout: ${circuitErr.resetTimeoutMs}ms`,
                   cause: circuitErr
                 }) as E // Safe cast since E extends AiError.AiError
               )

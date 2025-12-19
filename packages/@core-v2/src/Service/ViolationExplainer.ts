@@ -9,11 +9,11 @@
  */
 
 import { LanguageModel } from "@effect/ai"
-import { Data, Duration, Effect, Schema, Schedule } from "effect"
-import type { ShaclViolation } from "./Shacl.js"
-import type { RdfStore } from "./Rdf.js"
+import { Data, Duration, Effect, Schedule, Schema } from "effect"
 import { ConfigService } from "./Config.js"
 import { generateObjectWithFeedback } from "./GenerateWithFeedback.js"
+import type { RdfStore } from "./Rdf.js"
+import type { ShaclViolation } from "./Shacl.js"
 
 // =============================================================================
 // Error Types
@@ -427,14 +427,18 @@ const generateRuleBasedExplanation = (
   // Cardinality constraints
   if (message.includes("mincount") || message.includes("min count")) {
     return {
-      explanation: `The entity "${extractLocalName(violation.focusNode)}" is missing a required value for the property "${extractLocalName(violation.path ?? "unknown")}".`,
+      explanation: `The entity "${
+        extractLocalName(violation.focusNode)
+      }" is missing a required value for the property "${extractLocalName(violation.path ?? "unknown")}".`,
       suggestion: `Add a value for the "${extractLocalName(violation.path ?? "unknown")}" property.`
     }
   }
 
   if (message.includes("maxcount") || message.includes("max count")) {
     return {
-      explanation: `The entity "${extractLocalName(violation.focusNode)}" has too many values for the property "${extractLocalName(violation.path ?? "unknown")}".`,
+      explanation: `The entity "${extractLocalName(violation.focusNode)}" has too many values for the property "${
+        extractLocalName(violation.path ?? "unknown")
+      }".`,
       suggestion: `Remove excess values from the "${extractLocalName(violation.path ?? "unknown")}" property.`
     }
   }
@@ -442,7 +446,9 @@ const generateRuleBasedExplanation = (
   // Datatype constraints (check before type to avoid false matches)
   if (message.includes("datatype")) {
     return {
-      explanation: `The value for "${extractLocalName(violation.path ?? "unknown")}" on "${extractLocalName(violation.focusNode)}" has the wrong data type.`,
+      explanation: `The value for "${extractLocalName(violation.path ?? "unknown")}" on "${
+        extractLocalName(violation.focusNode)
+      }" has the wrong data type.`,
       suggestion: "Check the data type of the value and correct it to match the expected type."
     }
   }
@@ -458,7 +464,9 @@ const generateRuleBasedExplanation = (
   // Pattern constraints
   if (message.includes("pattern")) {
     return {
-      explanation: `The value for "${extractLocalName(violation.path ?? "unknown")}" on "${extractLocalName(violation.focusNode)}" doesn't match the required format.`,
+      explanation: `The value for "${extractLocalName(violation.path ?? "unknown")}" on "${
+        extractLocalName(violation.focusNode)
+      }" doesn't match the required format.`,
       suggestion: "Update the value to match the required pattern/format."
     }
   }

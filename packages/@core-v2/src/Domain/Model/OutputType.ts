@@ -98,5 +98,3 @@ export const getOutputFilename = (type: OutputType): string => {
 export const getOutputDescription = (type: OutputType): string => {
   return OutputTypeRegistry[type].description
 }
-
-

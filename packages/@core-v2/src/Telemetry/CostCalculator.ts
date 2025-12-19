@@ -9,8 +9,9 @@
 
 /** Pricing per 1M tokens (as of Dec 2025) */
 const PRICING: Record<string, { input: number; output: number }> = {
-  // Anthropic - Current models
+  // Anthropic - Current models (Claude 4.5)
   "claude-haiku-4-5": { input: 1.0, output: 5.0 },
+  "claude-haiku-4-5-20251001": { input: 1.0, output: 5.0 },
   "claude-sonnet-4-5": { input: 3.0, output: 15.0 },
   "claude-opus-4-5": { input: 5.0, output: 25.0 },
   // Anthropic - Legacy models

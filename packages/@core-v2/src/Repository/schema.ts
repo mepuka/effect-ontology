@@ -8,7 +8,7 @@
  * @module Repository/schema
  */
 
-import { pgEnum, pgTable, text, timestamp, uuid, numeric, integer, jsonb, index, primaryKey } from "drizzle-orm/pg-core"
+import { index, integer, jsonb, numeric, pgEnum, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core"
 
 // =============================================================================
 // Enums
@@ -19,7 +19,11 @@ export const objectTypeEnum = pgEnum("object_type", ["iri", "literal", "typed_li
 export const correctionTypeEnum = pgEnum("correction_type", ["retraction", "clarification", "update", "amendment"])
 export const conflictTypeEnum = pgEnum("conflict_type", ["position", "temporal", "contradictory", "duplicate"])
 export const conflictStatusEnum = pgEnum("conflict_status", ["pending", "resolved", "ignored"])
-export const resolutionStrategyEnum = pgEnum("resolution_strategy", ["temporal_precedence", "source_authority", "manual"])
+export const resolutionStrategyEnum = pgEnum("resolution_strategy", [
+  "temporal_precedence",
+  "source_authority",
+  "manual"
+])
 export const batchStatusEnum = pgEnum("batch_status", ["pending", "running", "completed", "failed"])
 
 // =============================================================================

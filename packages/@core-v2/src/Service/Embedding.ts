@@ -113,8 +113,8 @@ export const EmbeddingServiceLive: Layer.Layer<
           )
 
           // Step 2: Separate cached from uncached and record metrics
-          const uncachedIndices: number[] = []
-          const uncachedTexts: string[] = []
+          const uncachedIndices: Array<number> = []
+          const uncachedTexts: Array<string> = []
           let cacheHits = 0
 
           hashResults.forEach((result, index) => {

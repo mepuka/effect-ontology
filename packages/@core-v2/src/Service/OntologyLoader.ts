@@ -50,7 +50,7 @@ const makeOntologyLoader = Effect.gen(function*() {
         )
       )
 
-      if (contentOpt._tag === "None") {
+      if (Option.isNone(contentOpt)) {
         return yield* Effect.fail(
           new OntologyFileNotFound({
             message: `Ontology file not found at ${ontologyPath} in GCS`,

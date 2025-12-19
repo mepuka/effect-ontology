@@ -405,7 +405,7 @@ const predicateLabel = (predicateIri: string): string => {
  * @category Service
  */
 export class GraphRAG extends Effect.Service<GraphRAG>()("@core-v2/GraphRAG", {
-  effect: Effect.gen(function* () {
+  effect: Effect.gen(function*() {
     const entityIndex = yield* EntityIndex
     const subgraphExtractor = yield* SubgraphExtractor
 
@@ -463,9 +463,9 @@ export class GraphRAG extends Effect.Service<GraphRAG>()("@core-v2/GraphRAG", {
       nodes: ReadonlyArray<ScoredNode>,
       includeAttributes: boolean
     ): string => {
-      const lines: string[] = []
+      const lines: Array<string> = []
 
-      for (const { entity, score, isSeed } of nodes) {
+      for (const { entity, isSeed, score } of nodes) {
         const types = entity.types.map(typeLabel).join(", ")
         const seedMarker = isSeed ? " [SEED]" : ""
         const scoreStr = (score * 100).toFixed(0)
@@ -490,7 +490,7 @@ export class GraphRAG extends Effect.Service<GraphRAG>()("@core-v2/GraphRAG", {
       edges: ReadonlyArray<Relation>,
       entityMap: Map<string, Entity>
     ): string => {
-      const lines: string[] = []
+      const lines: Array<string> = []
 
       for (const rel of edges) {
         const subject = entityMap.get(rel.subjectId)
@@ -524,7 +524,7 @@ export class GraphRAG extends Effect.Service<GraphRAG>()("@core-v2/GraphRAG", {
       const entityMap = new Map(subgraph.nodes.map((e) => [e.id, e]))
 
       // Build context sections
-      const sections: string[] = []
+      const sections: Array<string> = []
 
       // Header with query context
       sections.push("## Retrieved Knowledge Graph Context")
@@ -564,7 +564,7 @@ export class GraphRAG extends Effect.Service<GraphRAG>()("@core-v2/GraphRAG", {
       index: (graph) => entityIndex.index(graph),
 
       retrieve: (graph, query, options = {}) =>
-        Effect.gen(function* () {
+        Effect.gen(function*() {
           const topK = options.topK ?? 5
           const hops = options.hops ?? 1
           const maxNodes = options.maxNodes ?? 50
@@ -587,7 +587,8 @@ export class GraphRAG extends Effect.Service<GraphRAG>()("@core-v2/GraphRAG", {
             return {
               subgraph: emptySubgraph,
               scoredNodes: [],
-              context: `## Retrieved Knowledge Graph Context\n\nQuery: "${query}"\n\nNo relevant entities found in the knowledge graph.`,
+              context:
+                `## Retrieved Knowledge Graph Context\n\nQuery: "${query}"\n\nNo relevant entities found in the knowledge graph.`,
               query,
               stats: {
                 seedCount: 0,
@@ -621,10 +622,9 @@ export class GraphRAG extends Effect.Service<GraphRAG>()("@core-v2/GraphRAG", {
           const context = formatContextImpl(subgraph, query, scoredNodes, options)
 
           // Compute stats
-          const avgScore =
-            scoredNodes.length > 0
-              ? scoredNodes.reduce((sum, n) => sum + n.score, 0) / scoredNodes.length
-              : 0
+          const avgScore = scoredNodes.length > 0
+            ? scoredNodes.reduce((sum, n) => sum + n.score, 0) / scoredNodes.length
+            : 0
 
           return {
             subgraph,
@@ -644,7 +644,7 @@ export class GraphRAG extends Effect.Service<GraphRAG>()("@core-v2/GraphRAG", {
       formatContext: (subgraph, query, options = {}) =>
         Effect.sync(() => {
           // Build basic scored nodes (no embedding scores available)
-          const scoredNodes: ScoredNode[] = subgraph.nodes.map((entity) => ({
+          const scoredNodes: Array<ScoredNode> = subgraph.nodes.map((entity) => ({
             entity,
             score: subgraph.centerNodes.includes(entity.id) ? 1 : 0.5,
             hopDistance: subgraph.centerNodes.includes(entity.id) ? 0 : 1,
@@ -655,12 +655,13 @@ export class GraphRAG extends Effect.Service<GraphRAG>()("@core-v2/GraphRAG", {
         }),
 
       generate: (llm, query, retrieval, options = {}) =>
-        Effect.gen(function* () {
+        Effect.gen(function*() {
           const timeoutMs = options.timeoutMs ?? 30000
           const maxAttempts = options.maxAttempts ?? 3
 
           // Build prompt with context
-          const prompt = `You are a knowledge graph assistant. Answer the user's question based ONLY on the provided knowledge graph context.
+          const prompt =
+            `You are a knowledge graph assistant. Answer the user's question based ONLY on the provided knowledge graph context.
 
 ${retrieval.context}
 
@@ -693,10 +694,10 @@ Respond with a JSON object containing:
               e._tag === "TimeoutException"
                 ? e
                 : new GraphRAGGenerationError({
-                    message: `Failed to generate answer: ${e._tag}`,
-                    query,
-                    cause: e
-                  })
+                  message: `Failed to generate answer: ${e._tag}`,
+                  query,
+                  cause: e
+                })
             )
           )
 
@@ -711,7 +712,7 @@ Respond with a JSON object containing:
         }),
 
       answer: (llm, graph, query, options = {}) =>
-        Effect.gen(function* () {
+        Effect.gen(function*() {
           // Index the graph first
           yield* entityIndex.index(graph)
 
@@ -723,7 +724,7 @@ Respond with a JSON object containing:
         }),
 
       explain: (llm, answer, options = {}) =>
-        Effect.gen(function* () {
+        Effect.gen(function*() {
           const timeoutMs = options.timeoutMs ?? 30000
           const maxAttempts = options.maxAttempts ?? 3
           const generateStepExplanations = options.generateStepExplanations ?? true
@@ -810,17 +811,18 @@ For the step explanations:
                 e._tag === "TimeoutException"
                   ? e
                   : new GraphRAGGenerationError({
-                      message: `Failed to generate reasoning trace: ${e._tag}`,
-                      query: answer.retrieval.query,
-                      cause: e
-                    })
+                    message: `Failed to generate reasoning trace: ${e._tag}`,
+                    query: answer.retrieval.query,
+                    cause: e
+                  })
               )
             )
 
             // Merge explanations into steps
-            const stepsWithExplanations: ReasoningStep[] = steps.map((step, i) => ({
+            const stepsWithExplanations: Array<ReasoningStep> = steps.map((step, i) => ({
               ...step,
-              explanation: response.value.stepExplanations[i] || `${step.from.mention} is connected to ${step.to.mention} via ${predicateLabel(step.relation.predicate)}`
+              explanation: response.value.stepExplanations[i] ||
+                `${step.from.mention} is connected to ${step.to.mention} via ${predicateLabel(step.relation.predicate)}`
             }))
 
             return {
@@ -833,9 +835,11 @@ For the step explanations:
           }
 
           // Return trace without LLM explanations
-          const stepsWithBasicExplanations: ReasoningStep[] = steps.map((step) => ({
+          const stepsWithBasicExplanations: Array<ReasoningStep> = steps.map((step) => ({
             ...step,
-            explanation: `${step.from.mention} is connected to ${step.to.mention} via ${predicateLabel(step.relation.predicate)}`
+            explanation: `${step.from.mention} is connected to ${step.to.mention} via ${
+              predicateLabel(step.relation.predicate)
+            }`
           }))
 
           return {

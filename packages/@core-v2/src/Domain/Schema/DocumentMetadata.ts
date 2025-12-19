@@ -24,15 +24,15 @@ import { BatchId, DocumentId, GcsUri, Namespace, OntologyVersion } from "../Iden
  * @category Classification
  */
 export const DocumentType = Schema.Literal(
-  "article",        // News articles, blog posts
-  "transcript",     // Meeting notes, interviews, conversations
-  "report",         // Technical reports, whitepapers, research papers
-  "contract",       // Legal documents, agreements
+  "article", // News articles, blog posts
+  "transcript", // Meeting notes, interviews, conversations
+  "report", // Technical reports, whitepapers, research papers
+  "contract", // Legal documents, agreements
   "correspondence", // Emails, letters, memos
-  "reference",      // Wikipedia, encyclopedic content
-  "narrative",      // Stories, descriptions, prose
-  "structured",     // Tables, lists, forms, CSV-like content
-  "unknown"         // Fallback when classification fails
+  "reference", // Wikipedia, encyclopedic content
+  "narrative", // Stories, descriptions, prose
+  "structured", // Tables, lists, forms, CSV-like content
+  "unknown" // Fallback when classification fails
 ).annotations({
   title: "Document Type",
   description: "Classification of document structure and purpose"
@@ -49,9 +49,9 @@ export type DocumentType = typeof DocumentType.Type
  * @category Classification
  */
 export const EntityDensity = Schema.Literal(
-  "sparse",   // Few entities, mostly narrative prose
+  "sparse", // Few entities, mostly narrative prose
   "moderate", // Average entity density
-  "dense"     // Many entities per sentence (e.g., sports rosters, financial reports)
+  "dense" // Many entities per sentence (e.g., sports rosters, financial reports)
 ).annotations({
   title: "Entity Density",
   description: "Estimated entity density for chunk size optimization"
@@ -68,12 +68,12 @@ export type EntityDensity = typeof EntityDensity.Type
  * @category Chunking
  */
 export const ChunkingStrategy = Schema.Literal(
-  "standard",        // Default: ~500 chars, 2 sentence overlap
-  "fine_grained",    // Dense content: ~300 chars, 3 sentence overlap
-  "high_overlap",    // Complex content: ~400 chars, 4 sentence overlap
-  "section_aware",   // Contracts/reports: respect section headers
-  "speaker_aware",   // Transcripts: respect speaker turns
-  "paragraph_based"  // Articles: use natural paragraph breaks
+  "standard", // Default: ~500 chars, 2 sentence overlap
+  "fine_grained", // Dense content: ~300 chars, 3 sentence overlap
+  "high_overlap", // Complex content: ~400 chars, 4 sentence overlap
+  "section_aware", // Contracts/reports: respect section headers
+  "speaker_aware", // Transcripts: respect speaker turns
+  "paragraph_based" // Articles: use natural paragraph breaks
 ).annotations({
   title: "Chunking Strategy",
   description: "Strategy for splitting document into chunks"

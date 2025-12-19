@@ -31,9 +31,10 @@
  */
 
 import { LanguageModel } from "@effect/ai"
+import { Data, Duration, Effect, Schedule, Schema } from "effect"
 import * as N3 from "n3"
-import { Data, Duration, Effect, Schema, Schedule } from "effect"
-import { Agent, AgentId, AgentMetadata, ValidationResult } from "../../Domain/Model/Agent.js"
+import type { Agent } from "../../Domain/Model/Agent.js"
+import { AgentId, AgentMetadata, ValidationResult } from "../../Domain/Model/Agent.js"
 import type { OntologyContext } from "../../Domain/Model/Ontology.js"
 import { ConfigService } from "../Config.js"
 import { generateObjectWithFeedback } from "../GenerateWithFeedback.js"
@@ -714,18 +715,20 @@ export class CorrectorAgent extends Effect.Service<CorrectorAgent>()("CorrectorA
           violations.map((v) =>
             correct(v, store, ontologyContext).pipe(
               Effect.catchAll((error) =>
-                Effect.succeed(new CorrectionResult({
-                  violation: v,
-                  correction: new Correction({
-                    strategy: "skip",
-                    focusNode: v.focusNode,
-                    path: v.path,
-                    explanation: `Error: ${error.message}`,
-                    confidence: 0
-                  }),
-                  applied: false,
-                  durationMs: 0
-                }))
+                Effect.succeed(
+                  new CorrectionResult({
+                    violation: v,
+                    correction: new Correction({
+                      strategy: "skip",
+                      focusNode: v.focusNode,
+                      path: v.path,
+                      explanation: `Error: ${error.message}`,
+                      confidence: 0
+                    }),
+                    applied: false,
+                    durationMs: 0
+                  })
+                )
               )
             )
           ),

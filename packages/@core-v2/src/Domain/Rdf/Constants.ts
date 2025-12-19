@@ -228,7 +228,13 @@ export const CLAIMS = {
   Accepted: iri("http://effect-ontology.dev/claims#Accepted"),
   Retracted: iri("http://effect-ontology.dev/claims#Retracted"),
 
-  // Properties
+  // Reification Properties (aligned with claims.ttl vocabulary)
+  claimSubject: iri("http://effect-ontology.dev/claims#claimSubject"),
+  claimPredicate: iri("http://effect-ontology.dev/claims#claimPredicate"),
+  claimObject: iri("http://effect-ontology.dev/claims#claimObject"),
+  claimLiteral: iri("http://effect-ontology.dev/claims#claimLiteral"),
+
+  // Metadata Properties
   rank: iri("http://effect-ontology.dev/claims#rank"),
   confidence: iri("http://effect-ontology.dev/claims#confidence"),
   validFrom: iri("http://effect-ontology.dev/claims#validFrom"),

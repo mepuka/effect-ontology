@@ -10,8 +10,6 @@
  */
 
 import { Data, Effect, Schema, Stream } from "effect"
-import type { KnowledgeGraph } from "../../Domain/Model/Entity.js"
-import type { ShaclValidationReport } from "../Shacl.js"
 import {
   type Agent,
   type AgentEvent,
@@ -23,6 +21,8 @@ import {
   PipelineState,
   TerminationCondition
 } from "../../Domain/Model/Agent.js"
+import type { KnowledgeGraph } from "../../Domain/Model/Entity.js"
+import type { ShaclValidationReport } from "../Shacl.js"
 
 // =============================================================================
 // Agent Task Definition
@@ -346,12 +346,12 @@ export class RefinementConfig extends Schema.Class<RefinementConfig>("Refinement
  * @category Types
  */
 export type RefinementStatus =
-  | "conformant"           // All validations pass
-  | "max-iterations"       // Hit iteration limit
-  | "timeout"              // Hit time limit
+  | "conformant" // All validations pass
+  | "max-iterations" // Hit iteration limit
+  | "timeout" // Hit time limit
   | "confidence-threshold" // Confidence dropped too low
-  | "human-rejected"       // Human rejected at checkpoint
-  | "error"                // Pipeline error
+  | "human-rejected" // Human rejected at checkpoint
+  | "error" // Pipeline error
 
 /**
  * RefinementResult - Result of a validation-correction loop

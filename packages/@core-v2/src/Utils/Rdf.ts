@@ -75,8 +75,7 @@ export const buildIri = (baseNamespace: string, localName: string): Iri => {
 /**
  * @deprecated Use extractLocalNameFromIri from Utils/Iri.ts for typed results
  */
-export const extractLocalName = (iri: string): string =>
-  extractLocalNameFromIri(iri)
+export const extractLocalName = (iri: string): string => extractLocalNameFromIri(iri)
 
 /**
  * Sync transform helper: Array of IRIs to array of local names

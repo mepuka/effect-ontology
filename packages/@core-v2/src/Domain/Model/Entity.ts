@@ -189,6 +189,32 @@ export class Entity extends Schema.Class<Entity>("Entity")({
   }),
 
   /**
+   * Document ID this entity was extracted from
+   *
+   * Links entity back to source document for provenance queries.
+   * Set during extraction from DocumentMetadata.
+   *
+   * @example "doc-abc123def456"
+   */
+  documentId: Schema.optional(Schema.String).annotations({
+    title: "Document ID",
+    description: "Source document ID for provenance tracking"
+  }),
+
+  /**
+   * Source URI where the document was loaded from
+   *
+   * GCS URI or other storage path to the source document.
+   * Enables direct lookup of source content.
+   *
+   * @example "gs://bucket/documents/press-release.txt"
+   */
+  sourceUri: Schema.optional(Schema.String).annotations({
+    title: "Source URI",
+    description: "Storage URI of source document"
+  }),
+
+  /**
    * When this entity was extracted from text
    *
    * Auto-set during extraction. Used for temporal queries and audit trails.
@@ -241,6 +267,8 @@ export class Entity extends Schema.Class<Entity>("Entity")({
       attributes: this.attributes,
       chunkIndex: this.chunkIndex,
       chunkId: this.chunkId,
+      documentId: this.documentId,
+      sourceUri: this.sourceUri,
       extractedAt: this.extractedAt,
       eventTime: this.eventTime,
       mentions: this.mentions

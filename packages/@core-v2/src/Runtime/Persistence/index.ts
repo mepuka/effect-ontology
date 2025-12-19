@@ -7,5 +7,5 @@
  * @module Runtime/Persistence
  */
 
-export * from "./PostgresLayer.js"
 export * from "./MigrationRunner.js"
+export * from "./PostgresLayer.js"

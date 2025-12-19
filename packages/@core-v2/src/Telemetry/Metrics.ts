@@ -199,7 +199,7 @@ export class MetricsService extends Effect.Service<MetricsService>()(
         }> =>
           Ref.get(stateRef).pipe(
             Effect.map((state) => {
-              const { hits, misses, latencySumMs, latencyCount } = state.embeddingCache
+              const { hits, latencyCount, latencySumMs, misses } = state.embeddingCache
               const total = hits + misses
               return {
                 hits,

@@ -39,35 +39,35 @@
  * @module Service/Agent/AgentCoordinator
  */
 
-import { Chunk, Clock, Effect, HashMap, Queue, Ref } from "effect"
+import { Chunk, Clock, Effect, HashMap, Option, Queue, Ref } from "effect"
 import {
   type Agent,
-  type AgentEvent,
   AgentCompleted,
+  type AgentEvent,
   AgentFailed,
   AgentId,
   type AgentId as AgentIdType,
+  AgentMetadata,
   AgentProgress,
   AgentStarted,
-  AgentMetadata,
   type AgentType,
   IntermediateResult,
   PipelineCheckpoint,
   PipelineState,
   TerminationCondition
 } from "../../Domain/Model/Agent.js"
+import { ConfigService } from "../Config.js"
 import {
   AgentExecutionError,
   AgentNotFoundError,
-  AgentTask,
-  PipelineConfig,
   PipelineExecutionError,
-  RefinementConfig,
   RefinementResult,
+  type AgentTask,
+  type PipelineConfig,
+  type RefinementConfig,
   type RefinementStatus,
   type RegisteredAgent
 } from "./types.js"
-import { ConfigService } from "../Config.js"
 
 // =============================================================================
 // Coordinator Types
@@ -151,8 +151,7 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
         }
 
         yield* Ref.update(registryRef, (registry) =>
-          HashMap.set(registry, agent.metadata.id, registered as RegisteredAgent)
-        )
+          HashMap.set(registry, agent.metadata.id, registered as RegisteredAgent))
 
         yield* Effect.logInfo("AgentCoordinator: Registered agent", {
           agentId: agent.metadata.id,
@@ -165,9 +164,7 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
      */
     const unregister = (agentId: AgentIdType): Effect.Effect<void> =>
       Effect.gen(function*() {
-        yield* Ref.update(registryRef, (registry) =>
-          HashMap.remove(registry, agentId)
-        )
+        yield* Ref.update(registryRef, (registry) => HashMap.remove(registry, agentId))
 
         yield* Effect.logInfo("AgentCoordinator: Unregistered agent", { agentId })
       })
@@ -180,12 +177,14 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
         const registry = yield* Ref.get(registryRef)
         const agent = HashMap.get(registry, agentId)
 
-        if (agent._tag === "None") {
+        if (Option.isNone(agent)) {
           const registeredIds = Array.from(HashMap.keys(registry))
-          return yield* Effect.fail(new AgentNotFoundError({
-            agentId,
-            registeredAgents: registeredIds
-          }))
+          return yield* Effect.fail(
+            new AgentNotFoundError({
+              agentId,
+              registeredAgents: registeredIds
+            })
+          )
         }
 
         return agent.value
@@ -252,11 +251,13 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
             yield* Ref.update(eventsRef, (events) => [...events, failedEvent])
             if (options?.onEvent) yield* options.onEvent(failedEvent)
 
-            return yield* Effect.fail(new AgentExecutionError({
-              agentId,
-              message: `Validation failed: ${validation.errors?.join(", ")}`,
-              retryable: false
-            }))
+            return yield* Effect.fail(
+              new AgentExecutionError({
+                agentId,
+                message: `Validation failed: ${validation.errors?.join(", ")}`,
+                retryable: false
+              })
+            )
           }
         }
 
@@ -268,7 +269,8 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
         const result = yield* executeWithTimeout.pipe(
           Effect.catchAll((error) =>
             Effect.gen(function*() {
-              const isTimeout = error && typeof error === "object" && "_tag" in error && error._tag === "TimeoutException"
+              const isTimeout = error && typeof error === "object" && "_tag" in error &&
+                error._tag === "TimeoutException"
               const failedAt = yield* Clock.currentTimeMillis
               const failedEvent = new AgentFailed({
                 agentId,
@@ -280,12 +282,14 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
               yield* Ref.update(eventsRef, (events) => [...events, failedEvent])
               if (options?.onEvent) yield* options.onEvent(failedEvent)
 
-              return yield* Effect.fail(new AgentExecutionError({
-                agentId,
-                message: isTimeout ? "Agent execution timed out" : String(error),
-                cause: error,
-                retryable: !isTimeout
-              }))
+              return yield* Effect.fail(
+                new AgentExecutionError({
+                  agentId,
+                  message: isTimeout ? "Agent execution timed out" : String(error),
+                  cause: error,
+                  retryable: !isTimeout
+                })
+              )
             })
           )
         )
@@ -321,12 +325,14 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
             yield* Ref.update(eventsRef, (events) => [...events, failedEvent])
             if (options?.onEvent) yield* options.onEvent(failedEvent)
 
-            return yield* Effect.fail(new AgentExecutionError({
-              agentId: agent.metadata.id,
-              message: String(error),
-              cause: error,
-              retryable: false
-            }))
+            return yield* Effect.fail(
+              new AgentExecutionError({
+                agentId: agent.metadata.id,
+                message: String(error),
+                cause: error,
+                retryable: false
+              })
+            )
           })
         )
       )
@@ -350,11 +356,13 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
         const agents: Array<RegisteredAgent> = []
         for (const id of agentIds) {
           const agent = yield* getAgent(id).pipe(
-            Effect.mapError((e) => new PipelineExecutionError({
-              pipelineId,
-              message: `Agent not found: ${e.agentId}`,
-              state
-            }))
+            Effect.mapError((e) =>
+              new PipelineExecutionError({
+                pipelineId,
+                message: `Agent not found: ${e.agentId}`,
+                state
+              })
+            )
           )
           agents.push(agent)
         }
@@ -373,13 +381,15 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
           })
 
           const result = yield* executeAgent(agent, currentInput, eventsRef, options).pipe(
-            Effect.mapError((e) => new PipelineExecutionError({
-              pipelineId,
-              message: e.message,
-              failedAgentId: agentId,
-              state,
-              cause: e
-            })),
+            Effect.mapError((e) =>
+              new PipelineExecutionError({
+                pipelineId,
+                message: e.message,
+                failedAgentId: agentId,
+                state,
+                cause: e
+              })
+            ),
             Effect.catchAll((error) => {
               if (options?.continueOnError) {
                 return Effect.succeed({ output: null, duration: 0 })
@@ -457,11 +467,13 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
         const agents: Array<RegisteredAgent> = []
         for (const id of agentIds) {
           const agent = yield* getAgent(id).pipe(
-            Effect.mapError((e) => new PipelineExecutionError({
-              pipelineId,
-              message: `Agent not found: ${e.agentId}`,
-              state
-            }))
+            Effect.mapError((e) =>
+              new PipelineExecutionError({
+                pipelineId,
+                message: `Agent not found: ${e.agentId}`,
+                state
+              })
+            )
           )
           agents.push(agent)
         }
@@ -495,13 +507,15 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
             })
 
             const result = yield* executeAgent(agent, currentInput, eventsRef, options).pipe(
-              Effect.mapError((e) => new PipelineExecutionError({
-                pipelineId,
-                message: e.message,
-                failedAgentId: agentId,
-                state,
-                cause: e
-              })),
+              Effect.mapError((e) =>
+                new PipelineExecutionError({
+                  pipelineId,
+                  message: e.message,
+                  failedAgentId: agentId,
+                  state,
+                  cause: e
+                })
+              ),
               Effect.catchAll((error) => {
                 if (options?.continueOnError) {
                   return Effect.succeed({ output: null, duration: 0 })
@@ -596,11 +610,13 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
         const agents: Array<RegisteredAgent> = []
         for (const id of agentIds) {
           const agent = yield* getAgent(id).pipe(
-            Effect.mapError((e) => new PipelineExecutionError({
-              pipelineId,
-              message: `Agent not found: ${e.agentId}`,
-              state
-            }))
+            Effect.mapError((e) =>
+              new PipelineExecutionError({
+                pipelineId,
+                message: `Agent not found: ${e.agentId}`,
+                state
+              })
+            )
           )
           agents.push(agent)
         }
@@ -610,7 +626,7 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
           agents.map((registered) => {
             const agent = registered.agent as Agent<unknown, unknown, unknown, never>
             return executeAgent(agent, task, eventsRef, options).pipe(
-              Effect.map(({ output, duration }) => ({
+              Effect.map(({ duration, output }) => ({
                 agentId: agent.metadata.id,
                 output,
                 duration,
@@ -626,13 +642,15 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
                     error
                   })
                 }
-                return Effect.fail(new PipelineExecutionError({
-                  pipelineId,
-                  message: error.message,
-                  failedAgentId: agent.metadata.id,
-                  state,
-                  cause: error
-                }))
+                return Effect.fail(
+                  new PipelineExecutionError({
+                    pipelineId,
+                    message: error.message,
+                    failedAgentId: agent.metadata.id,
+                    state,
+                    cause: error
+                  })
+                )
               })
             )
           }),
@@ -649,12 +667,14 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
           if (r.success && r.output !== null) {
             outputsMap.set(r.agentId, r.output)
             completedAgentIds.push(r.agentId)
-            intermediateResults.push(new IntermediateResult({
-              agentId: r.agentId,
-              output: r.output,
-              producedAt: completedAt,
-              durationMs: r.duration
-            }))
+            intermediateResults.push(
+              new IntermediateResult({
+                agentId: r.agentId,
+                output: r.output,
+                producedAt: completedAt,
+                durationMs: r.duration
+              })
+            )
           }
         }
 
@@ -738,11 +758,13 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
         const agents: Array<RegisteredAgent> = []
         for (const id of agentIds) {
           const agent = yield* getAgent(id).pipe(
-            Effect.mapError((e) => new PipelineExecutionError({
-              pipelineId,
-              message: `Agent not found: ${e.agentId}`,
-              state
-            }))
+            Effect.mapError((e) =>
+              new PipelineExecutionError({
+                pipelineId,
+                message: `Agent not found: ${e.agentId}`,
+                state
+              })
+            )
           )
           agents.push(agent)
         }
@@ -764,13 +786,15 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
             })
 
             const result = yield* executeAgent(agent, currentInput, eventsRef, options).pipe(
-              Effect.mapError((e) => new PipelineExecutionError({
-                pipelineId,
-                message: e.message,
-                failedAgentId: agentId,
-                state,
-                cause: e
-              }))
+              Effect.mapError((e) =>
+                new PipelineExecutionError({
+                  pipelineId,
+                  message: e.message,
+                  failedAgentId: agentId,
+                  state,
+                  cause: e
+                })
+              )
             )
 
             outputsMap.set(agentId, result.output)
@@ -781,12 +805,15 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
             state = new PipelineState({
               ...state,
               completedAgents: [...state.completedAgents, agentId],
-              intermediateResults: [...state.intermediateResults, new IntermediateResult({
-                agentId,
-                output: result.output,
-                producedAt: now,
-                durationMs: result.duration
-              })],
+              intermediateResults: [
+                ...state.intermediateResults,
+                new IntermediateResult({
+                  agentId,
+                  output: result.output,
+                  producedAt: now,
+                  durationMs: result.duration
+                })
+              ],
               currentAgentId: undefined
             })
 
@@ -839,41 +866,55 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
 
         // Get agents
         const validatorRegistered = yield* getAgent(validatorId).pipe(
-          Effect.mapError(() => new PipelineExecutionError({
-            pipelineId,
-            message: `Validator agent not found: ${validatorId}`,
-            state: new PipelineState({
+          Effect.mapError(() =>
+            new PipelineExecutionError({
               pipelineId,
-              completedAgents: [],
-              intermediateResults: [],
-              startedAt: startTime,
-              status: "failed"
+              message: `Validator agent not found: ${validatorId}`,
+              state: new PipelineState({
+                pipelineId,
+                completedAgents: [],
+                intermediateResults: [],
+                startedAt: startTime,
+                status: "failed"
+              })
             })
-          }))
+          )
         )
 
         const correctorRegistered = yield* getAgent(correctorId).pipe(
-          Effect.mapError(() => new PipelineExecutionError({
-            pipelineId,
-            message: `Corrector agent not found: ${correctorId}`,
-            state: new PipelineState({
+          Effect.mapError(() =>
+            new PipelineExecutionError({
               pipelineId,
-              completedAgents: [],
-              intermediateResults: [],
-              startedAt: startTime,
-              status: "failed"
+              message: `Corrector agent not found: ${correctorId}`,
+              state: new PipelineState({
+                pipelineId,
+                completedAgents: [],
+                intermediateResults: [],
+                startedAt: startTime,
+                status: "failed"
+              })
             })
-          }))
+          )
         )
 
-        const validator = validatorRegistered.agent as Agent<unknown, { conforms: boolean; violations?: unknown[] }, unknown, never>
-        const corrector = correctorRegistered.agent as Agent<unknown, { correctedGraph: unknown; confidence: number }, unknown, never>
+        const validator = validatorRegistered.agent as Agent<
+          unknown,
+          { conforms: boolean; violations?: Array<unknown> },
+          unknown,
+          never
+        >
+        const corrector = correctorRegistered.agent as Agent<
+          unknown,
+          { correctedGraph: unknown; confidence: number },
+          unknown,
+          never
+        >
 
         let currentGraph = graph
         let iteration = 0
         let status: RefinementStatus = "max-iterations"
         let lastValidationReport: unknown = undefined
-        const violationsFixed: number[] = []
+        const violationsFixed: Array<number> = []
 
         // Main refinement loop
         while (iteration < refinementConfig.maxIterations) {
@@ -896,23 +937,25 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
             eventsRef,
             options
           ).pipe(
-            Effect.mapError((e) => new PipelineExecutionError({
-              pipelineId,
-              message: `Validation failed: ${e.message}`,
-              failedAgentId: validatorId,
-              state: new PipelineState({
+            Effect.mapError((e) =>
+              new PipelineExecutionError({
                 pipelineId,
-                completedAgents: [],
-                intermediateResults: [],
-                startedAt: startTime,
-                status: "failed",
-                iterationCount: iteration
-              }),
-              cause: e
-            }))
+                message: `Validation failed: ${e.message}`,
+                failedAgentId: validatorId,
+                state: new PipelineState({
+                  pipelineId,
+                  completedAgents: [],
+                  intermediateResults: [],
+                  startedAt: startTime,
+                  status: "failed",
+                  iterationCount: iteration
+                }),
+                cause: e
+              })
+            )
           )
 
-          const validationReport = validationResult.output as { conforms: boolean; violations?: unknown[] }
+          const validationReport = validationResult.output as { conforms: boolean; violations?: Array<unknown> }
           lastValidationReport = validationReport
 
           // Check if conformant
@@ -931,23 +974,29 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
             eventsRef,
             options
           ).pipe(
-            Effect.mapError((e) => new PipelineExecutionError({
-              pipelineId,
-              message: `Correction failed: ${e.message}`,
-              failedAgentId: correctorId,
-              state: new PipelineState({
+            Effect.mapError((e) =>
+              new PipelineExecutionError({
                 pipelineId,
-                completedAgents: [],
-                intermediateResults: [],
-                startedAt: startTime,
-                status: "failed",
-                iterationCount: iteration
-              }),
-              cause: e
-            }))
+                message: `Correction failed: ${e.message}`,
+                failedAgentId: correctorId,
+                state: new PipelineState({
+                  pipelineId,
+                  completedAgents: [],
+                  intermediateResults: [],
+                  startedAt: startTime,
+                  status: "failed",
+                  iterationCount: iteration
+                }),
+                cause: e
+              })
+            )
           )
 
-          const correctionOutput = correctionResult.output as { correctedGraph: unknown; confidence: number; correctedCount?: number }
+          const correctionOutput = correctionResult.output as {
+            correctedGraph: unknown
+            confidence: number
+            correctedCount?: number
+          }
           currentGraph = correctionOutput.correctedGraph
           violationsFixed.push(correctionOutput.correctedCount ?? 0)
 
@@ -1118,11 +1167,11 @@ const summarizeOutput = (output: unknown): string => {
   if (typeof output === "string") return output.slice(0, 100)
   if (typeof output === "object") {
     if ("entities" in output) {
-      const kg = output as { entities: unknown[] }
+      const kg = output as { entities: Array<unknown> }
       return `KnowledgeGraph: ${kg.entities.length} entities`
     }
     if ("conforms" in output) {
-      const report = output as { conforms: boolean; violations?: unknown[] }
+      const report = output as { conforms: boolean; violations?: Array<unknown> }
       return `ValidationReport: conforms=${report.conforms}, violations=${report.violations?.length ?? 0}`
     }
     if ("correctedCount" in output) {

@@ -10,9 +10,11 @@
  */
 
 import { LanguageModel } from "@effect/ai"
-import { Chunk, DateTime, Duration, Effect, Layer, Schedule } from "effect"
+import { Chunk, DateTime, Duration, Effect, Layer, Match, Option, Schedule } from "effect"
 import type { ShaclValidationError, ValidationPolicyError } from "../Domain/Error/Shacl.js"
+import type { ContentHash, Namespace, OntologyName } from "../Domain/Identity.js"
 import { ChunkingConfig, LlmConfig, RunConfig } from "../Domain/Model/ExtractionRun.js"
+import { OntologyRef } from "../Domain/Model/Ontology.js"
 import {
   EnhancedValidationReport,
   ExtractionMetrics,
@@ -25,16 +27,21 @@ import {
   ViolationExplanation,
   ViolationsByLevel
 } from "../Domain/Model/OntologyAgent.js"
-import { OntologyRef } from "../Domain/Model/Ontology.js"
-import type { ContentHash, Namespace, OntologyName } from "../Domain/Identity.js"
 import { ClaimService, type CreateClaimInput } from "./Claim.js"
 import { ConfigService } from "./Config.js"
 import { ExtractionWorkflow } from "./ExtractionWorkflow.js"
 import { OntologyService } from "./Ontology.js"
 import { RdfBuilder, type RdfStore } from "./Rdf.js"
-import { type ShaclValidationReport, ShaclService, type ShaclViolation, type ValidationPolicy } from "./Shacl.js"
-import { Reasoner, ReasoningConfig, type ReasoningResult, type ReasoningError, type RuleParseError } from "./Reasoner.js"
-import { SparqlGenerator, type SparqlGenerationError } from "./SparqlGenerator.js"
+import {
+  Reasoner,
+  ReasoningConfig,
+  type ReasoningError,
+  type ReasoningResult,
+  type RuleParseError
+} from "./Reasoner.js"
+import { ShaclService, type ShaclValidationReport, type ShaclViolation, type ValidationPolicy } from "./Shacl.js"
+import { FallbackResult, type SparqlBindings, type SparqlQuad, SparqlService, type SparqlValue } from "./Sparql.js"
+import { type SparqlGenerationError, SparqlGenerator } from "./SparqlGenerator.js"
 import { StorageService } from "./Storage.js"
 
 /**
@@ -79,6 +86,7 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
     const shaclService = yield* ShaclService
     const rdfBuilder = yield* RdfBuilder
     const sparqlGenerator = yield* SparqlGenerator
+    const sparqlService = yield* SparqlService
     const reasoner = yield* Reasoner
     const llm = yield* LanguageModel.LanguageModel
     const storage = yield* StorageService
@@ -93,12 +101,10 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
 
         // Load from storage (GCS or local filesystem via StorageService)
         const contentOpt = yield* storage.get(ontologyPath).pipe(
-          Effect.mapError((error) =>
-            new Error(`Failed to load ontology from storage: ${error.message}`)
-          )
+          Effect.mapError((error) => new Error(`Failed to load ontology from storage: ${error.message}`))
         )
 
-        if (contentOpt._tag === "None") {
+        if (Option.isNone(contentOpt)) {
           return yield* Effect.fail(
             new Error(`Ontology file not found at ${ontologyPath}`)
           )
@@ -106,9 +112,7 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
 
         // Parse Turtle to RDF store
         const ontologyStore = yield* rdfBuilder.parseTurtle(contentOpt.value).pipe(
-          Effect.mapError((error) =>
-            new Error(`Failed to parse ontology: ${error.message}`)
-          )
+          Effect.mapError((error) => new Error(`Failed to parse ontology: ${error.message}`))
         )
 
         yield* Effect.logInfo("Ontology store loaded for SHACL shapes", {
@@ -240,7 +244,8 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
           yield* Effect.logInfo("OntologyAgent.extractWithClaims starting", {
             textLength: text.length,
             articleId: options.articleId,
-            defaultConfidence: options.defaultConfidence
+            defaultConfidence: options.defaultConfidence,
+            targetNamespace: options.targetNamespace ?? config.rdf.baseNamespace
           })
 
           // Execute extraction workflow
@@ -264,21 +269,31 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
           let claimCount = 0
 
           // Build entity ID -> IRI map for resolving subject/object references
+          // Use targetNamespace option, falling back to config.rdf.baseNamespace
+          // This ensures entities are minted in the local ontology namespace,
+          // NOT borrowed from class namespaces (e.g., foaf:, org:)
+          // Convert Namespace identifier to full IRI if targetNamespace is provided
+          const baseNamespace = options.targetNamespace
+            ? (() => {
+              // Extract protocol://domain/ from config.rdf.baseNamespace
+              const match = config.rdf.baseNamespace.match(/^https?:\/\/[^/]+\//)
+              const baseDomain = match ? match[0] : "http://example.org/"
+              return `${baseDomain}${options.targetNamespace}/`
+            })()
+            : config.rdf.baseNamespace
           const entityIriMap = new Map<string, string>()
           for (const entity of graph.entities) {
-            // Entities get IRIs based on their types - use first type's namespace
-            const baseNamespace = entity.types[0]?.replace(/[^/]+$/, "") ?? "http://example.org/entity/"
             entityIriMap.set(entity.id, `${baseNamespace}${entity.id}`)
           }
 
           for (const relation of graph.relations) {
-            // Resolve subject IRI from entity ID
-            const subjectIri = entityIriMap.get(relation.subjectId) ?? `http://example.org/entity/${relation.subjectId}`
+            // Resolve subject IRI from entity ID (use baseNamespace for fallback too)
+            const subjectIri = entityIriMap.get(relation.subjectId) ?? `${baseNamespace}${relation.subjectId}`
 
             // Determine if object is entity reference or literal
             const isEntityRef = typeof relation.object === "string" && relation.isEntityReference
             const objectValue = isEntityRef
-              ? (entityIriMap.get(relation.object as string) ?? `http://example.org/entity/${relation.object}`)
+              ? (entityIriMap.get(relation.object as string) ?? `${baseNamespace}${relation.object}`)
               : String(relation.object)
             const objectType = isEntityRef ? "iri" as const : "literal" as const
 
@@ -293,11 +308,13 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
               objectType,
               articleId: options.articleId,
               confidence,
-              evidence: relation.evidence ? {
-                text: relation.evidence.text,
-                startOffset: relation.evidence.startChar,
-                endOffset: relation.evidence.endChar
-              } : undefined
+              evidence: relation.evidence ?
+                {
+                  text: relation.evidence.text,
+                  startOffset: relation.evidence.startChar,
+                  endOffset: relation.evidence.endChar
+                } :
+                undefined
             }
 
             yield* claimService.createClaim(claimInput)
@@ -401,7 +418,7 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
               }).pipe(
                 Effect.map(() => ({
                   inferredTripleCount: 0,
-                  rulesApplied: [] as readonly string[],
+                  rulesApplied: [] as ReadonlyArray<string>,
                   durationMs: 0
                 }))
               )
@@ -491,7 +508,7 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
               }).pipe(
                 Effect.map(() => ({
                   inferredTripleCount: 0,
-                  rulesApplied: [] as readonly string[],
+                  rulesApplied: [] as ReadonlyArray<string>,
                   durationMs: 0
                 }))
               )
@@ -599,13 +616,15 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
       explainViolations: (
         violations: ReadonlyArray<ShaclViolation>
       ): ReadonlyArray<ViolationExplanation> =>
-        violations.map((v) => new ViolationExplanation({
-          focusNode: v.focusNode,
-          path: v.path,
-          explanation: formatViolationExplanation(v),
-          suggestion: generateCorrectionSuggestion(v),
-          severity: v.severity
-        })),
+        violations.map((v) =>
+          new ViolationExplanation({
+            focusNode: v.focusNode,
+            path: v.path,
+            explanation: formatViolationExplanation(v),
+            suggestion: generateCorrectionSuggestion(v),
+            severity: v.severity
+          })
+        ),
 
       /**
        * Validate an RDF graph with auto-generated shapes and enhanced reporting
@@ -669,13 +688,15 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
           const byLevel = groupViolationsBySeverity(report.violations)
 
           // Generate explanations
-          const explanations = report.violations.map((v) => new ViolationExplanation({
-            focusNode: v.focusNode,
-            path: v.path,
-            explanation: formatViolationExplanation(v),
-            suggestion: generateCorrectionSuggestion(v),
-            severity: v.severity
-          }))
+          const explanations = report.violations.map((v) =>
+            new ViolationExplanation({
+              focusNode: v.focusNode,
+              path: v.path,
+              explanation: formatViolationExplanation(v),
+              suggestion: generateCorrectionSuggestion(v),
+              severity: v.severity
+            })
+          )
 
           const endTime = yield* DateTime.now
           const durationMs = DateTime.distance(startTime, endTime)
@@ -754,21 +775,80 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
             confidence: sparqlResult.confidence
           })
 
-          // Execute pattern-based queries to get data from the store
-          // For now, we extract all triples and let LLM interpret them
-          // TODO: Implement full SPARQL execution when parser is available
-          const allQuads = yield* rdfBuilder.queryStore(dataStore, {})
+          // Execute SPARQL query using Oxigraph
+          const sparqlResult_exec = yield* sparqlService.execute(dataStore, sparqlResult.sparql).pipe(
+            Effect.catchAll((error) =>
+              Effect.gen(function*() {
+                yield* Effect.logWarning("SPARQL execution failed, falling back to all triples", {
+                  error: String(error),
+                  query: sparqlResult.sparql
+                })
+                // Fallback to all triples if SPARQL execution fails
+                const allQuads = yield* rdfBuilder.queryStore(dataStore, {})
+                const quads: ReadonlyArray<SparqlQuad> = Chunk.toReadonlyArray(allQuads).map((q) => ({
+                  subject: q.subject,
+                  predicate: q.predicate,
+                  object: typeof q.object === "object" && "value" in q.object
+                    ? { type: "literal" as const, value: q.object.value }
+                    : { type: "uri" as const, value: q.object as string },
+                  graph: q.graph
+                }))
+                return new FallbackResult({
+                  quads,
+                  reason: String(error)
+                })
+              })
+            )
+          )
 
-          // Convert quads to a simple representation for LLM
-          const triplesForLlm = Chunk.toReadonlyArray(allQuads).map((quad) => ({
-            subject: extractLocalName(String(quad.subject)),
-            predicate: extractLocalName(String(quad.predicate)),
-            object: typeof quad.object === "string"
-              ? extractLocalName(quad.object)
-              : String(quad.object)
-          }))
+          // Convert SPARQL results to triples representation for LLM
+          const triplesForLlm = Match.value(sparqlResult_exec).pipe(
+            Match.tag("FallbackResult", (result) =>
+              // Fallback case - use all quads
+              result.quads.map((quad) => ({
+                subject: extractLocalName(quad.subject),
+                predicate: extractLocalName(quad.predicate),
+                object: quad.object.type === "uri"
+                  ? extractLocalName(quad.object.value)
+                  : quad.object.value
+              }))),
+            Match.tag("SelectResult", (result) =>
+              // SELECT query - convert bindings to triples
+              result.bindings.flatMap((binding: SparqlBindings) => {
+                const entries = Array.from(binding.entries())
+                if (entries.length === 0) return []
 
-          yield* Effect.logDebug("Retrieved triples from store", {
+                // Create a pseudo-triple from the binding variables
+                // For queries like SELECT ?name WHERE { ?s schema:name ?name }
+                // we create entries showing the bound values
+                return entries.map(([varName, value]) => ({
+                  subject: "result",
+                  predicate: varName,
+                  object: value.type === "uri"
+                    ? extractLocalName(value.value)
+                    : value.value
+                }))
+              })),
+            Match.tag("ConstructResult", (result) =>
+              // CONSTRUCT query - use the constructed quads directly
+              result.quads.map((quad) => ({
+                subject: extractLocalName(quad.subject),
+                predicate: extractLocalName(quad.predicate),
+                object: quad.object.type === "uri"
+                  ? extractLocalName(quad.object.value)
+                  : quad.object.value
+              }))),
+            Match.tag("AskResult", (result) => // ASK query - create a single result triple
+            [{
+              subject: "query",
+              predicate: "result",
+              object: result.value ? "true" : "false"
+            }]),
+            Match.exhaustive
+          )
+
+          yield* Effect.logDebug("SPARQL execution complete", {
+            resultType: sparqlResult_exec._tag,
             tripleCount: triplesForLlm.length
           })
 
@@ -784,22 +864,43 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
           const endTime = yield* DateTime.now
           const durationMs = DateTime.distance(startTime, endTime)
 
-          // Create bindings from triples (simplified representation)
-          const bindings = triplesForLlm.slice(0, 10).map((t) =>
-            new QueryBinding({
-              bindings: {
-                subject: t.subject,
-                predicate: t.predicate,
-                object: t.object
-              }
-            })
+          // Create bindings from SPARQL results
+          const bindings = Match.value(sparqlResult_exec).pipe(
+            Match.tag("SelectResult", (result) =>
+              // Use actual SPARQL bindings for SELECT queries
+              result.bindings.slice(0, 10).map((binding: SparqlBindings) => {
+                const bindingObj: Record<string, string> = {}
+                for (const [key, value] of binding.entries()) {
+                  bindingObj[key] = value.type === "uri"
+                    ? extractLocalName(value.value)
+                    : value.value
+                }
+                return new QueryBinding({ bindings: bindingObj })
+              })),
+            Match.orElse(() =>
+              // Fallback: create bindings from triples representation
+              triplesForLlm.slice(0, 10).map((t) =>
+                new QueryBinding({
+                  bindings: {
+                    subject: t.subject,
+                    predicate: t.predicate,
+                    object: t.object
+                  }
+                })
+              )
+            )
           )
 
-          // Calculate confidence based on SPARQL generation and result count
-          const confidence = Math.min(
-            sparqlResult.confidence,
-            triplesForLlm.length > 0 ? 0.8 : 0.3
+          // Calculate confidence based on SPARQL generation and result quality
+          // Higher confidence for actual SPARQL results vs fallback
+          const resultConfidence = Match.value(sparqlResult_exec).pipe(
+            Match.tag("FallbackResult", () => triplesForLlm.length > 0 ? 0.7 : 0.3),
+            Match.tag("SelectResult", () => triplesForLlm.length > 0 ? 0.9 : 0.5),
+            Match.tag("ConstructResult", () => triplesForLlm.length > 0 ? 0.9 : 0.5),
+            Match.tag("AskResult", (result) => result.value ? 0.95 : 0.85),
+            Match.exhaustive
           )
+          const confidence = Math.min(sparqlResult.confidence, resultConfidence)
 
           yield* Effect.logInfo("OntologyAgent.query complete", {
             answerLength: answerResult.length,
@@ -896,8 +997,7 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
        */
       reasonForValidation: (
         store: RdfStore
-      ): Effect.Effect<ReasoningResult, ReasoningError | RuleParseError> =>
-        reasoner.reasonForValidation(store),
+      ): Effect.Effect<ReasoningResult, ReasoningError | RuleParseError> => reasoner.reasonForValidation(store),
 
       /**
        * Check if reasoning would add any inferences
@@ -1001,9 +1101,9 @@ const generateCorrectionSuggestion = (violation: ShaclViolation): string | undef
  */
 const groupViolationsBySeverity = (violations: ReadonlyArray<ShaclViolation>): ViolationsByLevel => {
   const grouped = {
-    violations: [] as string[],
-    warnings: [] as string[],
-    info: [] as string[]
+    violations: [] as Array<string>,
+    warnings: [] as Array<string>,
+    info: [] as Array<string>
   }
 
   for (const v of violations) {

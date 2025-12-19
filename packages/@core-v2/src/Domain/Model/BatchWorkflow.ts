@@ -10,6 +10,30 @@
 import { Match, Schema } from "effect"
 import { BatchId, DocumentId, GcsUri, OntologyVersion } from "../Identity.js"
 
+// -----------------------------------------------------------------------------
+// Per-Document Status Tracking
+// -----------------------------------------------------------------------------
+
+/**
+ * Status of a single document within a batch
+ */
+export const DocumentStatus = Schema.Struct({
+  documentId: DocumentId,
+  status: Schema.Literal("pending", "processing", "success", "failed"),
+  graphUri: Schema.optional(GcsUri),
+  entityCount: Schema.optional(Schema.Number),
+  relationCount: Schema.optional(Schema.Number),
+  claimCount: Schema.optional(Schema.Number),
+  error: Schema.optional(Schema.Struct({
+    code: Schema.String,
+    message: Schema.String
+  })),
+  startedAt: Schema.optional(Schema.DateTimeUtc),
+  completedAt: Schema.optional(Schema.DateTimeUtc)
+})
+
+export type DocumentStatus = typeof DocumentStatus.Type
+
 /**
  * Common fields shared by all states.
  */
@@ -40,7 +64,9 @@ export const BatchExtracting = Schema.TaggedStruct("Extracting", {
   documentsTotal: Schema.Number,
   documentsCompleted: Schema.Number,
   documentsFailed: Schema.Number,
-  currentDocumentId: Schema.optional(DocumentId)
+  currentDocumentId: Schema.optional(DocumentId),
+  /** Per-document status for visibility into partial failures */
+  documentStatuses: Schema.optional(Schema.Array(DocumentStatus))
 })
 
 export const BatchResolving = Schema.TaggedStruct("Resolving", {
@@ -68,12 +94,17 @@ export const BatchComplete = Schema.TaggedStruct("Complete", {
   canonicalGraphUri: GcsUri,
   stats: Schema.Struct({
     documentsProcessed: Schema.Number,
+    documentsSucceeded: Schema.optional(Schema.Number),
+    documentsFailed: Schema.optional(Schema.Number),
     entitiesExtracted: Schema.Number,
     relationsExtracted: Schema.Number,
+    claimsExtracted: Schema.Number,
     clustersResolved: Schema.Number,
     triplesIngested: Schema.Number,
     totalDurationMs: Schema.Number
   }),
+  /** Per-document status for visibility into partial failures */
+  documentStatuses: Schema.optional(Schema.Array(DocumentStatus)),
   completedAt: Schema.DateTimeUtc
 })
 
@@ -88,7 +119,9 @@ export const BatchFailed = Schema.TaggedStruct("Failed", {
   }),
   lastSuccessfulStage: Schema.optional(
     Schema.Literal("pending", "preprocessing", "extracting", "resolving", "validating", "ingesting")
-  )
+  ),
+  /** Per-document status for visibility into which documents succeeded/failed */
+  documentStatuses: Schema.optional(Schema.Array(DocumentStatus))
 })
 
 export const BatchState = Schema.Union(
@@ -146,17 +179,17 @@ export const isTerminal = Match.type<BatchState>().pipe(
  */
 export const progressPercent = Match.type<BatchState>().pipe(
   Match.tag("Pending", () => 0),
-  Match.tag("Preprocessing", (s) =>
-    s.documentsTotal > 0 ? Math.round((s.documentsClassified / s.documentsTotal) * 10) : 0
+  Match.tag(
+    "Preprocessing",
+    (s) => s.documentsTotal > 0 ? Math.round((s.documentsClassified / s.documentsTotal) * 10) : 0
   ),
-  Match.tag("Extracting", (s) =>
-    s.documentsTotal > 0 ? 10 + Math.round((s.documentsCompleted / s.documentsTotal) * 25) : 10
+  Match.tag(
+    "Extracting",
+    (s) => s.documentsTotal > 0 ? 10 + Math.round((s.documentsCompleted / s.documentsTotal) * 25) : 10
   ),
   Match.tag("Resolving", () => 45),
   Match.tag("Validating", () => 65),
-  Match.tag("Ingesting", (s) =>
-    s.triplesTotal > 0 ? 75 + Math.round((s.triplesIngested / s.triplesTotal) * 25) : 85
-  ),
+  Match.tag("Ingesting", (s) => s.triplesTotal > 0 ? 75 + Math.round((s.triplesIngested / s.triplesTotal) * 25) : 85),
   Match.tag("Complete", () => 100),
   Match.tag("Failed", () => -1)
 )
@@ -266,8 +299,7 @@ export const isValidStateTransition = (from: BatchState, to: BatchState): boolea
  * @since 2.0.0
  * @category Validation
  */
-export const getValidNextStates = (tag: BatchStage): ReadonlyArray<BatchStage> =>
-  VALID_TRANSITIONS[tag]
+export const getValidNextStates = (tag: BatchStage): ReadonlyArray<BatchStage> => VALID_TRANSITIONS[tag]
 
 /**
  * Check if a state can fail (transition to Failed).
@@ -278,5 +310,4 @@ export const getValidNextStates = (tag: BatchStage): ReadonlyArray<BatchStage> =
  * @since 2.0.0
  * @category Validation
  */
-export const canFail = (tag: BatchStage): boolean =>
-  VALID_TRANSITIONS[tag].includes("Failed")
+export const canFail = (tag: BatchStage): boolean => VALID_TRANSITIONS[tag].includes("Failed")

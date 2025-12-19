@@ -8,16 +8,16 @@
  * @module Repository
  */
 
-export * from "./types.js"
-export * from "./schema.js"
-export { ClaimRepository, type ClaimFilter, type ConflictCandidate } from "./Claim.js"
-export { ArticleRepository, type ArticleFilter } from "./Article.js"
-
 import * as Pg from "@effect/sql-drizzle/Pg"
 import { PgClient } from "@effect/sql-pg"
 import { Config, Layer, Redacted } from "effect"
-import { ClaimRepository } from "./Claim.js"
 import { ArticleRepository } from "./Article.js"
+import { ClaimRepository } from "./Claim.js"
+
+export { type ArticleFilter, ArticleRepository } from "./Article.js"
+export { type ClaimFilter, ClaimRepository, type ConflictCandidate } from "./Claim.js"
+export * from "./schema.js"
+export * from "./types.js"
 
 // =============================================================================
 // Layer Composition

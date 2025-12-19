@@ -623,8 +623,7 @@ export type Event = typeof Event.Type
  * @since 2.0.0
  * @category Constructors
  */
-export const claimIdFromHash = (hash: string): ClaimId =>
-  `claim-${hash.slice(0, 12)}` as ClaimId
+export const claimIdFromHash = (hash: string): ClaimId => `claim-${hash.slice(0, 12)}` as ClaimId
 
 /**
  * Create an AssertionId from a hash
@@ -632,8 +631,7 @@ export const claimIdFromHash = (hash: string): ClaimId =>
  * @since 2.0.0
  * @category Constructors
  */
-export const assertionIdFromHash = (hash: string): AssertionId =>
-  `assertion-${hash.slice(0, 12)}` as AssertionId
+export const assertionIdFromHash = (hash: string): AssertionId => `assertion-${hash.slice(0, 12)}` as AssertionId
 
 /**
  * Create a DerivedAssertionId from a hash
@@ -650,5 +648,4 @@ export const derivedAssertionIdFromHash = (hash: string): DerivedAssertionId =>
  * @since 2.0.0
  * @category Constructors
  */
-export const eventIdFromHash = (hash: string): EventId =>
-  `event-${hash.slice(0, 12)}` as EventId
+export const eventIdFromHash = (hash: string): EventId => `event-${hash.slice(0, 12)}` as EventId

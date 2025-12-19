@@ -89,8 +89,7 @@ export class EmbeddingCache extends Context.Tag("@core-v2/EmbeddingCache")<
       Effect.gen(function*() {
         const cache = yield* Ref.make(HashMap.empty<string, CacheEntry>())
 
-        const isExpired = (entry: CacheEntry, now: number): boolean =>
-          now - entry.createdAt > config.ttlMs
+        const isExpired = (entry: CacheEntry, now: number): boolean => now - entry.createdAt > config.ttlMs
 
         const evictLRU = (
           map: HashMap.HashMap<string, CacheEntry>
@@ -133,8 +132,7 @@ export class EmbeddingCache extends Context.Tag("@core-v2/EmbeddingCache")<
                 HashMap.set(m, hash, {
                   ...entry.value,
                   lastAccessedAt: now
-                })
-              )
+                }))
 
               return Option.some(entry.value.embedding)
             }),

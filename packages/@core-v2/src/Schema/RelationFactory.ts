@@ -21,6 +21,17 @@ import { EmptyVocabularyError } from "./Errors.js"
 export { EmptyVocabularyError }
 
 /**
+ * Coerce string array to IRI array.
+ *
+ * PropertyDefinition.id is typed as `string` from Schema parsing,
+ * but the values are valid IRIs from ontology. This helper documents
+ * the intentional type coercion from string to branded IRI type.
+ *
+ * @internal
+ */
+const asIriArray = (ids: ReadonlyArray<string>): ReadonlyArray<IRI> => ids as ReadonlyArray<IRI>
+
+/**
  * Helper: Creates a Union schema from a non-empty array of string literals
  *
  * @internal
@@ -159,10 +170,10 @@ export const makeRelationSchema = (
   // Create local name schemas for each property type
   // LLM outputs local names (e.g., "playsFor") which are expanded to full IRIs post-extraction
   const ObjectPropertyUnion = objectProperties.length > 0
-    ? localNameSchema(objectProperties.map((p) => p.id) as unknown as ReadonlyArray<IRI>, "properties")
+    ? localNameSchema(asIriArray(objectProperties.map((p) => p.id)), "properties")
     : null
   const DatatypePropertyUnion = datatypeProperties.length > 0
-    ? localNameSchema(datatypeProperties.map((p) => p.id) as unknown as ReadonlyArray<IRI>, "properties")
+    ? localNameSchema(asIriArray(datatypeProperties.map((p) => p.id)), "properties")
     : null
 
   // Evidence span schema for provenance tracking

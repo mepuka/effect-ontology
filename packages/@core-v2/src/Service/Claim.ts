@@ -8,13 +8,13 @@
  * @module Service/Claim
  */
 
-import { DateTime, Effect, Option, Array as Arr } from "effect"
-import { ClaimRepository, type ClaimFilter, type ConflictCandidate } from "../Repository/Claim.js"
-import type { ClaimRow, ClaimInsertRow } from "../Repository/schema.js"
-import { RdfBuilder, type RdfStore } from "./Rdf.js"
-import { CLAIMS, RDF, XSD, PROV } from "../Domain/Rdf/Constants.js"
-import { type IRI, Quad, Literal } from "../Domain/Rdf/Types.js"
+import { Array as Arr, DateTime, Effect, Option } from "effect"
+import { CLAIMS, PROV, RDF, XSD } from "../Domain/Rdf/Constants.js"
+import { type IRI, Literal, Quad } from "../Domain/Rdf/Types.js"
 import type { Claim, ClaimId, Evidence } from "../Domain/Schema/KnowledgeModel.js"
+import { type ClaimFilter, ClaimRepository, type ConflictCandidate } from "../Repository/Claim.js"
+import type { ClaimInsertRow, ClaimRow } from "../Repository/schema.js"
+import { RdfBuilder, type RdfStore } from "./Rdf.js"
 
 // =============================================================================
 // Types
@@ -94,7 +94,7 @@ export interface DeprecationResult {
  * @category Services
  */
 export class ClaimService extends Effect.Service<ClaimService>()("ClaimService", {
-  effect: Effect.gen(function* () {
+  effect: Effect.gen(function*() {
     const repo = yield* ClaimRepository
     const rdf = yield* RdfBuilder
 
@@ -108,7 +108,7 @@ export class ClaimService extends Effect.Service<ClaimService>()("ClaimService",
      * Generates a unique claim ID and persists the claim with metadata.
      */
     const createClaim = (input: CreateClaimInput) =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const now = yield* DateTime.now
         const id = crypto.randomUUID()
 
@@ -138,7 +138,7 @@ export class ClaimService extends Effect.Service<ClaimService>()("ClaimService",
      * Marks the claim as deprecated and optionally links to a correction.
      */
     const deprecateClaim = (claimId: string, reason: string, correctionId?: string) =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const now = yield* DateTime.now
 
         yield* repo.deprecateClaim(claimId, correctionId ?? crypto.randomUUID())
@@ -156,8 +156,7 @@ export class ClaimService extends Effect.Service<ClaimService>()("ClaimService",
      *
      * Sets the claim as the preferred value for its subject+predicate.
      */
-    const promoteToPreferred = (claimId: string) =>
-      repo.promoteToPreferred(claimId)
+    const promoteToPreferred = (claimId: string) => repo.promoteToPreferred(claimId)
 
     /**
      * Find claims that conflict with a given claim
@@ -165,28 +164,24 @@ export class ClaimService extends Effect.Service<ClaimService>()("ClaimService",
      * Detects position conflicts (same subject+predicate, different value)
      * and temporal conflicts (overlapping validity periods).
      */
-    const findConflicting = (claim: ClaimRow | ClaimInsertRow) =>
-      repo.findConflictingClaims(claim)
+    const findConflicting = (claim: ClaimRow | ClaimInsertRow) => repo.findConflictingClaims(claim)
 
     /**
      * Get claim history for a subject+predicate
      *
      * Returns all claims (including deprecated) in chronological order.
      */
-    const getClaimHistory = (subjectIri: string, predicateIri: string) =>
-      repo.getClaimHistory(subjectIri, predicateIri)
+    const getClaimHistory = (subjectIri: string, predicateIri: string) => repo.getClaimHistory(subjectIri, predicateIri)
 
     /**
      * Get a claim by ID
      */
-    const getClaim = (claimId: string) =>
-      repo.getClaim(claimId)
+    const getClaim = (claimId: string) => repo.getClaim(claimId)
 
     /**
      * Query claims with filters
      */
-    const getClaims = (filter: ClaimFilter) =>
-      repo.getClaims(filter)
+    const getClaims = (filter: ClaimFilter) => repo.getClaims(filter)
 
     // -------------------------------------------------------------------------
     // RDF Reification
@@ -195,9 +190,10 @@ export class ClaimService extends Effect.Service<ClaimService>()("ClaimService",
     /**
      * Convert a claim to reified RDF quads
      *
-     * Generates quads using the CLAIMS vocabulary:
+     * Generates quads using the CLAIMS vocabulary (ontologies/claims/claims.ttl):
      * - claim:id a claims:Claim
-     * - rdf:subject, rdf:predicate, rdf:object (reification)
+     * - claims:claimSubject, claims:claimPredicate (statement reification)
+     * - claims:claimObject (for IRI objects) OR claims:claimLiteral (for literals)
      * - claims:rank, claims:confidence, claims:extractedAt
      * - claims:validFrom, claims:validUntil (if temporal)
      * - claims:hasEvidence with evidence details
@@ -208,44 +204,62 @@ export class ClaimService extends Effect.Service<ClaimService>()("ClaimService",
      */
     const toReifiedTriples = (claim: ClaimRow, graphUri?: string) =>
       Effect.sync(() => {
-        const quads: Quad[] = []
+        const quads: Array<Quad> = []
         const claimIri = `${CLAIMS.namespace}${claim.id}` as IRI
         const graph = graphUri as IRI | undefined
 
         // Type assertion
-        quads.push(new Quad({
-          subject: claimIri,
-          predicate: RDF.type,
-          object: CLAIMS.Claim,
-          graph
-        }))
+        quads.push(
+          new Quad({
+            subject: claimIri,
+            predicate: RDF.type,
+            object: CLAIMS.Claim,
+            graph
+          })
+        )
 
-        // RDF reification
-        quads.push(new Quad({
-          subject: claimIri,
-          predicate: RDF.subject,
-          object: claim.subjectIri as IRI,
-          graph
-        }))
+        // Claims vocabulary reification (aligned with ontologies/claims/claims.ttl)
+        // Uses claims:claimSubject, claims:claimPredicate, claims:claimObject|claimLiteral
+        // instead of RDF reification (rdf:subject, rdf:predicate, rdf:object)
+        quads.push(
+          new Quad({
+            subject: claimIri,
+            predicate: CLAIMS.claimSubject,
+            object: claim.subjectIri as IRI,
+            graph
+          })
+        )
 
-        quads.push(new Quad({
-          subject: claimIri,
-          predicate: RDF.predicate,
-          object: claim.predicateIri as IRI,
-          graph
-        }))
+        quads.push(
+          new Quad({
+            subject: claimIri,
+            predicate: CLAIMS.claimPredicate,
+            object: claim.predicateIri as IRI,
+            graph
+          })
+        )
 
-        // Object (IRI or Literal)
-        const objectTerm = claim.objectType === "iri"
-          ? claim.objectValue as IRI
-          : new Literal({ value: claim.objectValue })
-
-        quads.push(new Quad({
-          subject: claimIri,
-          predicate: RDF.object,
-          object: objectTerm,
-          graph
-        }))
+        // Object: use claimObject for IRIs, claimLiteral for literals
+        // This preserves the semantic distinction defined in claims.ttl
+        if (claim.objectType === "iri") {
+          quads.push(
+            new Quad({
+              subject: claimIri,
+              predicate: CLAIMS.claimObject,
+              object: claim.objectValue as IRI,
+              graph
+            })
+          )
+        } else {
+          quads.push(
+            new Quad({
+              subject: claimIri,
+              predicate: CLAIMS.claimLiteral,
+              object: new Literal({ value: claim.objectValue }),
+              graph
+            })
+          )
+        }
 
         // Rank
         const rankIri = claim.rank === "preferred"
@@ -254,132 +268,156 @@ export class ClaimService extends Effect.Service<ClaimService>()("ClaimService",
           ? CLAIMS.Deprecated
           : CLAIMS.Normal
 
-        quads.push(new Quad({
-          subject: claimIri,
-          predicate: CLAIMS.rank,
-          object: rankIri,
-          graph
-        }))
+        quads.push(
+          new Quad({
+            subject: claimIri,
+            predicate: CLAIMS.rank,
+            object: rankIri,
+            graph
+          })
+        )
 
         // Confidence
         if (claim.confidenceScore) {
-          quads.push(new Quad({
-            subject: claimIri,
-            predicate: CLAIMS.confidence,
-            object: new Literal({
-              value: claim.confidenceScore,
-              datatype: XSD.double
-            }),
-            graph
-          }))
+          quads.push(
+            new Quad({
+              subject: claimIri,
+              predicate: CLAIMS.confidence,
+              object: new Literal({
+                value: claim.confidenceScore,
+                datatype: XSD.double
+              }),
+              graph
+            })
+          )
         }
 
         // Extracted at
         if (claim.createdAt) {
-          quads.push(new Quad({
-            subject: claimIri,
-            predicate: CLAIMS.extractedAt,
-            object: new Literal({
-              value: claim.createdAt.toISOString(),
-              datatype: XSD.dateTime
-            }),
-            graph
-          }))
+          quads.push(
+            new Quad({
+              subject: claimIri,
+              predicate: CLAIMS.extractedAt,
+              object: new Literal({
+                value: claim.createdAt.toISOString(),
+                datatype: XSD.dateTime
+              }),
+              graph
+            })
+          )
         }
 
         // Source article
-        quads.push(new Quad({
-          subject: claimIri,
-          predicate: CLAIMS.statedIn,
-          object: `${CLAIMS.namespace}article/${claim.articleId}` as IRI,
-          graph
-        }))
+        quads.push(
+          new Quad({
+            subject: claimIri,
+            predicate: CLAIMS.statedIn,
+            object: `${CLAIMS.namespace}article/${claim.articleId}` as IRI,
+            graph
+          })
+        )
 
         // Temporal validity
         if (claim.validFrom) {
-          quads.push(new Quad({
-            subject: claimIri,
-            predicate: CLAIMS.validFrom,
-            object: new Literal({
-              value: claim.validFrom.toISOString(),
-              datatype: XSD.dateTime
-            }),
-            graph
-          }))
+          quads.push(
+            new Quad({
+              subject: claimIri,
+              predicate: CLAIMS.validFrom,
+              object: new Literal({
+                value: claim.validFrom.toISOString(),
+                datatype: XSD.dateTime
+              }),
+              graph
+            })
+          )
         }
 
         if (claim.validTo) {
-          quads.push(new Quad({
-            subject: claimIri,
-            predicate: CLAIMS.validUntil,
-            object: new Literal({
-              value: claim.validTo.toISOString(),
-              datatype: XSD.dateTime
-            }),
-            graph
-          }))
+          quads.push(
+            new Quad({
+              subject: claimIri,
+              predicate: CLAIMS.validUntil,
+              object: new Literal({
+                value: claim.validTo.toISOString(),
+                datatype: XSD.dateTime
+              }),
+              graph
+            })
+          )
         }
 
         // Deprecation info
         if (claim.deprecatedAt) {
-          quads.push(new Quad({
-            subject: claimIri,
-            predicate: CLAIMS.deprecatedAt,
-            object: new Literal({
-              value: claim.deprecatedAt.toISOString(),
-              datatype: XSD.dateTime
-            }),
-            graph
-          }))
+          quads.push(
+            new Quad({
+              subject: claimIri,
+              predicate: CLAIMS.deprecatedAt,
+              object: new Literal({
+                value: claim.deprecatedAt.toISOString(),
+                datatype: XSD.dateTime
+              }),
+              graph
+            })
+          )
         }
 
         // Evidence
         if (claim.evidenceText) {
           const evidenceIri = `${claimIri}/evidence` as IRI
 
-          quads.push(new Quad({
-            subject: claimIri,
-            predicate: CLAIMS.hasEvidence,
-            object: evidenceIri,
-            graph
-          }))
+          quads.push(
+            new Quad({
+              subject: claimIri,
+              predicate: CLAIMS.hasEvidence,
+              object: evidenceIri,
+              graph
+            })
+          )
 
-          quads.push(new Quad({
-            subject: evidenceIri,
-            predicate: RDF.type,
-            object: CLAIMS.Evidence,
-            graph
-          }))
+          quads.push(
+            new Quad({
+              subject: evidenceIri,
+              predicate: RDF.type,
+              object: CLAIMS.Evidence,
+              graph
+            })
+          )
 
-          quads.push(new Quad({
-            subject: evidenceIri,
-            predicate: CLAIMS.evidenceText,
-            object: new Literal({ value: claim.evidenceText }),
-            graph
-          }))
+          quads.push(
+            new Quad({
+              subject: evidenceIri,
+              predicate: CLAIMS.evidenceText,
+              object: new Literal({ value: claim.evidenceText }),
+              graph
+            })
+          )
 
           if (claim.evidenceStartOffset !== null) {
-            quads.push(new Quad({
-              subject: evidenceIri,
-              predicate: CLAIMS.startOffset,
-              object: new Literal({
-                value: claim.evidenceStartOffset.toString(),
-                datatype: XSD.integer
-              }),
-              graph
-            }))
+            quads.push(
+              new Quad({
+                subject: evidenceIri,
+                predicate: CLAIMS.startOffset,
+                object: new Literal({
+                  value: claim.evidenceStartOffset.toString(),
+                  datatype: XSD.integer
+                }),
+                graph
+              })
+            )
           }
 
           if (claim.evidenceEndOffset !== null) {
-            quads.push(new Quad({
-              subject: evidenceIri,
-              predicate: CLAIMS.endOffset,
-              object: new Literal({
-                value: claim.evidenceEndOffset.toString(),
-                datatype: XSD.integer
-              }),
-              graph
-            }))
+            quads.push(
+              new Quad({
+                subject: evidenceIri,
+                predicate: CLAIMS.endOffset,
+                object: new Literal({
+                  value: claim.evidenceEndOffset.toString(),
+                  datatype: XSD.integer
+                }),
+                graph
+              })
+            )
           }
         }
 
@@ -392,7 +430,7 @@ export class ClaimService extends Effect.Service<ClaimService>()("ClaimService",
      * Convenience method that converts a claim to quads and adds them to a store.
      */
     const addClaimToStore = (store: RdfStore, claim: ClaimRow, graphUri?: string) =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const quads = yield* toReifiedTriples(claim, graphUri)
         // Add quads to store using low-level N3 operations
         // The RdfBuilder doesn't have a direct addQuads method, so we build manually
@@ -404,8 +442,8 @@ export class ClaimService extends Effect.Service<ClaimService>()("ClaimService",
      *
      * Creates a new RDF store, adds all claims, and serializes to Turtle.
      */
-    const claimsToTurtle = (claims: ClaimRow[], graphUri?: string) =>
-      Effect.gen(function* () {
+    const claimsToTurtle = (claims: Array<ClaimRow>, graphUri?: string) =>
+      Effect.gen(function*() {
         const store = yield* rdf.createStore
 
         for (const claim of claims) {
@@ -422,8 +460,8 @@ export class ClaimService extends Effect.Service<ClaimService>()("ClaimService",
               ? quad.object.datatype
                 ? n3.DataFactory.literal(quad.object.value, n3.DataFactory.namedNode(quad.object.datatype))
                 : quad.object.language
-                  ? n3.DataFactory.literal(quad.object.value, quad.object.language)
-                  : n3.DataFactory.literal(quad.object.value)
+                ? n3.DataFactory.literal(quad.object.value, quad.object.language)
+                : n3.DataFactory.literal(quad.object.value)
               : n3.DataFactory.namedNode(quad.object as string)
             const graph = quad.graph
               ? n3.DataFactory.namedNode(quad.graph)

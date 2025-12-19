@@ -7,7 +7,7 @@
  * @module Runtime/HealthCheck
  */
 
-import { Effect, Duration, Redacted } from "effect"
+import { Duration, Effect, Option, Redacted } from "effect"
 import { ConfigService } from "../Service/Config.js"
 import { StorageService } from "../Service/Storage.js"
 
@@ -95,7 +95,7 @@ export class HealthCheckService extends Effect.Service<HealthCheckService>()(
             if (config.ontology.path) {
               const ontologyResult = yield* storage.get(config.ontology.path).pipe(
                 Effect.timeout(Duration.seconds(5)),
-                Effect.map((opt) => opt._tag === "Some" ? "ok" as const : "error" as const),
+                Effect.map((opt) => Option.isSome(opt) ? "ok" as const : "error" as const),
                 Effect.catchAll((error) =>
                   Effect.logWarning("Ontology file health check failed", {
                     path: config.ontology.path,
@@ -113,7 +113,7 @@ export class HealthCheckService extends Effect.Service<HealthCheckService>()(
             checks.llmApiKey = apiKeyValue && apiKeyValue.length > 0 ? "ok" : "error"
 
             // 5. Storage bucket accessibility (if using GCS)
-            if (config.storage.bucket._tag === "Some" && config.storage.type === "gcs") {
+            if (Option.isSome(config.storage.bucket) && config.storage.type === "gcs") {
               // Try to list or access the bucket root to verify connectivity
               const storageResult = yield* storage.list("").pipe(
                 Effect.timeout(Duration.seconds(5)),
@@ -147,7 +147,7 @@ export class HealthCheckService extends Effect.Service<HealthCheckService>()(
       }
     }),
     dependencies: [
-      // ConfigService provided by parent scope (e.g., EnvConfigService.Live)
+      // Dependencies provided by parent scope via Layer.provideMerge
     ]
   }
 ) {}

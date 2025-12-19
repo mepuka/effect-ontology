@@ -10,6 +10,6 @@
  * @module Cluster
  */
 
+export * from "./BackpressureHandler.js"
 export * from "./ExtractionEntity.js"
 export * from "./ExtractionEntityHandler.js"
-export * from "./BackpressureHandler.js"

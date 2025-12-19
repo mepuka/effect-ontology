@@ -7,8 +7,8 @@
  * @since 2.0.0
  */
 
-import { KeyValueStore } from "@effect/platform"
 import { Persistence } from "@effect/experimental"
+import { KeyValueStore } from "@effect/platform"
 import { Context, Effect, Layer, Option } from "effect"
 import { StorageService, StorageServiceLive, StorageServiceTest } from "./Storage.js"
 

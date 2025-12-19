@@ -175,7 +175,7 @@ Respond with the classification.`
 const buildBatchPrompt = (
   documents: ReadonlyArray<{ index: number; preview: string; contentType?: string }>
 ): string => {
-  const docSummaries = documents.map(({ index, preview, contentType }) => {
+  const docSummaries = documents.map(({ contentType, index, preview }) => {
     const typeHint = contentType ? ` (${contentType})` : ""
     return `Document ${index}${typeHint}:\n"""${preview.slice(0, MAX_PREVIEW_SIZE)}"""`
   }).join("\n\n---\n\n")

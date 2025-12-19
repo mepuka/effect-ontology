@@ -39,11 +39,11 @@ export class EntityResolutionService extends Context.Tag("@core-v2/EntityResolut
 >() {
   static readonly Default: Layer.Layer<EntityResolutionService, never, EmbeddingService> = Layer.effect(
     EntityResolutionService,
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const _embedding = yield* EmbeddingService
       return {
         resolve: (graphs: ReadonlyArray<KnowledgeGraph>, config: EntityResolutionConfig) =>
-          Effect.gen(function* () {
+          Effect.gen(function*() {
             // Merge all graphs
             const mergedEntities = graphs.flatMap((g) => g.entities)
             const mergedRelations = graphs.flatMap((g) => g.relations)

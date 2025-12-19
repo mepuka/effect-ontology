@@ -8,18 +8,18 @@
  * @module Service/Assertion
  */
 
-import { DateTime, Effect, Layer, Option, Ref, Array as Arr, HashMap } from "effect"
-import { ClaimRepository } from "../Repository/Claim.js"
-import type { ClaimRow } from "../Repository/schema.js"
-import { RdfBuilder } from "./Rdf.js"
-import { CLAIMS, RDF, XSD, PROV } from "../Domain/Rdf/Constants.js"
-import { type IRI, Quad, Literal } from "../Domain/Rdf/Types.js"
+import { Array as Arr, DateTime, Effect, HashMap, Layer, Option, Ref } from "effect"
+import { CLAIMS, PROV, RDF, XSD } from "../Domain/Rdf/Constants.js"
+import { type IRI, Literal, Quad } from "../Domain/Rdf/Types.js"
 import {
   type Assertion,
   type AssertionId,
   type AssertionStatus,
   type ClaimId
 } from "../Domain/Schema/KnowledgeModel.js"
+import { ClaimRepository } from "../Repository/Claim.js"
+import type { ClaimRow } from "../Repository/schema.js"
+import { RdfBuilder } from "./Rdf.js"
 
 // =============================================================================
 // Types
@@ -33,7 +33,7 @@ import {
  */
 export interface CreateAssertionInput {
   /** Claim IDs this assertion is derived from */
-  readonly claimIds: readonly string[]
+  readonly claimIds: ReadonlyArray<string>
   /** How the assertion was created */
   readonly decision: "accept" | "synthesize" | "manual"
   /** Who curated this assertion */
@@ -72,7 +72,7 @@ export interface AssertionFilter {
  */
 export interface AssertionWithProvenance {
   readonly assertion: AssertionRow
-  readonly sourceClaims: ClaimRow[]
+  readonly sourceClaims: Array<ClaimRow>
 }
 
 /**
@@ -89,7 +89,7 @@ export interface AssertionRow {
   readonly objectType: "iri" | "literal"
   readonly status: AssertionStatus
   readonly assertedAt: Date
-  readonly derivedFrom: readonly string[]
+  readonly derivedFrom: ReadonlyArray<string>
   readonly curatedBy: string | null
   readonly confidence: number
   readonly validFrom: Date | null
@@ -157,7 +157,7 @@ const ASSERTIONS = {
  * @category Services
  */
 export class AssertionService extends Effect.Service<AssertionService>()("AssertionService", {
-  effect: Effect.gen(function* () {
+  effect: Effect.gen(function*() {
     const claimRepo = yield* ClaimRepository
     const rdf = yield* RdfBuilder
 
@@ -175,11 +175,11 @@ export class AssertionService extends Effect.Service<AssertionService>()("Assert
      * For "synthesize"/"manual": Uses override values or first claim's values
      */
     const createAssertion = (input: CreateAssertionInput) =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const now = yield* DateTime.now
 
         // Fetch source claims
-        const sourceClaims: ClaimRow[] = []
+        const sourceClaims: Array<ClaimRow> = []
         for (const claimId of input.claimIds) {
           const claim = yield* claimRepo.getClaim(claimId)
           if (Option.isSome(claim)) {
@@ -233,7 +233,7 @@ export class AssertionService extends Effect.Service<AssertionService>()("Assert
      * Get an assertion by ID with full provenance
      */
     const getAssertion = (id: string) =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const assertions = yield* Ref.get(assertionsRef)
         const assertion = HashMap.get(assertions, id as AssertionId)
 
@@ -242,7 +242,7 @@ export class AssertionService extends Effect.Service<AssertionService>()("Assert
         }
 
         // Fetch supporting claims
-        const sourceClaims: ClaimRow[] = []
+        const sourceClaims: Array<ClaimRow> = []
         for (const claimId of assertion.value.derivedFrom) {
           const claim = yield* claimRepo.getClaim(claimId)
           if (Option.isSome(claim)) {
@@ -260,21 +260,21 @@ export class AssertionService extends Effect.Service<AssertionService>()("Assert
      * Query assertions with filters
      */
     const query = (filter: AssertionFilter) =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const assertions = yield* Ref.get(assertionsRef)
         let results = Array.from(HashMap.values(assertions))
 
         if (filter.subjectIri) {
-          results = results.filter(a => a.subjectIri === filter.subjectIri)
+          results = results.filter((a) => a.subjectIri === filter.subjectIri)
         }
         if (filter.predicateIri) {
-          results = results.filter(a => a.predicateIri === filter.predicateIri)
+          results = results.filter((a) => a.predicateIri === filter.predicateIri)
         }
         if (filter.status) {
-          results = results.filter(a => a.status === filter.status)
+          results = results.filter((a) => a.status === filter.status)
         }
         if (filter.curatedBy) {
-          results = results.filter(a => a.curatedBy === filter.curatedBy)
+          results = results.filter((a) => a.curatedBy === filter.curatedBy)
         }
 
         // Sort by assertedAt descending
@@ -295,7 +295,7 @@ export class AssertionService extends Effect.Service<AssertionService>()("Assert
      * Get claims that support an assertion
      */
     const getSupportingClaims = (assertionId: string) =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const assertions = yield* Ref.get(assertionsRef)
         const assertion = HashMap.get(assertions, assertionId as AssertionId)
 
@@ -303,7 +303,7 @@ export class AssertionService extends Effect.Service<AssertionService>()("Assert
           return []
         }
 
-        const claims: ClaimRow[] = []
+        const claims: Array<ClaimRow> = []
         for (const claimId of assertion.value.derivedFrom) {
           const claim = yield* claimRepo.getClaim(claimId)
           if (Option.isSome(claim)) {
@@ -320,7 +320,7 @@ export class AssertionService extends Effect.Service<AssertionService>()("Assert
      * Soft-deletes the assertion by marking it as rejected.
      */
     const reject = (assertionId: string, reason: string) =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const now = yield* DateTime.now
         const assertions = yield* Ref.get(assertionsRef)
         const assertion = HashMap.get(assertions, assertionId as AssertionId)
@@ -353,43 +353,51 @@ export class AssertionService extends Effect.Service<AssertionService>()("Assert
      */
     const toTriples = (assertion: AssertionRow, graphUri?: string) =>
       Effect.sync(() => {
-        const quads: Quad[] = []
+        const quads: Array<Quad> = []
         const assertionIri = `${ASSERTIONS.namespace}${assertion.id}` as IRI
         const graph = graphUri as IRI | undefined
 
         // Type assertion
-        quads.push(new Quad({
-          subject: assertionIri,
-          predicate: RDF.type,
-          object: ASSERTIONS.Assertion,
-          graph
-        }))
+        quads.push(
+          new Quad({
+            subject: assertionIri,
+            predicate: RDF.type,
+            object: ASSERTIONS.Assertion,
+            graph
+          })
+        )
 
         // RDF reification (the actual triple being asserted)
-        quads.push(new Quad({
-          subject: assertionIri,
-          predicate: RDF.subject,
-          object: assertion.subjectIri as IRI,
-          graph
-        }))
+        quads.push(
+          new Quad({
+            subject: assertionIri,
+            predicate: RDF.subject,
+            object: assertion.subjectIri as IRI,
+            graph
+          })
+        )
 
-        quads.push(new Quad({
-          subject: assertionIri,
-          predicate: RDF.predicate,
-          object: assertion.predicateIri as IRI,
-          graph
-        }))
+        quads.push(
+          new Quad({
+            subject: assertionIri,
+            predicate: RDF.predicate,
+            object: assertion.predicateIri as IRI,
+            graph
+          })
+        )
 
         const objectTerm = assertion.objectType === "iri"
           ? assertion.objectValue as IRI
           : new Literal({ value: assertion.objectValue })
 
-        quads.push(new Quad({
-          subject: assertionIri,
-          predicate: RDF.object,
-          object: objectTerm,
-          graph
-        }))
+        quads.push(
+          new Quad({
+            subject: assertionIri,
+            predicate: RDF.object,
+            object: objectTerm,
+            graph
+          })
+        )
 
         // Status
         const statusIri = assertion.status === "accepted"
@@ -398,111 +406,131 @@ export class AssertionService extends Effect.Service<AssertionService>()("Assert
           ? ASSERTIONS.Rejected
           : ASSERTIONS.Pending
 
-        quads.push(new Quad({
-          subject: assertionIri,
-          predicate: CLAIMS.claimStatus,
-          object: statusIri,
-          graph
-        }))
+        quads.push(
+          new Quad({
+            subject: assertionIri,
+            predicate: CLAIMS.claimStatus,
+            object: statusIri,
+            graph
+          })
+        )
 
         // Confidence
-        quads.push(new Quad({
-          subject: assertionIri,
-          predicate: CLAIMS.confidence,
-          object: new Literal({
-            value: assertion.confidence.toString(),
-            datatype: XSD.double
-          }),
-          graph
-        }))
+        quads.push(
+          new Quad({
+            subject: assertionIri,
+            predicate: CLAIMS.confidence,
+            object: new Literal({
+              value: assertion.confidence.toString(),
+              datatype: XSD.double
+            }),
+            graph
+          })
+        )
 
         // Asserted at
-        quads.push(new Quad({
-          subject: assertionIri,
-          predicate: ASSERTIONS.assertedAt,
-          object: new Literal({
-            value: assertion.assertedAt.toISOString(),
-            datatype: XSD.dateTime
-          }),
-          graph
-        }))
+        quads.push(
+          new Quad({
+            subject: assertionIri,
+            predicate: ASSERTIONS.assertedAt,
+            object: new Literal({
+              value: assertion.assertedAt.toISOString(),
+              datatype: XSD.dateTime
+            }),
+            graph
+          })
+        )
 
         // Curated by
         if (assertion.curatedBy) {
-          quads.push(new Quad({
-            subject: assertionIri,
-            predicate: ASSERTIONS.curatedBy,
-            object: new Literal({ value: assertion.curatedBy }),
-            graph
-          }))
+          quads.push(
+            new Quad({
+              subject: assertionIri,
+              predicate: ASSERTIONS.curatedBy,
+              object: new Literal({ value: assertion.curatedBy }),
+              graph
+            })
+          )
         }
 
         // Derived from claims (provenance)
         for (const claimId of assertion.derivedFrom) {
-          quads.push(new Quad({
-            subject: assertionIri,
-            predicate: ASSERTIONS.derivedFromClaim,
-            object: `${CLAIMS.namespace}${claimId}` as IRI,
-            graph
-          }))
+          quads.push(
+            new Quad({
+              subject: assertionIri,
+              predicate: ASSERTIONS.derivedFromClaim,
+              object: `${CLAIMS.namespace}${claimId}` as IRI,
+              graph
+            })
+          )
         }
 
         // PROV-O provenance
-        quads.push(new Quad({
-          subject: assertionIri,
-          predicate: PROV.generatedAtTime,
-          object: new Literal({
-            value: assertion.assertedAt.toISOString(),
-            datatype: XSD.dateTime
-          }),
-          graph
-        }))
+        quads.push(
+          new Quad({
+            subject: assertionIri,
+            predicate: PROV.generatedAtTime,
+            object: new Literal({
+              value: assertion.assertedAt.toISOString(),
+              datatype: XSD.dateTime
+            }),
+            graph
+          })
+        )
 
         // Temporal validity
         if (assertion.validFrom) {
-          quads.push(new Quad({
-            subject: assertionIri,
-            predicate: CLAIMS.validFrom,
-            object: new Literal({
-              value: assertion.validFrom.toISOString(),
-              datatype: XSD.dateTime
-            }),
-            graph
-          }))
+          quads.push(
+            new Quad({
+              subject: assertionIri,
+              predicate: CLAIMS.validFrom,
+              object: new Literal({
+                value: assertion.validFrom.toISOString(),
+                datatype: XSD.dateTime
+              }),
+              graph
+            })
+          )
         }
 
         if (assertion.validTo) {
-          quads.push(new Quad({
-            subject: assertionIri,
-            predicate: CLAIMS.validUntil,
-            object: new Literal({
-              value: assertion.validTo.toISOString(),
-              datatype: XSD.dateTime
-            }),
-            graph
-          }))
+          quads.push(
+            new Quad({
+              subject: assertionIri,
+              predicate: CLAIMS.validUntil,
+              object: new Literal({
+                value: assertion.validTo.toISOString(),
+                datatype: XSD.dateTime
+              }),
+              graph
+            })
+          )
         }
 
         // Rejection info
         if (assertion.rejectedAt) {
-          quads.push(new Quad({
-            subject: assertionIri,
-            predicate: ASSERTIONS.rejectedAt,
-            object: new Literal({
-              value: assertion.rejectedAt.toISOString(),
-              datatype: XSD.dateTime
-            }),
-            graph
-          }))
+          quads.push(
+            new Quad({
+              subject: assertionIri,
+              predicate: ASSERTIONS.rejectedAt,
+              object: new Literal({
+                value: assertion.rejectedAt.toISOString(),
+                datatype: XSD.dateTime
+              }),
+              graph
+            })
+          )
         }
 
         if (assertion.rejectionReason) {
-          quads.push(new Quad({
-            subject: assertionIri,
-            predicate: ASSERTIONS.rejectionReason,
-            object: new Literal({ value: assertion.rejectionReason }),
-            graph
-          }))
+          quads.push(
+            new Quad({
+              subject: assertionIri,
+              predicate: ASSERTIONS.rejectionReason,
+              object: new Literal({ value: assertion.rejectionReason }),
+              graph
+            })
+          )
         }
 
         return quads
@@ -512,7 +540,7 @@ export class AssertionService extends Effect.Service<AssertionService>()("Assert
      * Get count of assertions matching filter
      */
     const count = (filter: AssertionFilter) =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const results = yield* query({ ...filter, limit: undefined, offset: undefined })
         return results.length
       })

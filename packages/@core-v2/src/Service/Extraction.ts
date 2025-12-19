@@ -25,7 +25,7 @@ import { type Mention, MentionGraphSchema } from "../Schema/MentionFactory.js"
 import { makeRelationSchema } from "../Schema/RelationFactory.js"
 import { annotateExtraction, annotateLlmCall, LlmAttributes } from "../Telemetry/LlmAttributes.js"
 import { sha256Sync } from "../Utils/Hash.js"
-import { buildLocalNameToIriMap, expandLocalNameToIri, expandTypesToIris } from "../Utils/Iri.js"
+import { buildLocalNameToIriMapSafe, expandLocalNameToIri, expandTypesToIris } from "../Utils/Iri.js"
 import { ConfigService } from "./Config.js"
 import { generateObjectWithFeedback } from "./GenerateWithFeedback.js"
 import { StageTimeoutService } from "./LlmControl/StageTimeout.js"
@@ -193,13 +193,31 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
           // LLM outputs local names (e.g., "age") which we expand to full IRIs (e.g., "http://schema.org/age")
           // PropertyDefinition.id is string but contains valid IRIs from ontology parsing
           const propertyIris: ReadonlyArray<IRI> = (datatypeProps ?? []).map((p) => p.id as IRI)
-          const propertyLocalNameToIriMap = buildLocalNameToIriMap(propertyIris)
+          const propertyMapResult = buildLocalNameToIriMapSafe(propertyIris)
+          const propertyLocalNameToIriMap = propertyMapResult.map
+
+          // Warn about property local name collisions (e.g., org:member vs foaf:member)
+          if (propertyMapResult.hasCollisions) {
+            yield* Effect.logWarning("Property local name collisions detected - LLM output may map to wrong IRI", {
+              collisionCount: propertyMapResult.collisions.size,
+              collisions: Object.fromEntries(propertyMapResult.collisions)
+            })
+          }
 
           // Build local name to IRI map for expanding types post-extraction
           // LLM outputs local names (e.g., "Player") which we expand to full IRIs
           // ClassDefinition.id is already IRI type (branded)
           const classIris: ReadonlyArray<IRI> = candidates.map((c) => c.id)
-          const localNameToIriMap = buildLocalNameToIriMap(classIris)
+          const classMapResult = buildLocalNameToIriMapSafe(classIris)
+          const localNameToIriMap = classMapResult.map
+
+          // Warn about class local name collisions (e.g., foaf:Person vs schema:Person)
+          if (classMapResult.hasCollisions) {
+            yield* Effect.logWarning("Class local name collisions detected - LLM output may map to wrong IRI", {
+              collisionCount: classMapResult.collisions.size,
+              collisions: Object.fromEntries(classMapResult.collisions)
+            })
+          }
 
           // Convert to Entity domain models
           // Schema validation already enforced all constraints (types in candidate classes, ID format)
@@ -489,6 +507,27 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
           // Extract entity IDs for schema constraints
           const validEntityIds = entityArray.map((e) => e.id)
 
+          // Build entity ID → types map for domain/range validation
+          const entityTypesMap = new Map<string, ReadonlyArray<string>>()
+          for (const entity of entityArray) {
+            entityTypesMap.set(entity.id, entity.types)
+          }
+
+          // Build property IRI → domain/range map for validation
+          type PropertyConstraints = {
+            domain: ReadonlyArray<string>
+            range: ReadonlyArray<string>
+            rangeType: string
+          }
+          const propertyConstraintsMap = new Map<string, PropertyConstraints>()
+          for (const prop of properties) {
+            propertyConstraintsMap.set(prop.id, {
+              domain: prop.domain,
+              range: prop.range,
+              rangeType: prop.rangeType
+            })
+          }
+
           // Build prompt using unified Prompt module (ensures schema-prompt alignment)
           const prompt = generateRelationPrompt(text, entityArray, properties)
 
@@ -578,8 +617,34 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
           // Post-extraction expansion converts local names (e.g., "playsFor") to full IRIs
           // PropertyDefinition.id is string but contains valid IRIs from ontology parsing
           const propertyIris: ReadonlyArray<IRI> = properties.map((p) => p.id as IRI)
-          const localNameToIriMap = buildLocalNameToIriMap(propertyIris)
+          const relationPropertyMapResult = buildLocalNameToIriMapSafe(propertyIris)
+          const localNameToIriMap = relationPropertyMapResult.map
+
+          // Warn about relation property local name collisions
+          if (relationPropertyMapResult.hasCollisions) {
+            yield* Effect.logWarning("Relation property local name collisions detected", {
+              collisionCount: relationPropertyMapResult.collisions.size,
+              collisions: Object.fromEntries(relationPropertyMapResult.collisions)
+            })
+          }
           let skippedRelationCount = 0
+          const domainViolations: Array<
+            {
+              subjectId: string
+              predicate: string
+              subjectTypes: ReadonlyArray<string>
+              expectedDomain: ReadonlyArray<string>
+            }
+          > = []
+          const rangeViolations: Array<
+            {
+              objectId: string
+              predicate: string
+              objectTypes: ReadonlyArray<string>
+              expectedRange: ReadonlyArray<string>
+            }
+          > = []
+
           type EvidenceData = {
             text: string
             startChar: number
@@ -592,6 +657,18 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
             object: string
             evidence?: EvidenceData
           }
+
+          // Helper to check if entity types match constraint types (simple intersection check)
+          const typesMatchConstraint = (
+            entityTypes: ReadonlyArray<string>,
+            constraintTypes: ReadonlyArray<string>
+          ): boolean => {
+            // Empty constraint means no restriction
+            if (constraintTypes.length === 0) return true
+            // Check if any entity type matches any constraint type
+            return entityTypes.some((type) => constraintTypes.includes(type))
+          }
+
           const relations = yield* Stream.fromIterable(response.value.relations as ReadonlyArray<RelationData>)
             .pipe(
               Stream.filterMap((relationData: RelationData): Option.Option<Relation> => {
@@ -602,6 +679,35 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
                   skippedRelationCount++
                   return Option.none()
                 }
+
+                // Domain/range validation
+                const constraints = propertyConstraintsMap.get(expandedPredicate)
+                if (constraints) {
+                  // Check domain constraint (subject types must match property domain)
+                  const subjectTypes = entityTypesMap.get(relationData.subjectId) ?? []
+                  if (!typesMatchConstraint(subjectTypes, constraints.domain)) {
+                    domainViolations.push({
+                      subjectId: relationData.subjectId,
+                      predicate: expandedPredicate,
+                      subjectTypes,
+                      expectedDomain: constraints.domain
+                    })
+                  }
+
+                  // Check range constraint for object properties (object entity types must match property range)
+                  if (constraints.rangeType === "object") {
+                    const objectTypes = entityTypesMap.get(relationData.object) ?? []
+                    if (objectTypes.length > 0 && !typesMatchConstraint(objectTypes, constraints.range)) {
+                      rangeViolations.push({
+                        objectId: relationData.object,
+                        predicate: expandedPredicate,
+                        objectTypes,
+                        expectedRange: constraints.range
+                      })
+                    }
+                  }
+                }
+
                 return Option.some(
                   new Relation({
                     subjectId: relationData.subjectId,
@@ -621,6 +727,39 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
               skippedRelationCount,
               validPropertyCount: propertyIris.length
             })
+          }
+
+          // Log domain/range violations (OWL constraint checking)
+          if (domainViolations.length > 0) {
+            yield* Effect.logWarning(
+              "Domain constraint violations detected - subject entity types don't match property domain",
+              {
+                stage: "relation-extraction",
+                violationCount: domainViolations.length,
+                violations: domainViolations.slice(0, 10).map((v) => ({
+                  subject: v.subjectId,
+                  predicate: v.predicate,
+                  subjectTypes: v.subjectTypes,
+                  expectedDomain: v.expectedDomain
+                }))
+              }
+            )
+          }
+
+          if (rangeViolations.length > 0) {
+            yield* Effect.logWarning(
+              "Range constraint violations detected - object entity types don't match property range",
+              {
+                stage: "relation-extraction",
+                violationCount: rangeViolations.length,
+                violations: rangeViolations.slice(0, 10).map((v) => ({
+                  object: v.objectId,
+                  predicate: v.predicate,
+                  objectTypes: v.objectTypes,
+                  expectedRange: v.expectedRange
+                }))
+              }
+            )
           }
 
           // Log extracted relations summary

@@ -10,10 +10,10 @@
  */
 
 import * as Pg from "@effect/sql-drizzle/Pg"
-import { and, eq, or, isNull, desc } from "drizzle-orm"
+import { and, desc, eq, isNull, or } from "drizzle-orm"
 import { DateTime, Effect, Option } from "effect"
-import { claims, corrections, correctionClaims } from "./schema.js"
-import type { ClaimRow, ClaimInsertRow, CorrectionRow, CorrectionInsertRow } from "./schema.js"
+import { claims, correctionClaims, corrections } from "./schema.js"
+import type { ClaimInsertRow, ClaimRow, CorrectionInsertRow, CorrectionRow } from "./schema.js"
 
 // =============================================================================
 // Types
@@ -43,7 +43,7 @@ export interface ConflictCandidate {
 // =============================================================================
 
 export class ClaimRepository extends Effect.Service<ClaimRepository>()("ClaimRepository", {
-  effect: Effect.gen(function* () {
+  effect: Effect.gen(function*() {
     const drizzle = yield* Pg.PgDrizzle
 
     // -------------------------------------------------------------------------
@@ -54,10 +54,8 @@ export class ClaimRepository extends Effect.Service<ClaimRepository>()("ClaimRep
      * Insert a new claim
      */
     const insertClaim = (claim: ClaimInsertRow) =>
-      Effect.gen(function* () {
-        const [result] = yield* Effect.promise(() =>
-          drizzle.insert(claims).values(claim).returning()
-        )
+      Effect.gen(function*() {
+        const [result] = yield* Effect.promise(() => drizzle.insert(claims).values(claim).returning())
         return result
       })
 
@@ -65,10 +63,8 @@ export class ClaimRepository extends Effect.Service<ClaimRepository>()("ClaimRep
      * Get claim by ID
      */
     const getClaim = (id: ClaimId) =>
-      Effect.gen(function* () {
-        const [result] = yield* Effect.promise(() =>
-          drizzle.select().from(claims).where(eq(claims.id, id)).limit(1)
-        )
+      Effect.gen(function*() {
+        const [result] = yield* Effect.promise(() => drizzle.select().from(claims).where(eq(claims.id, id)).limit(1))
         return Option.fromNullable(result)
       })
 
@@ -76,7 +72,7 @@ export class ClaimRepository extends Effect.Service<ClaimRepository>()("ClaimRep
      * Get claims with filters
      */
     const getClaims = (filter: ClaimFilter) =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const conditions = []
 
         if (filter.articleId) {
@@ -120,14 +116,12 @@ export class ClaimRepository extends Effect.Service<ClaimRepository>()("ClaimRep
     /**
      * Get claims by article
      */
-    const getClaimsByArticle = (articleId: ArticleId) =>
-      getClaims({ articleId, includeDeprecated: false })
+    const getClaimsByArticle = (articleId: ArticleId) => getClaims({ articleId, includeDeprecated: false })
 
     /**
      * Get claims by subject IRI
      */
-    const getClaimsBySubject = (subjectIri: string) =>
-      getClaims({ subjectIri, includeDeprecated: false })
+    const getClaimsBySubject = (subjectIri: string) => getClaims({ subjectIri, includeDeprecated: false })
 
     /**
      * Get preferred claims for a subject + predicate
@@ -149,7 +143,7 @@ export class ClaimRepository extends Effect.Service<ClaimRepository>()("ClaimRep
      * Deprecate a claim due to a correction
      */
     const deprecateClaim = (claimId: ClaimId, correctionId: CorrectionId) =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const now = yield* DateTime.now
         yield* Effect.promise(() =>
           drizzle
@@ -178,10 +172,8 @@ export class ClaimRepository extends Effect.Service<ClaimRepository>()("ClaimRep
      * Insert a correction
      */
     const insertCorrection = (correction: CorrectionInsertRow) =>
-      Effect.gen(function* () {
-        const [result] = yield* Effect.promise(() =>
-          drizzle.insert(corrections).values(correction).returning()
-        )
+      Effect.gen(function*() {
+        const [result] = yield* Effect.promise(() => drizzle.insert(corrections).values(correction).returning())
         return result
       })
 
@@ -189,7 +181,7 @@ export class ClaimRepository extends Effect.Service<ClaimRepository>()("ClaimRep
      * Get correction by ID
      */
     const getCorrection = (id: CorrectionId) =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const [result] = yield* Effect.promise(() =>
           drizzle.select().from(corrections).where(eq(corrections.id, id)).limit(1)
         )
@@ -216,7 +208,7 @@ export class ClaimRepository extends Effect.Service<ClaimRepository>()("ClaimRep
      * Get correction chain for a claim (all corrections that affected it)
      */
     const getCorrectionChain = (claimId: ClaimId) =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const result = yield* Effect.promise(() =>
           drizzle
             .select({
@@ -246,8 +238,8 @@ export class ClaimRepository extends Effect.Service<ClaimRepository>()("ClaimRep
      * 1. Same subject + predicate with different object (position conflict)
      * 2. Overlapping temporal validity (temporal conflict)
      */
-    const findConflictingClaims = (claim: ClaimInsertRow | ClaimRow): Effect.Effect<ConflictCandidate[]> =>
-      Effect.gen(function* () {
+    const findConflictingClaims = (claim: ClaimInsertRow | ClaimRow): Effect.Effect<Array<ConflictCandidate>> =>
+      Effect.gen(function*() {
         // Find claims with same subject + predicate but different value
         const candidates = yield* Effect.promise(() =>
           drizzle
@@ -262,7 +254,7 @@ export class ClaimRepository extends Effect.Service<ClaimRepository>()("ClaimRep
             )
         )
 
-        const conflicts: ConflictCandidate[] = []
+        const conflicts: Array<ConflictCandidate> = []
 
         for (const existing of candidates) {
           // Skip if same claim or same value
@@ -298,11 +290,30 @@ export class ClaimRepository extends Effect.Service<ClaimRepository>()("ClaimRep
     /**
      * Insert multiple claims in a batch
      */
-    const insertClaimsBatch = (claimList: ClaimInsertRow[]) =>
-      Effect.gen(function* () {
+    const insertClaimsBatch = (claimList: Array<ClaimInsertRow>) =>
+      Effect.gen(function*() {
+        if (claimList.length === 0) return []
+        return yield* Effect.promise(() => drizzle.insert(claims).values(claimList).returning())
+      })
+
+    /**
+     * Upsert multiple claims in a batch (idempotent)
+     *
+     * Uses ON CONFLICT DO NOTHING on the natural key
+     * (article_id, subject_iri, predicate_iri, object_value).
+     * Returns only the newly inserted claims.
+     */
+    const upsertClaimsBatch = (claimList: Array<ClaimInsertRow>) =>
+      Effect.gen(function*() {
         if (claimList.length === 0) return []
         return yield* Effect.promise(() =>
-          drizzle.insert(claims).values(claimList).returning()
+          drizzle
+            .insert(claims)
+            .values(claimList)
+            .onConflictDoNothing({
+              target: [claims.articleId, claims.subjectIri, claims.predicateIri, claims.objectValue]
+            })
+            .returning()
         )
       })
 
@@ -310,7 +321,7 @@ export class ClaimRepository extends Effect.Service<ClaimRepository>()("ClaimRep
      * Count claims with filters
      */
     const countClaims = (filter: ClaimFilter) =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const result = yield* getClaims({ ...filter, limit: undefined, offset: undefined })
         return result.length
       })
@@ -340,6 +351,7 @@ export class ClaimRepository extends Effect.Service<ClaimRepository>()("ClaimRep
 
       // Bulk
       insertClaimsBatch,
+      upsertClaimsBatch,
       countClaims
     }
   }),

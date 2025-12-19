@@ -1,15 +1,98 @@
 /**
  * Runtime: HTTP Middleware
  *
- * Middleware for the HTTP server, including shutdown tracking.
+ * Middleware for the HTTP server, including shutdown tracking and authentication.
  *
  * @since 2.0.0
  * @module Runtime/HttpMiddleware
  */
 
-import { HttpMiddleware } from "@effect/platform"
-import { Effect } from "effect"
+import { HttpMiddleware, HttpServerRequest, HttpServerResponse } from "@effect/platform"
+import { Effect, Option, Redacted } from "effect"
+import { ConfigService } from "../Service/Config.js"
 import { ShutdownService } from "./Shutdown.js"
+
+/**
+ * Paths that are exempt from authentication (health checks)
+ */
+const PUBLIC_PATHS = ["/", "/health", "/health/live", "/health/ready", "/health/deep"]
+
+/**
+ * Check if a path is public (exempt from auth)
+ */
+const isPublicPath = (path: string): boolean => PUBLIC_PATHS.includes(path) || path.startsWith("/health/")
+
+/**
+ * Parse API keys from comma-separated string
+ */
+const parseApiKeys = (redacted: Redacted.Redacted<string>): Set<string> => {
+  const raw = Redacted.value(redacted)
+  return new Set(raw.split(",").map((k) => k.trim()).filter((k) => k.length > 0))
+}
+
+/**
+ * Middleware to enforce API key authentication
+ *
+ * When API.REQUIRE_AUTH is true:
+ * - All /v1/* endpoints require valid X-API-Key header
+ * - Health endpoints remain public
+ * - Invalid/missing key returns 401
+ *
+ * @since 2.0.0
+ * @category Middleware
+ */
+export const makeAuthMiddleware = Effect.gen(function*() {
+  const config = yield* ConfigService
+
+  // Skip auth if not required
+  if (!config.api.requireAuth) {
+    return HttpMiddleware.make((app) => app)
+  }
+
+  // Parse API keys
+  const apiKeys = Option.match(config.api.keys, {
+    onNone: () => new Set<string>(),
+    onSome: parseApiKeys
+  })
+
+  // If auth is required but no keys configured, log warning
+  if (apiKeys.size === 0) {
+    yield* Effect.logWarning("API.REQUIRE_AUTH is true but no API.KEYS configured - all requests will be rejected")
+  }
+
+  return HttpMiddleware.make((app) =>
+    Effect.gen(function*() {
+      const request = yield* HttpServerRequest.HttpServerRequest
+      const path = request.url
+
+      // Skip auth for public paths
+      if (isPublicPath(path)) {
+        return yield* app
+      }
+
+      // Get API key from header
+      const apiKeyHeader = request.headers["x-api-key"]
+      const apiKey = Array.isArray(apiKeyHeader) ? apiKeyHeader[0] : apiKeyHeader
+
+      // Validate API key
+      if (!apiKey || !apiKeys.has(apiKey)) {
+        yield* Effect.logWarning("Unauthorized request", {
+          path,
+          hasKey: !!apiKey,
+          remoteAddress: request.headers["x-forwarded-for"] ?? "unknown"
+        })
+
+        return yield* HttpServerResponse.json({
+          error: "UNAUTHORIZED",
+          message: "Missing or invalid API key. Provide X-API-Key header."
+        }, { status: 401 })
+      }
+
+      // API key valid, proceed with request
+      return yield* app
+    })
+  )
+})
 
 /**
  * Middleware to track active requests for graceful shutdown

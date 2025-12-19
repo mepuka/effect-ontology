@@ -113,29 +113,94 @@ export const extractLocalNameFromIri = (iri: string): LocalName => {
 }
 
 /**
- * Build a case-insensitive local name to IRI map.
+ * Result of building a local name to IRI map, including collision info
+ *
+ * @since 2.0.0
+ */
+export interface LocalNameMapResult {
+  /** The local name to IRI mapping (last IRI wins for collisions) */
+  readonly map: Map<string, IRI>
+  /** Map of local names that had collisions to all their IRIs */
+  readonly collisions: Map<string, ReadonlyArray<IRI>>
+  /** Whether any collisions were detected */
+  readonly hasCollisions: boolean
+}
+
+/**
+ * Build a case-insensitive local name to IRI map with collision detection.
  *
  * Creates a Map where keys are lowercase local names and values are the full canonical IRIs.
  * This allows case-insensitive local name matching while providing the full IRI.
  *
+ * **IMPORTANT**: When multiple IRIs share the same local name (e.g., `org:member` and
+ * `foaf:member`), this is a collision. The function tracks all collisions and returns
+ * them in the result. The map will contain the LAST IRI for each colliding local name.
+ *
  * @param iris - Array of canonical IRIs
- * @returns Map from lowercase local name to full canonical IRI
+ * @returns LocalNameMapResult with map, collisions, and hasCollisions flag
  *
  * @example
  * ```typescript
- * const map = buildLocalNameToIriMap([
+ * const result = buildLocalNameToIriMapSafe([
  *   "http://ontology/Player",
- *   "http://ontology/TeamRanking"
+ *   "http://xmlns.com/foaf/0.1/member",
+ *   "http://www.w3.org/ns/org#member"
  * ] as IRI[])
- * // map.get("player") => "http://ontology/Player"
- * // map.get("teamranking") => "http://ontology/TeamRanking"
+ * // result.map.get("member") => "http://www.w3.org/ns/org#member" (last wins)
+ * // result.collisions.get("member") => ["http://xmlns.com/foaf/0.1/member", "http://www.w3.org/ns/org#member"]
+ * // result.hasCollisions => true
  * ```
  *
  * @since 2.0.0
  */
+export const buildLocalNameToIriMapSafe = (
+  iris: ReadonlyArray<IRI>
+): LocalNameMapResult => {
+  const map = new Map<string, IRI>()
+  const allByLocalName = new Map<string, Array<IRI>>()
+
+  for (const iri of iris) {
+    const localName = extractLocalNameFromIri(iri).toLowerCase()
+
+    // Track all IRIs for this local name
+    const existing = allByLocalName.get(localName) ?? []
+    existing.push(iri)
+    allByLocalName.set(localName, existing)
+
+    // Map stores the last one (for backwards compatibility)
+    map.set(localName, iri)
+  }
+
+  // Build collisions map (only entries with > 1 IRI)
+  const collisions = new Map<string, ReadonlyArray<IRI>>()
+  for (const [localName, iris] of allByLocalName) {
+    if (iris.length > 1) {
+      collisions.set(localName, iris)
+    }
+  }
+
+  return {
+    map,
+    collisions,
+    hasCollisions: collisions.size > 0
+  }
+}
+
+/**
+ * Build a case-insensitive local name to IRI map.
+ *
+ * **WARNING**: This function silently overwrites collisions (last IRI wins).
+ * For production code, prefer `buildLocalNameToIriMapSafe` which tracks collisions.
+ *
+ * @param iris - Array of canonical IRIs
+ * @returns Map from lowercase local name to full canonical IRI
+ *
+ * @deprecated Use buildLocalNameToIriMapSafe for collision awareness
+ * @since 2.0.0
+ */
 export const buildLocalNameToIriMap = (
   iris: ReadonlyArray<IRI>
-): Map<string, IRI> => new Map(iris.map((iri) => [extractLocalNameFromIri(iri).toLowerCase(), iri]))
+): Map<string, IRI> => buildLocalNameToIriMapSafe(iris).map
 
 /**
  * Expand a local name to its full IRI using case-insensitive matching.

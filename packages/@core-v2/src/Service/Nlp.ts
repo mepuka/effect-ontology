@@ -8,16 +8,18 @@
  * @module Service/Nlp
  */
 
-import { Duration, Effect, Schedule } from "effect"
+import { Duration, Effect, Layer, Schedule } from "effect"
 import model from "wink-eng-lite-web-model"
 import winkNLP from "wink-nlp"
 
-// @ts-expect-error - wink-bm25-text-search has no type definitions
 import winkBM25 from "wink-bm25-text-search"
 import type { ClassDefinition, OntologyContext, PropertyDefinition } from "../Domain/Model/Ontology.js"
 import type { OntologyEmbeddings } from "../Domain/Model/OntologyEmbeddings.js"
 import { type ChunkingStrategy, defaultChunkingParams } from "../Domain/Schema/DocumentMetadata.js"
+import { MetricsService } from "../Telemetry/Metrics.js"
 import { enhanceTextForSearch, generateNGrams } from "../Utils/Text.js"
+import { EmbeddingService, EmbeddingServiceLive } from "./Embedding.js"
+import { EmbeddingCache } from "./EmbeddingCache.js"
 import { NomicNlpService, NomicNlpServiceDefault } from "./NomicNlp.js"
 
 /**
@@ -505,6 +507,7 @@ export class NlpService extends Effect.Service<NlpService>()(
   {
     effect: Effect.gen(function*() {
       const nomic = yield* NomicNlpService
+      const embedding = yield* EmbeddingService
 
       // Initialize wink-nlp with model, pipes (sbd+pos for embeddings)
       // sbd = sentence boundary detection, pos = part-of-speech (required for lemmas/contextual vectors)
@@ -979,37 +982,36 @@ export class NlpService extends Effect.Service<NlpService>()(
             const documents = ontology.toDocuments()
 
             // Create mapping from IRI to embedding and domain model
-
             const embeddingMap = new Map<string, ReadonlyArray<number>>()
             const domainModelMap = new Map<string, ClassDefinition | PropertyDefinition>()
 
-            // Compute embeddings for each document (in parallel)
-            const embeddings = yield* Effect.all(
-              documents.map(([iri, document]) =>
-                nomic.embed(document, "search_document").pipe(
-                  Effect.retry(embeddingRetrySchedule),
-                  Effect.timeout(Duration.millis(EMBEDDING_TIMEOUT_MS)),
-                  Effect.map((embedding) => ({ iri, embedding })),
-                  Effect.catchAll(() => Effect.succeed(null))
-                )
-              ),
-              { concurrency: 5 }
+            // Extract document texts for batch embedding
+            const iris = documents.map(([iri]) => iri)
+            const texts = documents.map(([, document]) => document)
+
+            // Use EmbeddingService.embedBatch for cached embedding computation
+            // This checks the cache first, only computes embeddings for cache misses,
+            // and stores new embeddings in the cache for future use
+            const embeddings = yield* embedding.embedBatch(texts, "search_document").pipe(
+              Effect.retry(embeddingRetrySchedule),
+              Effect.timeout(Duration.millis(EMBEDDING_TIMEOUT_MS * texts.length)),
+              Effect.catchAll(() => Effect.succeed([] as ReadonlyArray<ReadonlyArray<number>>))
             )
 
-            // Store valid embeddings
-            for (const item of embeddings) {
-              if (item) {
-                const { embedding, iri } = item
-                embeddingMap.set(iri, embedding)
+            // Store embeddings with their corresponding IRIs
+            for (let i = 0; i < iris.length && i < embeddings.length; i++) {
+              const iri = iris[i]
+              const emb = embeddings[i]
 
-                // Map IRI to domain model for later retrieval
-                const classDef = ontology.getClass(iri)
-                const propertyDef = ontology.getProperty(iri)
-                if (classDef) {
-                  domainModelMap.set(iri, classDef)
-                } else if (propertyDef) {
-                  domainModelMap.set(iri, propertyDef)
-                }
+              embeddingMap.set(iri, emb)
+
+              // Map IRI to domain model for later retrieval
+              const classDef = ontology.getClass(iri)
+              const propertyDef = ontology.getProperty(iri)
+              if (classDef) {
+                domainModelMap.set(iri, classDef)
+              } else if (propertyDef) {
+                domainModelMap.set(iri, propertyDef)
               }
             }
 
@@ -1152,7 +1154,18 @@ export class NlpService extends Effect.Service<NlpService>()(
           })
       }
     }),
-    dependencies: [NomicNlpServiceDefault],
+    dependencies: [
+      // Bundle provides both NomicNlpService and EmbeddingService
+      // EmbeddingServiceLive requires NomicNlpService | EmbeddingCache | MetricsService
+      Layer.merge(
+        NomicNlpServiceDefault,
+        EmbeddingServiceLive.pipe(
+          Layer.provide(NomicNlpServiceDefault),
+          Layer.provide(EmbeddingCache.Default),
+          Layer.provide(MetricsService.Default)
+        )
+      )
+    ],
     accessors: true
   }
 ) {
