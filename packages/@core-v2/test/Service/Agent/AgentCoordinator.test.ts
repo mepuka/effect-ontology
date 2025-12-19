@@ -242,6 +242,9 @@ const MockConfigService = Layer.succeed(ConfigService, {
     model: "nomic-embed-text-v1.5",
     dimension: 768,
     transformersModelId: "Xenova/nomic-embed-text-v1"
+  },
+  extraction: {
+    runsDir: "/tmp/test-runs"
   }
 } as ConfigService)
 

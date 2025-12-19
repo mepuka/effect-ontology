@@ -24,7 +24,8 @@ export const TestConfigProvider = ConfigProvider.fromMap(
     ["RUNTIME_ENABLE_TRACING", "false"],
     ["EMBEDDING_MODEL", "nomic-embed-text-v1.5"],
     ["EMBEDDING_DIMENSION", "768"],
-    ["EMBEDDING_TRANSFORMERS_MODEL_ID", "Xenova/nomic-embed-text-v1"]
+    ["EMBEDDING_TRANSFORMERS_MODEL_ID", "Xenova/nomic-embed-text-v1"],
+    ["EXTRACTION_RUNS_DIR", "/tmp/test-runs"]
   ]),
   { pathDelim: "_" }
 )

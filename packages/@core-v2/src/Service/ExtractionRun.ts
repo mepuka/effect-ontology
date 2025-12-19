@@ -10,6 +10,7 @@
 import { createHash } from "node:crypto"
 import { FileSystem, Path } from "@effect/platform"
 import { Context, Effect, Layer } from "effect"
+import { ConfigService } from "./Config.js"
 import type { ChunkId, ExtractionRunId, IdempotencyKey } from "../Domain/Identity.js"
 import type {
   AuditError,
@@ -67,8 +68,6 @@ export const getRunIdFromText = (text: string): ExtractionRunId => generateDocum
  * Hash content for integrity checking
  */
 const hashContent = (content: string): string => sha256Hex(content)
-
-const getBaseDir = (): string => process.env.EXTRACTION_RUNS_DIR || "./output/runs"
 
 // =============================================================================
 // Service Interface
@@ -188,7 +187,8 @@ const keyIndexFile = "key-index.json"
 
 const makeExtractionRunService = Effect.gen(function*() {
   const fs = yield* FileSystem.FileSystem
-  const baseDir = getBaseDir()
+  const config = yield* ConfigService
+  const baseDir = config.extraction.runsDir
   const path = yield* Path.Path
 
   // Ensure base directory exists

@@ -70,6 +70,11 @@ const EmbeddingConfig = Config.nested("EMBEDDING")(Config.all({
   )
 }))
 
+const ExtractionConfig = Config.nested("EXTRACTION")(Config.all({
+  /** Base directory for extraction run artifacts */
+  runsDir: Config.string("RUNS_DIR").pipe(Config.withDefault("./output/runs"))
+}))
+
 const RdfConfig = Config.nested("RDF")(Config.all({
   baseNamespace: Config.string("BASE_NAMESPACE").pipe(Config.withDefault("http://example.org/kg/")),
   outputFormat: Config.literal("Turtle", "N-Triples", "JSON-LD")("OUTPUT_FORMAT").pipe(
@@ -95,6 +100,7 @@ export interface AppConfig {
   readonly runtime: Config.Config.Success<typeof RuntimeConfig>
   readonly grounder: Config.Config.Success<typeof GrounderConfig>
   readonly embedding: Config.Config.Success<typeof EmbeddingConfig>
+  readonly extraction: Config.Config.Success<typeof ExtractionConfig>
   readonly rdf: Config.Config.Success<typeof RdfConfig>
 }
 
@@ -136,6 +142,9 @@ export const DEFAULT_CONFIG: AppConfig = {
     dimension: 768,
     transformersModelId: "Xenova/nomic-embed-text-v1"
   },
+  extraction: {
+    runsDir: "./output/runs"
+  },
   rdf: {
     baseNamespace: "http://example.org/kg/",
     outputFormat: "Turtle",
@@ -154,13 +163,14 @@ export const DEFAULT_CONFIG: AppConfig = {
 // =============================================================================
 
 const makeConfigService = Effect.gen(function*() {
-  const [llm, storage, ontology, runtime, grounder, embedding, rdf] = yield* Effect.all([
+  const [llm, storage, ontology, runtime, grounder, embedding, extraction, rdf] = yield* Effect.all([
     LlmConfig,
     StorageConfig,
     OntologyConfig,
     RuntimeConfig,
     GrounderConfig,
     EmbeddingConfig,
+    ExtractionConfig,
     RdfConfig
   ])
 
@@ -171,6 +181,7 @@ const makeConfigService = Effect.gen(function*() {
     runtime,
     grounder,
     embedding,
+    extraction,
     rdf
   } satisfies AppConfig
 })
