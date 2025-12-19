@@ -26,7 +26,7 @@ const LlmConfig = Config.nested("LLM")(Config.all({
   maxTokens: Config.integer("MAX_TOKENS").pipe(Config.withDefault(4096)),
   temperature: Config.number("TEMPERATURE").pipe(Config.withDefault(0.1)),
   enablePromptCaching: Config.boolean("ENABLE_PROMPT_CACHING").pipe(
-    Config.withDefault(false)
+    Config.withDefault(true)
   )
 }))
 
@@ -146,7 +146,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     timeoutMs: 60_000,
     maxTokens: 4096,
     temperature: 0.1,
-    enablePromptCaching: false
+    enablePromptCaching: true
   },
   storage: {
     type: "local",
