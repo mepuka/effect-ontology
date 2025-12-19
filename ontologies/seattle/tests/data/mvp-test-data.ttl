@@ -1,0 +1,379 @@
+@prefix : <http://effect-ontology.dev/seattle/test/> .
+@prefix seattle: <http://effect-ontology.dev/seattle/> .
+@prefix claims: <http://effect-ontology.dev/claims#> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix org: <http://www.w3.org/ns/org#> .
+@prefix time: <http://www.w3.org/2006/time#> .
+@prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@base <http://effect-ontology.dev/seattle/test> .
+
+# =============================================================================
+# MVP Test Data for Competency Question Validation
+# =============================================================================
+#
+# This test data exercises all P0 competency questions from:
+# ontologies/seattle/tests/MVP_COMPETENCY_QUESTIONS_PRIORITY.md
+#
+# Contents:
+# - 3 Persons with roles and memberships
+# - 4 Events (StaffAnnouncement, PolicyInitiative, BudgetAction, CouncilVote)
+# - 5 Asserted claims with evidence
+# - 3 Derived assertions with reasoning provenance
+# - 1 Conflicting claim pair (for conflict detection)
+# - 1 Correction/supersession chain
+# - Temporal data spanning Dec 1-15, 2025
+#
+# =============================================================================
+
+# =============================================================================
+# PERSONS
+# =============================================================================
+
+:person-brian-surratt a foaf:Person ;
+    foaf:name "Brian Surratt" ;
+    rdfs:label "Brian Surratt"@en .
+
+:person-tim-burgess a foaf:Person ;
+    foaf:name "Tim Burgess" ;
+    rdfs:label "Tim Burgess"@en .
+
+:person-jane-doe a foaf:Person ;
+    foaf:name "Jane Doe" ;
+    rdfs:label "Jane Doe"@en .
+
+# =============================================================================
+# TIME INTERVALS
+# =============================================================================
+
+:interval-brian-deputy a time:Interval ;
+    time:hasBeginning :instant-2025-01-15 ;
+    time:hasEnd :instant-2025-12-31 .
+
+:interval-tim-mayor a time:Interval ;
+    time:hasBeginning :instant-2025-01-01 .
+    # No end - ongoing
+
+:interval-jane-policy a time:Interval ;
+    time:hasBeginning :instant-2025-02-01 ;
+    time:hasEnd :instant-2025-11-30 .
+
+:instant-2025-01-01 a time:Instant ;
+    time:inXSDDate "2025-01-01"^^xsd:date .
+
+:instant-2025-01-15 a time:Instant ;
+    time:inXSDDate "2025-01-15"^^xsd:date .
+
+:instant-2025-02-01 a time:Instant ;
+    time:inXSDDate "2025-02-01"^^xsd:date .
+
+:instant-2025-11-30 a time:Instant ;
+    time:inXSDDate "2025-11-30"^^xsd:date .
+
+:instant-2025-12-31 a time:Instant ;
+    time:inXSDDate "2025-12-31"^^xsd:date .
+
+# =============================================================================
+# MEMBERSHIPS (Role Assignments)
+# =============================================================================
+
+:membership-brian-deputy a org:Membership ;
+    org:member :person-brian-surratt ;
+    org:organization seattle:MayorsOffice ;
+    org:post seattle:DeputyMayorPost ;
+    org:memberDuring :interval-brian-deputy .
+
+:membership-tim-mayor a org:Membership ;
+    org:member :person-tim-burgess ;
+    org:organization seattle:CityOfSeattle ;
+    org:post seattle:MayorPost ;
+    org:memberDuring :interval-tim-mayor .
+
+:membership-jane-policy a org:Membership ;
+    org:member :person-jane-doe ;
+    org:organization seattle:PolicyOffice ;
+    org:post seattle:PolicyDirectorPost ;
+    org:memberDuring :interval-jane-policy .
+
+# =============================================================================
+# SOURCE DOCUMENTS
+# =============================================================================
+
+:source-doc-1 a foaf:Document ;
+    dcterms:title "Mayor Announces New Deputy Mayor"@en ;
+    dcterms:source <https://example.com/news/deputy-mayor> ;
+    dcterms:date "2025-12-01"^^xsd:date .
+
+:source-doc-2 a foaf:Document ;
+    dcterms:title "City Budget Update 2025"@en ;
+    dcterms:source <https://example.com/news/budget-2025> ;
+    dcterms:date "2025-12-05"^^xsd:date .
+
+:source-doc-3 a foaf:Document ;
+    dcterms:title "Council Approves Housing Initiative"@en ;
+    dcterms:source <https://example.com/news/housing> ;
+    dcterms:date "2025-12-10"^^xsd:date .
+
+:source-doc-4 a foaf:Document ;
+    dcterms:title "Correction: Deputy Mayor Start Date"@en ;
+    dcterms:source <https://example.com/news/correction> ;
+    dcterms:date "2025-12-15"^^xsd:date .
+
+# =============================================================================
+# EVENTS
+# =============================================================================
+
+# Staff Announcement Event (Dec 1)
+:event-staff-announcement-1 a seattle:StaffAnnouncementEvent ;
+    seattle:announcedMembership :membership-brian-deputy ;
+    time:inXSDDateTime "2025-12-01T10:00:00Z"^^xsd:dateTime ;
+    prov:wasDerivedFrom :source-doc-1 .
+
+# Staff Announcement Event (Dec 5)
+:event-staff-announcement-2 a seattle:StaffAnnouncementEvent ;
+    seattle:announcedMembership :membership-jane-policy ;
+    time:inXSDDateTime "2025-12-05T14:00:00Z"^^xsd:dateTime ;
+    prov:wasDerivedFrom :source-doc-2 .
+
+# Policy Initiative Event (Dec 8)
+:event-policy-initiative-1 a seattle:PolicyInitiativeEvent ;
+    seattle:announces :initiative-housing ;
+    time:inXSDDateTime "2025-12-08T09:00:00Z"^^xsd:dateTime ;
+    prov:wasDerivedFrom :source-doc-3 .
+
+:initiative-housing a skos:Concept ;
+    skos:prefLabel "Affordable Housing Initiative"@en ;
+    skos:definition "City-wide affordable housing program targeting 5000 new units."@en .
+
+# Budget Action Event (Dec 10)
+:event-budget-action-1 a seattle:BudgetActionEvent ;
+    seattle:impacts seattle:CityBudgetOffice ;
+    time:inXSDDateTime "2025-12-10T11:00:00Z"^^xsd:dateTime ;
+    prov:wasDerivedFrom :source-doc-2 .
+
+# Council Vote Event (Dec 12)
+:event-council-vote-1 a seattle:CouncilVoteEvent ;
+    seattle:voteResult "passed" ;
+    seattle:voteTally "7-2" ;
+    time:inXSDDateTime "2025-12-12T15:30:00Z"^^xsd:dateTime ;
+    prov:wasDerivedFrom :source-doc-3 .
+
+# =============================================================================
+# CLAIMS (Asserted Facts)
+# =============================================================================
+
+# Claim 1: Brian Surratt holds Deputy Mayor post
+:claim-brian-deputy a claims:Claim ;
+    claims:claimSubject :person-brian-surratt ;
+    claims:claimPredicate org:holds ;
+    claims:claimObject seattle:DeputyMayorPost ;
+    claims:rank claims:Preferred ;
+    claims:confidence 0.95 ;
+    claims:statedIn :source-doc-1 ;
+    claims:extractedAt "2025-12-01T10:30:00Z"^^xsd:dateTime ;
+    claims:validFrom "2025-01-15T00:00:00Z"^^xsd:dateTime ;
+    claims:hasEvidence :evidence-1 .
+
+:evidence-1 a claims:Evidence ;
+    claims:evidenceText "Brian Surratt has been appointed as Deputy Mayor effective January 15, 2025." ;
+    claims:startOffset 150 ;
+    claims:endOffset 230 ;
+    claims:evidenceSource :source-doc-1 .
+
+# Claim 2: Tim Burgess is Mayor
+:claim-tim-mayor a claims:Claim ;
+    claims:claimSubject :person-tim-burgess ;
+    claims:claimPredicate org:holds ;
+    claims:claimObject seattle:MayorPost ;
+    claims:rank claims:Preferred ;
+    claims:confidence 0.98 ;
+    claims:statedIn :source-doc-1 ;
+    claims:extractedAt "2025-12-01T10:30:00Z"^^xsd:dateTime ;
+    claims:validFrom "2025-01-01T00:00:00Z"^^xsd:dateTime ;
+    claims:hasEvidence :evidence-2 .
+
+:evidence-2 a claims:Evidence ;
+    claims:evidenceText "Mayor Tim Burgess announced today..." ;
+    claims:startOffset 0 ;
+    claims:endOffset 35 ;
+    claims:evidenceSource :source-doc-1 .
+
+# Claim 3: Jane Doe as Policy Director
+:claim-jane-policy a claims:Claim ;
+    claims:claimSubject :person-jane-doe ;
+    claims:claimPredicate org:holds ;
+    claims:claimObject seattle:PolicyDirectorPost ;
+    claims:rank claims:Preferred ;
+    claims:confidence 0.92 ;
+    claims:statedIn :source-doc-2 ;
+    claims:extractedAt "2025-12-05T14:30:00Z"^^xsd:dateTime ;
+    claims:validFrom "2025-02-01T00:00:00Z"^^xsd:dateTime ;
+    claims:validUntil "2025-11-30T23:59:59Z"^^xsd:dateTime ;
+    claims:hasEvidence :evidence-3 .
+
+:evidence-3 a claims:Evidence ;
+    claims:evidenceText "Policy Director Jane Doe presented the new budget framework." ;
+    claims:startOffset 45 ;
+    claims:endOffset 105 ;
+    claims:evidenceSource :source-doc-2 .
+
+# Claim 4: Budget amount (with conflict - see Claim 5)
+:claim-budget-amount-1 a claims:Claim ;
+    claims:claimSubject seattle:CityBudgetOffice ;
+    claims:claimPredicate seattle:allocatedBudget ;
+    claims:claimLiteral "8500000000"^^xsd:integer ;
+    claims:rank claims:Normal ;
+    claims:confidence 0.85 ;
+    claims:statedIn :source-doc-2 ;
+    claims:extractedAt "2025-12-05T14:35:00Z"^^xsd:dateTime ;
+    claims:hasEvidence :evidence-4 .
+
+:evidence-4 a claims:Evidence ;
+    claims:evidenceText "The city budget is set at $8.5 billion for 2025." ;
+    claims:startOffset 200 ;
+    claims:endOffset 250 ;
+    claims:evidenceSource :source-doc-2 .
+
+# Claim 5: Conflicting budget amount (different source)
+:claim-budget-amount-2 a claims:Claim ;
+    claims:claimSubject seattle:CityBudgetOffice ;
+    claims:claimPredicate seattle:allocatedBudget ;
+    claims:claimLiteral "8700000000"^^xsd:integer ;
+    claims:rank claims:Normal ;
+    claims:confidence 0.82 ;
+    claims:statedIn :source-doc-3 ;
+    claims:extractedAt "2025-12-10T11:30:00Z"^^xsd:dateTime ;
+    claims:hasEvidence :evidence-5 .
+
+:evidence-5 a claims:Evidence ;
+    claims:evidenceText "The revised budget totals $8.7 billion after council amendments." ;
+    claims:startOffset 300 ;
+    claims:endOffset 365 ;
+    claims:evidenceSource :source-doc-3 .
+
+# =============================================================================
+# CORRECTION CHAIN (Supersession)
+# =============================================================================
+
+# Original claim (now deprecated)
+:claim-brian-start-date-old a claims:Claim ;
+    claims:claimSubject :person-brian-surratt ;
+    claims:claimPredicate seattle:startDate ;
+    claims:claimLiteral "2025-01-10"^^xsd:date ;
+    claims:rank claims:Deprecated ;
+    claims:confidence 0.75 ;
+    claims:statedIn :source-doc-1 ;
+    claims:extractedAt "2025-12-01T10:30:00Z"^^xsd:dateTime ;
+    claims:deprecatedAt "2025-12-15T09:00:00Z"^^xsd:dateTime ;
+    claims:deprecationReason "Corrected by later article with accurate date" ;
+    claims:supersededBy :claim-brian-start-date-new .
+
+# Corrected claim (supersedes old)
+:claim-brian-start-date-new a claims:Claim ;
+    claims:claimSubject :person-brian-surratt ;
+    claims:claimPredicate seattle:startDate ;
+    claims:claimLiteral "2025-01-15"^^xsd:date ;
+    claims:rank claims:Preferred ;
+    claims:confidence 0.95 ;
+    claims:statedIn :source-doc-4 ;
+    claims:extractedAt "2025-12-15T09:30:00Z"^^xsd:dateTime ;
+    claims:supersedes :claim-brian-start-date-old ;
+    claims:hasEvidence :evidence-6 .
+
+:evidence-6 a claims:Evidence ;
+    claims:evidenceText "Correction: Brian Surratt's start date is January 15, not January 10 as previously reported." ;
+    claims:startOffset 0 ;
+    claims:endOffset 92 ;
+    claims:evidenceSource :source-doc-4 .
+
+# =============================================================================
+# INFERENCE RULE & DERIVED ASSERTIONS
+# =============================================================================
+
+:rule-org-membership a seattle:InferenceRule ;
+    skos:prefLabel "Organization Membership Rule"@en ;
+    seattle:ruleVersion "1.0.0" ;
+    rdfs:comment "Derives org:memberOf from org:Membership via org:organization." .
+
+:reasoning-activity-1 a seattle:ReasoningActivity ;
+    seattle:appliedRule :rule-org-membership ;
+    prov:used :claim-brian-deputy ;
+    prov:generated :derived-brian-memberof ;
+    prov:endedAtTime "2025-12-18T08:00:00Z"^^xsd:dateTime .
+
+# Derived Assertion 1: Brian is member of Mayor's Office
+:derived-brian-memberof a claims:DerivedAssertion ;
+    claims:claimSubject :person-brian-surratt ;
+    claims:claimPredicate org:memberOf ;
+    claims:claimObject seattle:MayorsOffice ;
+    claims:rank claims:Preferred ;
+    claims:derivedBy :reasoning-activity-1 ;
+    claims:supportedBy :claim-brian-deputy .
+
+:reasoning-activity-2 a seattle:ReasoningActivity ;
+    seattle:appliedRule :rule-org-membership ;
+    prov:used :claim-tim-mayor ;
+    prov:generated :derived-tim-memberof ;
+    prov:endedAtTime "2025-12-18T08:00:00Z"^^xsd:dateTime .
+
+# Derived Assertion 2: Tim is member of City of Seattle
+:derived-tim-memberof a claims:DerivedAssertion ;
+    claims:claimSubject :person-tim-burgess ;
+    claims:claimPredicate org:memberOf ;
+    claims:claimObject seattle:CityOfSeattle ;
+    claims:rank claims:Preferred ;
+    claims:derivedBy :reasoning-activity-2 ;
+    claims:supportedBy :claim-tim-mayor .
+
+:reasoning-activity-3 a seattle:ReasoningActivity ;
+    seattle:appliedRule :rule-org-membership ;
+    prov:used :claim-jane-policy ;
+    prov:generated :derived-jane-memberof ;
+    prov:endedAtTime "2025-12-18T08:00:00Z"^^xsd:dateTime .
+
+# Derived Assertion 3: Jane is member of Policy Office
+:derived-jane-memberof a claims:DerivedAssertion ;
+    claims:claimSubject :person-jane-doe ;
+    claims:claimPredicate org:memberOf ;
+    claims:claimObject seattle:PolicyOffice ;
+    claims:rank claims:Preferred ;
+    claims:derivedBy :reasoning-activity-3 ;
+    claims:supportedBy :claim-jane-policy .
+
+# =============================================================================
+# ARTICLE CLAIM SET (Batch/Ingestion Metadata)
+# =============================================================================
+
+:claimset-doc-1 a claims:ArticleClaimSet ;
+    claims:sourceArticle :source-doc-1 ;
+    claims:claimStatus claims:Accepted ;
+    claims:containsClaim :claim-brian-deputy ,
+                         :claim-tim-mayor ,
+                         :claim-brian-start-date-old .
+
+:claimset-doc-2 a claims:ArticleClaimSet ;
+    claims:sourceArticle :source-doc-2 ;
+    claims:claimStatus claims:Accepted ;
+    claims:containsClaim :claim-jane-policy ,
+                         :claim-budget-amount-1 .
+
+:claimset-doc-3 a claims:ArticleClaimSet ;
+    claims:sourceArticle :source-doc-3 ;
+    claims:claimStatus claims:Accepted ;
+    claims:containsClaim :claim-budget-amount-2 .
+
+:claimset-doc-4 a claims:ArticleClaimSet ;
+    claims:sourceArticle :source-doc-4 ;
+    claims:claimStatus claims:Accepted ;
+    claims:containsClaim :claim-brian-start-date-new .
+
+# =============================================================================
+# EXTRACTION AGENT (for extractedBy property)
+# =============================================================================
+
+:extraction-agent-v1 a prov:SoftwareAgent ;
+    rdfs:label "Effect Ontology Extractor v1.0"@en ;
+    prov:actedOnBehalfOf <http://effect-ontology.dev/> .

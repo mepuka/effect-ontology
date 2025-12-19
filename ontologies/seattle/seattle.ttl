@@ -263,7 +263,25 @@ seattle:ruleVersion a owl:DatatypeProperty ;
 
 seattle:SeattleRoleScheme a skos:ConceptScheme ;
     skos:prefLabel "Seattle Government Roles"@en ;
-    dcterms:description "Controlled vocabulary for positions and roles in Seattle city government."@en .
+    dcterms:description """Controlled vocabulary for positions and roles in Seattle city government.
+
+    Design Decision: Roles are dual-typed as both skos:Concept AND org:Role.
+
+    Rationale:
+    - skos:Concept enables hierarchical browsing via broader/narrower relationships,
+      providing UI-friendly navigation (e.g., "Executive Role" > "Mayor" > "Deputy Mayor")
+    - org:Role enables W3C ORG vocabulary integration, allowing roles to be linked
+      to org:Post and org:Membership for structural organizational queries
+
+    Benefits of dual-typing:
+    1. SKOS layer: Supports faceted search, auto-complete, and concept hierarchy display
+    2. ORG layer: Supports "who holds what position" queries with proper cardinality
+    3. Interoperability: Both vocabularies are W3C standards with broad tooling support
+
+    Usage:
+    - Use skos:broader/narrower for role taxonomy navigation
+    - Use org:role on org:Post to link positions to role concepts
+    - Query via SPARQL: ?role a skos:Concept, org:Role (returns all dual-typed roles)"""@en .
 
 # -----------------------------------------------------------------------------
 # Abstract Role Categories

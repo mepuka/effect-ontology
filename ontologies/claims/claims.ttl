@@ -113,9 +113,9 @@
     rdfs:comment "The literal value of the reified statement. Use for datatype properties where the value is a string, number, date, etc."@en ;
     rdfs:domain :Claim .
 
-:rank rdf:type owl:ObjectProperty ;
+:rank rdf:type owl:ObjectProperty, owl:FunctionalProperty ;
     rdfs:label "rank"@en ;
-    rdfs:comment "The Wikidata-style rank of this claim."@en ;
+    rdfs:comment "The Wikidata-style rank of this claim. Functional: each claim has exactly one rank."@en ;
     rdfs:domain :Claim ;
     rdfs:range :ClaimRank .
 
@@ -266,9 +266,9 @@
     rdfs:label "Article Claim Set"@en ;
     rdfs:comment "Metadata about a named graph containing all claims from a single article."@en .
 
-:claimStatus rdf:type owl:ObjectProperty ;
+:claimStatus rdf:type owl:ObjectProperty, owl:FunctionalProperty ;
     rdfs:label "claim status"@en ;
-    rdfs:comment "The curation status of an article's claim set."@en ;
+    rdfs:comment "The curation status of an article's claim set. Functional: each claim set has exactly one status."@en ;
     rdfs:domain :ArticleClaimSet ;
     rdfs:range :ClaimSetStatus .
 

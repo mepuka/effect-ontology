@@ -574,3 +574,59 @@
         sh:in ( 1 2 3 ) ;
         sh:message "rankOrder must be 1, 2, or 3 (Preferred, Normal, or Deprecated)"
     ] .
+
+# -----------------------------------------------------------------------------
+# Derived Assertion Shape
+# -----------------------------------------------------------------------------
+
+:DerivedAssertionShape a sh:NodeShape ;
+    sh:targetClass claims:DerivedAssertion ;
+    rdfs:label "Derived Assertion Shape"@en ;
+    rdfs:comment "Validates derived assertion instances (inferred claims)."@en ;
+
+    # Inherit all Claim constraints
+    sh:node :ClaimShape ;
+
+    sh:property [
+        sh:path claims:derivedBy ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:message "DerivedAssertion must specify exactly one derivedBy (reasoning activity or rule)"
+    ] ;
+
+    sh:property [
+        sh:path claims:supportedBy ;
+        sh:minCount 1 ;
+        sh:class claims:Claim ;
+        sh:message "DerivedAssertion must have at least one supporting claim"
+    ] .
+
+# -----------------------------------------------------------------------------
+# Article Claim Set Shape
+# -----------------------------------------------------------------------------
+
+:ArticleClaimSetShape a sh:NodeShape ;
+    sh:targetClass claims:ArticleClaimSet ;
+    rdfs:label "Article Claim Set Shape"@en ;
+    rdfs:comment "Validates article claim set metadata."@en ;
+
+    sh:property [
+        sh:path claims:sourceArticle ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:message "ArticleClaimSet must have exactly one sourceArticle"
+    ] ;
+
+    sh:property [
+        sh:path claims:claimStatus ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:in ( claims:Pending claims:Accepted claims:Retracted ) ;
+        sh:message "ArticleClaimSet must have exactly one status (Pending, Accepted, or Retracted)"
+    ] ;
+
+    sh:property [
+        sh:path claims:containsClaim ;
+        sh:class claims:Claim ;
+        sh:message "containsClaim must reference Claim instances"
+    ] .
