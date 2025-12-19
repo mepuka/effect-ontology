@@ -5,11 +5,53 @@ import { Context, Effect, Layer, Option, Scope } from "effect"
 import { ConfigService } from "./Config.js"
 
 /**
+ * Result of getWithGeneration - includes content and version for optimistic locking
+ */
+export interface ObjectWithGeneration {
+  readonly content: string
+  readonly generation: string
+}
+
+/**
+ * Error thrown when setIfGenerationMatch fails due to concurrent modification
+ */
+export class GenerationMismatchError extends Error {
+  readonly _tag = "GenerationMismatchError" as const
+  constructor(
+    readonly key: string,
+    readonly expectedGeneration: string,
+    readonly actualGeneration?: string
+  ) {
+    super(
+      `Generation mismatch for ${key}: expected ${expectedGeneration}${actualGeneration ? `, got ${actualGeneration}` : ""}`
+    )
+    this.name = "GenerationMismatchError"
+  }
+}
+
+/**
  * StorageService interface extending KeyValueStore
- * Adds `list` capability which is not standard in KeyValueStore but useful for GCS
+ * Adds `list` capability and optimistic locking for concurrent writes
  */
 export interface StorageService extends KeyValueStore.KeyValueStore {
   readonly list: (prefix: string) => Effect.Effect<Array<string>, SystemError>
+
+  /**
+   * Get an object along with its generation for optimistic locking
+   * @returns None if object doesn't exist, Some with content and generation if it does
+   */
+  readonly getWithGeneration: (key: string) => Effect.Effect<Option.Option<ObjectWithGeneration>, SystemError>
+
+  /**
+   * Set an object only if its generation matches the expected value
+   * @param generation - Expected generation (from previous getWithGeneration)
+   * @returns Fails with GenerationMismatchError if generation doesn't match
+   */
+  readonly setIfGenerationMatch: (
+    key: string,
+    value: string,
+    generation: string
+  ) => Effect.Effect<void, SystemError | GenerationMismatchError>
 }
 
 export const StorageService = Context.GenericTag<StorageService>("@core-v2/StorageService")
@@ -46,8 +88,11 @@ const makeGcsStore = (config: StorageConfig) =>
 
       if (cause instanceof Error) {
         message = cause.message
-        const code = (cause as any).code
-        if (typeof code === "number") {
+        // Use type guard to safely access .code property (GCS errors have numeric HTTP status codes)
+        const code = "code" in cause && typeof (cause as { code?: unknown }).code === "number"
+          ? (cause as { code: number }).code
+          : undefined
+        if (code !== undefined) {
           switch (code) {
             case 404:
               reason = "NotFound"
@@ -142,6 +187,46 @@ const makeGcsStore = (config: StorageConfig) =>
             return files.map((f) => f.name.replace(prefix ? prefix + "/" : "", ""))
           },
           catch: (e) => handleError("list", listPrefix, e)
+        }),
+      getWithGeneration: (key) =>
+        Effect.tryPromise({
+          try: async () => {
+            const file = bucket.file(toPath(key))
+            const [exists] = await file.exists()
+            if (!exists) return Option.none()
+
+            // Get file content and metadata in parallel
+            const [[content], [metadata]] = await Promise.all([
+              file.download(),
+              file.getMetadata()
+            ])
+
+            // GCS generation is a numeric string that increments on each write
+            const generation = String(metadata.generation)
+            return Option.some({
+              content: content.toString("utf-8"),
+              generation
+            })
+          },
+          catch: (e) => handleError("getWithGeneration", key, e)
+        }),
+      setIfGenerationMatch: (key, value, expectedGeneration) =>
+        Effect.tryPromise({
+          try: async () => {
+            const file = bucket.file(toPath(key))
+            await file.save(value, {
+              preconditionOpts: {
+                ifGenerationMatch: Number(expectedGeneration)
+              }
+            })
+          },
+          catch: (e) => {
+            // Check if this is a precondition failed error (HTTP 412)
+            if (e instanceof Error && "code" in e && (e as { code?: number }).code === 412) {
+              return new GenerationMismatchError(key, expectedGeneration)
+            }
+            return handleError("setIfGenerationMatch", key, e)
+          }
         })
     } as StorageService
   })
@@ -206,7 +291,9 @@ const makeLocalStore = (config: StorageConfig) =>
         // Calculate total size by walking directory tree
         const walkAndSum = (dir: string): Effect.Effect<number, never, never> =>
           Effect.gen(function*() {
-            const entries = yield* fs.readDirectory(dir).pipe(Effect.catchAll(() => Effect.succeed([] as readonly string[])))
+            const entries = yield* fs.readDirectory(dir).pipe(
+              Effect.catchAll(() => Effect.succeed([] as ReadonlyArray<string>))
+            )
             let totalSize = 0
             for (const entry of entries) {
               const entryPath = path.join(dir, entry)
@@ -233,6 +320,40 @@ const makeLocalStore = (config: StorageConfig) =>
           if (!(yield* fs.exists(dir))) return []
           const files = yield* fs.readDirectory(dir)
           return files
+        }),
+      getWithGeneration: (key) =>
+        Effect.gen(function*() {
+          const p = resolvePath(key)
+          const exists = yield* fs.exists(p)
+          if (!exists) return Option.none()
+
+          const content = yield* fs.readFileString(p)
+          const stat = yield* fs.stat(p)
+          // Use mtime as generation for local filesystem
+          // stat.mtime is Option<Date>, fallback to current time if None
+          const mtime = Option.getOrElse(stat.mtime, () => new Date())
+          const generation = String(mtime.getTime())
+          return Option.some({ content, generation })
+        }),
+      setIfGenerationMatch: (key, value, expectedGeneration) =>
+        Effect.gen(function*() {
+          const p = resolvePath(key)
+          const exists = yield* fs.exists(p)
+
+          if (exists) {
+            const stat = yield* fs.stat(p)
+            // stat.mtime is Option<Date>, fallback to current time if None
+            const mtime = Option.getOrElse(stat.mtime, () => new Date())
+            const currentGeneration = String(mtime.getTime())
+            if (currentGeneration !== expectedGeneration) {
+              return yield* Effect.fail(
+                new GenerationMismatchError(key, expectedGeneration, currentGeneration)
+              )
+            }
+          }
+
+          yield* ensureDir(p)
+          yield* fs.writeFileString(p, value)
         })
     } as StorageService
   })
@@ -241,6 +362,13 @@ const makeLocalStore = (config: StorageConfig) =>
 
 const makeMemoryStore = Effect.sync(() => {
   const store = new Map<string, string | Uint8Array>()
+  const generations = new Map<string, number>()
+
+  const getGeneration = (key: string): string => String(generations.get(key) ?? 0)
+  const incrementGeneration = (key: string): void => {
+    const current = generations.get(key) ?? 0
+    generations.set(key, current + 1)
+  }
 
   const kv = KeyValueStore.make({
     get: (key) =>
@@ -258,20 +386,40 @@ const makeMemoryStore = Effect.sync(() => {
     set: (key, value) =>
       Effect.sync(() => {
         store.set(key, value)
+        incrementGeneration(key)
       }),
     remove: (key) =>
       Effect.sync(() => {
         store.delete(key)
+        generations.delete(key)
       }),
     clear: Effect.sync(() => {
       store.clear()
+      generations.clear()
     }),
     size: Effect.sync(() => store.size)
   })
 
   return {
     ...kv,
-    list: (prefix) => Effect.sync(() => Array.from(store.keys()).filter((k) => k.startsWith(prefix)))
+    list: (prefix) => Effect.sync(() => Array.from(store.keys()).filter((k) => k.startsWith(prefix))),
+    getWithGeneration: (key) =>
+      Effect.sync(() => {
+        const val = store.get(key)
+        if (!val) return Option.none()
+        const content = typeof val === "string" ? val : new TextDecoder().decode(val)
+        return Option.some({ content, generation: getGeneration(key) })
+      }),
+    setIfGenerationMatch: (key, value, expectedGeneration) =>
+      Effect.suspend(() => {
+        const currentGeneration = getGeneration(key)
+        if (store.has(key) && currentGeneration !== expectedGeneration) {
+          return Effect.fail(new GenerationMismatchError(key, expectedGeneration, currentGeneration))
+        }
+        store.set(key, value)
+        incrementGeneration(key)
+        return Effect.void
+      })
   } as StorageService
 })
 

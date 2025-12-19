@@ -14,15 +14,20 @@
 
 import { ClusterWorkflowEngine, SingleRunner } from "@effect/cluster"
 import { BunContext, BunHttpServer, BunRuntime } from "@effect/platform-bun"
+import * as PgDrizzle from "@effect/sql-drizzle/Pg"
 import { PgClient } from "@effect/sql-pg"
 import { SqlClient } from "@effect/sql/SqlClient"
 import { WorkflowEngine } from "@effect/workflow"
 import { Cause, Config, Effect, Layer, Option, Schedule } from "effect"
+import { ArticleRepository } from "./Repository/Article.js"
+import { ClaimRepository } from "./Repository/Claim.js"
 import { HealthCheckService } from "./Runtime/HealthCheck.js"
 import { HttpServerLive } from "./Runtime/HttpServer.js"
+import { AllMigrations, MigrationRunner } from "./Runtime/Persistence/MigrationRunner.js"
 import { ShutdownService } from "./Runtime/Shutdown.js"
 import { ActivityDependenciesLayer, WorkflowOrchestratorFullLayer } from "./Runtime/WorkflowLayers.js"
 import { BatchStateHubLayer, BatchStatePersistenceLayer } from "./Service/BatchState.js"
+import { ClaimPersistenceService } from "./Service/ClaimPersistence.js"
 
 // Load port from environment
 const port = Effect.runSync(Config.number("PORT").pipe(Config.withDefault(8080)))
@@ -93,6 +98,25 @@ const checkDatabaseReady = Effect.gen(function*() {
   Effect.provide(PgClientLive)
 )
 
+// Run database migrations at startup
+const runMigrations = Effect.gen(function*() {
+  const runner = yield* MigrationRunner
+  const result = yield* runner.runMigrations(AllMigrations)
+
+  if (result.errors.length > 0) {
+    yield* Effect.logError("Migration errors", { errors: result.errors })
+    return yield* Effect.fail(new Error(`Migration failed: ${result.errors[0]?.error}`))
+  }
+
+  yield* Effect.logInfo("Migrations complete", {
+    applied: result.applied.length,
+    skipped: result.skipped.length
+  })
+}).pipe(
+  Effect.provide(MigrationRunner.Default),
+  Effect.provide(PgClientLive)
+)
+
 // Pre-compose WorkflowOrchestrator with all its dependencies
 // Workflow layer has dependencies provided before construction (see WorkflowLayers)
 const WorkflowOrchestratorWithDependencies = WorkflowOrchestratorFullLayer.pipe(
@@ -103,17 +127,54 @@ const WorkflowOrchestratorWithDependencies = WorkflowOrchestratorFullLayer.pipe(
 // =============================================================================
 // Server Layer Composition
 // =============================================================================
+// Several layers need ConfigService and StorageService from ActivityDependenciesLayer.
+// Pre-compose layers that have dependencies on ActivityDependenciesLayer.
+
+// BatchStatePersistenceLayer needs StorageService
+const BatchStatePersistenceWithDeps = BatchStatePersistenceLayer.pipe(
+  Layer.provideMerge(ActivityDependenciesLayer),
+  Layer.provideMerge(PlatformLayer)
+)
+
+// HealthCheckService needs ConfigService and StorageService
+const HealthCheckWithDeps = HealthCheckService.Default.pipe(
+  Layer.provideMerge(ActivityDependenciesLayer),
+  Layer.provideMerge(PlatformLayer)
+)
+
+// Repository layers (when PostgreSQL is configured)
+// PgDrizzle layer provides drizzle ORM access over PgClient
+const PgDrizzleLive = PgDrizzle.layer.pipe(
+  Layer.provideMerge(PgClientLive)
+)
+
+// Repositories bundle - ClaimRepository + ArticleRepository
+const RepositoriesLayer = usePostgres
+  ? Layer.mergeAll(
+    ClaimRepository.Default,
+    ArticleRepository.Default
+  ).pipe(Layer.provideMerge(PgDrizzleLive))
+  : Layer.empty // No repositories without PostgreSQL
+
+// ClaimPersistenceService layer (depends on repositories)
+const ClaimPersistenceLayer = usePostgres
+  ? ClaimPersistenceService.Default.pipe(
+    Layer.provideMerge(RepositoriesLayer)
+  )
+  : Layer.empty // No persistence without PostgreSQL
+
 // Uses Layer.provideMerge throughout for order-independent composition.
 // Later provideMerge layers PROVIDE to earlier layers in the chain.
-// ActivityDependenciesLayer provides ConfigService, StorageService, extractors.
 const ServerLive = HttpServerLive.pipe(
-  Layer.provideMerge(BunHttpServer.layer({ port, idleTimeout: 255 })), // Max for SSE (255s)
+  Layer.provideMerge(BunHttpServer.layer({ port, idleTimeout: 255 })), // Bun max is 255s (Cloud Run uses longer timeouts via nginx)
   Layer.provideMerge(WorkflowEngineLive),
   Layer.provideMerge(WorkflowOrchestratorWithDependencies),
   Layer.provideMerge(BatchStateHubLayer),
-  Layer.provideMerge(BatchStatePersistenceLayer),
-  Layer.provideMerge(HealthCheckService.Default),
+  Layer.provideMerge(BatchStatePersistenceWithDeps),
+  Layer.provideMerge(HealthCheckWithDeps),
   Layer.provideMerge(ShutdownService.Default),
+  Layer.provideMerge(ClaimPersistenceLayer), // ClaimPersistenceService (for activity persistence)
+  Layer.provideMerge(RepositoriesLayer), // ClaimRepository + ArticleRepository
   Layer.provideMerge(ActivityDependenciesLayer),
   Layer.provideMerge(PlatformLayer)
 )
@@ -122,9 +183,10 @@ const ServerLive = HttpServerLive.pipe(
 const server = Effect.gen(function*() {
   const shutdown = yield* ShutdownService
 
-  // Verify database connectivity before starting (if PostgreSQL is configured)
+  // Verify database connectivity and run migrations (if PostgreSQL is configured)
   if (usePostgres) {
     yield* checkDatabaseReady
+    yield* runMigrations
   }
 
   // Register SIGTERM handler for Cloud Run

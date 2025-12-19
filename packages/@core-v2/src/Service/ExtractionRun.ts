@@ -1,29 +1,36 @@
 /**
  * Service: Extraction Run Service
  *
- * Manages extraction runs with unique IDs, folder structure, and artifact storage.
+ * Manages extraction runs with unique IDs and artifact storage in GCS.
+ * Uses StorageService for cloud-native storage that works across multiple instances.
+ *
+ * Storage key structure:
+ * - runs/{runId}/metadata.json - Run metadata and audit events
+ * - runs/{runId}/input/document.txt - Original document
+ * - runs/{runId}/input/chunks/chunk-{n}.txt - Text chunks
+ * - runs/{runId}/outputs/{filename} - Output artifacts
+ * - runs/key-index.json - Idempotency key lookup index
  *
  * @since 2.0.0
  * @module Service/ExtractionRun
  */
 
+import { Context, Effect, Layer, Option, Schema } from "effect"
 import { createHash } from "node:crypto"
-import { FileSystem, Path } from "@effect/platform"
-import { Context, Effect, Layer } from "effect"
-import { ConfigService } from "./Config.js"
 import type { ChunkId, ExtractionRunId, IdempotencyKey } from "../Domain/Identity.js"
 import type {
   AuditError,
   AuditErrorType,
-  AuditEvent,
   AuditEventType,
   OutputMetadata,
   RunConfig,
   RunStats
 } from "../Domain/Model/ExtractionRun.js"
-import { ExtractionRun, getChunkId } from "../Domain/Model/ExtractionRun.js"
+import { AuditEvent, ExtractionRun, getChunkId } from "../Domain/Model/ExtractionRun.js"
 import type { OutputType } from "../Domain/Model/OutputType.js"
 import { getOutputFilename } from "../Domain/Model/OutputType.js"
+import { ConfigService } from "./Config.js"
+import { StorageService } from "./Storage.js"
 
 // =============================================================================
 // Helpers
@@ -54,8 +61,9 @@ const sha256Hex = (content: string): string => {
  */
 const generateDocumentId = (text: string): ExtractionRunId => {
   const hash = sha256Hex(text)
-  // Use first 32 hex chars (128 bits) for collision resistance
-  const prefix = hash.slice(0, 32)
+  // Use first 12 hex chars to match DocumentId schema pattern
+  // This gives 48 bits of entropy - sufficient for unique document identification
+  const prefix = hash.slice(0, 12)
   return `doc-${prefix}` as ExtractionRunId
 }
 
@@ -68,6 +76,33 @@ export const getRunIdFromText = (text: string): ExtractionRunId => generateDocum
  * Hash content for integrity checking
  */
 const hashContent = (content: string): string => sha256Hex(content)
+
+/**
+ * Decode JSON string to ExtractionRun
+ *
+ * Uses Schema.decodeUnknownSync to properly construct all nested
+ * Schema.Class instances (RunConfig, OntologyRef, etc.)
+ */
+const decodeExtractionRun = (json: string): ExtractionRun =>
+  Schema.decodeUnknownSync(ExtractionRun)(JSON.parse(json))
+
+// =============================================================================
+// Storage Key Helpers
+// =============================================================================
+
+const RUNS_PREFIX = "runs"
+const KEY_INDEX_FILE = "runs/key-index.json"
+
+const runKey = (runId: ExtractionRunId, ...parts: Array<string>): string => [RUNS_PREFIX, runId, ...parts].join("/")
+
+const metadataKey = (runId: ExtractionRunId): string => runKey(runId, "metadata.json")
+
+const documentKey = (runId: ExtractionRunId): string => runKey(runId, "input", "document.txt")
+
+const chunkKey = (runId: ExtractionRunId, chunkIndex: number): string =>
+  runKey(runId, "input", "chunks", `chunk-${chunkIndex}.txt`)
+
+const outputKey = (runId: ExtractionRunId, filename: string): string => runKey(runId, "outputs", filename)
 
 // =============================================================================
 // Service Interface
@@ -182,20 +217,11 @@ export const ExtractionRunService = Context.GenericTag<ExtractionRunService>("Ex
 // Implementation
 // =============================================================================
 
-/** Key index for fast lookup by idempotency key */
-const keyIndexFile = "key-index.json"
-
 const makeExtractionRunService = Effect.gen(function*() {
-  const fs = yield* FileSystem.FileSystem
+  const storage = yield* StorageService
   const config = yield* ConfigService
-  const baseDir = config.extraction.runsDir
-  const path = yield* Path.Path
-
-  // Ensure base directory exists
-  yield* Effect.orElseSucceed(
-    fs.makeDirectory(baseDir, { recursive: true }),
-    () => void 0
-  )
+  // Use a prefix for runs storage (could be made configurable)
+  const _basePrefix = config.extraction.runsDir.replace(/^\/+|\/+$/g, "") || "extraction-runs"
 
   // Helper: Read and update metadata atomically
   const updateMetadata = (
@@ -203,22 +229,26 @@ const makeExtractionRunService = Effect.gen(function*() {
     updater: (run: ExtractionRun) => ExtractionRun
   ) =>
     Effect.gen(function*() {
-      const metadataPath = path.resolve(baseDir, runId, "metadata.json")
-      const run = yield* fs.readFileString(metadataPath).pipe(
-        Effect.map((json) => new ExtractionRun(JSON.parse(json))),
-        Effect.mapError((error) => new Error(`Failed to read run metadata: ${error}`))
-      )
+      const key = metadataKey(runId)
+      const contentOpt = yield* storage.get(key)
+      if (Option.isNone(contentOpt)) {
+        return yield* Effect.fail(new Error(`Run not found: ${runId}`))
+      }
+      const run = decodeExtractionRun(contentOpt.value)
       const updatedRun = updater(run)
-      // updatedRun is a Class instance, JSON.stringify should serialize its fields.
-      yield* fs.writeFileString(metadataPath, JSON.stringify(updatedRun, null, 2))
+      yield* storage.set(key, JSON.stringify(updatedRun, null, 2))
       return updatedRun
     })
 
   // Helper: Get key index
   const getKeyIndex = () =>
-    fs.readFileString(path.resolve(baseDir, keyIndexFile)).pipe(
-      Effect.map((json) => JSON.parse(json) as Record<string, ExtractionRunId>),
-      Effect.orElseSucceed(() => ({}) as Record<string, ExtractionRunId>)
+    storage.get(KEY_INDEX_FILE).pipe(
+      Effect.map((opt) =>
+        Option.isSome(opt)
+          ? JSON.parse(opt.value) as Record<string, ExtractionRunId>
+          : {} as Record<string, ExtractionRunId>
+      ),
+      Effect.catchAll(() => Effect.succeed({} as Record<string, ExtractionRunId>))
     )
 
   // Helper: Update key index
@@ -226,57 +256,41 @@ const makeExtractionRunService = Effect.gen(function*() {
     Effect.gen(function*() {
       const index = yield* getKeyIndex()
       index[key] = runId
-      yield* fs.writeFileString(
-        path.resolve(baseDir, keyIndexFile),
-        JSON.stringify(index, null, 2)
-      )
+      yield* storage.set(KEY_INDEX_FILE, JSON.stringify(index, null, 2))
     })
 
   return {
     createRun: (
       text: string,
-      config: RunConfig,
+      runConfig: RunConfig,
       options?: { idempotencyKey?: IdempotencyKey; ontologyVersion?: string }
     ) =>
       Effect.gen(function*() {
         const documentId = generateDocumentId(text)
         const runId = documentId
 
-        const runDir = path.resolve(baseDir, runId)
-        const inputDir = path.resolve(runDir, "input")
-        const chunksDir = path.resolve(inputDir, "chunks")
-        const outputsDir = path.resolve(runDir, "outputs")
-        const documentPath = path.resolve(inputDir, "document.txt")
-        const metadataPath = path.resolve(runDir, "metadata.json")
-
         // COLLISION DETECTION: Check if run already exists
-        const existingMetadata = yield* fs.exists(metadataPath)
-        if (existingMetadata) {
+        const existingOpt = yield* storage.get(metadataKey(runId))
+        if (Option.isSome(existingOpt)) {
           // Run exists - verify content matches (idempotency check)
-          const existingText = yield* fs.readFileString(documentPath).pipe(
-            Effect.orElseSucceed(() => "")
-          )
+          const existingDocOpt = yield* storage.get(documentKey(runId))
+          const existingText = Option.isSome(existingDocOpt) ? existingDocOpt.value : ""
+
           if (existingText === text) {
             // Same content - return existing run (idempotent)
-            const json = yield* fs.readFileString(metadataPath)
-            return new ExtractionRun(JSON.parse(json))
+            return decodeExtractionRun(existingOpt.value)
           } else {
             // Different content with same hash - true collision (extremely rare with SHA-256)
             yield* Effect.logWarning(
               `Hash collision detected for runId ${runId}. ` +
-              `Existing content length: ${existingText.length}, new content length: ${text.length}. ` +
-              `This should be extremely rare with SHA-256. Overwriting.`
+                `Existing content length: ${existingText.length}, new content length: ${text.length}. ` +
+                `This should be extremely rare with SHA-256. Overwriting.`
             )
           }
         }
 
-        // Create directories sequentially to ensure parent exists before child
-        yield* fs.makeDirectory(runDir, { recursive: true })
-        yield* fs.makeDirectory(inputDir, { recursive: true })
-        yield* fs.makeDirectory(chunksDir, { recursive: true })
-        yield* fs.makeDirectory(outputsDir, { recursive: true })
-
-        yield* fs.writeFileString(documentPath, text)
+        // Store document
+        yield* storage.set(documentKey(runId), text)
 
         const now = new Date().toISOString()
         const run = new ExtractionRun({
@@ -284,19 +298,16 @@ const makeExtractionRunService = Effect.gen(function*() {
           createdAt: now,
           updatedAt: now,
           status: "pending",
-          config,
-          outputDir: runDir,
+          config: runConfig,
+          outputDir: runKey(runId), // Use storage key prefix as "outputDir"
           outputs: [],
-          events: [{ timestamp: now, type: "started" }],
+          events: [new AuditEvent({ timestamp: now, type: "started" })],
           errors: [],
           idempotencyKey: options?.idempotencyKey,
           ontologyVersion: options?.ontologyVersion
         })
 
-        yield* fs.writeFileString(
-          path.resolve(runDir, "metadata.json"),
-          JSON.stringify(run, null, 2)
-        )
+        yield* storage.set(metadataKey(runId), JSON.stringify(run, null, 2))
 
         // Update key index if idempotency key provided
         if (options?.idempotencyKey) {
@@ -308,26 +319,15 @@ const makeExtractionRunService = Effect.gen(function*() {
 
     saveChunk: (runId: ExtractionRunId, chunkIndex: number, chunkText: string) =>
       Effect.gen(function*() {
-        const chunkId = getChunkId(runId, chunkIndex) as unknown as ChunkId
-        const chunkPath = path.resolve(
-          baseDir,
-          runId,
-          "input",
-          "chunks",
-          `chunk-${chunkIndex}.txt`
-        )
-        yield* fs.writeFileString(chunkPath, chunkText)
-        return chunkId
+        const chunkIdValue = getChunkId(runId, chunkIndex) as unknown as ChunkId
+        yield* storage.set(chunkKey(runId, chunkIndex), chunkText)
+        return chunkIdValue
       }),
 
     saveOutput: (runId: ExtractionRunId, outputType: OutputType, content: string) =>
       Effect.gen(function*() {
-        const runDir = path.resolve(baseDir, runId)
-        const outputsDir = path.resolve(runDir, "outputs")
         const filename = getOutputFilename(outputType)
-        const outputPath = path.resolve(outputsDir, filename)
-
-        yield* fs.writeFileString(outputPath, content)
+        yield* storage.set(outputKey(runId, filename), content)
 
         const hash = hashContent(content)
         const size = Buffer.byteLength(content, "utf8")
@@ -360,34 +360,41 @@ const makeExtractionRunService = Effect.gen(function*() {
           ...run,
           status: "complete",
           completedAt: now,
-          events: [...run.events, { timestamp: now, type: "completed" }]
+          events: [...run.events, new AuditEvent({ timestamp: now, type: "completed" })]
         })
       }),
 
     getRun: (runId: ExtractionRunId) =>
       Effect.gen(function*() {
-        const metadataPath = path.resolve(baseDir, runId, "metadata.json")
-        const json = yield* fs.readFileString(metadataPath).pipe(
-          Effect.mapError((error) => new Error(`Run not found: ${runId} - ${error}`))
-        )
-        return new ExtractionRun(JSON.parse(json))
+        const contentOpt = yield* storage.get(metadataKey(runId))
+        if (Option.isNone(contentOpt)) {
+          return yield* Effect.fail(new Error(`Run not found: ${runId}`))
+        }
+        return decodeExtractionRun(contentOpt.value)
       }),
 
     listRuns: () =>
       Effect.gen(function*() {
-        const entries = yield* fs.readDirectory(baseDir).pipe(
-          Effect.orElseSucceed(() => [] as Array<string>)
+        // List all keys under the runs prefix
+        const keys = yield* storage.list(RUNS_PREFIX).pipe(
+          Effect.catchAll(() => Effect.succeed([] as Array<string>))
         )
 
+        // Extract unique run IDs from metadata.json keys
+        const runIds = new Set<string>()
+        for (const key of keys) {
+          // Pattern: runs/{runId}/metadata.json
+          const match = key.match(/^runs\/([^/]+)\/metadata\.json$/)
+          if (match) {
+            runIds.add(match[1])
+          }
+        }
+
         const runs: Array<ExtractionRun> = []
-        for (const entry of entries) {
-          if (entry.startsWith("doc-")) {
-            const metadataPath = path.resolve(baseDir, entry, "metadata.json")
-            const run = yield* fs.readFileString(metadataPath).pipe(
-              Effect.map((json) => new ExtractionRun(JSON.parse(json))),
-              Effect.orElseSucceed(() => null as ExtractionRun | null)
-            )
-            if (run) runs.push(run)
+        for (const runId of runIds) {
+          const contentOpt = yield* storage.get(metadataKey(runId as ExtractionRunId))
+          if (Option.isSome(contentOpt)) {
+            runs.push(decodeExtractionRun(contentOpt.value))
           }
         }
 
@@ -403,7 +410,8 @@ const makeExtractionRunService = Effect.gen(function*() {
         const index = yield* getKeyIndex()
         const runId = index[key]
         if (!runId) return false
-        return yield* fs.exists(path.resolve(baseDir, runId, "metadata.json"))
+        const contentOpt = yield* storage.get(metadataKey(runId))
+        return Option.isSome(contentOpt)
       }),
 
     getByKey: (key: IdempotencyKey) =>
@@ -412,12 +420,10 @@ const makeExtractionRunService = Effect.gen(function*() {
         const runId = index[key]
         if (!runId) return null
 
-        const metadataPath = path.resolve(baseDir, runId, "metadata.json")
-        const exists = yield* fs.exists(metadataPath)
-        if (!exists) return null
+        const contentOpt = yield* storage.get(metadataKey(runId))
+        if (Option.isNone(contentOpt)) return null
 
-        const json = yield* fs.readFileString(metadataPath)
-        return new ExtractionRun(JSON.parse(json))
+        return decodeExtractionRun(contentOpt.value)
       }),
 
     emitEvent: (
@@ -477,7 +483,7 @@ const makeExtractionRunService = Effect.gen(function*() {
           ...run,
           status: "failed",
           completedAt: now,
-          events: [...run.events, { timestamp: now, type: "failed" }],
+          events: [...run.events, new AuditEvent({ timestamp: now, type: "failed" })],
           errors: [...run.errors, error]
         })
       }).pipe(Effect.asVoid)

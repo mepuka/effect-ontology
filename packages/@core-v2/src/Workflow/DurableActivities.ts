@@ -19,7 +19,7 @@ import { LanguageModel } from "@effect/ai"
 import { Activity } from "@effect/workflow"
 import { Chunk, DateTime, Effect, Option, Schedule, Schema } from "effect"
 import { ActivityError, notFoundError, toActivityError } from "../Domain/Error/Activity.js"
-import { type BatchId, DocumentId, GcsUri, toGcsUri } from "../Domain/Identity.js"
+import { GcsUri, toGcsUri } from "../Domain/Identity.js"
 import { Entity, KnowledgeGraph, Relation } from "../Domain/Model/Entity.js"
 import { defaultEntityResolutionConfig } from "../Domain/Model/EntityResolution.js"
 import type { ElementEmbedding, OntologyEmbeddings } from "../Domain/Model/OntologyEmbeddings.js"
@@ -33,49 +33,38 @@ import { EntityId } from "../Domain/Model/shared.js"
 import { PathLayout } from "../Domain/PathLayout.js"
 import { RDF, RDFS } from "../Domain/Rdf/Types.js"
 import type {
-  ExtractionActivityInput,
   IngestionActivityInput,
   ResolutionActivityInput,
   ValidationActivityInput
 } from "../Domain/Schema/Batch.js"
 import { BatchManifest, ValidationActivityOutput } from "../Domain/Schema/Batch.js"
-import {
-  type ChunkingStrategy,
-  computePriority,
-  type DocumentMetadata,
-  type DocumentType,
-  type EnrichedManifest,
-  type EntityDensity,
-  estimateTokens,
-  PreprocessingActivityInput,
-  selectChunkingStrategy
+import type {
+  ChunkingStrategy,
+  DocumentMetadata,
+  DocumentType,
+  EnrichedManifest,
+  EntityDensity,
+  PreprocessingActivityInput
 } from "../Domain/Schema/DocumentMetadata.js"
+import { computePriority, estimateTokens, selectChunkingStrategy } from "../Domain/Schema/DocumentMetadata.js"
+import { ClaimPersistenceService } from "../Service/ClaimPersistence.js"
 import { ConfigService } from "../Service/Config.js"
 import { EmbeddingService } from "../Service/Embedding.js"
 import { EntityResolutionService } from "../Service/EntityResolution.js"
-import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { StageTimeoutService } from "../Service/LlmControl/StageTimeout.js"
 import { generateObjectWithRetry } from "../Service/LlmWithRetry.js"
-import { OntologyService, parseOntologyFromStore } from "../Service/Ontology.js"
+import { parseOntologyFromStore } from "../Service/Ontology.js"
 import { RdfBuilder, type RdfStore } from "../Service/Rdf.js"
 import { ShaclService } from "../Service/Shacl.js"
 import type { ShaclViolation } from "../Service/Shacl.js"
-import { StorageService } from "../Service/Storage.js"
+import { GenerationMismatchError, StorageService } from "../Service/Storage.js"
 import { LlmAttributes } from "../Telemetry/LlmAttributes.js"
+import { knowledgeGraphToClaims } from "../Utils/ClaimFactory.js"
 import { extractLocalNameFromIri } from "../Utils/Iri.js"
-import { makeProvenanceUri } from "../Utils/Provenance.js"
 
 // -----------------------------------------------------------------------------
 // Output Schemas (must be serializable for journaling)
 // -----------------------------------------------------------------------------
-
-export const ExtractionOutput = Schema.Struct({
-  documentId: DocumentId,
-  graphUri: GcsUri,
-  entityCount: Schema.Number,
-  relationCount: Schema.Number,
-  durationMs: Schema.Number
-})
 
 export const ResolutionOutput = Schema.Struct({
   resolvedUri: GcsUri,
@@ -97,6 +86,16 @@ export const ValidationOutput = ValidationActivityOutput
 export const IngestionOutput = Schema.Struct({
   canonicalUri: GcsUri,
   triplesIngested: Schema.Number,
+  durationMs: Schema.Number
+})
+
+export const ClaimPersistenceOutput = Schema.Struct({
+  /** Total claims persisted across all documents */
+  claimsPersisted: Schema.Number,
+  /** Number of documents processed */
+  documentsProcessed: Schema.Number,
+  /** Number of documents that failed claim persistence */
+  documentsFailed: Schema.Number,
   durationMs: Schema.Number
 })
 
@@ -149,18 +148,6 @@ const parseTurtleStats = (turtle: string) =>
       entityCount: typeQuads.length,
       tripleCount: allQuads.length
     }
-  })
-
-/**
- * Serialize a KnowledgeGraph to Turtle using RdfBuilder
- */
-const _graphToTurtle = (graph: KnowledgeGraph) =>
-  Effect.gen(function*() {
-    const rdf = yield* RdfBuilder
-    const store = yield* rdf.createStore
-    yield* rdf.addEntities(store, graph.entities)
-    yield* rdf.addRelations(store, graph.relations)
-    return yield* rdf.toTurtle(store)
   })
 
 /**
@@ -292,241 +279,6 @@ const activityRetryPolicy = Schedule.exponential("1 second").pipe(
 // -----------------------------------------------------------------------------
 // Durable Activities
 // -----------------------------------------------------------------------------
-
-/**
- * Durable Extraction Activity
- *
- * Extracts entities and relations from a source document using the ontology.
- * Journaled by WorkflowEngine - will replay from last checkpoint on crash.
- *
- * Pipeline:
- * 1. Read source document from storage
- * 2. Search ontology for candidate classes using hybrid search
- * 3. Extract entities using LLM (EntityExtractor)
- * 4. Get properties for extracted entity types
- * 5. Extract relations using LLM (RelationExtractor)
- * 6. Build KnowledgeGraph and serialize to Turtle
- * 7. Save graph to storage
- */
-export const makeExtractionActivity = (input: typeof ExtractionActivityInput.Type) =>
-  Activity.make({
-    name: `extraction-${input.documentId}`,
-    success: ExtractionOutput,
-    error: ActivityError,
-    execute: Effect.gen(function*() {
-      const start = yield* DateTime.now
-      const storage = yield* StorageService
-      const config = yield* ConfigService
-      const entityExtractor = yield* EntityExtractor
-      const relationExtractor = yield* RelationExtractor
-      const ontologyService = yield* OntologyService
-
-      const bucket = resolveBucket(config)
-
-      yield* Effect.logInfo("Extraction activity starting", {
-        batchId: input.batchId,
-        documentId: input.documentId,
-        sourceUri: input.sourceUri,
-        ontologyUri: input.ontologyUri
-      })
-
-      // 1. Read source document
-      const sourceKey = stripGsPrefix(input.sourceUri)
-      const sourceContent = yield* storage.get(sourceKey).pipe(
-        Effect.flatMap((opt) => requireContent(opt, sourceKey))
-      )
-
-      yield* Effect.logInfo("Source document loaded", {
-        documentId: input.documentId,
-        contentLength: sourceContent.length
-      })
-
-      // 2. Load pre-computed embeddings if available
-      const precomputedEmbeddings = yield* (
-        input.ontologyEmbeddingsUri
-          ? Effect.gen(function*() {
-            const embeddingsKey = stripGsPrefix(input.ontologyEmbeddingsUri!)
-            const embeddingsJson = yield* storage.get(embeddingsKey).pipe(
-              Effect.flatMap((opt) =>
-                Option.isSome(opt)
-                  ? Effect.succeed(opt.value)
-                  : Effect.succeed(null as string | null)
-              )
-            )
-
-            if (embeddingsJson) {
-              const embeddings = yield* Schema.decode(OntologyEmbeddingsJson)(embeddingsJson).pipe(
-                Effect.catchAll((error) =>
-                  Effect.gen(function*() {
-                    yield* Effect.logWarning("Failed to decode embeddings JSON, falling back to on-the-fly", {
-                      documentId: input.documentId,
-                      error: String(error)
-                    })
-                    return null as OntologyEmbeddings | null
-                  })
-                )
-              )
-
-              if (embeddings) {
-                yield* Effect.logInfo("Pre-computed embeddings loaded", {
-                  documentId: input.documentId,
-                  classCount: embeddings.classes.length,
-                  propertyCount: embeddings.properties.length
-                })
-                return embeddings
-              }
-            }
-
-            yield* Effect.logWarning("Pre-computed embeddings not found, falling back to on-the-fly computation", {
-              documentId: input.documentId,
-              embeddingsUri: input.ontologyEmbeddingsUri
-            })
-            return null
-          })
-          : Effect.succeed(null as OntologyEmbeddings | null)
-      )
-
-      // 3. Load ontology candidate classes via hybrid search
-      const candidateClasses = precomputedEmbeddings
-        ? yield* ontologyService.searchClassesHybridWithEmbeddings(
-          sourceContent.slice(0, 2000),
-          precomputedEmbeddings,
-          100
-        ).pipe(
-          Effect.tap((classes) =>
-            Effect.logInfo("Candidate classes loaded (with pre-computed embeddings)", {
-              documentId: input.documentId,
-              candidateCount: Chunk.size(classes)
-            })
-          ),
-          Effect.tapErrorCause((cause) =>
-            Effect.logError("Extraction: Failed to search candidate classes with embeddings", {
-              activity: "extraction",
-              batchId: input.batchId,
-              documentId: input.documentId,
-              cause: String(cause)
-            })
-          )
-        )
-        : yield* ontologyService.searchClassesHybrid(
-          sourceContent.slice(0, 2000),
-          100
-        ).pipe(
-          Effect.tap((classes) =>
-            Effect.logInfo("Candidate classes loaded", {
-              documentId: input.documentId,
-              candidateCount: Chunk.size(classes)
-            })
-          ),
-          Effect.tapErrorCause((cause) =>
-            Effect.logError("Extraction: Failed to search candidate classes", {
-              activity: "extraction",
-              batchId: input.batchId,
-              documentId: input.documentId,
-              cause: String(cause)
-            })
-          )
-        )
-
-      // 4. Extract entities from LLM
-      const entities = yield* entityExtractor.extract(
-        sourceContent,
-        Chunk.toReadonlyArray(candidateClasses)
-      ).pipe(
-        Effect.tap((extracted) =>
-          Effect.logInfo("Entities extracted", {
-            documentId: input.documentId,
-            entityCount: Chunk.size(extracted)
-          })
-        )
-      )
-
-      // 5. Get properties for extracted entity types
-      const entityTypes = Chunk.toReadonlyArray(entities).flatMap((e) => e.types)
-      const uniqueEntityTypes = Array.from(new Set(entityTypes))
-      const properties = yield* ontologyService.getPropertiesFor(uniqueEntityTypes).pipe(
-        Effect.tap((props) =>
-          Effect.logInfo("Properties loaded for entity types", {
-            documentId: input.documentId,
-            entityTypeCount: uniqueEntityTypes.length,
-            propertyCount: Chunk.size(props)
-          })
-        )
-      )
-
-      // 6. Extract relations from LLM (only if we have 2+ entities and properties)
-      const relations = Chunk.size(entities) >= 2 && Chunk.size(properties) > 0
-        ? yield* relationExtractor.extract(
-          sourceContent,
-          entities,
-          Chunk.toReadonlyArray(properties)
-        ).pipe(
-          Effect.tap((rels) =>
-            Effect.logInfo("Relations extracted", {
-              documentId: input.documentId,
-              relationCount: Chunk.size(rels)
-            })
-          )
-        )
-        : Chunk.empty()
-
-      // 7. Create KnowledgeGraph and serialize to Turtle with provenance
-      const graph = new KnowledgeGraph({
-        entities: Chunk.toReadonlyArray(entities),
-        relations: Chunk.toReadonlyArray(relations),
-        sourceText: sourceContent
-      })
-
-      // Generate provenance URI for this document's triples
-      const provenanceUri = makeProvenanceUri(
-        input.batchId as BatchId,
-        input.documentId
-      )
-
-      // Serialize with named graph for provenance tracking
-      // Use targetNamespace for entity IRI minting (from batch manifest)
-      const rdf = yield* RdfBuilder
-      const store = yield* rdf.createStore
-      yield* rdf.addEntities(store, graph.entities, {
-        graphUri: provenanceUri,
-        targetNamespace: input.targetNamespace
-      })
-      yield* rdf.addRelations(store, graph.relations, {
-        graphUri: provenanceUri,
-        targetNamespace: input.targetNamespace
-      })
-      const trigContent = yield* rdf.toTriG(store)
-
-      yield* Effect.logInfo("Graph serialized to TriG with provenance", {
-        documentId: input.documentId,
-        provenanceUri,
-        trigLength: trigContent.length
-      })
-
-      // 8. Save TriG graph to storage (preserves named graph provenance)
-      const graphPath = PathLayout.document.graph(input.documentId)
-      yield* storage.set(graphPath, trigContent)
-
-      const end = yield* DateTime.now
-
-      yield* Effect.logInfo("Extraction activity complete", {
-        batchId: input.batchId,
-        documentId: input.documentId,
-        entityCount: Chunk.size(entities),
-        relationCount: Chunk.size(relations),
-        durationMs: DateTime.distance(start, end)
-      })
-
-      return {
-        documentId: input.documentId,
-        graphUri: toGcsUri(bucket, graphPath),
-        entityCount: Chunk.size(entities),
-        relationCount: Chunk.size(relations),
-        durationMs: DateTime.distance(start, end)
-      }
-    }).pipe(Effect.mapError(toActivityError)),
-    interruptRetryPolicy: activityRetryPolicy
-  })
 
 /**
  * Durable Resolution Activity
@@ -759,12 +511,35 @@ export const makeValidationActivity = (input: typeof ValidationActivityInput.Typ
         )
       )
 
-      // Generate SHACL shapes from ONTOLOGY (not from extracted data)
-      // This ensures validation enforces ontology constraints, not circular data-derived rules
+      // Load SHACL shapes with auto-discovery:
+      // 1. If shaclUri provided explicitly, use it
+      // 2. Otherwise, try convention-based discovery: shapes.ttl in same directory as ontology
+      // 3. Fall back to auto-generation from ontology if shapes.ttl not found
       const shapesStore = yield* (input.shaclUri
         ? shacl.loadShapesFromUri(input.shaclUri)
         : Effect.gen(function*() {
-          // Load ontology for shape generation
+          // Try convention-based discovery: shapes.ttl in same directory as ontology
+          const shapesPath = input.ontologyUri.replace(/[^/]+\.ttl$/i, "shapes.ttl")
+          const shapesContent = yield* storage.get(stripGsPrefix(shapesPath))
+
+          if (Option.isSome(shapesContent)) {
+            yield* Effect.logInfo("Validation: Found shapes.ttl via auto-discovery", {
+              activity: "validation",
+              batchId: input.batchId,
+              shapesPath,
+              ontologyUri: input.ontologyUri
+            })
+            const parsed = yield* rdf.parseTurtle(shapesContent.value)
+            return parsed._store
+          }
+
+          // Fall back to auto-generation from ontology
+          yield* Effect.logInfo("Validation: Auto-generating SHACL shapes from ontology", {
+            activity: "validation",
+            batchId: input.batchId,
+            ontologyUri: input.ontologyUri,
+            triedShapesPath: shapesPath
+          })
           const ontologyContent = yield* storage.get(stripGsPrefix(input.ontologyUri)).pipe(
             Effect.flatMap((opt) => requireContent(opt, input.ontologyUri)),
             Effect.tapErrorCause((cause) =>
@@ -780,7 +555,7 @@ export const makeValidationActivity = (input: typeof ValidationActivityInput.Typ
           return yield* shacl.generateShapesFromOntology(ontologyStore._store)
         }).pipe(
           Effect.tapErrorCause((cause) =>
-            Effect.logError("Validation: Failed to generate shapes from ontology", {
+            Effect.logError("Validation: Failed to load or generate shapes", {
               activity: "validation",
               batchId: input.batchId,
               cause: String(cause)
@@ -882,7 +657,7 @@ export const makeIngestionActivity = (input: typeof IngestionActivityInput.Type)
       const canonicalPath = PathLayout.batch.canonical(input.batchId)
       yield* storage.set(canonicalPath, validatedGraph)
 
-      // Namespace canonical graph: read-merge-write pattern for incremental KB building
+      // Namespace canonical graph: optimistic locking for concurrent batch safety
       const namespaceCanonicalPath = PathLayout.canonical(input.targetNamespace).entities
 
       // Parse the new graph we want to merge
@@ -891,53 +666,332 @@ export const makeIngestionActivity = (input: typeof IngestionActivityInput.Type)
       )
       const newTripleCount = newStore._store.size
 
-      // Try to load existing namespace canonical graph
-      const existingGraphOpt = yield* storage.get(namespaceCanonicalPath)
+      // Optimistic locking merge with retry on conflict
+      // This prevents concurrent batches from overwriting each other's data
+      const mergeWithOptimisticLocking = Effect.gen(function*() {
+        // Try to load existing namespace canonical graph with generation for optimistic locking
+        const existingGraphOpt = yield* storage.getWithGeneration(namespaceCanonicalPath)
 
-      let mergedGraph: string
-      const mergedStats = { existingTriples: 0, newTriples: newTripleCount, addedTriples: 0 }
+        let mergedGraph: string
+        const mergedStats = { existingTriples: 0, newTriples: newTripleCount, addedTriples: 0 }
+        let generation: string | undefined
 
-      if (Option.isSome(existingGraphOpt)) {
-        // Merge with existing graph
-        const existingStore = yield* rdf.parseTurtle(existingGraphOpt.value).pipe(
-          Effect.mapError((error) => new Error(`Failed to parse existing graph: ${error.message}`))
-        )
-        mergedStats.existingTriples = existingStore._store.size
+        if (Option.isSome(existingGraphOpt)) {
+          generation = existingGraphOpt.value.generation
 
-        // Merge new into existing (union semantics)
-        mergedStats.addedTriples = yield* rdf.mergeStores(existingStore, newStore)
+          // Merge with existing graph
+          const existingStore = yield* rdf.parseTurtle(existingGraphOpt.value.content).pipe(
+            Effect.mapError((error) => new Error(`Failed to parse existing graph: ${error.message}`))
+          )
+          mergedStats.existingTriples = existingStore._store.size
 
-        // Serialize merged graph
-        mergedGraph = yield* rdf.toTurtle(existingStore)
+          // Re-parse new graph for merge (since we can't clone N3 stores)
+          const newStoreForMerge = yield* rdf.parseTurtle(validatedGraph).pipe(
+            Effect.mapError((error) => new Error(`Failed to parse new graph for merge: ${error.message}`))
+          )
 
-        yield* Effect.logInfo("Ingestion: Merged with existing namespace graph", {
-          batchId: input.batchId,
-          namespace: input.targetNamespace,
-          existingTriples: mergedStats.existingTriples,
-          newTriples: mergedStats.newTriples,
-          addedTriples: mergedStats.addedTriples,
-          totalTriples: existingStore._store.size
+          // Merge new into existing (union semantics)
+          mergedStats.addedTriples = yield* rdf.mergeStores(existingStore, newStoreForMerge)
+
+          // Validate merge integrity: addedTriples should never exceed newTriples
+          if (mergedStats.addedTriples > mergedStats.newTriples) {
+            yield* Effect.logError("Ingestion: Merge integrity violation - added more triples than source had", {
+              batchId: input.batchId,
+              newTriples: mergedStats.newTriples,
+              addedTriples: mergedStats.addedTriples
+            })
+            const errorMessage =
+              `Merge integrity violation: added ${mergedStats.addedTriples} triples but source only had ${mergedStats.newTriples}`
+            return yield* Effect.fail(new Error(errorMessage))
+          }
+
+          // Calculate deduplicated triples
+          const deduplicatedTriples = mergedStats.newTriples - mergedStats.addedTriples
+
+          // Log deduplication stats
+          if (deduplicatedTriples > 0) {
+            const deduplicationRatio = (deduplicatedTriples / mergedStats.newTriples) * 100
+
+            if (deduplicationRatio > 50) {
+              yield* Effect.logWarning(
+                "Ingestion: High triple deduplication detected - possible IRI collision or duplicate documents",
+                {
+                  batchId: input.batchId,
+                  namespace: input.targetNamespace,
+                  deduplicatedTriples,
+                  newTriples: mergedStats.newTriples,
+                  deduplicationRatio: `${deduplicationRatio.toFixed(1)}%`
+                }
+              )
+            } else {
+              yield* Effect.logDebug("Ingestion: Triple deduplication during merge", {
+                batchId: input.batchId,
+                deduplicatedTriples,
+                newTriples: mergedStats.newTriples,
+                deduplicationRatio: `${deduplicationRatio.toFixed(1)}%`
+              })
+            }
+          }
+
+          // Serialize merged graph
+          mergedGraph = yield* rdf.toTurtle(existingStore)
+
+          yield* Effect.logInfo("Ingestion: Merged with existing namespace graph", {
+            batchId: input.batchId,
+            namespace: input.targetNamespace,
+            existingTriples: mergedStats.existingTriples,
+            newTriples: mergedStats.newTriples,
+            addedTriples: mergedStats.addedTriples,
+            deduplicatedTriples,
+            totalTriples: existingStore._store.size
+          })
+        } else {
+          // No existing graph - use new graph as-is
+          mergedGraph = validatedGraph
+          mergedStats.addedTriples = newTripleCount
+
+          yield* Effect.logInfo("Ingestion: Creating new namespace graph", {
+            batchId: input.batchId,
+            namespace: input.targetNamespace,
+            tripleCount: newTripleCount
+          })
+        }
+
+        // Write with optimistic locking (conditional on generation match)
+        if (generation !== undefined) {
+          yield* storage.setIfGenerationMatch(namespaceCanonicalPath, mergedGraph, generation)
+        } else {
+          // No existing file - just write directly
+          yield* storage.set(namespaceCanonicalPath, mergedGraph)
+        }
+
+        return mergedStats
+      })
+
+      // Retry on generation mismatch (concurrent write detected)
+      const maxRetries = 3
+      const _mergedStats = yield* mergeWithOptimisticLocking.pipe(
+        Effect.retry({
+          while: (error) => error instanceof GenerationMismatchError,
+          times: maxRetries,
+          schedule: Schedule.exponential("100 millis").pipe(Schedule.jittered)
+        }),
+        Effect.tapError((error) => {
+          if (error instanceof GenerationMismatchError) {
+            return Effect.logError("Ingestion: Failed after max retries due to concurrent writes", {
+              batchId: input.batchId,
+              namespace: input.targetNamespace,
+              maxRetries,
+              key: error.key
+            })
+          }
+          return Effect.void
         })
-      } else {
-        // No existing graph - use new graph as-is
-        mergedGraph = validatedGraph
-        mergedStats.addedTriples = newTripleCount
-
-        yield* Effect.logInfo("Ingestion: Creating new namespace graph", {
-          batchId: input.batchId,
-          namespace: input.targetNamespace,
-          tripleCount: newTripleCount
-        })
-      }
-
-      // Write merged/new graph to namespace canonical path
-      yield* storage.set(namespaceCanonicalPath, mergedGraph)
+      )
 
       const end = yield* DateTime.now
 
       return {
         canonicalUri: toGcsUri(bucket, canonicalPath),
         triplesIngested: stats.tripleCount,
+        durationMs: DateTime.distance(start, end)
+      }
+    }).pipe(Effect.mapError(toActivityError)),
+    interruptRetryPolicy: activityRetryPolicy
+  })
+
+// -----------------------------------------------------------------------------
+// Claim Persistence Activity (runs after validation)
+// -----------------------------------------------------------------------------
+
+/**
+ * Input for ClaimPersistence activity
+ */
+export const ClaimPersistenceInput = Schema.Struct({
+  /** Batch ID for logging */
+  batchId: Schema.String,
+  /** URIs of document graphs to process */
+  documentGraphUris: Schema.Array(Schema.String),
+  /** Target namespace for IRI construction */
+  targetNamespace: Schema.String,
+  /** Optional article metadata per document */
+  documentMetadata: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        documentId: Schema.String,
+        sourceUri: Schema.String,
+        eventTime: Schema.optional(Schema.DateTimeUtc),
+        headline: Schema.optional(Schema.String)
+      })
+    )
+  )
+})
+export type ClaimPersistenceInput = typeof ClaimPersistenceInput.Type
+
+/**
+ * Durable Claim Persistence Activity
+ *
+ * Persists claims to PostgreSQL AFTER validation passes.
+ * This ensures only validated claims are persisted to the database.
+ *
+ * Pipeline:
+ * 1. For each document graph URI, load the TriG/Turtle content
+ * 2. Parse to RDF store and extract entities/relations
+ * 3. Convert to claims using knowledgeGraphToClaims
+ * 4. Persist to PostgreSQL via ClaimPersistenceService
+ *
+ * @since 2.0.0
+ */
+export const makeClaimPersistenceActivity = (input: ClaimPersistenceInput) =>
+  Activity.make({
+    name: `claim-persistence-${input.batchId}`,
+    success: ClaimPersistenceOutput,
+    error: ActivityError,
+    execute: Effect.gen(function*() {
+      const start = yield* DateTime.now
+      const storage = yield* StorageService
+      const rdf = yield* RdfBuilder
+      const config = yield* ConfigService
+      const claimPersistence = yield* Effect.serviceOption(ClaimPersistenceService)
+
+      if (Option.isNone(claimPersistence)) {
+        yield* Effect.logInfo("Claim persistence skipped - PostgreSQL not configured", {
+          batchId: input.batchId
+        })
+        const end = yield* DateTime.now
+        return {
+          claimsPersisted: 0,
+          documentsProcessed: 0,
+          documentsFailed: 0,
+          durationMs: DateTime.distance(start, end)
+        }
+      }
+
+      yield* Effect.logInfo("Claim persistence activity starting", {
+        batchId: input.batchId,
+        documentCount: input.documentGraphUris.length
+      })
+
+      // Build metadata lookup
+      const metadataMap = new Map<string, {
+        documentId: string
+        sourceUri: string
+        eventTime?: DateTime.Utc
+        headline?: string
+      }>()
+
+      for (const meta of input.documentMetadata ?? []) {
+        metadataMap.set(meta.sourceUri, meta)
+      }
+
+      let totalClaimsPersisted = 0
+      let documentsProcessed = 0
+      let documentsFailed = 0
+
+      // Process each document graph
+      for (const graphUri of input.documentGraphUris) {
+        const result = yield* Effect.gen(function*() {
+          const graphPath = stripGsPrefix(graphUri)
+          const graphContent = yield* storage.get(graphPath).pipe(
+            Effect.flatMap((opt) => requireContent(opt, graphPath))
+          )
+
+          // Parse TriG/Turtle to extract entities and relations
+          const store = yield* rdf.parseTurtle(graphContent)
+          const knowledgeGraph = yield* storeToKnowledgeGraph(store)
+
+          // Get metadata for this document
+          // Try to find metadata by matching graph URI path to sourceUri
+          let docMeta = metadataMap.get(graphUri)
+          if (!docMeta) {
+            // Fall back to extracting document ID from path
+            const pathMatch = graphPath.match(/documents\/([^/]+)\//)
+            const documentId = pathMatch?.[1] ?? graphPath
+            docMeta = {
+              documentId,
+              sourceUri: graphUri
+            }
+          }
+
+          // Convert to claims
+          // Convert Namespace identifier to full IRI
+          const match = config.rdf.baseNamespace.match(/^https?:\/\/[^/]+\//)
+          const baseDomain = match ? match[0] : "http://example.org/"
+          const baseNamespace = `${baseDomain}${input.targetNamespace}/`
+          const claims = knowledgeGraphToClaims(
+            knowledgeGraph.entities,
+            knowledgeGraph.relations,
+            {
+              baseNamespace,
+              documentId: docMeta.documentId,
+              defaultConfidence: 0.85
+            }
+          )
+
+          if (claims.length === 0) {
+            yield* Effect.logDebug("No claims to persist for document", {
+              batchId: input.batchId,
+              documentId: docMeta.documentId
+            })
+            return { persisted: 0, documentId: docMeta.documentId }
+          }
+
+          // Persist to PostgreSQL
+          const persistResult = yield* claimPersistence.value.persistClaims(
+            claims,
+            {
+              uri: docMeta.sourceUri,
+              headline: docMeta.headline,
+              publishedAt: docMeta.eventTime
+                ? DateTime.toDate(docMeta.eventTime)
+                : new Date()
+            },
+            graphUri
+          )
+
+          yield* Effect.logDebug("Claims persisted for document", {
+            batchId: input.batchId,
+            documentId: docMeta.documentId,
+            claimsInserted: persistResult.claimsInserted,
+            claimsTotal: persistResult.claimsTotal
+          })
+
+          return { persisted: persistResult.claimsInserted, documentId: docMeta.documentId }
+        }).pipe(
+          Effect.catchAll((error) =>
+            Effect.gen(function*() {
+              yield* Effect.logWarning("Failed to persist claims for document", {
+                batchId: input.batchId,
+                graphUri,
+                error: String(error)
+              })
+              return { persisted: 0, failed: true, graphUri }
+            })
+          )
+        )
+
+        if ("failed" in result && result.failed) {
+          documentsFailed++
+        } else {
+          documentsProcessed++
+          totalClaimsPersisted += result.persisted
+        }
+      }
+
+      const end = yield* DateTime.now
+
+      yield* Effect.logInfo("Claim persistence activity complete", {
+        batchId: input.batchId,
+        claimsPersisted: totalClaimsPersisted,
+        documentsProcessed,
+        documentsFailed,
+        durationMs: DateTime.distance(start, end)
+      })
+
+      return {
+        claimsPersisted: totalClaimsPersisted,
+        documentsProcessed,
+        documentsFailed,
         durationMs: DateTime.distance(start, end)
       }
     }).pipe(Effect.mapError(toActivityError)),
