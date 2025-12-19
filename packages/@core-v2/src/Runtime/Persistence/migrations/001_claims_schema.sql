@@ -47,6 +47,7 @@ CREATE INDEX IF NOT EXISTS idx_articles_published ON articles(published_at);
 -- Claims Table
 -- =============================================================================
 -- Reified claims with Wikidata-style ranks
+-- Note: deprecated_by FK added later after corrections table exists
 
 CREATE TABLE IF NOT EXISTS claims (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -73,7 +74,7 @@ CREATE TABLE IF NOT EXISTS claims (
     -- Lifecycle timestamps
     created_at TIMESTAMPTZ DEFAULT NOW(),        -- When claim was extracted
     deprecated_at TIMESTAMPTZ,                   -- When claim was deprecated
-    deprecated_by UUID REFERENCES corrections(id),
+    deprecated_by UUID,                          -- FK added below after corrections table
 
     -- Confidence and provenance
     confidence_score NUMERIC(4,3),               -- 0.000 to 1.000
@@ -119,6 +120,17 @@ CREATE TABLE IF NOT EXISTS corrections (
 CREATE INDEX IF NOT EXISTS idx_corrections_type ON corrections(correction_type);
 CREATE INDEX IF NOT EXISTS idx_corrections_source ON corrections(source_article_id);
 CREATE INDEX IF NOT EXISTS idx_corrections_date ON corrections(correction_date);
+
+-- Add FK from claims.deprecated_by to corrections now that both tables exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'claims_deprecated_by_fkey'
+    ) THEN
+        ALTER TABLE claims ADD CONSTRAINT claims_deprecated_by_fkey
+            FOREIGN KEY (deprecated_by) REFERENCES corrections(id);
+    END IF;
+END $$;
 
 -- =============================================================================
 -- Correction Claims Junction Table
