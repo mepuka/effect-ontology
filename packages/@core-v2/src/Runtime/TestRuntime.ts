@@ -177,6 +177,7 @@ export const MockShaclService = (options?: {
  * @since 2.0.0
  */
 const ontologyLayer = OntologyService.Default.pipe(
+  Layer.provide(StorageServiceTest),
   Layer.provideMerge(BunContext.layer)
 )
 
@@ -184,7 +185,6 @@ export const TestLayers = Layer.mergeAll(
   NlpService.Default,
   RdfBuilder.Default,
   ontologyLayer,
-  StorageServiceTest,
   MockShaclService(),
   MockLanguageModel,
   EntityExtractor.Test,

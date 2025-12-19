@@ -10,6 +10,7 @@ import { ConfigService, DEFAULT_CONFIG } from "../src/Service/Config.js"
 import { NlpService } from "../src/Service/Nlp.js"
 import { OntologyService } from "../src/Service/Ontology.js"
 import { RdfBuilder } from "../src/Service/Rdf.js"
+import { StorageServiceLive } from "../src/Service/Storage.js"
 
 describe("OntologyService - Football Ontology", () => {
   // Configure to use football ontology - override only the path
@@ -22,11 +23,12 @@ describe("OntologyService - Football Ontology", () => {
   } as ConfigService)
 
   // Chain layers to satisfy dependencies:
-  // Ontology -> (Nlp, Rdf)
-  // Nlp, Rdf -> Config
+  // Ontology -> (Nlp, Rdf, Storage)
+  // Storage, Nlp, Rdf -> Config
   const TestLayer = OntologyService.Default.pipe(
     Layer.provide(NlpService.Default),
     Layer.provide(RdfBuilder.Default),
+    Layer.provide(StorageServiceLive),
     Layer.provide(TestConfig),
     Layer.provideMerge(BunContext.layer)
   )

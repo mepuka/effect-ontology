@@ -495,17 +495,17 @@ export const makeExtractionActivity = (input: typeof ExtractionActivityInput.Typ
         graphUri: provenanceUri,
         targetNamespace: input.targetNamespace
       })
-      const turtleContent = yield* rdf.toTurtle(store)
+      const trigContent = yield* rdf.toTriG(store)
 
-      yield* Effect.logInfo("Graph serialized to Turtle with provenance", {
+      yield* Effect.logInfo("Graph serialized to TriG with provenance", {
         documentId: input.documentId,
         provenanceUri,
-        turtleLength: turtleContent.length
+        trigLength: trigContent.length
       })
 
-      // 8. Save Turtle graph to storage
+      // 8. Save TriG graph to storage (preserves named graph provenance)
       const graphPath = PathLayout.document.graph(input.documentId)
-      yield* storage.set(graphPath, turtleContent)
+      yield* storage.set(graphPath, trigContent)
 
       const end = yield* DateTime.now
 

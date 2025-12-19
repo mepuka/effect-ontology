@@ -110,7 +110,7 @@ export class ClaimService extends Effect.Service<ClaimService>()("ClaimService",
     const createClaim = (input: CreateClaimInput) =>
       Effect.gen(function* () {
         const now = yield* DateTime.now
-        const id = `claim-${Date.now().toString(16).slice(-12)}`
+        const id = crypto.randomUUID()
 
         const claimRow: ClaimInsertRow = {
           id,
@@ -141,7 +141,7 @@ export class ClaimService extends Effect.Service<ClaimService>()("ClaimService",
       Effect.gen(function* () {
         const now = yield* DateTime.now
 
-        yield* repo.deprecateClaim(claimId, correctionId ?? `correction-${Date.now().toString(16).slice(-12)}`)
+        yield* repo.deprecateClaim(claimId, correctionId ?? crypto.randomUUID())
 
         return {
           claimId,

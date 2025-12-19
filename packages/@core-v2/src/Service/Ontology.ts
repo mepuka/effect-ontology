@@ -9,8 +9,7 @@
  * @module Service/Ontology
  */
 
-import { FileSystem } from "@effect/platform"
-import { Chunk, Duration, Effect, Schema } from "effect"
+import { Chunk, Duration, Effect, Option, Schema } from "effect"
 import { OntologyFileNotFound, OntologyParsingFailed } from "../Domain/Error/Ontology.js"
 import type { RdfError } from "../Domain/Error/Rdf.js"
 import { ClassDefinition, OntologyContext, PropertyDefinition } from "../Domain/Model/Ontology.js"
@@ -47,6 +46,7 @@ import { rrfFusion } from "../Utils/Retrieval.js"
 import { ConfigService } from "./Config.js"
 import { NlpService } from "./Nlp.js"
 import { RdfBuilder, type RdfStore } from "./Rdf.js"
+import { StorageService } from "./Storage.js"
 
 /**
  * Parse ontology from RDF store using RdfService queries
@@ -238,7 +238,7 @@ export const parseOntologyFromStore = (
           finalClasses.push(
             new ClassDefinition({
               id: id as IRI,
-              label: labels.get(id)?.[0] || "",
+              label: labels.get(id)?.[0] || prefLabels.get(id)?.[0] || "",
               comment: comments.get(id)?.[0] || "",
               // properties field expects IRI[], coerce from string[]
               properties: asIriArray(getOrEmpty(classProperties, id)),
@@ -268,7 +268,7 @@ export const parseOntologyFromStore = (
         finalProperties.push(
           new PropertyDefinition({
             id: id,  // PropertyDefinition.id is Schema.String, not IRI
-            label: labels.get(id)?.[0] || "",
+            label: labels.get(id)?.[0] || prefLabels.get(id)?.[0] || "",
             comment: comments.get(id)?.[0] || "",
             // domain/range expect string[] (full IRIs as strings)
             domain: getOrEmpty(domains, id),
@@ -324,7 +324,7 @@ export class OntologyService extends Effect.Service<OntologyService>()(
   {
     effect: Effect.gen(function*() {
       const config = yield* ConfigService
-      const fs = yield* FileSystem.FileSystem
+      const storage = yield* StorageService
       const rdf = yield* RdfBuilder
       const nlp = yield* NlpService
 
@@ -333,17 +333,27 @@ export class OntologyService extends Effect.Service<OntologyService>()(
       const getOntology = yield* Effect.cachedWithTTL(cacheTtl)(
         Effect.gen(function*() {
           const ontologyPath = config.ontology.path
-          const turtleContent = yield* fs.readFileString(ontologyPath).pipe(
+          const contentOpt = yield* storage.get(ontologyPath).pipe(
             Effect.mapError(
               (error) =>
                 new OntologyFileNotFound({
-                  message: `Ontology file not found at ${ontologyPath}`,
+                  message: `Failed to read ontology from storage at ${ontologyPath}`,
                   path: ontologyPath,
                   cause: error
                 })
             )
           )
 
+          if (Option.isNone(contentOpt)) {
+            return yield* Effect.fail(
+              new OntologyFileNotFound({
+                message: `Ontology file not found at ${ontologyPath}`,
+                path: ontologyPath
+              })
+            )
+          }
+
+          const turtleContent = contentOpt.value
           const store = yield* rdf.parseTurtle(turtleContent)
           return yield* parseOntologyFromStore(
             rdf,
@@ -435,10 +445,10 @@ export class OntologyService extends Effect.Service<OntologyService>()(
 
               // B. Property Match -> Resolve Domain Classes
               if (result.property) {
-                for (const domainLocalName of result.property.domain) {
-                  // Find class by matching local name
+                for (const domainIri of result.property.domain) {
+                  // Find class by matching full IRI
                   const domainClass = ontology.classes.find(
-                    (c) => extractLocalName(c.id) === domainLocalName
+                    (c) => c.id === domainIri
                   )
                   if (domainClass) {
                     validClasses.set(domainClass.id, domainClass)
@@ -559,10 +569,10 @@ export class OntologyService extends Effect.Service<OntologyService>()(
 
               // B. Property Match -> Resolve Domain Classes
               if (result.property) {
-                for (const domainLocalName of result.property.domain) {
-                  // Find class by matching local name
+                for (const domainIri of result.property.domain) {
+                  // Find class by matching full IRI
                   const domainClass = ontology.classes.find(
-                    (c) => extractLocalName(c.id) === domainLocalName
+                    (c) => c.id === domainIri
                   )
                   if (domainClass) {
                     validClasses.set(domainClass.id, domainClass)
@@ -872,7 +882,7 @@ export class OntologyService extends Effect.Service<OntologyService>()(
     }),
     dependencies: [
       RdfBuilder.Default,
-      // ConfigService and platform layer (FileSystem) provided by parent scope
+      // StorageService and ConfigService provided by parent scope
       NlpService.Default
     ],
     accessors: true
