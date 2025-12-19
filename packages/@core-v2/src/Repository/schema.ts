@@ -8,7 +8,7 @@
  * @module Repository/schema
  */
 
-import { index, integer, jsonb, numeric, pgEnum, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core"
+import { index, integer, jsonb, numeric, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core"
 
 // =============================================================================
 // Enums
@@ -89,6 +89,8 @@ export const claims = pgTable("claims", {
   evidenceStartOffset: integer("evidence_start_offset"),
   evidenceEndOffset: integer("evidence_end_offset")
 }, (table) => [
+  // Unique constraint for claim idempotency - enables ON CONFLICT DO NOTHING
+  uniqueIndex("idx_claims_natural_key").on(table.articleId, table.subjectIri, table.predicateIri, table.objectValue),
   index("idx_claims_article").on(table.articleId),
   index("idx_claims_subject").on(table.subjectIri),
   index("idx_claims_predicate").on(table.predicateIri),
