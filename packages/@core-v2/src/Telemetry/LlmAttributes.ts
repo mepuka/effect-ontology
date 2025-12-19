@@ -34,6 +34,11 @@ export const LlmAttributes = {
   RESPONSE_LENGTH: "gen_ai.response.length",
   SCHEMA_HASH: "gen_ai.request.schema_hash",
 
+  // Prompt caching (custom)
+  PROMPT_CACHING_ENABLED: "llm.prompt_caching.enabled",
+  SYSTEM_MESSAGE_LENGTH: "llm.prompt_caching.system_message.length",
+  USER_MESSAGE_LENGTH: "llm.prompt_caching.user_message.length",
+
   // Extraction-specific (custom)
   ENTITY_COUNT: "extraction.entity_count",
   RELATION_COUNT: "extraction.relation_count",

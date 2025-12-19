@@ -19,7 +19,11 @@ import { Entity, Relation } from "../Domain/Model/Entity.js"
 import type { ClassDefinition, PropertyDefinition } from "../Domain/Model/Ontology.js"
 import { EntityId } from "../Domain/Model/shared.js"
 import type { IRI } from "../Domain/Rdf/Types.js"
-import { generateEntityPrompt, generateMentionPrompt, generateRelationPrompt } from "../Prompt/index.js"
+import {
+  generateStructuredEntityPrompt,
+  generateStructuredMentionPrompt,
+  generateStructuredRelationPrompt
+} from "../Prompt/index.js"
 import { makeEntitySchema } from "../Schema/EntityFactory.js"
 import { type Mention, MentionGraphSchema } from "../Schema/MentionFactory.js"
 import { makeRelationSchema } from "../Schema/RelationFactory.js"
@@ -98,8 +102,9 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
 
           const datatypeProps = datatypeProperties ?? []
 
-          // Build prompt using unified Prompt module (ensures schema-prompt alignment)
-          const prompt = generateEntityPrompt(text, candidates, datatypeProps)
+          // Build structured prompt for caching support
+          const structuredPrompt = generateStructuredEntityPrompt(text, candidates, datatypeProps)
+          const promptLength = structuredPrompt.systemMessage.length + structuredPrompt.userMessage.length
 
           // Create schema from candidate classes and datatype properties
           const schema = makeEntitySchema(candidates, datatypeProps)
@@ -116,8 +121,10 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
           // Log prompt (truncated for readability)
           yield* Effect.logDebug("Entity extraction prompt", {
             stage: "entity-extraction",
-            promptLength: prompt.length,
-            prompt: prompt.slice(0, 1000) // First 1000 chars
+            promptLength,
+            systemMessageLength: structuredPrompt.systemMessage.length,
+            userMessageLength: structuredPrompt.userMessage.length,
+            promptPreview: structuredPrompt.systemMessage.slice(0, 500) // First 500 chars of system message
           })
 
           // Log schema summary (hash only to prevent PII leakage)
@@ -136,13 +143,14 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
           const response = yield* timeout.withTimeout(
             "entity_extraction",
             generateObjectWithFeedback(llm, {
-              prompt,
+              prompt: structuredPrompt,
               schema,
               objectName: "EntityGraph",
               maxAttempts: config.runtime.retryMaxAttempts,
               serviceName: "EntityExtractor",
               timeoutMs: config.llm.timeoutMs,
-              retrySchedule
+              retrySchedule,
+              enablePromptCaching: config.llm.enablePromptCaching
             }),
             () =>
               Effect.logWarning("Entity extraction approaching timeout", {
@@ -162,7 +170,7 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
                 annotateLlmCall({
                   model: config.llm.model,
                   provider: config.llm.provider,
-                  promptLength: prompt.length,
+                  promptLength,
                   inputTokens: response.usage.inputTokens,
                   outputTokens: response.usage.outputTokens,
                   schemaHash
@@ -175,7 +183,7 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
             ),
             Effect.withSpan("entity-extraction-llm", {
               attributes: {
-                [LlmAttributes.PROMPT_LENGTH]: prompt.length,
+                [LlmAttributes.PROMPT_LENGTH]: promptLength,
                 [LlmAttributes.CANDIDATE_CLASS_COUNT]: candidates.length,
                 [LlmAttributes.SCHEMA_HASH]: schemaHash
               }
@@ -355,7 +363,6 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
  */
 export class MentionExtractor extends Effect.Service<MentionExtractor>()("MentionExtractor", {
   effect: Effect.gen(function*() {
-    const config = yield* ConfigService
     const timeout = yield* StageTimeoutService
 
     const llm = yield* LanguageModel.LanguageModel
@@ -369,8 +376,10 @@ export class MentionExtractor extends Effect.Service<MentionExtractor>()("Mentio
        */
       extract: (text: string) =>
         Effect.gen(function*() {
-          // Build prompt using unified Prompt module (ensures schema-prompt alignment)
-          const prompt = generateMentionPrompt(text)
+          const config = yield* ConfigService
+
+          // Build structured prompt for caching support
+          const structuredPrompt = generateStructuredMentionPrompt(text)
 
           yield* Effect.logDebug("Mention extraction stage", {
             stage: "mention-extraction",
@@ -384,8 +393,9 @@ export class MentionExtractor extends Effect.Service<MentionExtractor>()("Mentio
             "entity_extraction",
             generateObjectWithRetry({
               llm,
-              prompt,
+              prompt: structuredPrompt,
               schema: MentionGraphSchema,
+              enablePromptCaching: config.llm.enablePromptCaching,
               objectName: "MentionGraph",
               serviceName: "MentionExtractor",
               model: config.llm.model,
@@ -461,7 +471,7 @@ export class MentionExtractor extends Effect.Service<MentionExtractor>()("Mentio
           { id: "test_entity", mention: "Test Entity", context: "A test entity" }
         ])
       )
-  } as MentionExtractor)
+  } as unknown as MentionExtractor)
 }
 
 /**
@@ -528,8 +538,9 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
             })
           }
 
-          // Build prompt using unified Prompt module (ensures schema-prompt alignment)
-          const prompt = generateRelationPrompt(text, entityArray, properties)
+          // Build structured prompt for caching support
+          const structuredPrompt = generateStructuredRelationPrompt(text, entityArray, properties)
+          const promptLength = structuredPrompt.systemMessage.length + structuredPrompt.userMessage.length
 
           // Create schema from entity IDs and properties
           const schema = makeRelationSchema(validEntityIds, properties)
@@ -548,8 +559,10 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
           // Log prompt (truncated for readability)
           yield* Effect.logDebug("Relation extraction prompt", {
             stage: "relation-extraction",
-            promptLength: prompt.length,
-            prompt: prompt.slice(0, 1000) // First 1000 chars
+            promptLength,
+            systemMessageLength: structuredPrompt.systemMessage.length,
+            userMessageLength: structuredPrompt.userMessage.length,
+            promptPreview: structuredPrompt.systemMessage.slice(0, 500) // First 500 chars of system message
           })
 
           // Log schema summary (hash for tracing without PII)
@@ -570,7 +583,7 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
             "relation_extraction",
             generateObjectWithRetry({
               llm,
-              prompt,
+              prompt: structuredPrompt,
               schema,
               objectName: "RelationGraph",
               serviceName: "RelationExtractor",
@@ -582,6 +595,7 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
                 maxAttempts: config.runtime.retryMaxAttempts,
                 timeoutMs: config.llm.timeoutMs
               },
+              enablePromptCaching: config.llm.enablePromptCaching,
               spanAttributes: {
                 [LlmAttributes.ENTITY_COUNT]: entityArray.length
               },

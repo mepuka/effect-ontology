@@ -33,6 +33,21 @@ export interface OntologyPromptContext {
   readonly entities?: ReadonlyArray<Entity>
 }
 
+/**
+ * Structured prompt with separate system and user messages for prompt caching
+ *
+ * System message contains cacheable content (ontology schema, rules, instructions).
+ * User message contains variable content (input text to extract from).
+ *
+ * @since 2.0.0
+ */
+export interface StructuredPrompt {
+  /** Cacheable system message: rules, schema, instructions */
+  readonly systemMessage: string
+  /** Variable user message: input text */
+  readonly userMessage: string
+}
+
 // =============================================================================
 // Document Builders - Sections
 // =============================================================================
@@ -325,10 +340,79 @@ const buildOutputFormatSection = (stage: "mention" | "entity" | "relation"): Doc
 // =============================================================================
 
 /**
+ * Generate structured prompt with separate system and user messages
+ *
+ * Separates cacheable content (system message) from variable content (user message)
+ * to enable prompt caching. System message contains ontology schema, rules, and
+ * instructions. User message contains the input text to extract from.
+ *
+ * @param text - Source text to extract from
+ * @param ruleSet - Rule set for the extraction stage
+ * @param ctx - Ontology context (classes, properties, entities)
+ * @returns Structured prompt with system and user messages
+ *
+ * @example
+ * ```typescript
+ * const ruleSet = makeEntityRuleSet(classes, datatypeProperties)
+ * const structured = generateStructuredPrompt(text, ruleSet, {
+ *   classes,
+ *   objectProperties: [],
+ *   datatypeProperties
+ * })
+ * // structured.systemMessage: cacheable instructions
+ * // structured.userMessage: variable input text
+ * ```
+ *
+ * @since 2.0.0
+ */
+export const generateStructuredPrompt = (
+  text: string,
+  ruleSet: RuleSet,
+  ctx: OntologyPromptContext
+): StructuredPrompt => {
+  // Build system message sections (cacheable)
+  const systemSections: Array<Doc.Doc<never>> = [
+    buildTaskSection(ruleSet.stage),
+    Doc.empty,
+    // Critical rules FIRST so they aren't lost in context
+    buildRulesSection(ruleSet)
+  ]
+
+  // Stage-specific sections
+  if (ruleSet.stage === "entity") {
+    // Add namespace prefix section for entity extraction (explains local name usage)
+    systemSections.push(Doc.empty, buildNamespacePrefixSection(ctx))
+    systemSections.push(Doc.empty, buildQuickReferenceSection(ruleSet))
+    systemSections.push(Doc.empty, buildOntologySection(ctx))
+  } else if (ruleSet.stage === "relation") {
+    systemSections.push(Doc.empty, buildEntitiesSection(ctx))
+    systemSections.push(Doc.empty, buildQuickReferenceSection(ruleSet))
+    systemSections.push(Doc.empty, buildPropertiesSection(ctx))
+  }
+
+  // Common sections - Output Format closes the instructions
+  systemSections.push(Doc.empty, buildOutputFormatSection(ruleSet.stage))
+
+  // Build user message (variable content)
+  const userSections = buildInputTextSection(text)
+
+  const systemDoc = Doc.vsep(systemSections)
+  const userDoc = userSections
+
+  return {
+    systemMessage: Doc.render(systemDoc, { style: "pretty", options: { lineWidth: 120 } }),
+    userMessage: Doc.render(userDoc, { style: "pretty", options: { lineWidth: 120 } })
+  }
+}
+
+/**
  * Generate complete extraction prompt
  *
  * Combines all prompt sections using rules from the RuleSet
  * to ensure schema and prompt are aligned.
+ *
+ * @deprecated Use `generateStructuredPrompt()` for prompt caching support.
+ * This function is kept for backward compatibility.
  *
  * @param text - Source text to extract from
  * @param ruleSet - Rule set for the extraction stage
@@ -352,40 +436,42 @@ export const generatePrompt = (
   ruleSet: RuleSet,
   ctx: OntologyPromptContext
 ): string => {
-  const sections: Array<Doc.Doc<never>> = [
-    buildTaskSection(ruleSet.stage),
-    Doc.empty,
-    // Critical rules FIRST so they aren't lost in context
-    buildRulesSection(ruleSet)
-  ]
+  const structured = generateStructuredPrompt(text, ruleSet, ctx)
+  return `${structured.systemMessage}\n\n${structured.userMessage}`
+}
 
-  // Stage-specific sections
-  if (ruleSet.stage === "entity") {
-    // Add namespace prefix section for entity extraction (explains local name usage)
-    sections.push(Doc.empty, buildNamespacePrefixSection(ctx))
-    sections.push(Doc.empty, buildQuickReferenceSection(ruleSet))
-    sections.push(Doc.empty, buildOntologySection(ctx))
-  } else if (ruleSet.stage === "relation") {
-    sections.push(Doc.empty, buildEntitiesSection(ctx))
-    sections.push(Doc.empty, buildQuickReferenceSection(ruleSet))
-    sections.push(Doc.empty, buildPropertiesSection(ctx))
-  }
+/**
+ * Generate structured entity extraction prompt
+ *
+ * Convenience wrapper that creates RuleSet internally and returns structured prompt.
+ *
+ * @param text - Source text to extract from
+ * @param classes - Available ontology classes
+ * @param datatypeProperties - Available datatype properties
+ * @returns Structured prompt with system and user messages
+ *
+ * @since 2.0.0
+ */
+export const generateStructuredEntityPrompt = (
+  text: string,
+  classes: ReadonlyArray<ClassDefinition>,
+  datatypeProperties: ReadonlyArray<PropertyDefinition>
+): StructuredPrompt => {
+  const ruleSet = makeEntityRuleSet(classes, datatypeProperties)
 
-  // Common sections - Output Format closes the instructions
-  sections.push(Doc.empty, buildOutputFormatSection(ruleSet.stage))
-
-  // Input text at the END - LLMs have recency bias, so the text to extract
-  // should be the last thing they see before generating the response
-  sections.push(Doc.empty, buildInputTextSection(text))
-
-  const doc = Doc.vsep(sections)
-  return Doc.render(doc, { style: "pretty", options: { lineWidth: 120 } })
+  return generateStructuredPrompt(text, ruleSet, {
+    classes,
+    objectProperties: [],
+    datatypeProperties
+  })
 }
 
 /**
  * Generate entity extraction prompt
  *
  * Convenience wrapper that creates RuleSet internally.
+ *
+ * @deprecated Use `generateStructuredEntityPrompt()` for prompt caching support.
  *
  * @param text - Source text to extract from
  * @param classes - Available ontology classes
@@ -399,13 +485,39 @@ export const generateEntityPrompt = (
   classes: ReadonlyArray<ClassDefinition>,
   datatypeProperties: ReadonlyArray<PropertyDefinition>
 ): string => {
-  // Use imported function
-  const ruleSet = makeEntityRuleSet(classes, datatypeProperties)
+  const structured = generateStructuredEntityPrompt(text, classes, datatypeProperties)
+  return `${structured.systemMessage}\n\n${structured.userMessage}`
+}
 
-  return generatePrompt(text, ruleSet, {
-    classes,
-    objectProperties: [],
-    datatypeProperties
+/**
+ * Generate structured relation extraction prompt
+ *
+ * Convenience wrapper that creates RuleSet internally and returns structured prompt.
+ *
+ * @param text - Source text to extract from
+ * @param entities - Entities from Stage 1
+ * @param properties - Available properties
+ * @returns Structured prompt with system and user messages
+ *
+ * @since 2.0.0
+ */
+export const generateStructuredRelationPrompt = (
+  text: string,
+  entities: ReadonlyArray<Entity>,
+  properties: ReadonlyArray<PropertyDefinition>
+): StructuredPrompt => {
+  const entityIds = entities.map((e) => e.id)
+  const ruleSet = makeRelationRuleSet(entityIds, properties)
+
+  const objectProperties = properties.filter((p) => p.rangeType === "object")
+  const datatypeProperties = properties.filter((p) => p.rangeType === "datatype")
+
+  return generateStructuredPrompt(text, ruleSet, {
+    classes: [],
+    objectProperties,
+    datatypeProperties,
+    entityIds,
+    entities
   })
 }
 
@@ -413,6 +525,8 @@ export const generateEntityPrompt = (
  * Generate relation extraction prompt
  *
  * Convenience wrapper that creates RuleSet internally.
+ *
+ * @deprecated Use `generateStructuredRelationPrompt()` for prompt caching support.
  *
  * @param text - Source text to extract from
  * @param entities - Entities from Stage 1
@@ -426,19 +540,27 @@ export const generateRelationPrompt = (
   entities: ReadonlyArray<Entity>,
   properties: ReadonlyArray<PropertyDefinition>
 ): string => {
-  // Use imported function
-  const entityIds = entities.map((e) => e.id)
-  const ruleSet = makeRelationRuleSet(entityIds, properties)
+  const structured = generateStructuredRelationPrompt(text, entities, properties)
+  return `${structured.systemMessage}\n\n${structured.userMessage}`
+}
 
-  const objectProperties = properties.filter((p) => p.rangeType === "object")
-  const datatypeProperties = properties.filter((p) => p.rangeType === "datatype")
+/**
+ * Generate structured mention extraction prompt
+ *
+ * Convenience wrapper for pre-Stage 1 mention detection.
+ *
+ * @param text - Source text to extract from
+ * @returns Structured prompt with system and user messages
+ *
+ * @since 2.0.0
+ */
+export const generateStructuredMentionPrompt = (text: string): StructuredPrompt => {
+  const ruleSet = makeMentionRuleSet()
 
-  return generatePrompt(text, ruleSet, {
+  return generateStructuredPrompt(text, ruleSet, {
     classes: [],
-    objectProperties,
-    datatypeProperties,
-    entityIds,
-    entities
+    objectProperties: [],
+    datatypeProperties: []
   })
 }
 
@@ -447,18 +569,14 @@ export const generateRelationPrompt = (
  *
  * Convenience wrapper for pre-Stage 1 mention detection.
  *
+ * @deprecated Use `generateStructuredMentionPrompt()` for prompt caching support.
+ *
  * @param text - Source text to extract from
  * @returns Complete mention extraction prompt
  *
  * @since 2.0.0
  */
 export const generateMentionPrompt = (text: string): string => {
-  // Use imported function
-  const ruleSet = makeMentionRuleSet()
-
-  return generatePrompt(text, ruleSet, {
-    classes: [],
-    objectProperties: [],
-    datatypeProperties: []
-  })
+  const structured = generateStructuredMentionPrompt(text)
+  return `${structured.systemMessage}\n\n${structured.userMessage}`
 }

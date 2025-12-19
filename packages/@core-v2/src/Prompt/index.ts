@@ -38,9 +38,13 @@ export {
   generateEntityPrompt,
   generateMentionPrompt,
   generatePrompt,
-  generateRelationPrompt
+  generateRelationPrompt,
+  generateStructuredEntityPrompt,
+  generateStructuredMentionPrompt,
+  generateStructuredPrompt,
+  generateStructuredRelationPrompt
 } from "./PromptGenerator.js"
-export type { OntologyPromptContext } from "./PromptGenerator.js"
+export type { OntologyPromptContext, StructuredPrompt } from "./PromptGenerator.js"
 
 export {
   extractViolations,

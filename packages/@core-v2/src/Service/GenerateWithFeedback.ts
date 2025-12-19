@@ -14,6 +14,8 @@ import { Prompt } from "@effect/ai"
 import type { Schedule, Schema } from "effect"
 import { Duration, Effect, Either } from "effect"
 import type { TimeoutException } from "effect/Cause"
+import type { StructuredPrompt } from "../Prompt/PromptGenerator.js"
+import { makeCachedPromptFromStructured } from "./PromptCache.js"
 
 /**
  * Options for generateObjectWithFeedback
@@ -22,9 +24,9 @@ import type { TimeoutException } from "effect/Cause"
  */
 export interface GenerateWithFeedbackOptions<A, I extends Record<string, unknown>, R> {
   /**
-   * The initial prompt text
+   * The initial prompt - can be a string or structured prompt for caching
    */
-  readonly prompt: string
+  readonly prompt: string | StructuredPrompt
   /**
    * The schema for structured output
    */
@@ -51,6 +53,10 @@ export interface GenerateWithFeedbackOptions<A, I extends Record<string, unknown
    * Schema validation errors (MalformedOutput) still get feedback-based retry.
    */
   readonly retrySchedule?: Schedule.Schedule<unknown, unknown, never>
+  /**
+   * Whether to enable prompt caching (only applies when prompt is StructuredPrompt)
+   */
+  readonly enablePromptCaching?: boolean
 }
 
 /**
@@ -81,8 +87,15 @@ export const generateObjectWithFeedback = <A, I extends Record<string, unknown>,
   // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 ): Effect.Effect<LanguageModel.GenerateObjectResponse<{}, A>, AiError.AiError | TimeoutException, R> =>
   Effect.gen(function*() {
-    // Build initial prompt from string
-    let currentPrompt: Prompt.Prompt = Prompt.make(opts.prompt)
+    // Build initial prompt - support both string and structured prompts
+    const enableCaching = opts.enablePromptCaching ?? false
+    const isStructured = typeof opts.prompt !== "string"
+    const structuredPrompt: StructuredPrompt | null = typeof opts.prompt !== "string" ? opts.prompt : null
+
+    let currentPrompt: Prompt.Prompt = typeof opts.prompt === "string"
+      ? Prompt.make(opts.prompt)
+      : makeCachedPromptFromStructured(opts.prompt, enableCaching)
+
     let lastError: AiError.AiError | TimeoutException | null = null
     let attempts = 0
 
@@ -157,7 +170,23 @@ export const generateObjectWithFeedback = <A, I extends Record<string, unknown>,
         // Build feedback prompt with error details
         // This creates a multi-turn conversation where the LLM sees its mistake
         const feedbackMessage = buildFeedbackMessage(error)
-        currentPrompt = Prompt.merge(currentPrompt, feedbackMessage)
+
+        // When using structured prompts, we need to append feedback to user message
+        // and preserve the cached system message
+        if (isStructured && structuredPrompt) {
+          // Append feedback to user message while keeping system message cached
+          const updatedUserMessage = `${structuredPrompt.userMessage}\n\n${feedbackMessage[1]?.content || ""}`
+          currentPrompt = makeCachedPromptFromStructured(
+            {
+              systemMessage: structuredPrompt.systemMessage,
+              userMessage: updatedUserMessage
+            },
+            enableCaching
+          )
+        } else {
+          // For string prompts, use merge as before
+          currentPrompt = Prompt.merge(currentPrompt, feedbackMessage)
+        }
       } else {
         // For other errors (network, timeout, etc), retry without feedback
         yield* Effect.logWarning("LLM call failed, retrying without feedback", {

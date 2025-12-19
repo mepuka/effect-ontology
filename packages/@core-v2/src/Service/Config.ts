@@ -24,7 +24,10 @@ const LlmConfig = Config.nested("LLM")(Config.all({
   apiKey: Config.redacted("API_KEY"),
   timeoutMs: Config.integer("TIMEOUT_MS").pipe(Config.withDefault(60_000)),
   maxTokens: Config.integer("MAX_TOKENS").pipe(Config.withDefault(4096)),
-  temperature: Config.number("TEMPERATURE").pipe(Config.withDefault(0.1))
+  temperature: Config.number("TEMPERATURE").pipe(Config.withDefault(0.1)),
+  enablePromptCaching: Config.boolean("ENABLE_PROMPT_CACHING").pipe(
+    Config.withDefault(false)
+  )
 }))
 
 const StorageConfig = Config.nested("STORAGE")(Config.all({
@@ -142,7 +145,8 @@ export const DEFAULT_CONFIG: AppConfig = {
     apiKey: Secret.fromString(""),
     timeoutMs: 60_000,
     maxTokens: 4096,
-    temperature: 0.1
+    temperature: 0.1,
+    enablePromptCaching: false
   },
   storage: {
     type: "local",

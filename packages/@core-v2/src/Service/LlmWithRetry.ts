@@ -14,10 +14,13 @@
  */
 
 import type { LanguageModel } from "@effect/ai"
+import { Prompt } from "@effect/ai"
 import type { Schema } from "effect"
 import { Cause, Duration, Effect, JSONSchema, Ref, Schedule } from "effect"
+import type { StructuredPrompt } from "../Prompt/PromptGenerator.js"
 import { annotateError, annotateLlmCall, annotateRetry, LlmAttributes } from "../Telemetry/LlmAttributes.js"
 import { sha256Sync } from "../Utils/Hash.js"
+import { makeCachedPromptFromStructured } from "./PromptCache.js"
 import { makeRetryPolicy } from "./Retry.js"
 
 /**
@@ -35,7 +38,7 @@ export interface RetryConfig {
  */
 export interface GenerateObjectWithRetryOptions<A, I extends Record<string, unknown>, R> {
   readonly llm: LanguageModel.Service
-  readonly prompt: string
+  readonly prompt: string | StructuredPrompt
   readonly schema: Schema.Schema<A, I, R>
   readonly objectName: string
   readonly serviceName: string
@@ -50,6 +53,10 @@ export interface GenerateObjectWithRetryOptions<A, I extends Record<string, unkn
    * Optional callback to annotate success logs with domain-specific info
    */
   readonly annotateSuccess?: (response: LanguageModel.GenerateObjectResponse<{}, A>) => Record<string, unknown>
+  /**
+   * Whether to enable prompt caching (only applies when prompt is StructuredPrompt)
+   */
+  readonly enablePromptCaching?: boolean
 }
 
 /**
@@ -63,6 +70,7 @@ export const generateObjectWithRetry = <A, I extends Record<string, unknown>, R>
   Effect.gen(function*() {
     const {
       annotateSuccess,
+      enablePromptCaching = false,
       llm,
       model,
       objectName,
@@ -73,6 +81,16 @@ export const generateObjectWithRetry = <A, I extends Record<string, unknown>, R>
       serviceName,
       spanAttributes
     } = options
+
+    // Convert prompt to Prompt.Prompt if needed
+    const promptObj: Prompt.Prompt = typeof prompt === "string"
+      ? Prompt.make(prompt)
+      : makeCachedPromptFromStructured(prompt, enablePromptCaching)
+
+    // Calculate prompt length for telemetry
+    const promptLength = typeof prompt === "string"
+      ? prompt.length
+      : prompt.systemMessage.length + prompt.userMessage.length
 
     const retryPolicy = makeRetryPolicy({
       initialDelayMs: retryConfig.initialDelayMs,
@@ -85,7 +103,7 @@ export const generateObjectWithRetry = <A, I extends Record<string, unknown>, R>
     const schemaHash = sha256Sync(JSON.stringify(JSONSchema.make(schema)))
 
     return yield* llm.generateObject({
-      prompt,
+      prompt: promptObj,
       schema,
       objectName
     }).pipe(
@@ -99,7 +117,7 @@ export const generateObjectWithRetry = <A, I extends Record<string, unknown>, R>
         Effect.all([
           Effect.logError(`${serviceName} LLM call failed, will retry`, {
             stage: serviceName.toLowerCase(),
-            promptLength: prompt.length,
+            promptLength,
             cause: Cause.pretty(cause)
           }),
           annotateError({
@@ -126,7 +144,7 @@ export const generateObjectWithRetry = <A, I extends Record<string, unknown>, R>
             annotateLlmCall({
               model,
               provider,
-              promptLength: prompt.length,
+              promptLength,
               inputTokens: response.usage.inputTokens,
               outputTokens: response.usage.outputTokens,
               schemaHash
@@ -140,7 +158,7 @@ export const generateObjectWithRetry = <A, I extends Record<string, unknown>, R>
       ),
       Effect.withSpan(`${serviceName.toLowerCase()}-llm`, {
         attributes: {
-          [LlmAttributes.PROMPT_LENGTH]: prompt.length,
+          [LlmAttributes.PROMPT_LENGTH]: promptLength,
           [LlmAttributes.SCHEMA_HASH]: schemaHash,
           ...spanAttributes
         }
