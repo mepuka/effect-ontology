@@ -24,7 +24,7 @@ import { ShaclService, type ShaclValidationReport } from "../../src/Service/Shac
 import { RdfBuilder } from "../../src/Service/Rdf.js"
 import { OntologyService } from "../../src/Service/Ontology.js"
 import { ConfigService } from "../../src/Service/Config.js"
-import { Reasoner, ReasoningResult } from "../../src/Service/Reasoner.js"
+import { Reasoner, ReasoningResult, ReasoningConfig } from "../../src/Service/Reasoner.js"
 import { SparqlGenerator } from "../../src/Service/SparqlGenerator.js"
 import { StorageService } from "../../src/Service/Storage.js"
 import { ClaimService } from "../../src/Service/Claim.js"
@@ -570,6 +570,129 @@ schema:name a owl:DatatypeProperty ;
       }).pipe(
         Effect.provide(OntologyAgent.Default),
         Effect.provide(EmptyTestLayer)
+      )
+    })
+  })
+
+  describe("extractWithReasoning", () => {
+    it.effect("extracts entities and applies RDFS reasoning", () =>
+      Effect.gen(function*() {
+        const agent = yield* OntologyAgent
+
+        const result = yield* agent.extractWithReasoning(
+          "Cristiano Ronaldo plays for Al-Nassr."
+        )
+
+        // Check entities
+        expect(result.entities.length).toBe(2)
+        expect(result.entities[0].id).toBe("cristiano_ronaldo")
+        expect(result.entities[1].id).toBe("al_nassr")
+
+        // Check relations
+        expect(result.relations.length).toBe(1)
+
+        // Check RDF turtle output (includes inferred triples)
+        expect(result.hasTurtle).toBe(true)
+        expect(result.turtle).toContain("cristiano_ronaldo")
+
+        // Check metrics
+        expect(result.metrics.entityCount).toBe(2)
+        expect(result.metrics.relationCount).toBe(1)
+      }).pipe(
+        Effect.provide(OntologyAgent.Default),
+        Effect.provide(TestLayer)
+      )
+    )
+
+    it.effect("applies reasoning with custom config", () =>
+      Effect.gen(function*() {
+        const agent = yield* OntologyAgent
+
+        const result = yield* agent.extractWithReasoning(
+          "Cristiano Ronaldo plays for Al-Nassr.",
+          undefined, // default agent config
+          ReasoningConfig.rdfs() // full RDFS reasoning
+        )
+
+        // Check that extraction and reasoning succeeded
+        expect(result.entities.length).toBe(2)
+        expect(result.hasTurtle).toBe(true)
+      }).pipe(
+        Effect.provide(OntologyAgent.Default),
+        Effect.provide(TestLayer)
+      )
+    )
+  })
+
+  describe("extractAndValidate with reasoning", () => {
+    it.effect("applies RDFS reasoning before validation", () =>
+      Effect.gen(function*() {
+        const agent = yield* OntologyAgent
+
+        const result = yield* agent.extractAndValidate(
+          "Cristiano Ronaldo plays for Al-Nassr."
+        )
+
+        // Check entities
+        expect(result.entities.length).toBe(2)
+
+        // Check validation was performed (mock returns conforming)
+        expect(result.validationReport).toBeDefined()
+        expect(result.validationReport?.conforms).toBe(true)
+
+        // Check RDF turtle output (includes inferred triples)
+        expect(result.hasTurtle).toBe(true)
+        expect(result.turtle).toContain("cristiano_ronaldo")
+      }).pipe(
+        Effect.provide(OntologyAgent.Default),
+        Effect.provide(TestLayer)
+      )
+    )
+
+    it.effect("continues validation even if reasoning fails", () => {
+      // Create a reasoner that fails
+      const FailingReasoner = Layer.succeed(Reasoner, {
+        reason: () =>
+          Effect.fail(new Error("Reasoning failed")),
+        reasonCopy: () =>
+          Effect.fail(new Error("Reasoning failed")),
+        reasonForValidation: () =>
+          Effect.fail(new Error("Reasoning failed")),
+        wouldInfer: () => Effect.succeed(false),
+        getRules: () => []
+      } as unknown as Reasoner)
+
+      const FailingReasonerTestLayer = Layer.mergeAll(
+        MockExtractionWorkflow,
+        MockConfigService,
+        MockOntologyService,
+        MockLanguageModel,
+        MockSparqlGenerator,
+        FailingReasoner,
+        MockStorageService,
+        MockClaimService,
+        ShaclService.Test(),
+        RdfBuilder.Default
+      ).pipe(
+        Layer.provideMerge(MockConfigService)
+      )
+
+      return Effect.gen(function*() {
+        const agent = yield* OntologyAgent
+
+        // Should succeed even when reasoning fails (graceful degradation)
+        const result = yield* agent.extractAndValidate(
+          "Cristiano Ronaldo plays for Al-Nassr."
+        )
+
+        // Check entities were still extracted
+        expect(result.entities.length).toBe(2)
+
+        // Check validation was still performed
+        expect(result.validationReport).toBeDefined()
+      }).pipe(
+        Effect.provide(OntologyAgent.Default),
+        Effect.provide(FailingReasonerTestLayer)
       )
     })
   })

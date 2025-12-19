@@ -335,6 +335,119 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
         }),
 
       /**
+       * Extract with RDFS reasoning (without validation)
+       *
+       * Performs extraction and applies RDFS reasoning to materialize
+       * inferred triples. Useful when you want type hierarchy inference
+       * but don't need full SHACL validation.
+       *
+       * The extraction pipeline:
+       * 1. Chunks text based on config
+       * 2. Extracts entities using ontology-guided LLM prompts
+       * 3. Extracts relations between entities
+       * 4. Builds RDF graph
+       * 5. Applies RDFS reasoning (subClassOf transitivity, domain/range)
+       * 6. Serializes to Turtle (includes inferred triples)
+       *
+       * @param text - Source text to extract from
+       * @param agentConfig - Optional configuration overrides
+       * @param reasoningConfig - Optional reasoning configuration (defaults to subclass-only)
+       * @returns ExtractionResult with graph containing inferred types
+       *
+       * @example
+       * ```typescript
+       * const result = yield* agent.extractWithReasoning(text)
+       * // Turtle now includes inferred type assertions from rdfs:subClassOf
+       * console.log(`Inferred triples included in RDF output`)
+       * ```
+       */
+      extractWithReasoning: (
+        text: string,
+        agentConfig?: OntologyAgentConfig,
+        reasoningConfig?: ReasoningConfig
+      ): Effect.Effect<ExtractionResult, unknown> =>
+        Effect.gen(function*() {
+          const startTime = yield* DateTime.now
+
+          // Build RunConfig from OntologyAgentConfig and defaults
+          const runConfig = yield* buildRunConfig(config, agentConfig)
+
+          yield* Effect.logInfo("OntologyAgent.extractWithReasoning starting", {
+            textLength: text.length,
+            concurrency: runConfig.concurrency
+          })
+
+          // Execute extraction workflow
+          const graph = yield* extractionWorkflow.extract(text, runConfig)
+
+          yield* Effect.logDebug("Extraction complete, building RDF store", {
+            entityCount: graph.entities.length,
+            relationCount: graph.relations.length
+          })
+
+          // Build RDF store from extracted entities and relations
+          const store = yield* rdfBuilder.createStore
+          yield* rdfBuilder.addEntities(store, graph.entities)
+          yield* rdfBuilder.addRelations(store, graph.relations)
+
+          const tripleCountBeforeReasoning = store._store.size
+
+          // Apply RDFS reasoning (default to subclass-only for efficiency)
+          const effectiveReasoningConfig = reasoningConfig ?? ReasoningConfig.subclassOnly()
+          const reasoningResult = yield* reasoner.reason(store, effectiveReasoningConfig).pipe(
+            Effect.catchAll((error) =>
+              Effect.logWarning("Reasoning failed, continuing with unaugmented graph", {
+                error: String(error)
+              }).pipe(
+                Effect.map(() => ({
+                  inferredTripleCount: 0,
+                  rulesApplied: [] as readonly string[],
+                  durationMs: 0
+                }))
+              )
+            )
+          )
+
+          yield* Effect.logDebug("RDFS reasoning complete", {
+            inferredTripleCount: reasoningResult.inferredTripleCount,
+            rulesApplied: reasoningResult.rulesApplied,
+            tripleCountBefore: tripleCountBeforeReasoning,
+            tripleCountAfter: store._store.size
+          })
+
+          // Serialize to Turtle format (includes inferred triples)
+          const turtle = yield* rdfBuilder.toTurtle(store)
+
+          const endTime = yield* DateTime.now
+          const durationMs = DateTime.distance(startTime, endTime)
+
+          // Build metrics from graph
+          const metrics = new ExtractionMetrics({
+            entityCount: graph.entities.length,
+            relationCount: graph.relations.length,
+            chunkCount: 1,
+            inputTokens: 0,
+            outputTokens: 0,
+            durationMs
+          })
+
+          yield* Effect.logInfo("OntologyAgent.extractWithReasoning complete", {
+            entityCount: metrics.entityCount,
+            relationCount: metrics.relationCount,
+            inferredTripleCount: reasoningResult.inferredTripleCount,
+            turtleLength: turtle.length,
+            durationMs: metrics.durationMs
+          })
+
+          return new ExtractionResult({
+            graph,
+            metrics,
+            turtle,
+            validationReport: undefined
+          })
+        }),
+
+      /**
        * Extract with automatic SHACL validation
        *
        * Performs extraction followed by SHACL validation against
@@ -366,7 +479,33 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
           yield* rdfBuilder.addEntities(rdfStore, graph.entities)
           yield* rdfBuilder.addRelations(rdfStore, graph.relations)
 
-          // Serialize to Turtle
+          const tripleCountBeforeReasoning = rdfStore._store.size
+
+          // Apply RDFS reasoning to materialize type hierarchy inferences
+          // This enables SHACL validation to correctly check inherited type constraints
+          const reasoningResult = yield* reasoner.reasonForValidation(rdfStore).pipe(
+            Effect.catchAll((error) =>
+              // Log reasoning error but continue with validation on raw graph
+              Effect.logWarning("Reasoning failed, continuing with unaugmented graph", {
+                error: String(error)
+              }).pipe(
+                Effect.map(() => ({
+                  inferredTripleCount: 0,
+                  rulesApplied: [] as readonly string[],
+                  durationMs: 0
+                }))
+              )
+            )
+          )
+
+          yield* Effect.logDebug("RDFS reasoning complete", {
+            inferredTripleCount: reasoningResult.inferredTripleCount,
+            rulesApplied: reasoningResult.rulesApplied,
+            tripleCountBefore: tripleCountBeforeReasoning,
+            tripleCountAfter: rdfStore._store.size
+          })
+
+          // Serialize to Turtle (includes inferred triples)
           const turtle = yield* rdfBuilder.toTurtle(rdfStore)
 
           // Load ontology and generate SHACL shapes for validation
@@ -390,6 +529,7 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
           yield* Effect.logInfo("OntologyAgent.extractAndValidate complete", {
             entityCount: metrics.entityCount,
             relationCount: metrics.relationCount,
+            inferredTripleCount: reasoningResult.inferredTripleCount,
             conforms: report.conforms,
             violationCount: report.violations.length
           })
