@@ -532,6 +532,168 @@ const prereqsCommand = Command.make("prereqs", {}, () =>
     yield* Console.log("✓ All prerequisites met!")
   }).pipe(withErrorHandler)).pipe(Command.withDescription("Check if required tools are installed"))
 
+/**
+ * migrate - Run database migrations
+ */
+const migrateCommand = Command.make(
+  "migrate",
+  { env: envOption },
+  ({ env }) =>
+    Effect.gen(function*() {
+      yield* Console.log(`Running database migrations for ${env} environment...`)
+
+      const configLoader = yield* ConfigLoader
+      const config = yield* configLoader.load(env as Environment)
+
+      const instanceName = `workflow-postgres-${env}`
+      const zone = "us-central1-a"
+
+      // Check current version via SSH + docker exec
+      yield* Console.log("\nChecking current migration version...")
+
+      const checkCmd =
+        `sudo docker exec $(sudo docker ps -q --filter ancestor=pgvector/pgvector:pg15) psql -U workflow -d workflow -t -c "SELECT COALESCE(MAX(version), 0) FROM schema_migrations;"`
+
+      const versionResult = yield* Effect.tryPromise({
+        try: async () => {
+          const proc = Bun.spawn([
+            "gcloud",
+            "compute",
+            "ssh",
+            instanceName,
+            `--zone=${zone}`,
+            `--project=${config.projectId}`,
+            "--tunnel-through-iap",
+            "--quiet",
+            `--command=${checkCmd}`
+          ])
+          const output = await new Response(proc.stdout).text()
+          await proc.exited
+          return parseInt(output.trim(), 10) || 0
+        },
+        catch: (e) => new Error(`Failed to check version: ${e}`)
+      })
+
+      yield* Console.log(`  Current version: ${versionResult}`)
+
+      // Get migrations from MigrationRunner (embedded SQL)
+      const { AllMigrations } = yield* Effect.promise(() =>
+        import("@effect-ontology/core-v2/Runtime").then((m) => m.Persistence)
+      )
+
+      const pending = AllMigrations.filter((m: { version: number }) => m.version > versionResult)
+
+      if (pending.length === 0) {
+        yield* Console.log("  No pending migrations")
+        return
+      }
+
+      yield* Console.log(`  Pending migrations: ${pending.length}`)
+
+      // Apply each migration
+      for (const migration of pending) {
+        yield* Console.log(`\n  Applying ${migration.version}: ${migration.name}...`)
+
+        const migrateCmd =
+          `sudo docker exec -i $(sudo docker ps -q --filter ancestor=pgvector/pgvector:pg15) psql -U workflow -d workflow`
+
+        yield* Effect.tryPromise({
+          try: async () => {
+            const proc = Bun.spawn([
+              "gcloud",
+              "compute",
+              "ssh",
+              instanceName,
+              `--zone=${zone}`,
+              `--project=${config.projectId}`,
+              "--tunnel-through-iap",
+              "--quiet",
+              `--command=${migrateCmd}`
+            ], {
+              stdin: new TextEncoder().encode(migration.sql)
+            })
+            await new Response(proc.stdout).text()
+            const exitCode = await proc.exited
+            if (exitCode !== 0) {
+              throw new Error(`Migration failed with exit code ${exitCode}`)
+            }
+          },
+          catch: (e) => new Error(`Migration ${migration.version} failed: ${e}`)
+        })
+
+        yield* Console.log(`  ✓ Migration ${migration.version} applied`)
+      }
+
+      yield* Console.log(`\n✓ All migrations applied for ${env}`)
+    }).pipe(withErrorHandler)
+).pipe(Command.withDescription("Run database migrations on Postgres VM"))
+
+/**
+ * sync-ontology - Sync local ontology files to GCS
+ */
+const syncOntologyCommand = Command.make(
+  "sync-ontology",
+  { env: envOption },
+  ({ env }) =>
+    Effect.gen(function*() {
+      yield* Console.log(`Syncing ontology files to GCS for ${env} environment...`)
+
+      const configLoader = yield* ConfigLoader
+      const config = yield* configLoader.load(env as Environment)
+      const bucketName = `effect-ontology-${env}`
+
+      // Sync Seattle ontology
+      yield* Console.log("\n  Syncing Seattle ontology...")
+      yield* Effect.tryPromise({
+        try: async () => {
+          const proc = Bun.spawn([
+            "gsutil",
+            "-m",
+            "cp",
+            "-r",
+            "ontologies/seattle/seattle.ttl",
+            `gs://${bucketName}/canonical/seattle/ontology.ttl`
+          ])
+          await proc.exited
+        },
+        catch: (e) => new Error(`Failed to sync seattle ontology: ${e}`)
+      })
+
+      // Sync external vocabularies
+      yield* Console.log("  Syncing external vocabularies...")
+      yield* Effect.tryPromise({
+        try: async () => {
+          const proc = Bun.spawn([
+            "gsutil",
+            "-m",
+            "cp",
+            "ontologies/external/merged-external.ttl",
+            `gs://${bucketName}/canonical/external/merged.ttl`
+          ])
+          await proc.exited
+        },
+        catch: (e) => new Error(`Failed to sync external vocabs: ${e}`)
+      })
+
+      // Sync registry
+      yield* Console.log("  Syncing registry.json...")
+      yield* Effect.tryPromise({
+        try: async () => {
+          const proc = Bun.spawn([
+            "gsutil",
+            "cp",
+            "packages/@core-v2/registry.json",
+            `gs://${bucketName}/registry.json`
+          ])
+          await proc.exited
+        },
+        catch: (e) => new Error(`Failed to sync registry: ${e}`)
+      })
+
+      yield* Console.log(`\n✓ Ontology files synced to gs://${bucketName}/`)
+    }).pipe(withErrorHandler)
+).pipe(Command.withDescription("Sync ontology files to GCS bucket"))
+
 // =============================================================================
 // Root Command
 // =============================================================================
@@ -550,7 +712,9 @@ const rootCommand = Command.make("effect-deploy").pipe(
     statusCommand,
     verifyCommand,
     logsCommand,
-    prereqsCommand
+    prereqsCommand,
+    migrateCommand,
+    syncOntologyCommand
   ]),
   Command.withDescription(
     "Effect-based Terraform deploy CLI for effect-ontology infrastructure"

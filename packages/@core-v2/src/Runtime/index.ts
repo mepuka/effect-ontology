@@ -12,4 +12,5 @@ export * from "./LlmSemaphore.js"
 export * from "./ProductionRuntime.js"
 export * from "./RateLimitedLanguageModel.js"
 export * from "./Shutdown.js"
+export * as Persistence from "./Persistence/MigrationRunner.js"
 // TestRuntime excluded from production builds - use only in test files

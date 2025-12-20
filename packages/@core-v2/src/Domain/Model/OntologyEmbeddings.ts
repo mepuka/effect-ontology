@@ -9,7 +9,7 @@
  */
 
 import { Schema } from "effect"
-import { createHash } from "node:crypto"
+import { sha256Sync } from "../../Utils/Hash.js"
 
 /**
  * Embedding for a single ontology element (class or property)
@@ -85,7 +85,7 @@ export const OntologyEmbeddingsJson = Schema.parseJson(OntologyEmbeddings)
  * @category Utils
  */
 export const computeOntologyVersion = (ontologyContent: string): string => {
-  return createHash("sha256").update(ontologyContent).digest("hex").slice(0, 16)
+  return sha256Sync(ontologyContent)
 }
 
 /**

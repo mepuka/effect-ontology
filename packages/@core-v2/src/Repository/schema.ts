@@ -9,6 +9,7 @@
  */
 
 import {
+  boolean,
   customType,
   index,
   integer,
@@ -224,6 +225,9 @@ export const schemaMigrations = pgTable("schema_migrations", {
 export const canonicalEntities = pgTable("canonical_entities", {
   id: uuid("id").primaryKey().defaultRandom(),
 
+  // Ontology scoping (entities are scoped per ontology)
+  ontologyId: text("ontology_id").notNull().default("default"),
+
   // Identity
   iri: text("iri").unique().notNull(),
   canonicalMention: text("canonical_mention").notNull(),
@@ -244,7 +248,9 @@ export const canonicalEntities = pgTable("canonical_entities", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
 }, (table) => [
-  index("idx_canonical_entities_iri").on(table.iri)
+  index("idx_canonical_entities_iri").on(table.iri),
+  index("idx_canonical_entities_ontology_id").on(table.ontologyId),
+  index("idx_canonical_entities_ontology_iri").on(table.ontologyId, table.iri)
   // Note: HNSW, GIN indexes are created in migration SQL as Drizzle doesn't support them natively
 ])
 
@@ -256,6 +262,10 @@ export const canonicalEntities = pgTable("canonical_entities", {
  */
 export const entityAliases = pgTable("entity_aliases", {
   id: uuid("id").primaryKey().defaultRandom(),
+
+  // Ontology scoping (aliases are scoped per ontology)
+  ontologyId: text("ontology_id").notNull().default("default"),
+
   canonicalEntityId: uuid("canonical_entity_id").notNull().references(() => canonicalEntities.id, {
     onDelete: "cascade"
   }),
@@ -266,7 +276,7 @@ export const entityAliases = pgTable("entity_aliases", {
   embedding: vector768("embedding"),
 
   // Resolution metadata
-  resolutionMethod: text("resolution_method").notNull(), // 'exact', 'similarity', 'containment', 'neighbor'
+  resolutionMethod: text("resolution_method").notNull(), // 'exact', 'similarity', 'containment', 'neighbor', 'manual'
   resolutionConfidence: numeric("resolution_confidence", { precision: 4, scale: 3 }).notNull(),
 
   // Source tracking
@@ -276,8 +286,9 @@ export const entityAliases = pgTable("entity_aliases", {
   // Temporal
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
 }, (table) => [
-  uniqueIndex("idx_entity_aliases_mention_normalized").on(table.mentionNormalized),
-  index("idx_entity_aliases_canonical").on(table.canonicalEntityId)
+  uniqueIndex("idx_entity_aliases_ontology_mention").on(table.ontologyId, table.mentionNormalized),
+  index("idx_entity_aliases_canonical").on(table.canonicalEntityId),
+  index("idx_entity_aliases_ontology").on(table.ontologyId)
 ])
 
 /**
@@ -288,6 +299,10 @@ export const entityAliases = pgTable("entity_aliases", {
  */
 export const entityBlockingTokens = pgTable("entity_blocking_tokens", {
   id: uuid("id").primaryKey().defaultRandom(),
+
+  // Ontology scoping (tokens are scoped per ontology)
+  ontologyId: text("ontology_id").notNull().default("default"),
+
   canonicalEntityId: uuid("canonical_entity_id").notNull().references(() => canonicalEntities.id, {
     onDelete: "cascade"
   }),
@@ -296,7 +311,8 @@ export const entityBlockingTokens = pgTable("entity_blocking_tokens", {
 }, (table) => [
   index("idx_blocking_tokens_token").on(table.token),
   index("idx_blocking_tokens_entity").on(table.canonicalEntityId),
-  index("idx_blocking_tokens_composite").on(table.token, table.canonicalEntityId)
+  index("idx_blocking_tokens_ontology_token").on(table.ontologyId, table.token),
+  index("idx_blocking_tokens_composite").on(table.ontologyId, table.token, table.canonicalEntityId)
 ])
 
 // =============================================================================
@@ -465,3 +481,61 @@ export type LinkBatchInsertRow = typeof linkBatches.$inferInsert
 
 export type LinkBatchItemRow = typeof linkBatchItems.$inferSelect
 export type LinkBatchItemInsertRow = typeof linkBatchItems.$inferInsert
+
+// =============================================================================
+// LLM Examples Table (Few-Shot Learning)
+// =============================================================================
+
+/**
+ * LLM Examples
+ *
+ * Stores curated examples for few-shot prompting. Examples are scoped per-ontology
+ * and support hybrid retrieval (vector similarity + lexical search).
+ *
+ * @since 2.0.0
+ */
+export const llmExamples = pgTable("llm_examples", {
+  id: uuid("id").primaryKey().defaultRandom(),
+
+  // Scoping
+  ontologyId: text("ontology_id").notNull(),
+  exampleType: text("example_type").notNull(), // entity_extraction | relation_extraction | entity_linking | negative
+  source: text("source").notNull().default("manual"), // manual | validated | auto_generated
+
+  // Structured content
+  inputText: text("input_text").notNull(),
+  targetClass: text("target_class"),
+  targetPredicate: text("target_predicate"),
+  evidenceText: text("evidence_text"),
+  evidenceStartOffset: integer("evidence_start_offset"),
+  evidenceEndOffset: integer("evidence_end_offset"),
+
+  // Output
+  expectedOutput: jsonb("expected_output").notNull().$type<Record<string, unknown>>(),
+  promptMessages: jsonb("prompt_messages").$type<Array<{ role: string; content: string }>>(), // Pre-formatted for direct inclusion
+  explanation: text("explanation"),
+
+  // Embedding (768-dim Nomic with ontology prefix)
+  embedding: vector768("embedding").notNull(),
+
+  // Negative example metadata
+  isNegative: boolean("is_negative").notNull().default(false),
+  negativePattern: text("negative_pattern"),
+
+  // Quality metrics
+  usageCount: integer("usage_count").default(0),
+  successRate: numeric("success_rate", { precision: 4, scale: 3 }),
+
+  // Lifecycle
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  createdBy: text("created_by"),
+  isActive: boolean("is_active").notNull().default(true)
+}, (table) => [
+  index("idx_llm_examples_ontology_type").on(table.ontologyId, table.exampleType),
+  index("idx_llm_examples_ontology_active").on(table.ontologyId, table.isActive),
+  index("idx_llm_examples_is_negative").on(table.isNegative)
+  // Note: HNSW and GIN indexes are created in migration SQL
+])
+
+export type LlmExampleRow = typeof llmExamples.$inferSelect
+export type LlmExampleInsertRow = typeof llmExamples.$inferInsert

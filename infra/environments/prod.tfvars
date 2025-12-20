@@ -9,3 +9,9 @@ enable_postgres = true
 
 # Keep 1 instance warm for SSE streaming (avoids cold starts)
 min_instance_count = 1
+
+# Enable Pub/Sub for real-time event streaming
+enable_pubsub = true
+
+# Enable monitoring with alert policies
+enable_monitoring = true

@@ -85,3 +85,40 @@ variable "request_timeout" {
   description = "Maximum request timeout. SSE streaming requires 3600s for long-running batches."
   default     = "3600s"
 }
+
+# Pub/Sub configuration for EventBusService
+variable "enable_pubsub" {
+  type        = bool
+  description = "Enable Pub/Sub environment variables for event distribution"
+  default     = false
+}
+
+variable "pubsub_events_topic" {
+  type        = string
+  description = "Pub/Sub events topic name"
+  default     = null
+}
+
+variable "pubsub_jobs_topic" {
+  type        = string
+  description = "Pub/Sub jobs topic name"
+  default     = null
+}
+
+variable "pubsub_jobs_subscription" {
+  type        = string
+  description = "Pub/Sub jobs push subscription name"
+  default     = null
+}
+
+variable "pubsub_dlq_topic" {
+  type        = string
+  description = "Pub/Sub dead letter queue topic name"
+  default     = null
+}
+
+variable "pubsub_events_subscription" {
+  type        = string
+  description = "Pub/Sub events subscription name for WebSocket broadcast"
+  default     = null
+}

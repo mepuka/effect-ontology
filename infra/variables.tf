@@ -48,3 +48,9 @@ variable "min_instance_count" {
   type        = number
   default     = 0
 }
+
+variable "enable_pubsub" {
+  description = "Enable Cloud Pub/Sub for event distribution and background jobs"
+  type        = bool
+  default     = false
+}

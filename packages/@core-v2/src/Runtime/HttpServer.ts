@@ -56,9 +56,12 @@ import { StorageService } from "../Service/Storage.js"
 import { pollToBatchState, WorkflowOrchestrator } from "../Service/WorkflowOrchestrator.js"
 import { knowledgeGraphToClaims } from "../Utils/ClaimFactory.js"
 import { extractLocalNameFromIri } from "../Utils/Iri.js"
+import { EventBroadcastRouter } from "./EventBroadcastRouter.js"
+import { EventStreamRouter } from "./EventStreamRouter.js"
 import { HealthCheckService } from "./HealthCheck.js"
 import { makeAuthMiddleware, makeShutdownMiddleware } from "./HttpMiddleware.js"
 import { InferenceRouter } from "./InferenceRouter.js"
+import { JobPushRouter } from "./JobPushHandler.js"
 import { LinkIngestionRouter } from "./LinkIngestionRouter.js"
 
 type BatchWorkflowPayloadType = typeof BatchWorkflowPayload.Type
@@ -1116,14 +1119,12 @@ export const OntologyRouter = HttpRouter.empty.pipe(
           Effect.gen(function*() {
             yield* Effect.logWarning("Ontology registry not found, returning empty list")
             return [] as const
-          })
-        ),
+          })),
         Effect.catchTag("RegistryParseError", (error) =>
           Effect.gen(function*() {
             yield* Effect.logError("Failed to parse ontology registry", { error })
             return [] as const
-          })
-        )
+          }))
       )
 
       // For summary counts, we need to load each ontology (can be optimized later)
@@ -1772,7 +1773,10 @@ export const ApiRouter = HttpRouter.empty.pipe(
   HttpRouter.concat(SearchRouter),
   HttpRouter.concat(OntologyRouter),
   HttpRouter.concat(InferenceRouter),
-  HttpRouter.concat(LinkIngestionRouter)
+  HttpRouter.concat(LinkIngestionRouter),
+  HttpRouter.concat(JobPushRouter),
+  HttpRouter.concat(EventStreamRouter),
+  HttpRouter.concat(EventBroadcastRouter)
 )
 
 export const HttpServerLive = Layer.unwrapEffect(

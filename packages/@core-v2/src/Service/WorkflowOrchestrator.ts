@@ -33,6 +33,7 @@ import {
 import { makeStreamingExtractionActivity } from "../Workflow/StreamingExtractionActivity.js"
 import { getBatchStateFromStore, publishState } from "./BatchState.js"
 import { ConfigService } from "./Config.js"
+import { EventBusService } from "./EventBus.js"
 import { StorageService } from "./Storage.js"
 
 /**
@@ -309,6 +310,7 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
       const { batchId, manifestUri, ontologyVersion } = payload
       const storage = yield* StorageService
       const config = yield* ConfigService
+      const eventBus = yield* EventBusService
       const workflowStart = yield* DateTime.now
       const progressRef = yield* Ref.make(0)
       let currentStage: PipelineStage = "pending"
@@ -665,7 +667,8 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
         const crossBatchResult = yield* makeCrossBatchResolutionActivity({
           batchId,
           resolvedGraphUri: resolutionResult.resolvedUri,
-          enabled: config.entityRegistry.enabled
+          enabled: config.entityRegistry.enabled,
+          ontologyId: manifest.ontologyId
         }).execute
 
         if (config.entityRegistry.enabled) {
@@ -735,6 +738,26 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
           violations: validationResult.violations,
           policyApplied: manifest.validationPolicy ?? { failOnViolation: true, failOnWarning: false }
         })
+
+        // Publish ValidationFailed event if there are violations
+        if (!validationResult.conforms) {
+          yield* eventBus.publishExtractionEvent("ValidationFailed", {
+            batchId,
+            validationId: `val-${batchId}-${Date.now()}`,
+            ontologyId: manifest.ontologyId,
+            errorCount: validationResult.violations,
+            warningCount: 0,
+            reportUri: Option.fromNullable(validationResult.reportUri),
+            timestamp: new Date()
+          }).pipe(
+            Effect.catchAll((error) =>
+              Effect.logWarning("Failed to publish ValidationFailed event", {
+                batchId,
+                error: String(error)
+              })
+            )
+          )
+        }
 
         // Note: Policy enforcement is handled by validateWithPolicy in the activity.
         // If failOnViolation=true (default) and violations exist, activity throws ValidationPolicyError.
@@ -824,6 +847,25 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
         })
 
         yield* emitState(complete)
+
+        // Publish extraction completed event via EventBusService
+        yield* eventBus.publishExtractionEvent("ExtractionCompleted", {
+          batchId,
+          ontologyId: manifest.ontologyId,
+          entityCount: complete.stats.entitiesExtracted,
+          relationCount: complete.stats.relationsExtracted,
+          tripleCount: complete.stats.triplesIngested,
+          outputUri: Option.fromNullable(complete.canonicalGraphUri),
+          status: failedResults.length === 0 ? "success" : "partial",
+          timestamp: new Date()
+        }).pipe(
+          Effect.catchAll((error) =>
+            Effect.logWarning("Failed to publish ExtractionCompleted event", {
+              batchId,
+              error: String(error)
+            })
+          )
+        )
 
         return complete
       })

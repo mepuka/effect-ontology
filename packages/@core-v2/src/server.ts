@@ -21,6 +21,12 @@ import { WorkflowEngine } from "@effect/workflow"
 import { Cause, Config, Effect, Layer, Option, Schedule } from "effect"
 import { ArticleRepository } from "./Repository/Article.js"
 import { ClaimRepository } from "./Repository/Claim.js"
+import { ContentEnrichmentAgent } from "./Service/ContentEnrichmentAgent.js"
+import { JinaReaderClient } from "./Service/JinaReaderClient.js"
+import { LinkIngestionService } from "./Service/LinkIngestionService.js"
+import { EventBridgeAutoStart } from "./Runtime/EventBridge.js"
+import { EventBroadcastHubLive } from "./Runtime/EventBroadcastRouter.js"
+import { EventLogStorageMemory, EventLogStoragePostgres } from "./Runtime/EventStreamRouter.js"
 import { HealthCheckService } from "./Runtime/HealthCheck.js"
 import { HttpServerLive } from "./Runtime/HttpServer.js"
 import { AllMigrations, MigrationRunner } from "./Runtime/Persistence/MigrationRunner.js"
@@ -165,6 +171,29 @@ const ClaimPersistenceLayer = usePostgres
   )
   : Layer.empty // No persistence without PostgreSQL
 
+// LinkIngestionService layer (depends on Drizzle, Storage, LLM, Jina)
+// Only available with PostgreSQL
+const LinkIngestionLayer = usePostgres
+  ? LinkIngestionService.Default.pipe(
+    Layer.provideMerge(ContentEnrichmentAgent.Default),
+    Layer.provideMerge(JinaReaderClient.Default),
+    Layer.provideMerge(PgDrizzleLive)
+  )
+  : Layer.empty
+
+// EventLogServer.Storage layer for WebSocket event streaming
+// Uses PostgreSQL for persistence when available, otherwise in-memory
+const EventLogStorageLive = usePostgres
+  ? EventLogStoragePostgres.pipe(Layer.provideMerge(PgClientLive))
+  : EventLogStorageMemory
+
+// Log which storage is in use
+if (usePostgres) {
+  console.log("EventLog storage: PostgreSQL (persistent)")
+} else {
+  console.log("EventLog storage: Memory (events lost on restart)")
+}
+
 // Uses Layer.provideMerge throughout for order-independent composition.
 // Later provideMerge layers PROVIDE to earlier layers in the chain.
 const ServerLive = HttpServerLive.pipe(
@@ -176,8 +205,12 @@ const ServerLive = HttpServerLive.pipe(
   Layer.provideMerge(HealthCheckWithDeps),
   Layer.provideMerge(ShutdownService.Default),
   Layer.provideMerge(ClaimPersistenceLayer), // ClaimPersistenceService (for activity persistence)
+  Layer.provideMerge(LinkIngestionLayer), // LinkIngestionService for URL ingestion
   Layer.provideMerge(RepositoriesLayer), // ClaimRepository + ArticleRepository
-  Layer.provideMerge(ActivityDependenciesLayer),
+  Layer.provideMerge(EventLogStorageLive), // EventLogServer.Storage for WebSocket streaming
+  Layer.provideMerge(EventBridgeAutoStart), // Bridges EventBusService → EventBroadcastHub (needs both below)
+  Layer.provideMerge(EventBroadcastHubLive), // EventBroadcastHub for real-time WebSocket events
+  Layer.provideMerge(ActivityDependenciesLayer), // EventBusService + other activity deps
   Layer.provideMerge(PlatformLayer)
 )
 

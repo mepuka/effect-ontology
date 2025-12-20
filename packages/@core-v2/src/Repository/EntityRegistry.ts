@@ -11,7 +11,7 @@
 
 import { SqlClient, SqlError } from "@effect/sql"
 import * as Pg from "@effect/sql-drizzle/Pg"
-import { eq, inArray } from "drizzle-orm"
+import { and, eq, inArray } from "drizzle-orm"
 import { Effect, Option } from "effect"
 import {
   canonicalEntities,
@@ -45,6 +45,7 @@ export interface BlockingCandidate {
 }
 
 export interface CanonicalEntityFilter {
+  readonly ontologyId?: string
   readonly types?: ReadonlyArray<string>
   readonly limit?: number
   readonly offset?: number
@@ -70,8 +71,9 @@ export class EntityRegistryRepository extends Effect.Service<EntityRegistryRepos
       Effect.gen(function*() {
         // Use raw SQL for vector column
         const result = yield* sql`
-          INSERT INTO canonical_entities (iri, canonical_mention, types, embedding, merge_count, confidence_avg)
+          INSERT INTO canonical_entities (ontology_id, iri, canonical_mention, types, embedding, merge_count, confidence_avg)
           VALUES (
+            ${entity.ontologyId ?? "default"},
             ${entity.iri},
             ${entity.canonicalMention},
             ${entity.types}::text[],
@@ -79,7 +81,7 @@ export class EntityRegistryRepository extends Effect.Service<EntityRegistryRepos
             ${entity.mergeCount ?? 1},
             ${entity.confidenceAvg ?? null}
           )
-          RETURNING id, iri, canonical_mention, types, merge_count, confidence_avg,
+          RETURNING id, ontology_id, iri, canonical_mention, types, merge_count, confidence_avg,
                     first_seen_at, last_seen_at, created_at, updated_at
         `
         return result[0] as CanonicalEntityRow
@@ -110,12 +112,14 @@ export class EntityRegistryRepository extends Effect.Service<EntityRegistryRepos
     /**
      * Find similar canonical entities using pgvector ANN search
      *
+     * @param ontologyId - Ontology scope for the search
      * @param embedding - Query embedding vector (768 dimensions)
      * @param options.types - Optional type filter (entities must have at least one matching type)
      * @param options.k - Number of candidates to return (default: 10)
      * @param options.minSimilarity - Minimum cosine similarity threshold (default: 0.7)
      */
     const findSimilarEntities = (
+      ontologyId: string,
       embedding: ReadonlyArray<number>,
       options: {
         types?: ReadonlyArray<string>
@@ -127,7 +131,7 @@ export class EntityRegistryRepository extends Effect.Service<EntityRegistryRepos
         const { types, k = 10, minSimilarity = 0.7 } = options
         const vectorStr = formatVector(embedding)
 
-        // Build query with optional type filter
+        // Build query with ontology scoping and optional type filter
         const results = types && types.length > 0
           ? yield* sql`
               SELECT
@@ -137,7 +141,8 @@ export class EntityRegistryRepository extends Effect.Service<EntityRegistryRepos
                 types,
                 1 - (embedding <=> ${vectorStr}::vector) as similarity
               FROM canonical_entities
-              WHERE 1 - (embedding <=> ${vectorStr}::vector) >= ${minSimilarity}
+              WHERE ontology_id = ${ontologyId}
+                AND 1 - (embedding <=> ${vectorStr}::vector) >= ${minSimilarity}
                 AND types && ${types}::text[]
               ORDER BY embedding <=> ${vectorStr}::vector
               LIMIT ${k}
@@ -150,7 +155,8 @@ export class EntityRegistryRepository extends Effect.Service<EntityRegistryRepos
                 types,
                 1 - (embedding <=> ${vectorStr}::vector) as similarity
               FROM canonical_entities
-              WHERE 1 - (embedding <=> ${vectorStr}::vector) >= ${minSimilarity}
+              WHERE ontology_id = ${ontologyId}
+                AND 1 - (embedding <=> ${vectorStr}::vector) >= ${minSimilarity}
               ORDER BY embedding <=> ${vectorStr}::vector
               LIMIT ${k}
             `
@@ -160,8 +166,13 @@ export class EntityRegistryRepository extends Effect.Service<EntityRegistryRepos
 
     /**
      * Find candidates via token blocking
+     *
+     * @param ontologyId - Ontology scope for the search
+     * @param tokens - Blocking tokens to search for
+     * @param k - Maximum number of candidates to return (default: 50)
      */
     const findCandidatesByTokens = (
+      ontologyId: string,
       tokens: ReadonlyArray<string>,
       k: number = 50
     ): Effect.Effect<Array<BlockingCandidate>, SqlError.SqlError> =>
@@ -177,7 +188,8 @@ export class EntityRegistryRepository extends Effect.Service<EntityRegistryRepos
             0.0 as similarity
           FROM entity_blocking_tokens bt
           JOIN canonical_entities ce ON bt.canonical_entity_id = ce.id
-          WHERE bt.token = ANY(${tokens as Array<string>}::text[])
+          WHERE bt.ontology_id = ${ontologyId}
+            AND bt.token = ANY(${tokens as Array<string>}::text[])
           LIMIT ${k}
         `
 
@@ -230,7 +242,7 @@ export class EntityRegistryRepository extends Effect.Service<EntityRegistryRepos
     // -------------------------------------------------------------------------
 
     /**
-     * Insert an entity alias (upsert on mention_normalized)
+     * Insert an entity alias (upsert on ontology_id + mention_normalized)
      */
     const insertAlias = (alias: EntityAliasInsertRow) =>
       Effect.gen(function*() {
@@ -238,10 +250,11 @@ export class EntityRegistryRepository extends Effect.Service<EntityRegistryRepos
 
         const result = yield* sql`
           INSERT INTO entity_aliases (
-            canonical_entity_id, mention, mention_normalized, embedding,
+            ontology_id, canonical_entity_id, mention, mention_normalized, embedding,
             resolution_method, resolution_confidence, first_batch_id, source_article_id
           )
           VALUES (
+            ${alias.ontologyId ?? "default"},
             ${alias.canonicalEntityId},
             ${alias.mention},
             ${alias.mentionNormalized},
@@ -251,10 +264,10 @@ export class EntityRegistryRepository extends Effect.Service<EntityRegistryRepos
             ${alias.firstBatchId ?? null},
             ${alias.sourceArticleId ?? null}
           )
-          ON CONFLICT (mention_normalized) DO UPDATE SET
+          ON CONFLICT (ontology_id, mention_normalized) DO UPDATE SET
             canonical_entity_id = EXCLUDED.canonical_entity_id,
             resolution_confidence = GREATEST(entity_aliases.resolution_confidence, EXCLUDED.resolution_confidence)
-          RETURNING id, canonical_entity_id, mention, mention_normalized,
+          RETURNING id, ontology_id, canonical_entity_id, mention, mention_normalized,
                     resolution_method, resolution_confidence, first_batch_id,
                     source_article_id, created_at
         `
@@ -262,16 +275,22 @@ export class EntityRegistryRepository extends Effect.Service<EntityRegistryRepos
       })
 
     /**
-     * Find alias by exact mention (normalized)
+     * Find alias by exact mention (normalized) within an ontology
+     *
+     * @param ontologyId - Ontology scope for the search
+     * @param mention - The mention to look up
      */
-    const findAliasByMention = (mention: string) =>
+    const findAliasByMention = (ontologyId: string, mention: string) =>
       Effect.gen(function*() {
         const normalized = mention.toLowerCase().trim()
         const [result] = yield* Effect.promise(() =>
           drizzle
             .select()
             .from(entityAliases)
-            .where(eq(entityAliases.mentionNormalized, normalized))
+            .where(and(
+              eq(entityAliases.ontologyId, ontologyId),
+              eq(entityAliases.mentionNormalized, normalized)
+            ))
             .limit(1)
         )
         return Option.fromNullable(result)
@@ -306,8 +325,13 @@ export class EntityRegistryRepository extends Effect.Service<EntityRegistryRepos
 
     /**
      * Insert blocking tokens for a canonical entity
+     *
+     * @param ontologyId - Ontology scope for the tokens
+     * @param canonicalId - The canonical entity ID
+     * @param tokens - Tokens to insert
      */
     const insertBlockingTokens = (
+      ontologyId: string,
       canonicalId: CanonicalEntityId,
       tokens: ReadonlyArray<string>
     ) =>
@@ -315,6 +339,7 @@ export class EntityRegistryRepository extends Effect.Service<EntityRegistryRepos
         if (tokens.length === 0) return
 
         const values: Array<EntityBlockingTokenInsertRow> = tokens.map((token) => ({
+          ontologyId,
           canonicalEntityId: canonicalId,
           token: token.toLowerCase(),
           tokenType: "mention" as const
@@ -337,12 +362,16 @@ export class EntityRegistryRepository extends Effect.Service<EntityRegistryRepos
 
     /**
      * Rebuild blocking tokens for a canonical entity from its mention
+     *
+     * @param ontologyId - Ontology scope for the tokens
+     * @param canonicalId - The canonical entity ID
+     * @param mention - The mention to tokenize
      */
-    const rebuildBlockingTokens = (canonicalId: CanonicalEntityId, mention: string) =>
+    const rebuildBlockingTokens = (ontologyId: string, canonicalId: CanonicalEntityId, mention: string) =>
       Effect.gen(function*() {
         yield* deleteBlockingTokens(canonicalId)
         const tokens = tokenize(mention)
-        yield* insertBlockingTokens(canonicalId, tokens)
+        yield* insertBlockingTokens(ontologyId, canonicalId, tokens)
       })
 
     // -------------------------------------------------------------------------
@@ -375,16 +404,26 @@ export class EntityRegistryRepository extends Effect.Service<EntityRegistryRepos
 
     /**
      * Get statistics about the entity registry
+     *
+     * @param ontologyId - Optional ontology scope. If provided, returns stats for that ontology only.
      */
-    const getStats = () =>
+    const getStats = (ontologyId?: string) =>
       Effect.gen(function*() {
-        const result = yield* sql`
-          SELECT
-            (SELECT COUNT(*)::int FROM canonical_entities) as entity_count,
-            (SELECT COUNT(*)::int FROM entity_aliases) as alias_count,
-            (SELECT COUNT(*)::int FROM entity_blocking_tokens) as token_count,
-            (SELECT SUM(merge_count)::int FROM canonical_entities) as total_merges
-        `
+        const result = ontologyId
+          ? yield* sql`
+              SELECT
+                (SELECT COUNT(*)::int FROM canonical_entities WHERE ontology_id = ${ontologyId}) as entity_count,
+                (SELECT COUNT(*)::int FROM entity_aliases WHERE ontology_id = ${ontologyId}) as alias_count,
+                (SELECT COUNT(*)::int FROM entity_blocking_tokens WHERE ontology_id = ${ontologyId}) as token_count,
+                (SELECT COALESCE(SUM(merge_count), 0)::int FROM canonical_entities WHERE ontology_id = ${ontologyId}) as total_merges
+            `
+          : yield* sql`
+              SELECT
+                (SELECT COUNT(*)::int FROM canonical_entities) as entity_count,
+                (SELECT COUNT(*)::int FROM entity_aliases) as alias_count,
+                (SELECT COUNT(*)::int FROM entity_blocking_tokens) as token_count,
+                (SELECT COALESCE(SUM(merge_count), 0)::int FROM canonical_entities) as total_merges
+            `
         return result[0] as {
           entity_count: number
           alias_count: number

@@ -19,6 +19,7 @@ WORKDIR /app
 # Copy workspace files
 COPY package.json bun.lock ./
 COPY packages/@core-v2/package.json ./packages/@core-v2/
+COPY packages/web/package.json ./packages/web/
 COPY tools/deploy/package.json ./tools/deploy/
 
 # Install dependencies with BuildKit cache mount

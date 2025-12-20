@@ -43,15 +43,55 @@ const PreviewRequest = Schema.Struct({
 })
 
 // =============================================================================
+// Request Body Schemas (without ontologyId - comes from path)
+// =============================================================================
+
+const IngestLinkBody = Schema.Struct({
+  /** URL to ingest */
+  url: Schema.String.pipe(Schema.pattern(/^https?:\/\/.+/)),
+  /** Skip AI enrichment */
+  skipEnrich: Schema.optionalWith(Schema.Boolean, { default: () => false }),
+  /** Override source type classification */
+  sourceType: Schema.optional(
+    Schema.Literal("news", "blog", "press_release", "official", "academic", "unknown")
+  ),
+  /** Allow duplicate content */
+  allowDuplicates: Schema.optionalWith(Schema.Boolean, { default: () => false })
+})
+
+const BatchIngestBody = Schema.Struct({
+  /** URLs to ingest */
+  urls: Schema.Array(Schema.String.pipe(Schema.pattern(/^https?:\/\/.+/))),
+  /** Concurrency limit */
+  concurrency: Schema.optionalWith(Schema.Number.pipe(Schema.int(), Schema.positive()), {
+    default: () => 5
+  }),
+  /** Skip AI enrichment */
+  skipEnrich: Schema.optionalWith(Schema.Boolean, { default: () => false }),
+  /** Continue on individual failures */
+  continueOnError: Schema.optionalWith(Schema.Boolean, { default: () => true })
+})
+
+// =============================================================================
 // Link Ingestion Router
 // =============================================================================
 
 export const LinkIngestionRouter = HttpRouter.empty.pipe(
-  // POST /v1/links - Ingest a single URL
+  // POST /v1/ontologies/:ontologyId/links - Ingest a single URL
   HttpRouter.post(
-    "/v1/links",
+    "/v1/ontologies/:ontologyId/links",
     Effect.gen(function*() {
-      return yield* HttpServerRequest.schemaBodyJson(IngestLinkRequest).pipe(
+      const params = yield* HttpRouter.params
+      const ontologyId = params.ontologyId
+
+      if (!ontologyId) {
+        return yield* HttpServerResponse.json({
+          error: "VALIDATION_ERROR",
+          message: "ontologyId is required"
+        }, { status: 400 })
+      }
+
+      return yield* HttpServerRequest.schemaBodyJson(IngestLinkBody).pipe(
         Effect.matchEffect({
           onFailure: (error) =>
             HttpServerResponse.json({
@@ -63,7 +103,7 @@ export const LinkIngestionRouter = HttpRouter.empty.pipe(
               const ingestion = yield* LinkIngestionService
 
               const result = yield* ingestion.ingestUrl(request.url, {
-                ontologyId: request.ontologyId,
+                ontologyId,
                 enrich: !request.skipEnrich,
                 sourceType: request.sourceType,
                 skipDuplicates: !request.allowDuplicates
@@ -84,20 +124,27 @@ export const LinkIngestionRouter = HttpRouter.empty.pipe(
                 duplicate: result.duplicate
               }, { status: result.duplicate ? 200 : 201 })
             }).pipe(
-              Effect.catchAll((error) =>
-                HttpServerResponse.json(error, { status: 500 })
-              )
+              Effect.catchAll((error) => HttpServerResponse.json(error, { status: 500 }))
             )
         })
       )
     })
   ),
-
-  // POST /v1/links/batch - Batch ingest URLs
+  // POST /v1/ontologies/:ontologyId/links/batch - Batch ingest URLs
   HttpRouter.post(
-    "/v1/links/batch",
+    "/v1/ontologies/:ontologyId/links/batch",
     Effect.gen(function*() {
-      return yield* HttpServerRequest.schemaBodyJson(BatchIngestRequest).pipe(
+      const params = yield* HttpRouter.params
+      const ontologyId = params.ontologyId
+
+      if (!ontologyId) {
+        return yield* HttpServerResponse.json({
+          error: "VALIDATION_ERROR",
+          message: "ontologyId is required"
+        }, { status: 400 })
+      }
+
+      return yield* HttpServerRequest.schemaBodyJson(BatchIngestBody).pipe(
         Effect.matchEffect({
           onFailure: (error) =>
             HttpServerResponse.json({
@@ -109,7 +156,7 @@ export const LinkIngestionRouter = HttpRouter.empty.pipe(
               const ingestion = yield* LinkIngestionService
 
               const results = yield* ingestion.ingestUrls(request.urls, {
-                ontologyId: request.ontologyId,
+                ontologyId,
                 concurrency: request.concurrency,
                 enrich: !request.skipEnrich,
                 continueOnError: request.continueOnError
@@ -168,19 +215,30 @@ export const LinkIngestionRouter = HttpRouter.empty.pipe(
       )
     })
   ),
-
-  // GET /v1/links - List ingested links
+  // GET /v1/ontologies/:ontologyId/links - List ingested links
   HttpRouter.get(
-    "/v1/links",
+    "/v1/ontologies/:ontologyId/links",
     Effect.gen(function*() {
+      const params = yield* HttpRouter.params
+      const ontologyId = params.ontologyId
+
+      if (!ontologyId) {
+        return yield* HttpServerResponse.json({
+          error: "VALIDATION_ERROR",
+          message: "ontologyId is required"
+        }, { status: 400 })
+      }
+
       const queryParams = yield* HttpServerRequest.schemaSearchParams(ListLinksQueryParams).pipe(
-        Effect.catchAll(() => Effect.succeed({
-          status: undefined,
-          sourceType: undefined,
-          organization: undefined,
-          limit: undefined,
-          offset: undefined
-        } as Schema.Schema.Type<typeof ListLinksQueryParams>))
+        Effect.catchAll(() =>
+          Effect.succeed({
+            status: undefined,
+            sourceType: undefined,
+            organization: undefined,
+            limit: undefined,
+            offset: undefined
+          } as Schema.Schema.Type<typeof ListLinksQueryParams>)
+        )
       )
 
       const ingestion = yield* LinkIngestionService
@@ -188,6 +246,7 @@ export const LinkIngestionRouter = HttpRouter.empty.pipe(
       const offset = queryParams.offset ?? 0
 
       const links = yield* ingestion.list({
+        ontologyId,
         status: queryParams.status,
         sourceType: queryParams.sourceType,
         organization: queryParams.organization,
@@ -225,7 +284,6 @@ export const LinkIngestionRouter = HttpRouter.empty.pipe(
       })
     })
   ),
-
   // GET /v1/links/:id - Get link details
   HttpRouter.get(
     "/v1/links/:id",
@@ -262,8 +320,8 @@ export const LinkIngestionRouter = HttpRouter.empty.pipe(
         author: link.author,
         organization: link.organization,
         language: link.language,
-        topics: (link.topics as string[]) ?? [],
-        keyEntities: (link.keyEntities as string[]) ?? [],
+        topics: (link.topics as Array<string>) ?? [],
+        keyEntities: (link.keyEntities as Array<string>) ?? [],
         storageUri: link.storageUri,
         status: link.status,
         wordCount: link.wordCount,
@@ -275,7 +333,6 @@ export const LinkIngestionRouter = HttpRouter.empty.pipe(
       })
     })
   ),
-
   // POST /v1/links/preview - Preview URL without storing
   HttpRouter.post(
     "/v1/links/preview",
@@ -311,9 +368,7 @@ export const LinkIngestionRouter = HttpRouter.empty.pipe(
                   (content.content.length > 500 ? "..." : "")
               })
             }).pipe(
-              Effect.catchAll((error) =>
-                HttpServerResponse.json(error, { status: 502 })
-              )
+              Effect.catchAll((error) => HttpServerResponse.json(error, { status: 502 }))
             )
         })
       )

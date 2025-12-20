@@ -9,15 +9,12 @@
  * @module Service/Agent/types
  */
 
-import { Data, Effect, Schema, Stream } from "effect"
+import { Data, Schema } from "effect"
 import {
   type Agent,
-  type AgentEvent,
-  AgentId,
   type AgentId as AgentIdType,
   type AgentType,
   CheckpointConfig,
-  type PipelineMode,
   PipelineState,
   TerminationCondition
 } from "../../Domain/Model/Agent.js"

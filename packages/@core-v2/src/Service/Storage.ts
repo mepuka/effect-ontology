@@ -1,7 +1,7 @@
 import { FileSystem, KeyValueStore, Path } from "@effect/platform"
 import { SystemError } from "@effect/platform/Error"
 import { Storage } from "@google-cloud/storage"
-import { Context, Effect, Layer, Option, Scope } from "effect"
+import { Context, Effect, Layer, Option } from "effect"
 import { ConfigService } from "./Config.js"
 
 /**

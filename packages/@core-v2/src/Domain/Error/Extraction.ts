@@ -8,7 +8,6 @@
  */
 
 import { Schema } from "effect"
-import { BaseError } from "./Base.js"
 
 /**
  * ExtractionError - Errors during extraction process

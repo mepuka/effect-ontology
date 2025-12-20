@@ -7,5 +7,6 @@
  * @module Runtime/Persistence
  */
 
+export * from "./EventLogStorage.js"
 export * from "./MigrationRunner.js"
 export * from "./PostgresLayer.js"

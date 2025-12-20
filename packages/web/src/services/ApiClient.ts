@@ -178,7 +178,7 @@ export const ApiClientLive = Layer.effect(
       getLink: (id) =>
         request(HttpClientRequest.get(`/api/v1/links/${id}`), LinkDetail),
 
-      // Ingest a new link (uses ontologyId from body)
+      // Ingest a new link (ontologyId from path)
       ingestLink: (body) =>
         HttpClientRequest.post(`/api/v1/ontologies/${body.ontologyId}/links`).pipe(
           HttpClientRequest.bodyJson(body),

@@ -109,8 +109,11 @@ export class CrossBatchEntityResolver extends Effect.Service<CrossBatchEntityRes
        * Phase 1: Load blocking candidates from registry
        *
        * Uses hybrid blocking: token-based + embedding-based
+       *
+       * @param ontologyId - Ontology scope for candidate retrieval
        */
       const loadCandidates = (
+        ontologyId: string,
         entities: ReadonlyArray<Entity>,
         config: CrossBatchResolverConfig = DEFAULT_CONFIG
       ): Effect.Effect<HashMap.HashMap<string, Array<BlockingCandidate>>, CrossBatchResolutionError> =>
@@ -142,12 +145,14 @@ export class CrossBatchEntityResolver extends Effect.Service<CrossBatchEntityRes
 
                 // Token-based blocking
                 const tokenCandidates = yield* registry.findCandidatesByTokens(
+                  ontologyId,
                   tokens,
                   config.maxBlockingCandidates
                 )
 
                 // Embedding-based ANN search
                 const embeddingCandidates = yield* registry.findSimilarEntities(
+                  ontologyId,
                   entityEmbedding,
                   {
                     types: entity.types.length > 0 ? entity.types : undefined,
@@ -238,8 +243,11 @@ export class CrossBatchEntityResolver extends Effect.Service<CrossBatchEntityRes
 
       /**
        * Phase 3: Update registry with new/merged entities
+       *
+       * @param ontologyId - Ontology scope for entity creation
        */
       const updateRegistry = (
+        ontologyId: string,
         resolutionResult: {
           canonicalMap: Record<string, string>
           mergedEntities: Array<MergedEntity>
@@ -282,6 +290,7 @@ export class CrossBatchEntityResolver extends Effect.Service<CrossBatchEntityRes
             const iri = `${config.canonicalNamespace}${entity.id}`
 
             yield* registry.insertCanonicalEntity({
+              ontologyId,
               iri,
               canonicalMention: entity.mention,
               types: entity.types as Array<string>,
@@ -295,7 +304,7 @@ export class CrossBatchEntityResolver extends Effect.Service<CrossBatchEntityRes
             // Need to get the ID of the just-inserted entity
             const insertedOpt = yield* registry.getCanonicalEntityByIri(iri)
             if (Option.isSome(insertedOpt)) {
-              yield* registry.insertBlockingTokens(insertedOpt.value.id, tokens)
+              yield* registry.insertBlockingTokens(ontologyId, insertedOpt.value.id, tokens)
             }
 
             canonicalMap[entity.id] = iri
@@ -310,8 +319,11 @@ export class CrossBatchEntityResolver extends Effect.Service<CrossBatchEntityRes
 
       /**
        * Full cross-batch resolution pipeline
+       *
+       * @param ontologyId - Ontology scope for entity resolution
        */
       const resolve = (
+        ontologyId: string,
         entities: ReadonlyArray<Entity>,
         batchId: string,
         config: CrossBatchResolverConfig = DEFAULT_CONFIG
@@ -333,7 +345,8 @@ export class CrossBatchEntityResolver extends Effect.Service<CrossBatchEntityRes
 
           yield* Effect.logInfo("Cross-batch entity resolution starting", {
             entityCount: entities.length,
-            batchId
+            batchId,
+            ontologyId
           })
 
           // Generate embeddings for all entities
@@ -343,13 +356,14 @@ export class CrossBatchEntityResolver extends Effect.Service<CrossBatchEntityRes
           )
 
           // Phase 1: Load candidates
-          const candidateMap = yield* loadCandidates(entities, config)
+          const candidateMap = yield* loadCandidates(ontologyId, entities, config)
 
           // Phase 2: Resolve against candidates
           const resolutionResult = resolveEntities(entities, embeddings, candidateMap, config)
 
           // Phase 3: Update registry
           const finalResult = yield* updateRegistry(
+            ontologyId,
             {
               ...resolutionResult,
               unresolvedEntities: resolutionResult.unresolvedEntities
@@ -389,8 +403,10 @@ export class CrossBatchEntityResolver extends Effect.Service<CrossBatchEntityRes
 
       /**
        * Get registry statistics
+       *
+       * @param ontologyId - Optional ontology scope. If provided, returns stats for that ontology only.
        */
-      const getStats = () => registry.getStats()
+      const getStats = (ontologyId?: string) => registry.getStats(ontologyId)
 
       return {
         loadCandidates,

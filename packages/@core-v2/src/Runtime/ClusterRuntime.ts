@@ -55,7 +55,6 @@ export const ClusterSqliteLive = (options?: {
     runnerStorage: options?.runnerStorage
   })
 
-  // @ts-expect-error - Layer type mismatch between @effect/cluster and @effect/sql-sqlite-bun (WIP module)
   return Layer.provide(runnerLayer, sqliteLayer)
 }
 

@@ -9,7 +9,7 @@
  */
 
 import { Data, PrimaryKey, Schema } from "effect"
-import { DocumentId, IdempotencyKey } from "../Identity.js"
+import { DocumentId } from "../Identity.js"
 import { PathLayout } from "../PathLayout.js"
 import type { OutputType } from "../PathLayout.js"
 import { OntologyRef } from "./Ontology.js"

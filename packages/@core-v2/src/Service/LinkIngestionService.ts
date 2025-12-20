@@ -330,6 +330,9 @@ export class LinkIngestionService extends Effect.Service<LinkIngestionService>()
           let query = drizzle.select().from(ingestedLinks)
 
           // Apply filters
+          if (filter.ontologyId) {
+            query = query.where(eq(ingestedLinks.ontologyId, filter.ontologyId)) as typeof query
+          }
           if (filter.status) {
             query = query.where(eq(ingestedLinks.status, filter.status)) as typeof query
           }

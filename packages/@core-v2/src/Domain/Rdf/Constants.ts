@@ -305,7 +305,47 @@ export const CORRECTIONS = {
   involvesClaim: iri("http://effect-ontology.dev/corrections#involvesClaim"),
   detectedAt: iri("http://effect-ontology.dev/corrections#detectedAt"),
   resolvedBy: iri("http://effect-ontology.dev/corrections#resolvedBy"),
-  resolutionStrategy: iri("http://effect-ontology.dev/corrections#resolutionStrategy")
+  resolutionStrategy: iri("http://effect-ontology.dev/corrections#resolutionStrategy"),
+
+  // Curation extensions (used for few-shot learning and curation actions)
+  CurationActivity: iri("http://effect-ontology.dev/corrections#CurationActivity"),
+  curatedBy: iri("http://effect-ontology.dev/corrections#curatedBy"),
+  curationConfidence: iri("http://effect-ontology.dev/corrections#curationConfidence"),
+  usedAsExample: iri("http://effect-ontology.dev/corrections#usedAsExample"),
+  curationNote: iri("http://effect-ontology.dev/corrections#curationNote")
+} as const
+
+/**
+ * Schema.org Vocabulary IRIs
+ * http://schema.org/
+ *
+ * Commonly used schema.org properties for entity metadata.
+ *
+ * @since 2.0.0
+ */
+export const SCHEMA = {
+  // Namespace
+  namespace: "http://schema.org/",
+
+  // Common properties
+  name: iri("http://schema.org/name"),
+  alternateName: iri("http://schema.org/alternateName"),
+  description: iri("http://schema.org/description"),
+  identifier: iri("http://schema.org/identifier"),
+  url: iri("http://schema.org/url"),
+  sameAs: iri("http://schema.org/sameAs"),
+
+  // Date/time properties
+  dateCreated: iri("http://schema.org/dateCreated"),
+  dateModified: iri("http://schema.org/dateModified"),
+  datePublished: iri("http://schema.org/datePublished"),
+
+  // Types
+  Thing: iri("http://schema.org/Thing"),
+  Person: iri("http://schema.org/Person"),
+  Organization: iri("http://schema.org/Organization"),
+  Place: iri("http://schema.org/Place"),
+  Event: iri("http://schema.org/Event")
 } as const
 
 // Legacy named exports for backward compatibility

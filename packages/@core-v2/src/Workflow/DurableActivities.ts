@@ -121,6 +121,8 @@ export interface CrossBatchResolutionInput {
   readonly resolvedGraphUri: string
   /** Whether to enable cross-batch resolution */
   readonly enabled: boolean
+  /** Ontology scope for entity resolution */
+  readonly ontologyId: string
 }
 
 // -----------------------------------------------------------------------------
@@ -1113,7 +1115,7 @@ export const makeCrossBatchResolutionActivity = (input: CrossBatchResolutionInpu
 
       // Resolve against registry
       const config = new CrossBatchResolverConfig({})
-      const result = yield* resolver.resolve(knowledgeGraph.entities, input.batchId, config)
+      const result = yield* resolver.resolve(input.ontologyId, knowledgeGraph.entities, input.batchId, config)
 
       const end = yield* DateTime.now
 

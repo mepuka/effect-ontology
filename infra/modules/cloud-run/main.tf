@@ -43,7 +43,7 @@ resource "google_cloud_run_v2_service" "main" {
       }
       env {
         name  = "LLM_MODEL"
-        value = "claude-haiku-4-5"
+        value = "claude-haiku-4-5-20251001"
       }
       env {
         name  = "ONTOLOGY_PATH"
@@ -120,6 +120,57 @@ resource "google_cloud_run_v2_service" "main" {
         content {
           name  = "WORKFLOW_PERSISTENCE"
           value = "postgres"
+        }
+      }
+
+      # Pub/Sub environment variables (when enabled)
+      dynamic "env" {
+        for_each = var.enable_pubsub ? [1] : []
+        content {
+          name  = "EVENTS_BACKEND"
+          value = "pubsub"
+        }
+      }
+      dynamic "env" {
+        for_each = var.enable_pubsub ? [1] : []
+        content {
+          name  = "PUBSUB_PROJECT_ID"
+          value = var.project_id
+        }
+      }
+      dynamic "env" {
+        for_each = var.enable_pubsub && var.pubsub_events_topic != null ? [1] : []
+        content {
+          name  = "PUBSUB_EVENTS_TOPIC"
+          value = var.pubsub_events_topic
+        }
+      }
+      dynamic "env" {
+        for_each = var.enable_pubsub && var.pubsub_jobs_topic != null ? [1] : []
+        content {
+          name  = "PUBSUB_JOBS_TOPIC"
+          value = var.pubsub_jobs_topic
+        }
+      }
+      dynamic "env" {
+        for_each = var.enable_pubsub && var.pubsub_jobs_subscription != null ? [1] : []
+        content {
+          name  = "PUBSUB_JOBS_SUBSCRIPTION"
+          value = var.pubsub_jobs_subscription
+        }
+      }
+      dynamic "env" {
+        for_each = var.enable_pubsub && var.pubsub_dlq_topic != null ? [1] : []
+        content {
+          name  = "PUBSUB_DLQ_TOPIC"
+          value = var.pubsub_dlq_topic
+        }
+      }
+      dynamic "env" {
+        for_each = var.enable_pubsub && var.pubsub_events_subscription != null ? [1] : []
+        content {
+          name  = "PUBSUB_EVENTS_SUBSCRIPTION"
+          value = var.pubsub_events_subscription
         }
       }
     }

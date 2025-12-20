@@ -404,5 +404,112 @@ ON entity_blocking_tokens(canonical_entity_id);
 -- Composite for efficient blocking queries
 CREATE INDEX IF NOT EXISTS idx_blocking_tokens_composite
 ON entity_blocking_tokens(token, canonical_entity_id);`
+  },
+  {
+    version: 5,
+    name: "005_ontology_scoping",
+    sql: `-- Add ontology_id to articles, claims for namespace scoping
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS ontology_id TEXT;
+UPDATE articles SET ontology_id = 'seattle' WHERE ontology_id IS NULL;
+ALTER TABLE articles ALTER COLUMN ontology_id SET NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_articles_ontology_id ON articles(ontology_id);
+CREATE INDEX IF NOT EXISTS idx_articles_ontology_source ON articles(ontology_id, source_name);
+CREATE INDEX IF NOT EXISTS idx_articles_ontology_published ON articles(ontology_id, published_at DESC);
+
+ALTER TABLE claims ADD COLUMN IF NOT EXISTS ontology_id TEXT;
+UPDATE claims SET ontology_id = 'seattle' WHERE ontology_id IS NULL;
+ALTER TABLE claims ALTER COLUMN ontology_id SET NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_claims_ontology_id ON claims(ontology_id);
+CREATE INDEX IF NOT EXISTS idx_claims_ontology_subject ON claims(ontology_id, subject_iri);
+CREATE INDEX IF NOT EXISTS idx_claims_ontology_predicate ON claims(ontology_id, predicate_iri);
+CREATE INDEX IF NOT EXISTS idx_claims_ontology_subject_predicate ON claims(ontology_id, subject_iri, predicate_iri);`
+  },
+  {
+    version: 6,
+    name: "006_entity_registry_scoping",
+    sql: `-- Add ontology_id scoping to entity registry tables
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'canonical_entities' AND column_name = 'ontology_id'
+    ) THEN
+        ALTER TABLE canonical_entities ADD COLUMN ontology_id TEXT NOT NULL DEFAULT 'default';
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_canonical_entities_ontology_id ON canonical_entities(ontology_id);
+CREATE INDEX IF NOT EXISTS idx_canonical_entities_ontology_iri ON canonical_entities(ontology_id, iri);
+
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'entity_aliases' AND column_name = 'ontology_id'
+    ) THEN
+        ALTER TABLE entity_aliases ADD COLUMN ontology_id TEXT NOT NULL DEFAULT 'default';
+    END IF;
+END $$;
+
+DROP INDEX IF EXISTS idx_entity_aliases_mention_normalized;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_entity_aliases_ontology_mention ON entity_aliases(ontology_id, mention_normalized);
+CREATE INDEX IF NOT EXISTS idx_entity_aliases_ontology ON entity_aliases(ontology_id);
+
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'entity_blocking_tokens' AND column_name = 'ontology_id'
+    ) THEN
+        ALTER TABLE entity_blocking_tokens ADD COLUMN ontology_id TEXT NOT NULL DEFAULT 'default';
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_blocking_tokens_ontology_token ON entity_blocking_tokens(ontology_id, token);`
+  },
+  {
+    version: 7,
+    name: "007_llm_examples",
+    sql: `-- LLM examples table for few-shot learning
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+CREATE TABLE IF NOT EXISTS llm_examples (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ontology_id TEXT NOT NULL,
+    example_type TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'manual',
+    input_text TEXT NOT NULL,
+    target_class TEXT,
+    target_predicate TEXT,
+    evidence_text TEXT,
+    evidence_start_offset INTEGER,
+    evidence_end_offset INTEGER,
+    expected_output JSONB NOT NULL,
+    prompt_messages JSONB,
+    explanation TEXT,
+    embedding vector(768) NOT NULL,
+    is_negative BOOLEAN NOT NULL DEFAULT FALSE,
+    negative_pattern TEXT,
+    usage_count INTEGER DEFAULT 0,
+    success_rate NUMERIC(4, 3),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    created_by TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE INDEX IF NOT EXISTS idx_llm_examples_ontology_type ON llm_examples(ontology_id, example_type);
+CREATE INDEX IF NOT EXISTS idx_llm_examples_ontology_active ON llm_examples(ontology_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_llm_examples_is_negative ON llm_examples(is_negative);
+CREATE INDEX IF NOT EXISTS idx_llm_examples_target_class ON llm_examples(ontology_id, target_class);
+CREATE INDEX IF NOT EXISTS idx_llm_examples_target_predicate ON llm_examples(ontology_id, target_predicate);
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_llm_examples_embedding_hnsw') THEN
+        CREATE INDEX idx_llm_examples_embedding_hnsw ON llm_examples USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64);
+    END IF;
+END $$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_llm_examples_input_text_trgm') THEN
+        CREATE INDEX idx_llm_examples_input_text_trgm ON llm_examples USING gin (input_text gin_trgm_ops);
+    END IF;
+END $$;`
   }
 ]

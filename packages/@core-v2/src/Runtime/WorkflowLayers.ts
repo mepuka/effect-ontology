@@ -35,6 +35,7 @@ import { OntologyRegistryService } from "../Service/OntologyRegistry.js"
 import { RdfBuilder } from "../Service/Rdf.js"
 import { ShaclService } from "../Service/Shacl.js"
 import { StorageServiceLive } from "../Service/Storage.js"
+import { EventBusServiceMemory } from "../Service/EventBus.js"
 import { BatchExtractionWorkflowLayer, WorkflowOrchestratorLive } from "../Service/WorkflowOrchestrator.js"
 import { ExtractionWorkflowLive } from "../Workflow/StreamingExtraction.js"
 import { makeLanguageModelLayer } from "./ProductionRuntime.js"
@@ -305,6 +306,14 @@ const ExtractionWorkflowBundle = ExtractionWorkflowLive.pipe(
  */
 const ReasonerBundle = Reasoner.Default
 
+/**
+ * EventBusService for publishing domain events
+ *
+ * Using in-memory implementation by default.
+ * For production with PostgreSQL, use EventBusServiceSqlLive instead.
+ */
+const EventBusBundle = EventBusServiceMemory
+
 export const ActivityDependenciesLayer = Layer.mergeAll(
   StorageBundle,
   CoreDependenciesLayer,
@@ -315,7 +324,8 @@ export const ActivityDependenciesLayer = Layer.mergeAll(
   EntityResolutionBundle,
   GraphRAGBundle,
   ReasonerBundle,
-  ExtractionWorkflowBundle
+  ExtractionWorkflowBundle,
+  EventBusBundle
 )
 
 // =============================================================================

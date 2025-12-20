@@ -6,3 +6,6 @@ allow_unauthenticated = true
 
 # Enable PostgreSQL for @effect/workflow durable persistence
 enable_postgres = true
+
+# Enable Pub/Sub for real-time event streaming
+enable_pubsub = true

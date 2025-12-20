@@ -11,6 +11,7 @@
 import { Doc } from "@effect/printer"
 import type { Entity } from "../Domain/Model/Entity.js"
 import type { ClassDefinition, PropertyDefinition } from "../Domain/Model/Ontology.js"
+import type { ScoredExample } from "../Repository/Examples.js"
 import { extractLocalNameFromIri } from "../Utils/Iri.js"
 import { makeEntityRuleSet, makeMentionRuleSet, makeRelationRuleSet } from "./RuleSet.js"
 import type { RuleSet } from "./RuleSet.js"
@@ -46,6 +47,32 @@ export interface StructuredPrompt {
   readonly systemMessage: string
   /** Variable user message: input text */
   readonly userMessage: string
+}
+
+/**
+ * Conversation message for few-shot examples
+ *
+ * @since 2.0.0
+ */
+export interface ExampleMessage {
+  readonly role: "user" | "assistant"
+  readonly content: string
+}
+
+/**
+ * Structured prompt with few-shot examples for improved extraction
+ *
+ * Extends StructuredPrompt with conversation-style examples that demonstrate
+ * correct extraction behavior. Examples are inserted between system and user
+ * messages as user/assistant turn pairs.
+ *
+ * @since 2.0.0
+ */
+export interface StructuredPromptWithExamples extends StructuredPrompt {
+  /** Few-shot example turns (user input -> assistant output pairs) */
+  readonly exampleMessages: ReadonlyArray<ExampleMessage>
+  /** Negative examples section included in system message */
+  readonly hasNegativeExamples: boolean
 }
 
 // =============================================================================
@@ -336,6 +363,99 @@ const buildOutputFormatSection = (stage: "mention" | "entity" | "relation"): Doc
 }
 
 // =============================================================================
+// Few-Shot Example Builders
+// =============================================================================
+
+/**
+ * Build example messages from scored examples
+ *
+ * Converts ScoredExample objects into user/assistant message pairs
+ * suitable for few-shot prompting.
+ *
+ * @param examples - Scored examples from retrieval
+ * @returns Array of example messages as user/assistant turns
+ */
+const buildExampleMessages = (
+  examples: ReadonlyArray<ScoredExample>
+): ReadonlyArray<ExampleMessage> => {
+  const messages: Array<ExampleMessage> = []
+
+  for (const example of examples) {
+    // Skip negative examples - they go in system message
+    if (example.isNegative) continue
+
+    // Use pre-formatted prompt messages if available
+    if (example.promptMessages && example.promptMessages.length > 0) {
+      for (const msg of example.promptMessages) {
+        if (msg.role === "user" || msg.role === "assistant") {
+          messages.push({
+            role: msg.role,
+            content: msg.content
+          })
+        }
+      }
+    } else {
+      // Fall back to input/output format
+      messages.push({
+        role: "user",
+        content: `Extract from: ${example.inputText}`
+      })
+      messages.push({
+        role: "assistant",
+        content: JSON.stringify(example.expectedOutput, null, 2)
+      })
+    }
+  }
+
+  return messages
+}
+
+/**
+ * Build negative examples section for system message
+ *
+ * Negative examples warn the model about common extraction mistakes.
+ * They are included in the system message as explicit warnings.
+ *
+ * @param examples - Scored examples (filtered to negatives)
+ * @returns Doc section for negative examples, or empty if none
+ */
+const buildNegativeExamplesSection = (
+  examples: ReadonlyArray<ScoredExample>
+): Doc.Doc<never> => {
+  const negatives = examples.filter((e) => e.isNegative)
+
+  if (negatives.length === 0) {
+    return Doc.empty
+  }
+
+  const lines: Array<Doc.Doc<never>> = [
+    Doc.text("=== EXTRACTION WARNINGS (Avoid These Mistakes) ==="),
+    Doc.empty
+  ]
+
+  for (const neg of negatives) {
+    const output = neg.expectedOutput as {
+      shouldNotExtract?: boolean
+      errorCategory?: string
+      pattern?: string
+    }
+
+    lines.push(Doc.text(`❌ DO NOT: ${neg.explanation || "Avoid this pattern"}`))
+
+    if (output.pattern) {
+      lines.push(Doc.text(`   Pattern: ${output.pattern}`))
+    }
+    if (output.errorCategory) {
+      lines.push(Doc.text(`   Error type: ${output.errorCategory}`))
+    }
+    lines.push(Doc.text(`   Example input: "${neg.inputText}"`))
+    lines.push(Doc.empty)
+  }
+
+  return Doc.vsep(lines)
+}
+
+// =============================================================================
 // Public API
 // =============================================================================
 
@@ -402,6 +522,103 @@ export const generateStructuredPrompt = (
   return {
     systemMessage: Doc.render(systemDoc, { style: "pretty", options: { lineWidth: 120 } }),
     userMessage: Doc.render(userDoc, { style: "pretty", options: { lineWidth: 120 } })
+  }
+}
+
+/**
+ * Generate structured prompt with few-shot examples
+ *
+ * Extends the base structured prompt with examples retrieved from the
+ * ontology-scoped example store. Positive examples become user/assistant
+ * conversation turns. Negative examples are included in the system message
+ * as explicit warnings.
+ *
+ * Example message structure:
+ * - System: rules, schema, warnings (including negative examples)
+ * - Example 1 User: input
+ * - Example 1 Assistant: output
+ * - Example 2 User: input
+ * - Example 2 Assistant: output
+ * - User: actual input text
+ *
+ * @param text - Source text to extract from
+ * @param ruleSet - Rule set for the extraction stage
+ * @param ctx - Ontology context (classes, properties, entities)
+ * @param examples - Retrieved few-shot examples (positives and negatives)
+ * @returns Structured prompt with system message, example turns, and user message
+ *
+ * @example
+ * ```typescript
+ * const examples = await ExamplesService.retrieveForStage(ontologyId, "entity_extraction", text)
+ * const prompt = generateStructuredPromptWithExamples(text, ruleSet, ctx, [
+ *   ...examples.positives,
+ *   ...examples.negatives
+ * ])
+ * // prompt.systemMessage: instructions + negative example warnings
+ * // prompt.exampleMessages: positive example turns
+ * // prompt.userMessage: actual input
+ * ```
+ *
+ * @since 2.0.0
+ */
+export const generateStructuredPromptWithExamples = (
+  text: string,
+  ruleSet: RuleSet,
+  ctx: OntologyPromptContext,
+  examples: ReadonlyArray<ScoredExample>
+): StructuredPromptWithExamples => {
+  // Build base system message sections (cacheable)
+  const systemSections: Array<Doc.Doc<never>> = [
+    buildTaskSection(ruleSet.stage),
+    Doc.empty,
+    // Critical rules FIRST so they aren't lost in context
+    buildRulesSection(ruleSet)
+  ]
+
+  // Stage-specific sections
+  if (ruleSet.stage === "entity") {
+    systemSections.push(Doc.empty, buildNamespacePrefixSection(ctx))
+    systemSections.push(Doc.empty, buildQuickReferenceSection(ruleSet))
+    systemSections.push(Doc.empty, buildOntologySection(ctx))
+  } else if (ruleSet.stage === "relation") {
+    systemSections.push(Doc.empty, buildEntitiesSection(ctx))
+    systemSections.push(Doc.empty, buildQuickReferenceSection(ruleSet))
+    systemSections.push(Doc.empty, buildPropertiesSection(ctx))
+  }
+
+  // Add negative examples as warnings in system message
+  const negativeSection = buildNegativeExamplesSection(examples)
+  const hasNegatives = examples.some((e) => e.isNegative)
+  if (hasNegatives) {
+    systemSections.push(Doc.empty, negativeSection)
+  }
+
+  // Common sections - Output Format closes the instructions
+  systemSections.push(Doc.empty, buildOutputFormatSection(ruleSet.stage))
+
+  // Hint about examples if we have any positive ones
+  const positiveCount = examples.filter((e) => !e.isNegative).length
+  if (positiveCount > 0) {
+    systemSections.push(
+      Doc.empty,
+      Doc.text("=== EXAMPLES ==="),
+      Doc.text(`${positiveCount} example(s) follow. Study them carefully before processing the input.`)
+    )
+  }
+
+  // Build example messages from positive examples
+  const exampleMessages = buildExampleMessages(examples)
+
+  // Build user message (variable content)
+  const userDoc = buildInputTextSection(text)
+
+  const systemDoc = Doc.vsep(systemSections)
+
+  return {
+    systemMessage: Doc.render(systemDoc, { style: "pretty", options: { lineWidth: 120 } }),
+    userMessage: Doc.render(userDoc, { style: "pretty", options: { lineWidth: 120 } }),
+    exampleMessages,
+    hasNegativeExamples: hasNegatives
   }
 }
 

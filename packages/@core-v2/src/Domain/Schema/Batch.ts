@@ -10,6 +10,10 @@
 import { Schema } from "effect"
 import { BatchId, DocumentId, GcsUri, Namespace, OntologyVersion } from "../Identity.js"
 import { PreprocessingOptions } from "./BatchRequest.js"
+import { ValidationPolicy } from "./Shacl.js"
+
+// Re-export for backward compatibility
+export { ValidationPolicy }
 
 export const ManifestDocument = Schema.Struct({
   documentId: DocumentId,
@@ -17,17 +21,6 @@ export const ManifestDocument = Schema.Struct({
   contentType: Schema.String,
   sizeBytes: Schema.Number
 })
-
-/**
- * Validation policy for controlling workflow behavior based on severity
- */
-export const ValidationPolicy = Schema.Struct({
-  /** Fail if any Violation-level results are present (default: true) */
-  failOnViolation: Schema.optional(Schema.Boolean),
-  /** Fail if any Warning-level results are present (default: false) */
-  failOnWarning: Schema.optional(Schema.Boolean)
-})
-export type ValidationPolicy = typeof ValidationPolicy.Type
 
 export const BatchManifest = Schema.Struct({
   batchId: BatchId,

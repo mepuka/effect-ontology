@@ -10,8 +10,8 @@
  * @module Utils/IdempotencyKey
  */
 
-import { createHash } from "crypto"
 import { Effect, Schema } from "effect"
+import { sha256Sync, sha256SyncFull } from "./Hash.js"
 
 // =============================================================================
 // Types
@@ -91,7 +91,7 @@ export const hashParams = (params: ExtractionParams): string => {
 
   const sorted = defined.map(([k, v]) => `${k}:${JSON.stringify(v)}`).join("|")
 
-  return createHash("sha256").update(sorted).digest("hex").slice(0, 16)
+  return sha256Sync(sorted)
 }
 
 /**
@@ -103,8 +103,7 @@ export const hashParams = (params: ExtractionParams): string => {
  * @param ontologyContent - Serialized ontology content (Turtle, JSON-LD, etc.)
  * @returns 16-character hex hash of ontology content
  */
-export const computeOntologyVersion = (ontologyContent: string): string =>
-  createHash("sha256").update(ontologyContent).digest("hex").slice(0, 16)
+export const computeOntologyVersion = (ontologyContent: string): string => sha256Sync(ontologyContent)
 
 /**
  * Compute unified idempotency key
@@ -142,7 +141,7 @@ export const computeIdempotencyKey = (
   const paramsHash = hashParams(params)
 
   const input = `${normalized}|${ontologyId}|${ontologyVersion}|${paramsHash}`
-  const hash = createHash("sha256").update(input).digest("hex")
+  const hash = sha256SyncFull(input)
 
   return hash as IdempotencyKey
 }

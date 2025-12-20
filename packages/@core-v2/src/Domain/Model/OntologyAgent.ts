@@ -9,8 +9,7 @@
  */
 
 import { Schema } from "effect"
-import type { ClaimRow } from "../../Repository/schema.js"
-import { ShaclValidationReport, ValidationPolicy } from "../../Service/Shacl.js"
+import { ShaclValidationReport, ValidationPolicy } from "../Schema/Shacl.js"
 import type { Entity, Relation } from "./Entity.js"
 import { KnowledgeGraph } from "./Entity.js"
 import { OntologyRef } from "./Ontology.js"

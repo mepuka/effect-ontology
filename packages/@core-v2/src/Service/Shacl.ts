@@ -19,10 +19,18 @@ import {
   ValidationPolicyError,
   ValidationReportError
 } from "../Domain/Error/Shacl.js"
+import {
+  ShaclValidationReport,
+  ShaclViolation,
+  ValidationPolicy
+} from "../Domain/Schema/Shacl.js"
 import { sha256Sync } from "../Utils/Hash.js"
 import type { RdfStore } from "./Rdf.js"
 import { RdfBuilder } from "./Rdf.js"
 import { StorageService } from "./Storage.js"
+
+// Re-export types for backward compatibility
+export { ShaclValidationReport, ShaclViolation, ValidationPolicy }
 
 const mapSeverity = (severity: { value?: string } | undefined): "Violation" | "Warning" | "Info" => {
   if (!severity?.value) return "Info"
@@ -85,52 +93,6 @@ const hashStore = (store: N3.Store): string => {
   const sortedNquads = nquads.split("\n").sort().join("\n")
   return sha256Sync(sortedNquads)
 }
-
-/**
- * Violation summary for SHACL validation
- *
- * @since 2.0.0
- * @category Schema
- */
-export const ShaclViolation = Schema.Struct({
-  focusNode: Schema.String,
-  path: Schema.optional(Schema.String),
-  value: Schema.optional(Schema.String),
-  message: Schema.String,
-  severity: Schema.Literal("Violation", "Warning", "Info"),
-  sourceShape: Schema.optional(Schema.String)
-})
-export type ShaclViolation = typeof ShaclViolation.Type
-
-/**
- * Validation report structure
- *
- * @since 2.0.0
- * @category Schema
- */
-export const ShaclValidationReport = Schema.Struct({
-  conforms: Schema.Boolean,
-  violations: Schema.Array(ShaclViolation),
-  validatedAt: Schema.DateTimeUtc,
-  dataGraphTripleCount: Schema.Number,
-  shapesGraphTripleCount: Schema.Number,
-  durationMs: Schema.Number
-})
-export type ShaclValidationReport = typeof ShaclValidationReport.Type
-
-/**
- * Validation policy for controlling workflow behavior based on severity
- *
- * @since 2.0.0
- * @category Schema
- */
-export const ValidationPolicy = Schema.Struct({
-  /** Fail if any Violation-level results are present (default: true) */
-  failOnViolation: Schema.optional(Schema.Boolean),
-  /** Fail if any Warning-level results are present (default: false) */
-  failOnWarning: Schema.optional(Schema.Boolean)
-})
-export type ValidationPolicy = typeof ValidationPolicy.Type
 
 export interface ShaclServiceMethods {
   readonly validate: (

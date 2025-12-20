@@ -20,3 +20,5 @@ cd packages/@core-v2
 bun --env-file=.env.postgres run src/server.ts
 
 
+
+

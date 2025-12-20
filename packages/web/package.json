@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "check": "tsc --noEmit"
   },
@@ -12,6 +12,7 @@
     "@effect-atom/atom": "^0.4.4",
     "@effect-atom/atom-react": "^0.4.4",
     "@effect-ontology/core-v2": "workspace:*",
+    "@effect/experimental": "^0.58.0",
     "@effect/platform": "^0.94.0",
     "@effect/platform-browser": "^0.74.0",
     "@radix-ui/react-slot": "^1.2.4",
