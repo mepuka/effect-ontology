@@ -114,7 +114,7 @@ export const Claim = Schema.Struct({
   rank: ClaimRank,
   validFrom: Schema.NullOr(Schema.DateTimeUtc),
   validTo: Schema.NullOr(Schema.DateTimeUtc),
-  createdAt: Schema.DateTimeUtc,
+  assertedAt: Schema.DateTimeUtc,
   deprecatedAt: Schema.NullOr(Schema.DateTimeUtc),
   deprecatedBy: Schema.NullOr(CorrectionId),
   confidenceScore: Schema.NullOr(Schema.Number),

@@ -94,7 +94,7 @@ export class ClaimRepository extends Effect.Service<ClaimRepository>()("ClaimRep
         let query = drizzle
           .select()
           .from(claims)
-          .orderBy(desc(claims.createdAt))
+          .orderBy(desc(claims.assertedAt))
 
         if (conditions.length > 0) {
           query = query.where(and(...conditions)) as typeof query

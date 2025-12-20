@@ -81,7 +81,7 @@ export const claims = pgTable("claims", {
   rank: text("rank").notNull().default("normal"),
   validFrom: timestamp("valid_from", { withTimezone: true }),
   validTo: timestamp("valid_to", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  assertedAt: timestamp("asserted_at", { withTimezone: true }).defaultNow(),
   deprecatedAt: timestamp("deprecated_at", { withTimezone: true }),
   deprecatedBy: uuid("deprecated_by").references(() => corrections.id),
   confidenceScore: numeric("confidence_score", { precision: 4, scale: 3 }),
