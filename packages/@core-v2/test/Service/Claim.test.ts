@@ -32,7 +32,7 @@ const createTestClaimRow = (overrides: Partial<ClaimRow> = {}): ClaimRow => ({
   rank: "normal",
   validFrom: null,
   validTo: null,
-  createdAt: new Date("2025-01-15T10:00:00Z"),
+  assertedAt: new Date("2025-01-15T10:00:00Z"),
   deprecatedAt: null,
   deprecatedBy: null,
   confidenceScore: "0.95",
@@ -57,7 +57,7 @@ const makeMockClaimRepository = (claims: Map<string, ClaimRow> = new Map()) =>
         const row: ClaimRow = {
           ...claim,
           id: claim.id ?? `claim-${Date.now().toString(16).slice(-12)}`,
-          createdAt: claim.createdAt ?? new Date(),
+          assertedAt: claim.assertedAt ?? new Date(),
           deprecatedAt: null,
           deprecatedBy: null,
           objectDatatype: null,
@@ -129,7 +129,7 @@ const makeMockClaimRepository = (claims: Map<string, ClaimRow> = new Map()) =>
           const row = {
             ...c,
             id: c.id ?? `claim-${Date.now().toString(16).slice(-12)}`,
-            createdAt: c.createdAt ?? new Date(),
+            assertedAt: c.assertedAt ?? new Date(),
             deprecatedAt: null,
             deprecatedBy: null,
             objectDatatype: null,
@@ -275,13 +275,13 @@ const buildTestClaimServiceLayer = () => {
           }
 
           // Extracted at
-          if (claim.createdAt) {
+          if (claim.assertedAt) {
             quads.push(
               new Quad({
                 subject: claimIri,
                 predicate: CLAIMS.extractedAt,
                 object: new Literal({
-                  value: claim.createdAt.toISOString(),
+                  value: claim.assertedAt.toISOString(),
                   datatype: XSD.dateTime
                 }),
                 graph

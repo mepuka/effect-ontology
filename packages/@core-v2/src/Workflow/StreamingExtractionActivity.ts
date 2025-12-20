@@ -17,7 +17,7 @@
  */
 
 import { Activity } from "@effect/workflow"
-import { Chunk, DateTime, Effect, Option, Schedule, Schema } from "effect"
+import { Chunk, Context, DateTime, Effect, Option, Schedule, Schema } from "effect"
 import * as Crypto from "node:crypto"
 import { ActivityError, notFoundError, toActivityError } from "../Domain/Error/Activity.js"
 import {
@@ -34,6 +34,7 @@ import { ChunkingConfig, LlmConfig, RunConfig } from "../Domain/Model/Extraction
 import { OntologyRef } from "../Domain/Model/Ontology.js"
 import { PathLayout } from "../Domain/PathLayout.js"
 import type { ExtractionActivityInput } from "../Domain/Schema/Batch.js"
+import { type ArticleMetadata, ClaimPersistenceService } from "../Service/ClaimPersistence.js"
 import { ConfigService } from "../Service/Config.js"
 import { ExtractionWorkflow } from "../Service/ExtractionWorkflow.js"
 import { RdfBuilder } from "../Service/Rdf.js"
@@ -406,12 +407,59 @@ export const makeStreamingExtractionActivity = (input: typeof ExtractionActivity
       })
 
       // 7. Save TriG graph to storage
-      // NOTE: Claim persistence to PostgreSQL happens AFTER validation in WorkflowOrchestrator
-      // This ensures only validated claims are persisted to the database
       const graphPath = PathLayout.document.graph(input.documentId)
       yield* storage.set(graphPath, trigContent)
 
       const graphUri = toGcsUri(bucket, graphPath)
+
+      // 8. Persist claims to PostgreSQL (if configured)
+      // Uses serviceOption to gracefully handle missing ClaimPersistenceService
+      const claimPersistenceOpt = yield* Effect.serviceOption(ClaimPersistenceService)
+      let claimsPersisted = 0
+
+      if (Option.isSome(claimPersistenceOpt)) {
+        const claimPersistence = claimPersistenceOpt.value
+
+        // Build article metadata from extraction input
+        // Use publishedAt if available, fall back to eventTime, then current time
+        const publishedDate = input.publishedAt
+          ? new Date(input.publishedAt.epochMillis)
+          : input.eventTime
+            ? new Date(input.eventTime.epochMillis)
+            : new Date()
+
+        const articleMeta: ArticleMetadata = {
+          uri: input.sourceUri,
+          headline: input.title,
+          publishedAt: publishedDate,
+          contentHash: computeContentHash(sourceContent)
+        }
+
+        const result = yield* claimPersistence.persistClaims(claims, articleMeta, graphUri).pipe(
+          Effect.tap((r) =>
+            Effect.logInfo("Claims persisted to PostgreSQL", {
+              documentId: input.documentId,
+              articleId: r.articleId,
+              claimsInserted: r.claimsInserted,
+              claimsTotal: r.claimsTotal,
+              duplicatesSkipped: r.claimsTotal - r.claimsInserted
+            })
+          ),
+          Effect.catchAll((error) =>
+            Effect.logWarning("Failed to persist claims to PostgreSQL (continuing)", {
+              documentId: input.documentId,
+              error: String(error)
+            }).pipe(Effect.as({ articleId: "", claimsInserted: 0, claimsTotal: claims.length }))
+          )
+        )
+
+        claimsPersisted = result.claimsInserted
+      } else {
+        yield* Effect.logDebug("ClaimPersistenceService not available, skipping PostgreSQL persistence", {
+          documentId: input.documentId,
+          claimCount: claims.length
+        })
+      }
 
       const end = yield* DateTime.now
 
@@ -421,6 +469,7 @@ export const makeStreamingExtractionActivity = (input: typeof ExtractionActivity
         entityCount: graph.entities.length,
         relationCount: graph.relations.length,
         claimCount: claims.length,
+        claimsPersisted,
         durationMs: DateTime.distance(start, end)
       })
 

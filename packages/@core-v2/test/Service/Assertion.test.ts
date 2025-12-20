@@ -36,7 +36,7 @@ const makeMockClaim = (overrides: Partial<ClaimRow> = {}): ClaimRow => ({
   deprecatedBy: null,
   objectDatatype: null,
   objectLanguage: null,
-  createdAt: new Date("2024-01-01"),
+  assertedAt: new Date("2024-01-01"),
   ...overrides
 })
 

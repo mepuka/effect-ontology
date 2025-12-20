@@ -41,6 +41,9 @@ import {
 } from "../Domain/Schema/Timeline.js"
 import { ArticleRepository } from "../Repository/Article.js"
 import { ClaimRepository } from "../Repository/Claim.js"
+import { type ArticleMetadata, ClaimPersistenceService } from "../Service/ClaimPersistence.js"
+import { knowledgeGraphToClaims } from "../Utils/ClaimFactory.js"
+import * as Crypto from "node:crypto"
 import { ChunkingConfig, LlmConfig, RunConfig } from "../Domain/Model/ExtractionRun.js"
 import { OntologyRef } from "../Domain/Model/Ontology.js"
 import { getBatchStateFromStore } from "../Service/BatchState.js"
@@ -236,7 +239,7 @@ const claimRowToClaimWithRank = (
     confidenceScore: string | null
     evidenceText: string | null
     // Transaction time (bitemporal)
-    createdAt: Date | null
+    assertedAt: Date | null
     deprecatedAt: Date | null
   },
   article: {
@@ -247,7 +250,6 @@ const claimRowToClaimWithRank = (
     publishedAt: Date
     // Transaction time (bitemporal)
     ingestedAt: Date | null
-    createdAt: Date | null
   }
 ): typeof ClaimWithRank.Type => ({
   id: claim.id,
@@ -262,13 +264,13 @@ const claimRowToClaimWithRank = (
     headline: article.headline,
     sourceName: article.sourceName,
     publishedAt: DateTime.unsafeFromDate(article.publishedAt),
-    ingestedAt: DateTime.unsafeFromDate(article.ingestedAt ?? article.createdAt ?? new Date())
+    ingestedAt: DateTime.unsafeFromDate(article.ingestedAt ?? new Date())
   },
   // Valid time
   validFrom: claim.validFrom ? DateTime.unsafeFromDate(claim.validFrom) : null,
   validTo: claim.validTo ? DateTime.unsafeFromDate(claim.validTo) : null,
   // Transaction time
-  assertedAt: DateTime.unsafeFromDate(claim.createdAt ?? new Date()),
+  assertedAt: DateTime.unsafeFromDate(claim.assertedAt ?? new Date()),
   derivedAt: null, // TODO: populate from derived_at column when available
   deprecatedAt: claim.deprecatedAt ? DateTime.unsafeFromDate(claim.deprecatedAt) : null,
   confidence: claim.confidenceScore ? parseFloat(claim.confidenceScore) : null,
@@ -781,6 +783,51 @@ export const ExtractionRouter = HttpRouter.empty.pipe(
               yield* rdfBuilder.addRelations(store, graph.relations)
               const turtle = yield* rdfBuilder.toTurtle(store)
 
+              // Persist claims to PostgreSQL (if configured)
+              let claimsPersisted = 0
+              const claimPersistenceOpt = yield* Effect.serviceOption(ClaimPersistenceService)
+
+              if (Option.isSome(claimPersistenceOpt) && graph.entities.length > 0) {
+                const claimPersistence = claimPersistenceOpt.value
+
+                // Create claims from extracted graph
+                const claims = knowledgeGraphToClaims(
+                  graph.entities,
+                  graph.relations,
+                  {
+                    baseNamespace: `${config.rdf.baseNamespace}inline/`,
+                    documentId: `inline-${Date.now()}`,
+                    defaultConfidence: 0.85
+                  }
+                )
+
+                // Generate synthetic article metadata for inline extraction
+                const contentHash = Crypto.createHash("sha256").update(request.text).digest("hex").slice(0, 16)
+                const articleMeta: ArticleMetadata = {
+                  uri: `inline:${contentHash}`,
+                  headline: request.text.slice(0, 100),
+                  publishedAt: new Date(),
+                  contentHash
+                }
+
+                const result = yield* claimPersistence.persistClaims(claims, articleMeta).pipe(
+                  Effect.tap((r) =>
+                    Effect.logInfo("Inline extraction: claims persisted to PostgreSQL", {
+                      articleId: r.articleId,
+                      claimsInserted: r.claimsInserted,
+                      claimsTotal: r.claimsTotal
+                    })
+                  ),
+                  Effect.catchAll((error) =>
+                    Effect.logWarning("Failed to persist claims to PostgreSQL", {
+                      error: String(error)
+                    }).pipe(Effect.as({ articleId: "", claimsInserted: 0, claimsTotal: claims.length }))
+                  )
+                )
+
+                claimsPersisted = result.claimsInserted
+              }
+
               return yield* HttpServerResponse.json({
                 entities: graph.entities.map((e) => ({
                   id: e.id,
@@ -798,7 +845,8 @@ export const ExtractionRouter = HttpRouter.empty.pipe(
                 stats: {
                   entityCount: graph.entities.length,
                   relationCount: graph.relations.length,
-                  tripleCount: store._store.size
+                  tripleCount: store._store.size,
+                  claimsPersisted
                 }
               })
             })
