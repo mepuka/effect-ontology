@@ -24,6 +24,7 @@ export type ArticleId = string
 export type CorrectionId = string
 
 export interface ClaimFilter {
+  readonly ontologyId?: string
   readonly articleId?: ArticleId
   readonly subjectIri?: string
   readonly predicateIri?: string
@@ -75,6 +76,9 @@ export class ClaimRepository extends Effect.Service<ClaimRepository>()("ClaimRep
       Effect.gen(function*() {
         const conditions = []
 
+        if (filter.ontologyId) {
+          conditions.push(eq(claims.ontologyId, filter.ontologyId))
+        }
         if (filter.articleId) {
           conditions.push(eq(claims.articleId, filter.articleId))
         }

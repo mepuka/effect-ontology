@@ -27,6 +27,8 @@ export const BatchRequestDocument = Schema.Struct({
 
 export const BatchRequest = Schema.Struct({
   batchId: Schema.optional(BatchId),
+  /** Ontology registry ID (e.g., "seattle") */
+  ontologyId: Schema.String,
   ontologyUri: GcsUri,
   ontologyVersion: OntologyVersion,
   targetNamespace: Namespace,

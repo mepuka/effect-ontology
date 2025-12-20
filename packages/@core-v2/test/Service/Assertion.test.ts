@@ -20,6 +20,7 @@ import { TestConfigProviderLayer } from "../setup.js"
 
 const makeMockClaim = (overrides: Partial<ClaimRow> = {}): ClaimRow => ({
   id: "claim-test123",
+  ontologyId: "test-ontology",
   articleId: "article-001",
   subjectIri: "http://example.org/entity/1",
   predicateIri: "http://schema.org/name",

@@ -44,6 +44,7 @@ describe("Activity Input Schemas", () => {
         documentId: testDocId,
         sourceUri: makeGcsUri("input/doc.txt"),
         ontologyUri: makeGcsUri("ontologies/football/ontology.ttl"),
+        ontologyId: "football",
         targetNamespace: "sports-football"
       }
 

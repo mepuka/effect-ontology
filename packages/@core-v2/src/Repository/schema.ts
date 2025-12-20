@@ -8,7 +8,20 @@
  * @module Repository/schema
  */
 
-import { customType, index, integer, jsonb, numeric, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core"
+import {
+  customType,
+  index,
+  integer,
+  jsonb,
+  numeric,
+  pgEnum,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid
+} from "drizzle-orm/pg-core"
 
 // =============================================================================
 // Custom Types
@@ -55,6 +68,7 @@ export const batchStatusEnum = pgEnum("batch_status", ["pending", "running", "co
 export const articles = pgTable("articles", {
   id: uuid("id").primaryKey().defaultRandom(),
   uri: text("uri").unique().notNull(),
+  ontologyId: text("ontology_id").notNull(),
   sourceName: text("source_name"),
   headline: text("headline"),
   publishedAt: timestamp("published_at", { withTimezone: true }).notNull(),
@@ -66,7 +80,10 @@ export const articles = pgTable("articles", {
 }, (table) => [
   index("idx_articles_uri").on(table.uri),
   index("idx_articles_source").on(table.sourceName),
-  index("idx_articles_published").on(table.publishedAt)
+  index("idx_articles_published").on(table.publishedAt),
+  index("idx_articles_ontology_id").on(table.ontologyId),
+  index("idx_articles_ontology_source").on(table.ontologyId, table.sourceName),
+  index("idx_articles_ontology_published").on(table.ontologyId, table.publishedAt)
 ])
 
 // =============================================================================
@@ -94,6 +111,7 @@ export const corrections = pgTable("corrections", {
 export const claims = pgTable("claims", {
   id: uuid("id").primaryKey().defaultRandom(),
   articleId: uuid("article_id").notNull().references(() => articles.id, { onDelete: "cascade" }),
+  ontologyId: text("ontology_id").notNull(),
   subjectIri: text("subject_iri").notNull(),
   predicateIri: text("predicate_iri").notNull(),
   objectValue: text("object_value").notNull(),
@@ -119,7 +137,11 @@ export const claims = pgTable("claims", {
   index("idx_claims_rank").on(table.rank),
   index("idx_claims_valid_period").on(table.validFrom, table.validTo),
   index("idx_claims_deprecated").on(table.deprecatedAt),
-  index("idx_claims_subject_predicate").on(table.subjectIri, table.predicateIri)
+  index("idx_claims_subject_predicate").on(table.subjectIri, table.predicateIri),
+  index("idx_claims_ontology_id").on(table.ontologyId),
+  index("idx_claims_ontology_subject").on(table.ontologyId, table.subjectIri),
+  index("idx_claims_ontology_predicate").on(table.ontologyId, table.predicateIri),
+  index("idx_claims_ontology_subject_predicate").on(table.ontologyId, table.subjectIri, table.predicateIri)
 ])
 
 // =============================================================================
@@ -234,7 +256,9 @@ export const canonicalEntities = pgTable("canonical_entities", {
  */
 export const entityAliases = pgTable("entity_aliases", {
   id: uuid("id").primaryKey().defaultRandom(),
-  canonicalEntityId: uuid("canonical_entity_id").notNull().references(() => canonicalEntities.id, { onDelete: "cascade" }),
+  canonicalEntityId: uuid("canonical_entity_id").notNull().references(() => canonicalEntities.id, {
+    onDelete: "cascade"
+  }),
 
   // Alias data
   mention: text("mention").notNull(),
@@ -264,7 +288,9 @@ export const entityAliases = pgTable("entity_aliases", {
  */
 export const entityBlockingTokens = pgTable("entity_blocking_tokens", {
   id: uuid("id").primaryKey().defaultRandom(),
-  canonicalEntityId: uuid("canonical_entity_id").notNull().references(() => canonicalEntities.id, { onDelete: "cascade" }),
+  canonicalEntityId: uuid("canonical_entity_id").notNull().references(() => canonicalEntities.id, {
+    onDelete: "cascade"
+  }),
   token: text("token").notNull(),
   tokenType: text("token_type").default("mention") // 'mention', 'type', 'attribute'
 }, (table) => [
@@ -303,3 +329,139 @@ export type EntityAliasInsertRow = typeof entityAliases.$inferInsert
 
 export type EntityBlockingTokenRow = typeof entityBlockingTokens.$inferSelect
 export type EntityBlockingTokenInsertRow = typeof entityBlockingTokens.$inferInsert
+
+// =============================================================================
+// Ingested Links Tables (Link Ingestion Pipeline)
+// =============================================================================
+
+/**
+ * Ingested Links
+ *
+ * Tracks URLs fetched via Jina Reader API for extraction.
+ * Content is stored in GCS/local; this table holds metadata.
+ */
+export const ingestedLinks = pgTable("ingested_links", {
+  id: uuid("id").primaryKey().defaultRandom(),
+
+  // Content identification (content-addressed)
+  contentHash: text("content_hash").unique().notNull(),
+
+  // Ontology scoping
+  ontologyId: text("ontology_id").notNull(),
+
+  // Source information
+  sourceUri: text("source_uri"),
+  sourceType: text("source_type"),
+
+  // Enriched metadata
+  headline: text("headline"),
+  description: text("description"),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  author: text("author"),
+  organization: text("organization"),
+  language: text("language").default("en"),
+
+  // Topics and entities (JSONB for flexibility)
+  topics: jsonb("topics").$type<Array<string>>().default([]),
+  keyEntities: jsonb("key_entities").$type<Array<string>>().default([]),
+
+  // Storage location
+  storageUri: text("storage_uri").notNull(),
+
+  // Processing status
+  status: text("status").notNull().default("pending"),
+
+  // Timestamps
+  fetchedAt: timestamp("fetched_at", { withTimezone: true }).defaultNow(),
+  enrichedAt: timestamp("enriched_at", { withTimezone: true }),
+  processedAt: timestamp("processed_at", { withTimezone: true }),
+
+  // Error tracking
+  errorMessage: text("error_message"),
+
+  // Content stats
+  wordCount: integer("word_count"),
+
+  // Metadata
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+
+  // Lifecycle
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
+}, (table) => [
+  index("idx_ingested_links_status").on(table.status),
+  index("idx_ingested_links_source_uri").on(table.sourceUri),
+  index("idx_ingested_links_fetched_at").on(table.fetchedAt),
+  index("idx_ingested_links_source_type").on(table.sourceType),
+  index("idx_ingested_links_organization").on(table.organization),
+  index("idx_ingested_links_ontology_id").on(table.ontologyId),
+  index("idx_ingested_links_ontology_status").on(table.ontologyId, table.status)
+])
+
+/**
+ * Link Batches
+ *
+ * Groups ingested links for batch extraction.
+ */
+export const linkBatches = pgTable("link_batches", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  batchId: text("batch_id").unique().notNull(),
+
+  // Status
+  status: text("status").notNull().default("pending"),
+
+  // Metrics
+  linksTotal: integer("links_total").default(0),
+  linksProcessed: integer("links_processed").default(0),
+  linksFailed: integer("links_failed").default(0),
+
+  // Ontology
+  ontologyUri: text("ontology_uri"),
+
+  // Timing
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+
+  // Error
+  errorMessage: text("error_message")
+}, (table) => [
+  index("idx_link_batches_status").on(table.status)
+])
+
+/**
+ * Link Batch Items Junction
+ *
+ * Links ingested_links to batches.
+ */
+export const linkBatchItems = pgTable("link_batch_items", {
+  batchId: uuid("batch_id").notNull().references(() => linkBatches.id, { onDelete: "cascade" }),
+  linkId: uuid("link_id").notNull().references(() => ingestedLinks.id, { onDelete: "cascade" }),
+
+  // Item status
+  status: text("status").notNull().default("pending"),
+
+  // Result reference
+  extractionRunId: text("extraction_run_id"),
+  articleId: uuid("article_id"),
+
+  // Timing
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+
+  // Error
+  errorMessage: text("error_message")
+}, (table) => [
+  primaryKey({ columns: [table.batchId, table.linkId] }),
+  index("idx_link_batch_items_link").on(table.linkId),
+  index("idx_link_batch_items_status").on(table.status)
+])
+
+export type IngestedLinkRow = typeof ingestedLinks.$inferSelect
+export type IngestedLinkInsertRow = typeof ingestedLinks.$inferInsert
+
+export type LinkBatchRow = typeof linkBatches.$inferSelect
+export type LinkBatchInsertRow = typeof linkBatches.$inferInsert
+
+export type LinkBatchItemRow = typeof linkBatchItems.$inferSelect
+export type LinkBatchItemInsertRow = typeof linkBatchItems.$inferInsert

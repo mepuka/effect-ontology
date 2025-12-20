@@ -144,6 +144,36 @@ const ApiConfig = Config.nested("API")(Config.all({
   requireAuth: Config.boolean("REQUIRE_AUTH").pipe(Config.withDefault(false))
 }))
 
+const JinaConfig = Config.nested("JINA")(Config.all({
+  /**
+   * Jina Reader API key (optional).
+   * Without key: 20 RPM rate limit.
+   * With key: 500 RPM rate limit.
+   * @see https://jina.ai/reader/
+   */
+  apiKey: Config.option(Config.redacted("API_KEY")),
+  /**
+   * Rate limit in requests per minute.
+   * Defaults to 20 (free tier). Set to 500 if using API key.
+   */
+  rateLimitRpm: Config.integer("RATE_LIMIT_RPM").pipe(Config.withDefault(20)),
+  /**
+   * Request timeout in milliseconds.
+   * Jina may take longer for JS-heavy sites.
+   */
+  timeoutMs: Config.integer("TIMEOUT_MS").pipe(Config.withDefault(30_000)),
+  /**
+   * Maximum concurrent requests.
+   * Used with Effect.Semaphore for client-side limiting.
+   */
+  maxConcurrent: Config.integer("MAX_CONCURRENT").pipe(Config.withDefault(5)),
+  /**
+   * Base URL for Jina Reader API.
+   * Defaults to production endpoint.
+   */
+  baseUrl: Config.string("BASE_URL").pipe(Config.withDefault("https://r.jina.ai"))
+}))
+
 const RdfConfig = Config.nested("RDF")(Config.all({
   baseNamespace: Config.string("BASE_NAMESPACE").pipe(Config.withDefault("http://example.org/kg/")),
   outputFormat: Config.literal("Turtle", "N-Triples", "JSON-LD")("OUTPUT_FORMAT").pipe(
@@ -174,6 +204,7 @@ export interface AppConfig {
   readonly inference: Config.Config.Success<typeof InferenceConfig>
   readonly rdf: Config.Config.Success<typeof RdfConfig>
   readonly api: Config.Config.Success<typeof ApiConfig>
+  readonly jina: Config.Config.Success<typeof JinaConfig>
 }
 
 export const DEFAULT_CONFIG: AppConfig = {
@@ -252,6 +283,13 @@ export const DEFAULT_CONFIG: AppConfig = {
   api: {
     keys: Option.none(),
     requireAuth: false
+  },
+  jina: {
+    apiKey: Option.none(),
+    rateLimitRpm: 20,
+    timeoutMs: 30_000,
+    maxConcurrent: 5,
+    baseUrl: "https://r.jina.ai"
   }
 }
 
@@ -260,7 +298,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 // =============================================================================
 
 const makeConfigService = Effect.gen(function*() {
-  const [llm, storage, ontology, runtime, grounder, embedding, extraction, entityRegistry, inference, rdf, api] = yield* Effect.all([
+  const [llm, storage, ontology, runtime, grounder, embedding, extraction, entityRegistry, inference, rdf, api, jina] = yield* Effect.all([
     LlmConfig,
     StorageConfig,
     OntologyConfig,
@@ -271,7 +309,8 @@ const makeConfigService = Effect.gen(function*() {
     EntityRegistryConfig,
     InferenceConfig,
     RdfConfig,
-    ApiConfig
+    ApiConfig,
+    JinaConfig
   ])
 
   return {
@@ -281,6 +320,7 @@ const makeConfigService = Effect.gen(function*() {
     extraction,
     grounder,
     inference,
+    jina,
     llm,
     ontology,
     rdf,

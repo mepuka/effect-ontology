@@ -275,6 +275,13 @@ describe("OntologyAgent Service", () => {
     api: {
       keys: Option.none(),
       requireAuth: false
+    },
+    jina: {
+      apiKey: Option.none(),
+      rateLimitRpm: 20,
+      timeoutMs: 30_000,
+      maxConcurrent: 5,
+      baseUrl: "https://r.jina.ai"
     }
   } as ConfigService)
 
@@ -508,7 +515,7 @@ schema:name a owl:DatatypeProperty ;
 
         const result = yield* agent.extractWithClaims(
           "Cristiano Ronaldo plays for Al-Nassr.",
-          { articleId: "article-001" }
+          { ontologyId: "test-ontology", articleId: "article-001" }
         )
 
         // Check entities
@@ -541,6 +548,7 @@ schema:name a owl:DatatypeProperty ;
         const result = yield* agent.extractWithClaims(
           "Cristiano Ronaldo plays for Al-Nassr.",
           {
+            ontologyId: "test-ontology",
             articleId: "article-002",
             defaultConfidence: 0.95
           }
@@ -587,7 +595,7 @@ schema:name a owl:DatatypeProperty ;
 
         const result = yield* agent.extractWithClaims(
           "Some text with no entities.",
-          { articleId: "article-003" }
+          { ontologyId: "test-ontology", articleId: "article-003" }
         )
 
         expect(result.isEmpty).toBe(true)

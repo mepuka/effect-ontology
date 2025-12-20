@@ -37,6 +37,8 @@ export interface ClaimFactoryOptions {
   readonly baseNamespace: string
   /** Document ID (used as articleId in claims) */
   readonly documentId: string
+  /** Ontology ID for namespace scoping */
+  readonly ontologyId: string
   /** Default confidence score (0-1) */
   readonly defaultConfidence?: number
   /** Default claim rank */
@@ -286,7 +288,7 @@ export const entityToClaims = (
   options: ClaimFactoryOptions
 ): ReadonlyArray<ClaimData> => {
   const claims: Array<ClaimData> = []
-  const { baseNamespace, defaultConfidence = 0.85, documentId } = options
+  const { baseNamespace, defaultConfidence = 0.85, documentId, ontologyId } = options
 
   // Build subject IRI
   const subjectIri = buildIri(baseNamespace, entity.id)
@@ -315,6 +317,7 @@ export const entityToClaims = (
       objectValue: typeIri,
       objectType: "iri",
       articleId: documentId,
+      ontologyId,
       confidence,
       evidence
     })
@@ -334,6 +337,7 @@ export const entityToClaims = (
       objectValue,
       objectType,
       articleId: documentId,
+      ontologyId,
       confidence,
       evidence
     })
@@ -379,7 +383,7 @@ export const relationToClaim = (
   relation: Relation,
   options: ClaimFactoryOptions
 ): ClaimData => {
-  const { baseNamespace, defaultConfidence = 0.85, documentId } = options
+  const { baseNamespace, defaultConfidence = 0.85, documentId, ontologyId } = options
 
   // Build subject IRI
   const subjectIri = buildIri(baseNamespace, relation.subjectId)
@@ -418,6 +422,7 @@ export const relationToClaim = (
     objectValue,
     objectType,
     articleId: documentId,
+    ontologyId,
     confidence,
     evidence
   }

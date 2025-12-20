@@ -216,6 +216,7 @@ describe("BatchRequest Schema", () => {
   }
 
   const minimalRequest = {
+    ontologyId: "test-ontology",
     ontologyUri: "gs://bucket/ontology.ttl",
     ontologyVersion: "test/ontology@deadbeefdeadbeef",
     targetNamespace: "example-ns",

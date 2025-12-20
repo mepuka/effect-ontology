@@ -834,6 +834,8 @@ export const makeIngestionActivity = (input: typeof IngestionActivityInput.Type)
 export const ClaimPersistenceInput = Schema.Struct({
   /** Batch ID for logging */
   batchId: Schema.String,
+  /** Ontology ID for namespace scoping (e.g., "seattle") */
+  ontologyId: Schema.String,
   /** URIs of document graphs to process */
   documentGraphUris: Schema.Array(Schema.String),
   /** Target namespace for IRI construction */
@@ -948,6 +950,7 @@ export const makeClaimPersistenceActivity = (input: ClaimPersistenceInput) =>
             {
               baseNamespace,
               documentId: docMeta.documentId,
+              ontologyId: input.ontologyId,
               defaultConfidence: 0.85
             }
           )
@@ -965,6 +968,7 @@ export const makeClaimPersistenceActivity = (input: ClaimPersistenceInput) =>
             claims,
             {
               uri: docMeta.sourceUri,
+              ontologyId: input.ontologyId,
               headline: docMeta.headline,
               publishedAt: docMeta.eventTime
                 ? DateTime.toDate(docMeta.eventTime)

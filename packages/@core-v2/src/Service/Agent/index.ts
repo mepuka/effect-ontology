@@ -8,5 +8,6 @@
  */
 
 export * from "./AgentCoordinator.js"
+export * from "./AgentKit.js"
 export * from "./CorrectorAgent.js"
 export * from "./types.js"

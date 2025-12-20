@@ -524,6 +524,7 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
                 documentId: doc.documentId,
                 sourceUri: doc.sourceUri,
                 ontologyUri: manifest.ontologyUri,
+                ontologyId: manifest.ontologyId,
                 targetNamespace: manifest.targetNamespace,
                 eventTime: docMetadata?.eventTime,
                 publishedAt: docMetadata?.publishedAt,
@@ -746,6 +747,7 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
 
         const claimPersistenceResult = yield* makeClaimPersistenceActivity({
           batchId,
+          ontologyId: manifest.ontologyId,
           documentGraphUris: successfulResults.map((r) => r.graphUri),
           targetNamespace: manifest.targetNamespace,
           documentMetadata: manifest.documents.map((doc) => ({

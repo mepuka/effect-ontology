@@ -31,6 +31,8 @@ export type ValidationPolicy = typeof ValidationPolicy.Type
 
 export const BatchManifest = Schema.Struct({
   batchId: BatchId,
+  /** Ontology registry ID (e.g., "seattle") */
+  ontologyId: Schema.String,
   ontologyUri: GcsUri,
   ontologyVersion: OntologyVersion,
   shaclUri: Schema.optional(GcsUri),
@@ -55,6 +57,8 @@ export const ExtractionActivityInput = Schema.Struct({
   documentId: DocumentId,
   sourceUri: GcsUri,
   ontologyUri: GcsUri,
+  /** Ontology registry ID for namespace scoping (e.g., "seattle") */
+  ontologyId: Schema.String,
   /** Target namespace for entity IRI minting (from batch manifest) */
   targetNamespace: Namespace,
   /** Pre-computed ontology embeddings URI (optional, speeds up semantic search) */
@@ -123,6 +127,8 @@ export const IngestionActivityInput = Schema.Struct({
 
 export const BatchWorkflowPayload = Schema.Struct({
   batchId: BatchId,
+  /** Ontology registry ID (e.g., "seattle") */
+  ontologyId: Schema.String,
   manifestUri: GcsUri,
   ontologyVersion: OntologyVersion,
   ontologyUri: GcsUri,

@@ -350,6 +350,7 @@ export const makeStreamingExtractionActivity = (input: typeof ExtractionActivity
         {
           baseNamespace,
           documentId: input.documentId,
+          ontologyId: input.ontologyId,
           defaultConfidence: 0.85
         }
       )
@@ -430,6 +431,7 @@ export const makeStreamingExtractionActivity = (input: typeof ExtractionActivity
 
         const articleMeta: ArticleMetadata = {
           uri: input.sourceUri,
+          ontologyId: input.ontologyId,
           headline: input.title,
           publishedAt: publishedDate,
           contentHash: computeContentHash(sourceContent)

@@ -302,6 +302,7 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
 
             // Build claim input from relation
             const claimInput: CreateClaimInput = {
+              ontologyId: options.ontologyId,
               subjectIri,
               predicateIri: relation.predicate,
               objectValue,

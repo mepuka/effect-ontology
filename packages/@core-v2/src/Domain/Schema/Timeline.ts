@@ -60,7 +60,11 @@ export class ClaimWithRank extends Schema.Class<ClaimWithRank>("ClaimWithRank")(
   deprecatedAt: Schema.NullOr(Schema.DateTimeUtc),
 
   confidence: Schema.NullOr(Schema.Number),
-  evidenceText: Schema.NullOr(Schema.String)
+  evidenceText: Schema.NullOr(Schema.String),
+  /** Character offset where evidence span starts in source document */
+  evidenceStartOffset: Schema.NullOr(Schema.Number),
+  /** Character offset where evidence span ends in source document */
+  evidenceEndOffset: Schema.NullOr(Schema.Number)
 }) {}
 
 /**
@@ -73,6 +77,24 @@ export class CorrectionSummary extends Schema.Class<CorrectionSummary>("Correcti
   correctionDate: Schema.DateTimeUtc,
   originalClaimId: Schema.String,
   newClaimId: Schema.NullOr(Schema.String)
+}) {}
+
+// =============================================================================
+// Article Detail Response
+// =============================================================================
+
+/**
+ * Response for article detail endpoint
+ * GET /v1/articles/:id
+ */
+export class ArticleDetailResponse extends Schema.Class<ArticleDetailResponse>("ArticleDetailResponse")({
+  article: ArticleSummary,
+  /** All claims extracted from this article */
+  claims: Schema.Array(ClaimWithRank),
+  /** Number of unique entities in claims */
+  entityCount: Schema.Number,
+  /** Number of detected conflicts */
+  conflictCount: Schema.Number
 }) {}
 
 // =============================================================================

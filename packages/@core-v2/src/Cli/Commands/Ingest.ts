@@ -10,7 +10,8 @@
 import { Args, Command, Options } from "@effect/cli"
 import { FileSystem, Path } from "@effect/platform"
 import { Console, DateTime, Effect, Option, Schema } from "effect"
-import { BatchManifest, ManifestDocument } from "../../Domain/Schema/Batch.js"
+import type { ManifestDocument } from "../../Domain/Schema/Batch.js"
+import { BatchManifest } from "../../Domain/Schema/Batch.js"
 import { StorageService } from "../../Service/Storage.js"
 import { withErrorHandler } from "../ErrorHandler.js"
 
@@ -30,6 +31,10 @@ const ontologyOption = Options.file("ontology").pipe(
 const namespaceOption = Options.text("namespace").pipe(
   Options.withAlias("n"),
   Options.withDescription("Target namespace for entity minting")
+)
+
+const ontologyIdOption = Options.text("ontology-id").pipe(
+  Options.withDescription("Ontology registry ID (e.g., 'seattle')")
 )
 
 const outputOption = Options.file("output").pipe(
@@ -57,6 +62,7 @@ const prefixOption = Options.text("prefix").pipe(
 const ingestHandler = (
   dir: string,
   ontology: string,
+  ontologyId: string,
   namespace: string,
   output: Option.Option<string>,
   batchId: Option.Option<string>,
@@ -84,9 +90,7 @@ const ingestHandler = (
 
     // Filter to supported file types
     const supportedExtensions = [".txt", ".md", ".json", ".html", ".htm"]
-    const files = entries.filter((entry) =>
-      supportedExtensions.some((ext) => entry.toLowerCase().endsWith(ext))
-    )
+    const files = entries.filter((entry) => supportedExtensions.some((ext) => entry.toLowerCase().endsWith(ext)))
 
     if (files.length === 0) {
       yield* Console.error(`No supported files found in ${dir}`)
@@ -115,10 +119,10 @@ const ingestHandler = (
       const contentType = file.endsWith(".json")
         ? "application/json"
         : file.endsWith(".html") || file.endsWith(".htm")
-          ? "text/html"
-          : file.endsWith(".md")
-            ? "text/markdown"
-            : "text/plain"
+        ? "text/html"
+        : file.endsWith(".md")
+        ? "text/markdown"
+        : "text/plain"
 
       documents.push({
         documentId: docId as typeof ManifestDocument.Type["documentId"],
@@ -140,6 +144,7 @@ const ingestHandler = (
     // Build manifest
     const manifest: typeof BatchManifest.Type = {
       batchId: effectiveBatchId as typeof BatchManifest.Type["batchId"],
+      ontologyId,
       ontologyUri: ontologyKey as typeof BatchManifest.Type["ontologyUri"],
       ontologyVersion: "1.0.0" as typeof BatchManifest.Type["ontologyVersion"],
       targetNamespace: namespace as typeof BatchManifest.Type["targetNamespace"],
@@ -167,10 +172,18 @@ const ingestHandler = (
 
 export const ingestCommand = Command.make(
   "ingest",
-  { dir: inputDir, ontology: ontologyOption, namespace: namespaceOption, output: outputOption, batchId: batchIdOption, prefix: prefixOption },
-  ({ dir, ontology, namespace, output, batchId, prefix }) =>
+  {
+    dir: inputDir,
+    ontology: ontologyOption,
+    ontologyId: ontologyIdOption,
+    namespace: namespaceOption,
+    output: outputOption,
+    batchId: batchIdOption,
+    prefix: prefixOption
+  },
+  ({ batchId, dir, namespace, ontology, ontologyId, output, prefix }) =>
     withErrorHandler(
-      ingestHandler(dir, ontology, namespace, output, batchId, prefix)
+      ingestHandler(dir, ontology, ontologyId, namespace, output, batchId, prefix)
     )
 ).pipe(
   Command.withDescription("Upload local files to storage and generate batch manifest")

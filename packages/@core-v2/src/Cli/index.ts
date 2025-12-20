@@ -16,11 +16,15 @@ import { RdfBuilder } from "../Service/Rdf.js"
 import { Reasoner } from "../Service/Reasoner.js"
 import { StorageServiceLive } from "../Service/Storage.js"
 import { WikidataClient } from "../Service/WikidataClient.js"
+import { JinaReaderClient } from "../Service/JinaReaderClient.js"
 import { inferenceCommand } from "./Commands/Inference.js"
 import { ingestCommand } from "./Commands/Ingest.js"
 import { linkCommand } from "./Commands/Link.js"
 import { reconcileCommand } from "./Commands/Reconcile.js"
 import { storageCommand } from "./Commands/Storage.js"
+import { fetchCommand } from "./Commands/Fetch.js"
+// Note: ingestLinkCommand, ingestBatchCommand, documentsCommand require PostgreSQL and LLM layers
+// They are available in Cli/Commands/Fetch.ts but not registered in the base CLI
 
 // =============================================================================
 // Root Command
@@ -32,7 +36,8 @@ const rootCommand = Command.make("effect-onto").pipe(
     ingestCommand,
     reconcileCommand,
     linkCommand,
-    storageCommand
+    storageCommand,
+    fetchCommand
   ]),
   Command.withDescription("Effect Ontology CLI - Knowledge extraction and reasoning tools")
 )
@@ -50,13 +55,18 @@ const rootCommand = Command.make("effect-onto").pipe(
  * - Reasoner (RDFS reasoning)
  * - StorageService (file/GCS storage)
  * - WikidataClient (Wikidata API integration)
+ * - JinaReaderClient (Jina Reader API for URL fetching)
  * - BunContext (FileSystem, Path, etc.)
+ *
+ * Note: Commands that need LLM (ContentEnrichmentAgent) or Postgres
+ * (LinkIngestionService) require additional layer setup.
  */
 const CliLive = Layer.mergeAll(
   Reasoner.Default,
   RdfBuilder.Default,
   StorageServiceLive,
-  WikidataClient.Default
+  WikidataClient.Default,
+  JinaReaderClient.Default
 ).pipe(
   Layer.provide(ConfigServiceDefault),
   Layer.provideMerge(BunContext.layer)

@@ -233,6 +233,13 @@ const MockConfigService = Layer.succeed(ConfigService, {
   api: {
     keys: Option.none(),
     requireAuth: false
+  },
+  jina: {
+    apiKey: Option.none(),
+    rateLimitRpm: 20,
+    timeoutMs: 30_000,
+    maxConcurrent: 5,
+    baseUrl: "https://r.jina.ai"
   }
 } as ConfigService)
 

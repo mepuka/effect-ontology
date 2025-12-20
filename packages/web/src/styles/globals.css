@@ -5,13 +5,36 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 187 100% 42%;
+    --primary-foreground: 222.2 84% 4.9%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 187 100% 42%;
+    --radius: 0.5rem;
+  }
+
   html {
     font-family: 'JetBrains Mono', ui-monospace, monospace;
     @apply antialiased;
   }
 
   body {
-    @apply bg-gray-950 text-gray-300;
+    @apply bg-background text-foreground;
   }
 
   /* Scrollbar */

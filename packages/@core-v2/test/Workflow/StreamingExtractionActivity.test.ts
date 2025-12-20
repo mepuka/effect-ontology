@@ -66,6 +66,7 @@ const sampleExtractionInput: typeof ExtractionActivityInput.Type = {
   documentId: testDocId,
   sourceUri: makeGcsUri("documents/press-release.txt"),
   ontologyUri: makeGcsUri("ontologies/football/ontology.ttl"),
+  ontologyId: "football",
   targetNamespace: testNamespace
 }
 

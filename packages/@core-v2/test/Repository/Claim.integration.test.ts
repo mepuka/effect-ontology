@@ -61,12 +61,14 @@ const PersistenceTestLayer = Layer.mergeAll(
 
 const makeTestArticle = (suffix: string): ArticleInsertRow => ({
   uri: `https://example.com/article-${suffix}-${Date.now()}`,
+  ontologyId: "test-ontology",
   sourceName: "Test Source",
   headline: `Test Article ${suffix}`,
   publishedAt: new Date()
 })
 
 const makeTestClaim = (articleId: string, suffix: string): ClaimInsertRow => ({
+  ontologyId: "test-ontology",
   articleId,
   subjectIri: `http://example.com/entity/${suffix}`,
   predicateIri: "http://example.com/predicate/hasRole",
@@ -160,6 +162,7 @@ describe("ClaimRepository Integration", () => {
         const predicateIri = "http://example.com/predicate/testProp"
 
         yield* claimRepo.insertClaim({
+          ontologyId: "test-ontology",
           articleId: article.id,
           subjectIri,
           predicateIri,
@@ -168,6 +171,7 @@ describe("ClaimRepository Integration", () => {
         })
 
         yield* claimRepo.insertClaim({
+          ontologyId: "test-ontology",
           articleId: article.id,
           subjectIri,
           predicateIri,
@@ -191,6 +195,7 @@ describe("ClaimRepository Integration", () => {
         const predicateIri = "http://example.com/predicate/histProp"
 
         yield* claimRepo.insertClaim({
+          ontologyId: "test-ontology",
           articleId: article.id,
           subjectIri,
           predicateIri,
@@ -199,6 +204,7 @@ describe("ClaimRepository Integration", () => {
         })
 
         yield* claimRepo.insertClaim({
+          ontologyId: "test-ontology",
           articleId: article.id,
           subjectIri,
           predicateIri,
@@ -270,6 +276,7 @@ describe("ClaimRepository Integration", () => {
         const predicateIri = "http://example.com/predicate/position"
 
         yield* claimRepo.insertClaim({
+          ontologyId: "test-ontology",
           articleId: article1.id,
           subjectIri,
           predicateIri,
@@ -278,6 +285,7 @@ describe("ClaimRepository Integration", () => {
         })
 
         const newClaim: ClaimInsertRow = {
+          ontologyId: "test-ontology",
           articleId: article2.id,
           subjectIri,
           predicateIri,
@@ -437,6 +445,7 @@ const makeTestClaimData = (suffix: string, articleId = "test-article"): ClaimDat
 
   return {
     claimId: generateClaimId(subjectIri, predicateIri, objectValue, articleId),
+    ontologyId: "test-ontology",
     articleId,
     subjectIri,
     predicateIri,
@@ -469,6 +478,7 @@ describe("ClaimPersistenceService Integration", () => {
           claims,
           {
             uri: articleUri,
+            ontologyId: "test-ontology",
             headline: "Test Article for Persistence",
             publishedAt: new Date(),
             sourceName: "Seattle Times"
@@ -501,6 +511,7 @@ describe("ClaimPersistenceService Integration", () => {
         const articleUri = `https://seattletimes.com/idempotent-${Date.now()}`
         const articleMeta = {
           uri: articleUri,
+          ontologyId: "test-ontology",
           headline: "Idempotency Test",
           publishedAt: new Date(),
           sourceName: "Seattle Times"
@@ -529,6 +540,7 @@ describe("ClaimPersistenceService Integration", () => {
           [],
           {
             uri: articleUri,
+            ontologyId: "test-ontology",
             headline: "Empty Claims Test",
             publishedAt: new Date()
           }
@@ -561,6 +573,7 @@ describe("ClaimPersistenceService Integration", () => {
           claims,
           {
             uri: articleUri,
+            ontologyId: "test-ontology",
             headline: "Temporal Validity Test",
             publishedAt: new Date()
           }

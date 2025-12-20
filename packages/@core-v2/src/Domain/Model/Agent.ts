@@ -10,6 +10,7 @@
  * - **ResolverAgent**: Entity deduplication and conflict resolution
  * - **CorrectorAgent**: LLM-based violation correction
  * - **ReasonerAgent**: RDFS inference and rule application
+ * - **IngestorAgent**: Document ingestion and enrichment
  *
  * ## Usage
  * ```typescript
@@ -93,6 +94,7 @@ export type AgentType =
   | "resolver"
   | "corrector"
   | "reasoner"
+  | "ingestor"
 
 /**
  * Schema for agent types
@@ -105,7 +107,8 @@ export const AgentTypeSchema = Schema.Literal(
   "validator",
   "resolver",
   "corrector",
-  "reasoner"
+  "reasoner",
+  "ingestor"
 ).annotations({
   title: "Agent Type",
   description: "Type of agent in the pipeline"

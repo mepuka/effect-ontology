@@ -7,6 +7,7 @@
 
 export * from "./Agent.js"
 export * from "./BatchWorkflow.js"
+export * from "./EnrichedContent.js"
 export * from "./Entity.js"
 export * from "./EntityResolution.js"
 export * from "./Ontology.js"

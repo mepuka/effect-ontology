@@ -32,6 +32,7 @@ export interface CreateClaimInput {
   readonly objectValue: string
   readonly objectType: "iri" | "literal"
   readonly articleId: string
+  readonly ontologyId: string
   readonly confidence: number
   readonly evidence?: {
     readonly text: string
@@ -115,6 +116,7 @@ export class ClaimService extends Effect.Service<ClaimService>()("ClaimService",
         const claimRow: ClaimInsertRow = {
           id,
           articleId: input.articleId,
+          ontologyId: input.ontologyId,
           subjectIri: input.subjectIri,
           predicateIri: input.predicateIri,
           objectValue: input.objectValue,

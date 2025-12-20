@@ -21,8 +21,10 @@ import {
   PipelineState,
   TerminationCondition
 } from "../../Domain/Model/Agent.js"
-import type { KnowledgeGraph } from "../../Domain/Model/Entity.js"
-import type { ShaclValidationReport } from "../Shacl.js"
+import { KnowledgeGraph } from "../../Domain/Model/Entity.js"
+import { OntologyContext, OntologyRef } from "../../Domain/Model/Ontology.js"
+import { OntologyAgentConfig, ViolationExplanation } from "../../Domain/Model/OntologyAgent.js"
+import { ShaclValidationReport } from "../Shacl.js"
 
 // =============================================================================
 // Agent Task Definition
@@ -46,19 +48,79 @@ export class AgentTask extends Schema.Class<AgentTask>("AgentTask")({
   }),
 
   /**
+   * Ontology ID for scoping (e.g., "seattle")
+   */
+  ontologyId: Schema.optional(Schema.String),
+
+  /**
    * Source text to process (for extraction tasks)
    */
   text: Schema.optional(Schema.String),
 
   /**
-   * Input knowledge graph (for validation/correction tasks)
+   * Source URL to ingest (for ingestion tasks)
+   */
+  sourceUrl: Schema.optional(Schema.String),
+
+  /**
+   * Optional ontology agent config override (for extraction tasks)
+   */
+  agentConfig: Schema.optional(OntologyAgentConfig),
+
+  /**
+   * Ingestion options (implementation-specific)
+   */
+  ingestionOptions: Schema.optional(Schema.Unknown),
+
+  /**
+   * Ingestion result metadata (implementation-specific)
+   */
+  ingestionResult: Schema.optional(Schema.Unknown),
+
+  /**
+   * Input knowledge graph (legacy; prefer knowledgeGraph/rdfStore/turtle)
    */
   graph: Schema.optional(Schema.Unknown), // KnowledgeGraph or RdfStore
 
   /**
+   * Extracted knowledge graph
+   */
+  knowledgeGraph: Schema.optional(KnowledgeGraph),
+
+  /**
+   * RDF store for validation/correction
+   */
+  rdfStore: Schema.optional(Schema.Unknown),
+
+  /**
+   * Serialized RDF graph (Turtle)
+   */
+  turtle: Schema.optional(Schema.String),
+
+  /**
+   * Ontology context used for extraction/correction
+   */
+  ontologyContext: Schema.optional(OntologyContext),
+
+  /**
+   * Ontology reference used for extraction
+   */
+  ontologyRef: Schema.optional(OntologyRef),
+
+  /**
    * Validation report (for correction tasks)
    */
-  validationReport: Schema.optional(Schema.Unknown), // ShaclValidationReport
+  validationReport: Schema.optional(ShaclValidationReport),
+
+  /**
+   * Human-readable validation explanations
+   */
+  validationExplanations: Schema.optional(Schema.Array(ViolationExplanation)),
+
+  /**
+   * Correction result metadata (implementation-specific)
+   */
+  correctionResult: Schema.optional(Schema.Unknown),
 
   /**
    * Source document ID for provenance
@@ -81,8 +143,13 @@ export class AgentTask extends Schema.Class<AgentTask>("AgentTask")({
   /**
    * Create a text extraction task
    */
-  static forExtraction(taskId: string, text: string, documentId?: string): AgentTask {
-    return new AgentTask({ taskId, text, documentId, priority: 1 })
+  static forExtraction(
+    taskId: string,
+    text: string,
+    documentId?: string,
+    agentConfig?: OntologyAgentConfig
+  ): AgentTask {
+    return new AgentTask({ taskId, text, documentId, agentConfig, priority: 1 })
   }
 
   /**
@@ -93,9 +160,16 @@ export class AgentTask extends Schema.Class<AgentTask>("AgentTask")({
   }
 
   /**
+   * Create an ingestion task
+   */
+  static forIngestion(taskId: string, sourceUrl: string, ingestionOptions?: unknown): AgentTask {
+    return new AgentTask({ taskId, sourceUrl, ingestionOptions, priority: 0 })
+  }
+
+  /**
    * Create a correction task
    */
-  static forCorrection(taskId: string, graph: unknown, validationReport: unknown): AgentTask {
+  static forCorrection(taskId: string, graph: unknown, validationReport: ShaclValidationReport): AgentTask {
     return new AgentTask({ taskId, graph, validationReport, priority: 3 })
   }
 }

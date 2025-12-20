@@ -211,6 +211,11 @@ export class ExtractionResult extends Schema.Class<ExtractionResult>("Extraction
  */
 export interface ExtractWithClaimsOptions {
   /**
+   * Ontology registry ID (e.g., "seattle")
+   */
+  readonly ontologyId: string
+
+  /**
    * Document/article ID for claim provenance
    */
   readonly articleId: string

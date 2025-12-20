@@ -45,21 +45,18 @@ export const ClusterSqliteLive = (options?: {
 }) => {
   const filename = options?.filename ?? "output/cluster.db"
 
-  const sqliteLayer = SqliteClient.layerConfig(
-    Config.succeed({
-      filename,
-      create: true,
-      readonly: false
-    })
-  )
+  const sqliteLayer = SqliteClient.layer({
+    filename,
+    create: true,
+    readonly: false
+  })
 
-  return sqliteLayer.pipe(
-    Layer.provideMerge(
-      SingleRunner.layer({
-        runnerStorage: options?.runnerStorage
-      })
-    )
-  )
+  const runnerLayer = SingleRunner.layer({
+    runnerStorage: options?.runnerStorage
+  })
+
+  // @ts-expect-error - Layer type mismatch between @effect/cluster and @effect/sql-sqlite-bun (WIP module)
+  return Layer.provide(runnerLayer, sqliteLayer)
 }
 
 /**

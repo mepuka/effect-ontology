@@ -22,6 +22,7 @@ import { RdfBuilder, type RdfBuilderShape, type RdfStore } from "../../src/Servi
 
 const createTestClaimRow = (overrides: Partial<ClaimRow> = {}): ClaimRow => ({
   id: "claim-abc123def456",
+  ontologyId: "test-ontology",
   articleId: "article-001",
   subjectIri: "http://example.org/person/john",
   predicateIri: "http://schema.org/name",

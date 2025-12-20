@@ -27,6 +27,8 @@ import type { ClaimData } from "../Utils/ClaimFactory.js"
 export interface ArticleMetadata {
   /** Article URI (unique identifier) */
   readonly uri: string
+  /** Ontology ID for namespace scoping */
+  readonly ontologyId: string
   /** Article headline */
   readonly headline?: string
   /** When the article was published */
@@ -94,6 +96,7 @@ export class ClaimPersistenceService extends Effect.Service<ClaimPersistenceServ
           // 1. Get or create article
           const article = yield* articleRepo.getOrCreateArticle({
             uri: articleMeta.uri,
+            ontologyId: articleMeta.ontologyId,
             headline: articleMeta.headline,
             publishedAt: articleMeta.publishedAt,
             sourceName: articleMeta.sourceName,
@@ -109,6 +112,7 @@ export class ClaimPersistenceService extends Effect.Service<ClaimPersistenceServ
           // 2. Map ClaimData to ClaimInsertRow
           const claimRows: Array<ClaimInsertRow> = claims.map((claim) => ({
             articleId: article.id,
+            ontologyId: articleMeta.ontologyId,
             subjectIri: claim.subjectIri,
             predicateIri: claim.predicateIri,
             objectValue: claim.objectValue,

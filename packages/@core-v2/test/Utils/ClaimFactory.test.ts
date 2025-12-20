@@ -25,6 +25,7 @@ describe("ClaimFactory", () => {
   const baseOptions: ClaimFactoryOptions = {
     baseNamespace: "http://example.org/",
     documentId: "doc-123abc",
+    ontologyId: "test-ontology",
     defaultConfidence: 0.85
   }
 
