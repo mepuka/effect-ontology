@@ -119,6 +119,17 @@ const EntityRegistryConfig = Config.nested("ENTITY_REGISTRY")(Config.all({
   )
 }))
 
+const InferenceConfig = Config.nested("INFERENCE")(Config.all({
+  /** Enable RDFS inference stage in extraction pipeline */
+  enabled: Config.boolean("ENABLED").pipe(Config.withDefault(false)),
+  /** Reasoning profile: rdfs (full), rdfs-subclass, owl-sameas, custom */
+  profile: Config.literal("rdfs", "rdfs-subclass", "owl-sameas", "custom")("PROFILE").pipe(
+    Config.withDefault("rdfs")
+  ),
+  /** Whether to persist derived claims to database */
+  persistDerived: Config.boolean("PERSIST_DERIVED").pipe(Config.withDefault(true))
+}))
+
 const ApiConfig = Config.nested("API")(Config.all({
   /**
    * API keys for authentication (comma-separated list).
@@ -160,6 +171,7 @@ export interface AppConfig {
   readonly embedding: Config.Config.Success<typeof EmbeddingConfig>
   readonly extraction: Config.Config.Success<typeof ExtractionConfig>
   readonly entityRegistry: Config.Config.Success<typeof EntityRegistryConfig>
+  readonly inference: Config.Config.Success<typeof InferenceConfig>
   readonly rdf: Config.Config.Success<typeof RdfConfig>
   readonly api: Config.Config.Success<typeof ApiConfig>
 }
@@ -221,6 +233,11 @@ export const DEFAULT_CONFIG: AppConfig = {
     maxBlockingCandidates: 100,
     canonicalNamespace: "http://example.org/entities/"
   },
+  inference: {
+    enabled: false,
+    profile: "rdfs",
+    persistDerived: true
+  },
   rdf: {
     baseNamespace: "http://example.org/kg/",
     outputFormat: "Turtle",
@@ -243,7 +260,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 // =============================================================================
 
 const makeConfigService = Effect.gen(function*() {
-  const [llm, storage, ontology, runtime, grounder, embedding, extraction, entityRegistry, rdf, api] = yield* Effect.all([
+  const [llm, storage, ontology, runtime, grounder, embedding, extraction, entityRegistry, inference, rdf, api] = yield* Effect.all([
     LlmConfig,
     StorageConfig,
     OntologyConfig,
@@ -252,21 +269,23 @@ const makeConfigService = Effect.gen(function*() {
     EmbeddingConfig,
     ExtractionConfig,
     EntityRegistryConfig,
+    InferenceConfig,
     RdfConfig,
     ApiConfig
   ])
 
   return {
-    llm,
-    storage,
-    ontology,
-    runtime,
-    grounder,
+    api,
     embedding,
-    extraction,
     entityRegistry,
+    extraction,
+    grounder,
+    inference,
+    llm,
+    ontology,
     rdf,
-    api
+    runtime,
+    storage
   } satisfies AppConfig
 })
 

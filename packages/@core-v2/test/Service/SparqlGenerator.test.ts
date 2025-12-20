@@ -160,6 +160,11 @@ const MockConfigService = Layer.succeed(ConfigService, {
     maxBlockingCandidates: 100,
     canonicalNamespace: "http://example.org/entities/"
   },
+  inference: {
+    enabled: false,
+    profile: "rdfs" as const,
+    persistDerived: true
+  },
   api: {
     keys: Option.none(),
     requireAuth: false

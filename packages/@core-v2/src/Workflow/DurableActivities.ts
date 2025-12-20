@@ -18,8 +18,9 @@
 import { LanguageModel } from "@effect/ai"
 import { Activity } from "@effect/workflow"
 import { Chunk, DateTime, Effect, Option, Schedule, Schema } from "effect"
+import * as N3 from "n3"
 import { ActivityError, notFoundError, toActivityError } from "../Domain/Error/Activity.js"
-import { GcsUri, toGcsUri } from "../Domain/Identity.js"
+import { type BatchId, GcsUri, toGcsUri } from "../Domain/Identity.js"
 import { Entity, KnowledgeGraph, Relation } from "../Domain/Model/Entity.js"
 import { defaultEntityResolutionConfig } from "../Domain/Model/EntityResolution.js"
 import type { ElementEmbedding, OntologyEmbeddings } from "../Domain/Model/OntologyEmbeddings.js"
@@ -31,7 +32,7 @@ import {
 } from "../Domain/Model/OntologyEmbeddings.js"
 import { EntityId } from "../Domain/Model/shared.js"
 import { PathLayout } from "../Domain/PathLayout.js"
-import { RDF, RDFS } from "../Domain/Rdf/Types.js"
+import { PROV, RDF, RDFS } from "../Domain/Rdf/Constants.js"
 import type {
   IngestionActivityInput,
   ResolutionActivityInput,
@@ -58,10 +59,12 @@ import { parseOntologyFromStore } from "../Service/Ontology.js"
 import { RdfBuilder, type RdfStore } from "../Service/Rdf.js"
 import { ShaclService } from "../Service/Shacl.js"
 import type { ShaclViolation } from "../Service/Shacl.js"
+import { Reasoner, ReasoningConfig } from "../Service/Reasoner.js"
 import { GenerationMismatchError, StorageService } from "../Service/Storage.js"
 import { LlmAttributes } from "../Telemetry/LlmAttributes.js"
 import { knowledgeGraphToClaims } from "../Utils/ClaimFactory.js"
 import { extractLocalNameFromIri } from "../Utils/Iri.js"
+import { computeQuadDelta } from "../Utils/QuadDelta.js"
 
 // -----------------------------------------------------------------------------
 // Output Schemas (must be serializable for journaling)
@@ -1124,6 +1127,199 @@ export const makeCrossBatchResolutionActivity = (input: CrossBatchResolutionInpu
         matchedToExisting: result.stats.matchedToExisting,
         newCanonicals: result.stats.createdNew,
         candidatesEvaluated: result.stats.candidatesEvaluated,
+        durationMs: DateTime.distance(start, end)
+      }
+    }).pipe(Effect.mapError(toActivityError)),
+    interruptRetryPolicy: activityRetryPolicy
+  })
+
+// -----------------------------------------------------------------------------
+// RDFS Inference Activity
+// -----------------------------------------------------------------------------
+
+/**
+ * Input for Inference activity
+ */
+export const InferenceInput = Schema.Struct({
+  /** Batch ID for logging and provenance */
+  batchId: Schema.String,
+  /** URI of the resolved graph to reason over */
+  resolvedGraphUri: Schema.String,
+  /** Reasoning profile to use (default: rdfs) */
+  profile: Schema.optional(Schema.Literal("rdfs", "rdfs-subclass", "owl-sameas", "custom")),
+  /** Whether inference is enabled (default: true) */
+  enabled: Schema.optional(Schema.Boolean)
+})
+export type InferenceInput = typeof InferenceInput.Type
+
+/**
+ * Output for Inference activity
+ */
+export const InferenceOutput = Schema.Struct({
+  /** URI of the enriched graph with inferences */
+  enrichedGraphUri: GcsUri,
+  /** Number of triples inferred */
+  inferredTripleCount: Schema.Number,
+  /** Total triples after inference */
+  totalTripleCount: Schema.Number,
+  /** Number of provenance quads added */
+  provenanceQuadCount: Schema.Number,
+  /** Number of rules applied */
+  rulesApplied: Schema.Number,
+  /** Duration in milliseconds */
+  durationMs: Schema.Number
+})
+export type InferenceOutput = typeof InferenceOutput.Type
+
+/**
+ * Durable RDFS Inference Activity
+ *
+ * Applies RDFS reasoning to the resolved graph to generate new facts
+ * through forward-chaining inference. Computes the delta (new triples only)
+ * and adds PROV-O provenance linking inferred facts to the inference activity.
+ *
+ * Pipeline:
+ * 1. Load resolved graph from storage
+ * 2. Apply reasoning (rdfs profile by default)
+ * 3. Compute delta (new triples)
+ * 4. Add PROV provenance for each inferred triple
+ * 5. Save enriched graph
+ * 6. Return statistics
+ *
+ * @since 2.0.0
+ */
+export const makeInferenceActivity = (input: InferenceInput) =>
+  Activity.make({
+    name: `inference-${input.batchId}`,
+    success: InferenceOutput,
+    error: ActivityError,
+    execute: Effect.gen(function*() {
+      const start = yield* DateTime.now
+      const storage = yield* StorageService
+      const config = yield* ConfigService
+      const rdf = yield* RdfBuilder
+      const reasoner = yield* Reasoner
+      const bucket = resolveBucket(config)
+
+      // Skip if not enabled
+      const enabled = input.enabled ?? true
+      if (!enabled) {
+        yield* Effect.logInfo("Inference skipped - not enabled", {
+          batchId: input.batchId
+        })
+        const end = yield* DateTime.now
+        return {
+          enrichedGraphUri: input.resolvedGraphUri as GcsUri,
+          inferredTripleCount: 0,
+          totalTripleCount: 0,
+          provenanceQuadCount: 0,
+          rulesApplied: 0,
+          durationMs: DateTime.distance(start, end)
+        }
+      }
+
+      yield* Effect.logInfo("Inference activity starting", {
+        batchId: input.batchId,
+        profile: input.profile ?? "rdfs"
+      })
+
+      // 1. Load resolved graph
+      const graphPath = stripGsPrefix(input.resolvedGraphUri)
+      const graphContent = yield* storage.get(graphPath).pipe(
+        Effect.flatMap((opt) => requireContent(opt, graphPath))
+      )
+      const originalStore = yield* rdf.parseTurtle(graphContent)
+
+      // 2. Apply reasoning (creates a copy, doesn't mutate original)
+      const profile = input.profile ?? "rdfs"
+      const reasoningConfig = ReasoningConfig.make({ profile })
+      const { result: reasoningResult, store: enrichedStore } = yield* reasoner.reasonCopy(
+        originalStore,
+        reasoningConfig
+      )
+
+      yield* Effect.logInfo("Reasoning complete", {
+        batchId: input.batchId,
+        inferredTriples: reasoningResult.inferredTripleCount,
+        totalTriples: reasoningResult.totalTripleCount,
+        rulesApplied: reasoningResult.rulesApplied
+      })
+
+      // 3. Compute delta (new triples only)
+      const delta = yield* computeQuadDelta(originalStore, enrichedStore)
+
+      // 4. Add PROV provenance for the inference activity
+      let provenanceQuadCount = 0
+      if (delta.deltaCount > 0) {
+        const inferenceActivityIri = `urn:provenance:inference:${input.batchId}`
+        const df = N3.DataFactory
+
+        // Helper to add a quad to the enriched store
+        const addQuad = (s: string, p: string, o: string) => {
+          enrichedStore._store.addQuad(df.quad(
+            df.namedNode(s),
+            df.namedNode(p),
+            o.startsWith("http") || o.startsWith("urn:") ? df.namedNode(o) : df.literal(o)
+          ))
+        }
+
+        // Add inference activity metadata
+        addQuad(inferenceActivityIri, RDF.type, PROV.Activity)
+        addQuad(inferenceActivityIri, PROV.generatedAtTime, DateTime.formatIso(start))
+        addQuad(inferenceActivityIri, PROV.used, input.resolvedGraphUri)
+        provenanceQuadCount += 3
+
+        // For each inferred triple, add prov:wasGeneratedBy linking to the activity
+        // We use RDF reification (rdf:Statement) to reference the inferred triples
+        for (const quad of delta.newQuads) {
+          // Create a statement IRI based on hash of the quad
+          const quadHash = `${quad.subject.value}|${quad.predicate.value}|${quad.object.value}`.split("").reduce(
+            (acc, char) => ((acc << 5) - acc + char.charCodeAt(0)) | 0,
+            0
+          )
+          const statementIri = `${inferenceActivityIri}/stmt/${Math.abs(quadHash).toString(16)}`
+
+          // Reify the statement
+          addQuad(statementIri, RDF.type, RDF.Statement)
+          addQuad(statementIri, RDF.subject, quad.subject.value)
+          addQuad(statementIri, RDF.predicate, quad.predicate.value)
+          addQuad(
+            statementIri,
+            RDF.object,
+            quad.object.termType === "Literal" ? `"${quad.object.value}"` : quad.object.value
+          )
+          addQuad(statementIri, PROV.wasGeneratedBy, inferenceActivityIri)
+          provenanceQuadCount += 5
+        }
+
+        yield* Effect.logInfo("Added provenance for inferred triples", {
+          batchId: input.batchId,
+          inferredTriples: delta.deltaCount,
+          provenanceQuads: provenanceQuadCount
+        })
+      }
+
+      // 5. Save enriched graph
+      const enrichedTurtle = yield* rdf.toTurtle(enrichedStore)
+      const enrichedPath = PathLayout.batch.inference(input.batchId as BatchId)
+      yield* storage.set(enrichedPath, enrichedTurtle)
+
+      const end = yield* DateTime.now
+
+      yield* Effect.logInfo("Inference activity complete", {
+        batchId: input.batchId,
+        inferredTriples: delta.deltaCount,
+        totalTriples: enrichedStore._store.size,
+        provenanceQuads: provenanceQuadCount,
+        durationMs: DateTime.distance(start, end)
+      })
+
+      return {
+        enrichedGraphUri: toGcsUri(bucket, enrichedPath),
+        inferredTripleCount: delta.deltaCount,
+        totalTripleCount: enrichedStore._store.size,
+        provenanceQuadCount,
+        rulesApplied: reasoningResult.rulesApplied,
         durationMs: DateTime.distance(start, end)
       }
     }).pipe(Effect.mapError(toActivityError)),

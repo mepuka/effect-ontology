@@ -24,6 +24,7 @@ import { EnrichedManifest } from "../Domain/Schema/DocumentMetadata.js"
 import {
   makeClaimPersistenceActivity,
   makeCrossBatchResolutionActivity,
+  makeInferenceActivity,
   makeIngestionActivity,
   makePreprocessingActivity,
   makeResolutionActivity,
@@ -677,6 +678,33 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
           yield* Effect.logDebug("Cross-batch resolution skipped (not configured)", { batchId })
         }
 
+        // RDFS Inference stage (optional)
+        // Applies RDFS reasoning to generate new facts through forward-chaining inference
+        const inferenceEnabled = config.inference?.enabled ?? false
+        const inferenceResult = yield* makeInferenceActivity({
+          batchId,
+          resolvedGraphUri: resolutionResult.resolvedUri,
+          profile: config.inference?.profile ?? "rdfs",
+          enabled: inferenceEnabled
+        }).execute
+
+        // Use enriched graph for validation if inference produced new triples
+        const graphForValidation = inferenceResult.inferredTripleCount > 0
+          ? inferenceResult.enrichedGraphUri
+          : resolutionResult.resolvedUri
+
+        if (inferenceEnabled) {
+          yield* Effect.logInfo("Inference complete", {
+            batchId,
+            inferredTriples: inferenceResult.inferredTripleCount,
+            totalTriples: inferenceResult.totalTripleCount,
+            provenanceQuads: inferenceResult.provenanceQuadCount,
+            rulesApplied: inferenceResult.rulesApplied
+          })
+        } else {
+          yield* Effect.logDebug("Inference skipped (not configured)", { batchId })
+        }
+
         currentStage = "validating"
         const validatingState: BatchState = {
           _tag: "Validating",
@@ -685,7 +713,7 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
           ontologyVersion,
           createdAt: workflowStart,
           updatedAt: yield* DateTime.now,
-          resolvedGraphUri: resolutionResult.resolvedUri,
+          resolvedGraphUri: graphForValidation,
           validationStartedAt: yield* DateTime.now
         }
         yield* emitState(validatingState)
@@ -694,7 +722,7 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
         // The activity's validateWithPolicy will fail with ValidationPolicyError if policy violated
         const validationResult = yield* makeValidationActivity({
           batchId,
-          resolvedGraphUri: resolutionResult.resolvedUri,
+          resolvedGraphUri: graphForValidation,
           ontologyUri: manifest.ontologyUri,
           shaclUri: manifest.shaclUri,
           validationPolicy: manifest.validationPolicy

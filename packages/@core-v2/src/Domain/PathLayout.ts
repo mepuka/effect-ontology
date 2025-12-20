@@ -185,7 +185,9 @@ export const PathLayout = {
       makeBatchPath(batchId, "preprocessing/enriched-manifest.json"),
     // Additional batch paths for ingestion
     ingestManifest: (batchId: BatchId): string => makeBatchPath(batchId, "ingest/manifest.json"),
-    finalOutput: (batchId: BatchId): string => makeBatchPath(batchId, "ingest/output.ttl")
+    finalOutput: (batchId: BatchId): string => makeBatchPath(batchId, "ingest/output.ttl"),
+    // Inference output path
+    inference: (batchId: BatchId): string => makeBatchPath(batchId, "inference/enriched.ttl")
   },
 
   // DOCUMENT

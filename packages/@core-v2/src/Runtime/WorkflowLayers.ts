@@ -26,6 +26,7 @@ import { NomicNlpServiceLive } from "../Service/NomicNlp.js"
 import { EntityResolutionService } from "../Service/EntityResolution.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { GraphRAG } from "../Service/GraphRAG.js"
+import { Reasoner } from "../Service/Reasoner.js"
 import { StageTimeoutServiceLive } from "../Service/LlmControl/StageTimeout.js"
 import { TokenBudgetServiceLive } from "../Service/LlmControl/TokenBudget.js"
 import { NlpService } from "../Service/Nlp.js"
@@ -297,6 +298,13 @@ const ExtractionWorkflowBundle = ExtractionWorkflowLive.pipe(
  *
  * Note: ConfigService is included in output for HTTP handlers that need config.
  */
+/**
+ * Reasoner bundle for RDFS/OWL inference
+ *
+ * Reasoner.Default has no external dependencies - it uses N3.js internally.
+ */
+const ReasonerBundle = Reasoner.Default
+
 export const ActivityDependenciesLayer = Layer.mergeAll(
   StorageBundle,
   CoreDependenciesLayer,
@@ -306,6 +314,7 @@ export const ActivityDependenciesLayer = Layer.mergeAll(
   EmbeddingBundle,
   EntityResolutionBundle,
   GraphRAGBundle,
+  ReasonerBundle,
   ExtractionWorkflowBundle
 )
 
