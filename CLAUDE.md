@@ -212,6 +212,26 @@ VITE_LLM_ANTHROPIC_API_KEY=sk-...
 
 Copy `.env.example` to `.env` and configure your LLM provider.
 
+### Ontology Configuration
+
+For extraction to correctly type entities, external vocabularies (FOAF, PROV-O, W3C ORG) must be loaded:
+
+```bash
+# Main ontology path (required) - must be absolute path for local storage
+ONTOLOGY_PATH=/path/to/ontologies/seattle/seattle.ttl
+
+# External vocabularies for owl:imports resolution (required for proper entity typing)
+# Contains FOAF, PROV-O, W3C ORG, SKOS, OWL-Time bundled together
+ONTOLOGY_EXTERNAL_VOCABS_PATH=/path/to/ontologies/external/merged-external.ttl
+
+# Optional: ontology registry for multi-ontology support
+ONTOLOGY_REGISTRY_PATH=registry.json
+```
+
+**Note**: Config keys are nested under `ONTOLOGY`, so env vars use the `ONTOLOGY_` prefix (e.g., `ONTOLOGY_PATH`, not just `PATH`).
+
+Without `ONTOLOGY_EXTERNAL_VOCABS_PATH`, imported classes like `foaf:Person` and `prov:Activity` won't be available, causing entities to be misclassified.
+
 ## Test Configuration
 
 Tests use a dedicated config provider in `test/setup.ts`:
