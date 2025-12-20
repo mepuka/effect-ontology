@@ -3,7 +3,7 @@ import { HttpRouter, HttpServer, HttpServerRequest, HttpServerResponse } from "@
 import { Cause, DateTime, Deferred, Duration, Effect, Layer, Option, Schedule, Schema, Stream } from "effect"
 import { type ParseError, TreeFormatter } from "effect/ParseResult"
 import { WorkflowNotFoundError, WorkflowSuspendedError } from "../Domain/Error/Workflow.js"
-import type { DocumentId, GcsUri } from "../Domain/Identity.js"
+import type { ContentHash, DocumentId, GcsUri, Namespace, OntologyName } from "../Domain/Identity.js"
 import { BatchId, documentIdFromHash, toGcsUri } from "../Domain/Identity.js"
 import { BatchState } from "../Domain/Model/BatchWorkflow.js"
 import { embeddingsPathFromOntology } from "../Domain/Model/OntologyEmbeddings.js"
@@ -32,7 +32,6 @@ import {
 } from "../Domain/Schema/Search.js"
 import type { ClaimWithRank, CorrectionSummary } from "../Domain/Schema/Timeline.js"
 import {
-  ArticleSummary,
   ConflictsQuery,
   ConflictsResponse,
   TimelineClaimsQuery,
@@ -42,12 +41,16 @@ import {
 } from "../Domain/Schema/Timeline.js"
 import { ArticleRepository } from "../Repository/Article.js"
 import { ClaimRepository } from "../Repository/Claim.js"
+import { ChunkingConfig, LlmConfig, RunConfig } from "../Domain/Model/ExtractionRun.js"
+import { OntologyRef } from "../Domain/Model/Ontology.js"
 import { getBatchStateFromStore } from "../Service/BatchState.js"
 import { ConfigService } from "../Service/Config.js"
+import { ExtractionWorkflow } from "../Service/ExtractionWorkflow.js"
 import { OntologyService } from "../Service/Ontology.js"
+import { RdfBuilder } from "../Service/Rdf.js"
 import { StorageService } from "../Service/Storage.js"
-import { extractLocalNameFromIri } from "../Utils/Iri.js"
 import { pollToBatchState, WorkflowOrchestrator } from "../Service/WorkflowOrchestrator.js"
+import { extractLocalNameFromIri } from "../Utils/Iri.js"
 import { HealthCheckService } from "./HealthCheck.js"
 import { makeAuthMiddleware, makeShutdownMiddleware } from "./HttpMiddleware.js"
 
@@ -393,11 +396,12 @@ export const TimelineRouter = HttpRouter.empty.pipe(
   HttpRouter.get(
     "/v1/timeline/conflicts",
     Effect.gen(function*() {
-      const queryParams = yield* HttpServerRequest.schemaSearchParams(ConflictsQuery).pipe(
+      const _queryParams = yield* HttpServerRequest.schemaSearchParams(ConflictsQuery).pipe(
         Effect.catchAll(() => Effect.succeed(new ConflictsQuery({})))
       )
 
       // For now, return empty conflicts (would need ConflictRepository)
+      // TODO: Use _queryParams for filtering when ConflictRepository is implemented
       return yield* HttpServerResponse.schemaJson(ConflictsResponse)({
         conflicts: [],
         total: 0,
@@ -722,6 +726,81 @@ export const ExtractionRouter = HttpRouter.empty.pipe(
                 toPayload(manifest, manifestUri, request.preprocessing, request.ontologyEmbeddingsUri)
               )
               return yield* streamBatchExtraction(executionId)
+            })
+        })
+      )
+    })
+  ),
+  // Inline extraction endpoint for local testing (no GCS required)
+  HttpRouter.post(
+    "/v1/extract/inline",
+    Effect.gen(function*() {
+      return yield* HttpServerRequest.schemaBodyJson(Schema.Struct({
+        text: Schema.String
+      })).pipe(
+        Effect.matchEffect({
+          onFailure: (error) =>
+            HttpServerResponse.json({
+              error: "VALIDATION_ERROR",
+              message: TreeFormatter.formatErrorSync(error as ParseError)
+            }, { status: 400 }),
+          onSuccess: (request) =>
+            Effect.gen(function*() {
+              const config = yield* ConfigService
+              const extractionWorkflow = yield* ExtractionWorkflow
+              const rdfBuilder = yield* RdfBuilder
+
+              // Build RunConfig from ConfigService
+              const runConfig = new RunConfig({
+                ontology: new OntologyRef({
+                  namespace: "default" as Namespace,
+                  name: "ontology" as OntologyName,
+                  contentHash: "0000000000000000" as ContentHash
+                }),
+                chunking: new ChunkingConfig({
+                  maxChunkSize: 2000,
+                  preserveSentences: true,
+                  overlapTokens: 50
+                }),
+                llm: new LlmConfig({
+                  model: config.llm.model,
+                  temperature: config.llm.temperature,
+                  maxTokens: config.llm.maxTokens,
+                  timeoutMs: config.llm.timeoutMs
+                }),
+                concurrency: 4,
+                enableGrounding: true
+              })
+
+              // Execute extraction
+              const graph = yield* extractionWorkflow.extract(request.text, runConfig)
+
+              // Build RDF store and serialize to Turtle
+              const store = yield* rdfBuilder.createStore
+              yield* rdfBuilder.addEntities(store, graph.entities)
+              yield* rdfBuilder.addRelations(store, graph.relations)
+              const turtle = yield* rdfBuilder.toTurtle(store)
+
+              return yield* HttpServerResponse.json({
+                entities: graph.entities.map((e) => ({
+                  id: e.id,
+                  mention: e.mention,
+                  types: e.types,
+                  attributes: e.attributes
+                })),
+                relations: graph.relations.map((r) => ({
+                  subjectId: r.subjectId,
+                  predicate: r.predicate,
+                  object: r.object,
+                  evidence: r.evidence
+                })),
+                turtle,
+                stats: {
+                  entityCount: graph.entities.length,
+                  relationCount: graph.relations.length,
+                  tripleCount: store._store.size
+                }
+              })
             })
         })
       )
