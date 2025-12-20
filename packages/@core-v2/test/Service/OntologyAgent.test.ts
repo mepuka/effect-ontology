@@ -7,6 +7,7 @@
 import { LanguageModel } from "@effect/ai"
 import { describe, expect, it } from "@effect/vitest"
 import { Chunk, Context, DateTime, Effect, Layer, Option, Secret } from "effect"
+import { TestConfigProviderLayer } from "../setup.js"
 import { Entity, KnowledgeGraph, Relation } from "../../src/Domain/Model/Entity.js"
 import {
   EnhancedValidationReport,
@@ -451,7 +452,8 @@ schema:name a owl:DatatypeProperty ;
         expect(result.turtle).toContain("schema.org")
       }).pipe(
         Effect.provide(OntologyAgent.Default),
-        Effect.provide(TestLayer)
+        Effect.provide(TestLayer),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("returns empty result for empty extraction", () =>
@@ -477,7 +479,8 @@ schema:name a owl:DatatypeProperty ;
         expect(emptyResult.isValid).toBe(true)
       }).pipe(
         Effect.provide(OntologyAgent.Default),
-        Effect.provide(TestLayer)
+        Effect.provide(TestLayer),
+        Effect.provide(TestConfigProviderLayer)
       ))
   })
 
@@ -510,7 +513,8 @@ schema:name a owl:DatatypeProperty ;
         expect(result.metrics.relationCount).toBe(1)
       }).pipe(
         Effect.provide(OntologyAgent.Default),
-        Effect.provide(TestLayer)
+        Effect.provide(TestLayer),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("creates claims with custom confidence", () =>
@@ -529,7 +533,8 @@ schema:name a owl:DatatypeProperty ;
         expect(result.articleId).toBe("article-002")
       }).pipe(
         Effect.provide(OntologyAgent.Default),
-        Effect.provide(TestLayer)
+        Effect.provide(TestLayer),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("returns empty claims for empty extraction", () => {
@@ -573,7 +578,8 @@ schema:name a owl:DatatypeProperty ;
         expect(result.hasClaims).toBe(false)
       }).pipe(
         Effect.provide(OntologyAgent.Default),
-        Effect.provide(EmptyTestLayer)
+        Effect.provide(EmptyTestLayer),
+        Effect.provide(TestConfigProviderLayer)
       )
     })
   })
@@ -604,7 +610,8 @@ schema:name a owl:DatatypeProperty ;
         expect(result.metrics.relationCount).toBe(1)
       }).pipe(
         Effect.provide(OntologyAgent.Default),
-        Effect.provide(TestLayer)
+        Effect.provide(TestLayer),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("applies reasoning with custom config", () =>
@@ -622,7 +629,8 @@ schema:name a owl:DatatypeProperty ;
         expect(result.hasTurtle).toBe(true)
       }).pipe(
         Effect.provide(OntologyAgent.Default),
-        Effect.provide(TestLayer)
+        Effect.provide(TestLayer),
+        Effect.provide(TestConfigProviderLayer)
       ))
   })
 
@@ -647,7 +655,8 @@ schema:name a owl:DatatypeProperty ;
         expect(result.turtle).toContain("cristiano_ronaldo")
       }).pipe(
         Effect.provide(OntologyAgent.Default),
-        Effect.provide(TestLayer)
+        Effect.provide(TestLayer),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("continues validation even if reasoning fails", () => {
@@ -691,7 +700,8 @@ schema:name a owl:DatatypeProperty ;
         expect(result.validationReport).toBeDefined()
       }).pipe(
         Effect.provide(OntologyAgent.Default),
-        Effect.provide(FailingReasonerTestLayer)
+        Effect.provide(FailingReasonerTestLayer),
+        Effect.provide(TestConfigProviderLayer)
       )
     })
   })
@@ -722,7 +732,8 @@ schema:name a owl:DatatypeProperty ;
         expect(explanations[1].suggestion).toContain("data type")
       }).pipe(
         Effect.provide(OntologyAgent.Default),
-        Effect.provide(TestLayer)
+        Effect.provide(TestLayer),
+        Effect.provide(TestConfigProviderLayer)
       ))
   })
 
@@ -745,7 +756,8 @@ schema:name a owl:DatatypeProperty ;
         expect(report.violations.length).toBe(0)
       }).pipe(
         Effect.provide(OntologyAgent.Default),
-        Effect.provide(TestLayer)
+        Effect.provide(TestLayer),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("validateWithPolicy applies policy to validation", () =>
@@ -765,7 +777,8 @@ schema:name a owl:DatatypeProperty ;
         expect(report.conforms).toBe(true)
       }).pipe(
         Effect.provide(OntologyAgent.Default),
-        Effect.provide(TestLayer)
+        Effect.provide(TestLayer),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("generateShapes produces SHACL shapes from ontology store", () =>
@@ -780,7 +793,8 @@ schema:name a owl:DatatypeProperty ;
         expect(shapesStore).toBeDefined()
       }).pipe(
         Effect.provide(OntologyAgent.Default),
-        Effect.provide(TestLayer)
+        Effect.provide(TestLayer),
+        Effect.provide(TestConfigProviderLayer)
       ))
   })
 
@@ -814,7 +828,8 @@ schema:name a owl:DatatypeProperty ;
         expect(result.confidence).toBeLessThanOrEqual(1)
       }).pipe(
         Effect.provide(OntologyAgent.Default),
-        Effect.provide(TestLayer)
+        Effect.provide(TestLayer),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("returns result with bindings for matching triples", () =>
@@ -845,7 +860,8 @@ schema:name a owl:DatatypeProperty ;
         expect(result.sparql).toContain("SELECT")
       }).pipe(
         Effect.provide(OntologyAgent.Default),
-        Effect.provide(TestLayer)
+        Effect.provide(TestLayer),
+        Effect.provide(TestConfigProviderLayer)
       ))
   })
 })

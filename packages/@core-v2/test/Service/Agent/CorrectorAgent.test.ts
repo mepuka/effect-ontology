@@ -9,6 +9,7 @@
 import { LanguageModel } from "@effect/ai"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Layer, Option, Secret } from "effect"
+import { TestConfigProviderLayer } from "../../setup.js"
 import * as N3 from "n3"
 import { ClassDefinition, OntologyContext, PropertyDefinition } from "../../../src/Domain/Model/Ontology.js"
 import type { IRI } from "../../../src/Domain/Rdf/Types.js"
@@ -261,6 +262,7 @@ describe("CorrectorAgent", () => {
       }).pipe(
         Effect.provide(CorrectorAgent.Default),
         Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer),
         Effect.provide(createMockLlm({
           strategy: "generate-value",
           newValue: "alice@example.com",
@@ -280,6 +282,7 @@ describe("CorrectorAgent", () => {
       }).pipe(
         Effect.provide(CorrectorAgent.Default),
         Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer),
         Effect.provide(createMockLlm({
           strategy: "coerce-datatype",
           explanation: "Type conversion",
@@ -298,6 +301,7 @@ describe("CorrectorAgent", () => {
       }).pipe(
         Effect.provide(CorrectorAgent.Default),
         Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer),
         Effect.provide(createMockLlm({
           strategy: "skip",
           explanation: "Cannot auto-correct",
@@ -316,6 +320,7 @@ describe("CorrectorAgent", () => {
       }).pipe(
         Effect.provide(CorrectorAgent.Default),
         Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer),
         Effect.provide(createMockLlm({
           strategy: "reformat-value",
           explanation: "Reformatted",
@@ -334,6 +339,7 @@ describe("CorrectorAgent", () => {
       }).pipe(
         Effect.provide(CorrectorAgent.Default),
         Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer),
         Effect.provide(createMockLlm({
           strategy: "reclassify-entity",
           newType: "http://example.org/Employee",
@@ -399,6 +405,7 @@ describe("CorrectorAgent", () => {
       }).pipe(
         Effect.provide(CorrectorAgent.Default),
         Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer),
         Effect.provide(createMockLlm({
           strategy: "generate-value",
           newValue: "alice@example.com",
@@ -424,6 +431,7 @@ describe("CorrectorAgent", () => {
       }).pipe(
         Effect.provide(CorrectorAgent.Default),
         Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer),
         Effect.provide(createMockLlm({
           strategy: "generate-value",
           newValue: "alice@example.com",
@@ -457,6 +465,7 @@ describe("CorrectorAgent", () => {
       }).pipe(
         Effect.provide(CorrectorAgent.Default),
         Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer),
         Effect.provide(createMockLlm({
           strategy: "generate-value",
           newValue: "alice@example.com",
@@ -494,6 +503,7 @@ describe("CorrectorAgent", () => {
       }).pipe(
         Effect.provide(CorrectorAgent.Default),
         Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer),
         Effect.provide(createMockLlm({
           strategy: "skip",
           explanation: "Test",

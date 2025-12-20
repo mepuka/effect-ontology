@@ -6,6 +6,7 @@ import { BunContext } from "@effect/platform-bun"
 import { Effect, Layer } from "effect"
 import * as path from "node:path"
 import { describe, expect, it } from "vitest"
+import { TestConfigProviderLayer } from "./setup.js"
 import { ConfigService, DEFAULT_CONFIG } from "../src/Service/Config.js"
 import { NlpService } from "../src/Service/Nlp.js"
 import { OntologyService } from "../src/Service/Ontology.js"
@@ -30,7 +31,8 @@ describe("OntologyService - Football Ontology", () => {
     Layer.provide(RdfBuilder.Default),
     Layer.provide(StorageServiceLive),
     Layer.provide(TestConfig),
-    Layer.provideMerge(BunContext.layer)
+    Layer.provideMerge(BunContext.layer),
+    Layer.provideMerge(TestConfigProviderLayer)
   )
 
   describe("Entity-First Semantic Search", () => {

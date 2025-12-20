@@ -8,6 +8,7 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Layer, Option, Secret } from "effect"
+import { TestConfigProviderLayer } from "../../setup.js"
 import type { Agent } from "../../../src/Domain/Model/Agent.js"
 import { AgentId, AgentMetadata, TerminationCondition, ValidationResult } from "../../../src/Domain/Model/Agent.js"
 import { AgentCoordinator, type ExecutionResult } from "../../../src/Service/Agent/AgentCoordinator.js"
@@ -284,7 +285,8 @@ describe("AgentCoordinator", () => {
         expect(agents[0].id).toBe("echo")
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("unregisters an agent", () =>
@@ -299,7 +301,8 @@ describe("AgentCoordinator", () => {
         expect(agents).toHaveLength(0)
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("fails when getting unregistered agent", () =>
@@ -313,7 +316,8 @@ describe("AgentCoordinator", () => {
         expect(result._tag).toBe("Left")
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
   })
 
@@ -338,7 +342,8 @@ describe("AgentCoordinator", () => {
         expect(result.events.length).toBeGreaterThan(0)
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("passes output from one agent to the next", () =>
@@ -363,7 +368,8 @@ describe("AgentCoordinator", () => {
         expect(secondOutput.data.marker).toBe("A")
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("emits AgentStarted and AgentCompleted events", () =>
@@ -384,7 +390,8 @@ describe("AgentCoordinator", () => {
         expect(eventTags).toContain("PipelineCheckpoint")
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
   })
 
@@ -411,7 +418,8 @@ describe("AgentCoordinator", () => {
         expect(result.state.iterationCount).toBe(3)
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("stops when conformance is reached", () =>
@@ -438,7 +446,8 @@ describe("AgentCoordinator", () => {
         expect(result.state.iterationCount).toBeLessThanOrEqual(10)
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("emits progress events per iteration", () =>
@@ -462,7 +471,8 @@ describe("AgentCoordinator", () => {
         expect(progressEvents.length).toBe(3) // One per iteration
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
   })
 
@@ -487,7 +497,8 @@ describe("AgentCoordinator", () => {
         expect(result.outputs.size).toBe(3)
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("all agents receive the same input", () =>
@@ -511,7 +522,8 @@ describe("AgentCoordinator", () => {
         expect(outputB.data.taskId).toBe("par-2")
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
   })
 
@@ -532,7 +544,8 @@ describe("AgentCoordinator", () => {
         expect(result.state.completedAgents).toHaveLength(2)
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("executes from PipelineConfig - loop", () =>
@@ -556,7 +569,8 @@ describe("AgentCoordinator", () => {
         expect(result.state.iterationCount).toBe(2)
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
   })
 
@@ -574,7 +588,8 @@ describe("AgentCoordinator", () => {
         expect(result._tag).toBe("Left")
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("continues on error when configured", () =>
@@ -595,7 +610,8 @@ describe("AgentCoordinator", () => {
         expect(result.state.status).toBe("completed")
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("emits AgentFailed events on error", () =>
@@ -615,7 +631,8 @@ describe("AgentCoordinator", () => {
         expect(failedEvents.length).toBeGreaterThan(0)
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
   })
 
@@ -639,7 +656,8 @@ describe("AgentCoordinator", () => {
         expect(failedEvents.length).toBeGreaterThan(0)
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
   })
 
@@ -661,7 +679,8 @@ describe("AgentCoordinator", () => {
         expect(result.state.status).toBe("completed")
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
   })
 
@@ -688,7 +707,8 @@ describe("AgentCoordinator", () => {
         expect(eventCount.value).toBeGreaterThan(0)
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("calls onCheckpoint callback at end", () =>
@@ -713,7 +733,8 @@ describe("AgentCoordinator", () => {
         expect(checkpointCalled).toBe(true)
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
   })
 
@@ -736,7 +757,8 @@ describe("AgentCoordinator", () => {
         expect(result.isConformant).toBe(true)
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("refines until conformant", () =>
@@ -764,7 +786,8 @@ describe("AgentCoordinator", () => {
         expect(result.iterations).toBe(4)
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("stops at max iterations", () =>
@@ -791,7 +814,8 @@ describe("AgentCoordinator", () => {
         expect(result.isConformant).toBe(false)
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("stops when confidence drops below threshold", () =>
@@ -817,7 +841,8 @@ describe("AgentCoordinator", () => {
         expect(result.iterations).toBeLessThan(4) // Should stop before conformance
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("emits checkpoint events at intervals", () =>
@@ -849,7 +874,8 @@ describe("AgentCoordinator", () => {
         expect(checkpoints.length).toBeGreaterThan(1)
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("tracks violations fixed per iteration", () =>
@@ -872,7 +898,8 @@ describe("AgentCoordinator", () => {
         expect(result.avgViolationsFixed).toBeGreaterThan(0)
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("fails when validator agent is not registered", () =>
@@ -892,7 +919,8 @@ describe("AgentCoordinator", () => {
         expect(result._tag).toBe("Left")
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("fails when corrector agent is not registered", () =>
@@ -921,7 +949,8 @@ describe("AgentCoordinator", () => {
         expect(result._tag).toBe("Left")
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("emits progress events", () =>
@@ -951,7 +980,8 @@ describe("AgentCoordinator", () => {
         expect(progressEvents.length).toBeGreaterThan(0)
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
 
     it.effect("returns duration in result", () =>
@@ -969,7 +999,8 @@ describe("AgentCoordinator", () => {
         expect(result.durationMs).toBeGreaterThanOrEqual(0)
       }).pipe(
         Effect.provide(AgentCoordinator.Default),
-        Effect.provide(MockConfigService)
+        Effect.provide(MockConfigService),
+        Effect.provide(TestConfigProviderLayer)
       ))
   })
 })
