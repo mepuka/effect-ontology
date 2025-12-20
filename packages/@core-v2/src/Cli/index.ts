@@ -20,13 +20,20 @@ import { inferenceCommand } from "./Commands/Inference.js"
 import { ingestCommand } from "./Commands/Ingest.js"
 import { linkCommand } from "./Commands/Link.js"
 import { reconcileCommand } from "./Commands/Reconcile.js"
+import { storageCommand } from "./Commands/Storage.js"
 
 // =============================================================================
 // Root Command
 // =============================================================================
 
 const rootCommand = Command.make("effect-onto").pipe(
-  Command.withSubcommands([inferenceCommand, ingestCommand, reconcileCommand, linkCommand]),
+  Command.withSubcommands([
+    inferenceCommand,
+    ingestCommand,
+    reconcileCommand,
+    linkCommand,
+    storageCommand
+  ]),
   Command.withDescription("Effect Ontology CLI - Knowledge extraction and reasoning tools")
 )
 
