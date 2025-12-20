@@ -252,7 +252,8 @@ describe("OntologyAgent Service", () => {
       transformersModelId: "Xenova/nomic-embed-text-v1",
       cachePath: Option.none(),
       cacheTtlHours: 24,
-      cacheMaxEntries: 10000
+      cacheMaxEntries: 10000,
+      entityIndexPath: Option.none()
     },
     extraction: {
       runsDir: "/tmp/test-runs",

@@ -29,6 +29,7 @@ import { ActivityDependenciesLayer, WorkflowOrchestratorFullLayer } from "./Runt
 import { BatchStateHubLayer, BatchStatePersistenceLayer } from "./Service/BatchState.js"
 import { ClaimPersistenceService } from "./Service/ClaimPersistence.js"
 import { PersistentEmbeddingCache } from "./Service/EmbeddingCache.js"
+import { PersistentEntityIndex } from "./Service/EntityIndex.js"
 
 // Load port from environment
 const port = Effect.runSync(Config.number("PORT").pipe(Config.withDefault(8080)))
@@ -180,18 +181,28 @@ const ServerLive = HttpServerLive.pipe(
   Layer.provideMerge(PlatformLayer)
 )
 
-// Warm up embedding cache from GCS (if configured)
-const warmUpEmbeddingCache = Effect.gen(function*() {
-  const cacheOpt = yield* Effect.serviceOption(PersistentEmbeddingCache)
-  if (Option.isSome(cacheOpt)) {
-    const loaded = yield* cacheOpt.value.warmUp()
+// Warm up caches from GCS (if configured)
+const warmUpCaches = Effect.gen(function*() {
+  // Warm up embedding cache
+  const embeddingCacheOpt = yield* Effect.serviceOption(PersistentEmbeddingCache)
+  if (Option.isSome(embeddingCacheOpt)) {
+    const loaded = yield* embeddingCacheOpt.value.warmUp()
     if (loaded > 0) {
-      yield* Effect.logInfo("Embedding cache warmed up", { loaded })
+      yield* Effect.logInfo("Embedding cache warmed up", { embeddingsLoaded: loaded })
+    }
+  }
+
+  // Warm up entity index
+  const entityIndexOpt = yield* Effect.serviceOption(PersistentEntityIndex)
+  if (Option.isSome(entityIndexOpt)) {
+    const loaded = yield* entityIndexOpt.value.load()
+    if (loaded > 0) {
+      yield* Effect.logInfo("Entity index loaded from GCS", { entitiesLoaded: loaded })
     }
   }
 }).pipe(
   Effect.catchAll((error) =>
-    Effect.logWarning("Embedding cache warm-up failed (continuing)", { error: String(error) })
+    Effect.logWarning("Cache warm-up failed (continuing)", { error: String(error) })
   )
 )
 
@@ -205,8 +216,8 @@ const server = Effect.gen(function*() {
     yield* runMigrations
   }
 
-  // Warm up embedding cache (runs in background, doesn't block startup)
-  yield* Effect.forkDaemon(warmUpEmbeddingCache)
+  // Warm up caches from GCS (runs in background, doesn't block startup)
+  yield* Effect.forkDaemon(warmUpCaches)
 
   // Register SIGTERM handler for Cloud Run
   process.on("SIGTERM", () => {

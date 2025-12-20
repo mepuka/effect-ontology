@@ -90,7 +90,9 @@ const EmbeddingConfig = Config.nested("EMBEDDING")(Config.all({
   /** TTL for cached embeddings in hours (default: 24 hours) */
   cacheTtlHours: Config.integer("CACHE_TTL_HOURS").pipe(Config.withDefault(24)),
   /** Maximum entries in in-memory cache before LRU eviction (default: 10000) */
-  cacheMaxEntries: Config.integer("CACHE_MAX_ENTRIES").pipe(Config.withDefault(10000))
+  cacheMaxEntries: Config.integer("CACHE_MAX_ENTRIES").pipe(Config.withDefault(10000)),
+  /** GCS/local path for persisting entity index (optional, enables GraphRAG persistence when set) */
+  entityIndexPath: Config.option(Config.string("ENTITY_INDEX_PATH"))
 }))
 
 const ExtractionConfig = Config.nested("EXTRACTION")(Config.all({
@@ -186,7 +188,8 @@ export const DEFAULT_CONFIG: AppConfig = {
     transformersModelId: "Xenova/nomic-embed-text-v1",
     cachePath: Option.none(),
     cacheTtlHours: 24,
-    cacheMaxEntries: 10000
+    cacheMaxEntries: 10000,
+    entityIndexPath: Option.none()
   },
   extraction: {
     runsDir: "./output/runs",
