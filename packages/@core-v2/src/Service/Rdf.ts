@@ -15,7 +15,7 @@ import type { Entity, Relation } from "../Domain/Model/Entity.js"
 import { DCTERMS, EXTR, OWL, PROV, XSD } from "../Domain/Rdf/Constants.js"
 import { type BlankNode as BlankNodeType, type IRI, Literal, Quad, type RdfTerm } from "../Domain/Rdf/Types.js"
 import { createN3Builders, entityToQuads, relationToQuad } from "../Utils/Rdf.js"
-import { ConfigService } from "./Config.js"
+import { ConfigService, ConfigServiceDefault } from "./Config.js"
 
 /**
  * N3Store type (from n3 library) - internal use only
@@ -1078,9 +1078,7 @@ export class RdfBuilder extends Effect.Service<RdfBuilder>()(
           })
       } satisfies RdfBuilderShape
     }),
-    dependencies: [
-      // ConfigService provided by parent scope (e.g., EnvConfigService.Live)
-    ],
+    dependencies: [ConfigServiceDefault],
     accessors: true
   }
 ) {}

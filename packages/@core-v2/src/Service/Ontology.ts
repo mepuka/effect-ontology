@@ -1597,9 +1597,9 @@ export class OntologyService extends Effect.Service<OntologyService>()(
       }
     }),
     dependencies: [
-      RdfBuilder.Default,
-      // StorageService and ConfigService provided by parent scope
+      RdfBuilder.Default, // Includes ConfigServiceDefault
       NlpService.Default
+      // StorageService provided by parent scope (runtime-selected storage type)
     ],
     accessors: true
   }

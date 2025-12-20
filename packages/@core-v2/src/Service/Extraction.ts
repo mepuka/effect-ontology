@@ -30,9 +30,9 @@ import { makeRelationSchema } from "../Schema/RelationFactory.js"
 import { annotateExtraction, annotateLlmCall, LlmAttributes } from "../Telemetry/LlmAttributes.js"
 import { sha256Sync } from "../Utils/Hash.js"
 import { buildLocalNameToIriMapSafe, expandLocalNameToIri, expandTypesToIris } from "../Utils/Iri.js"
-import { ConfigService } from "./Config.js"
+import { ConfigService, ConfigServiceDefault } from "./Config.js"
 import { generateObjectWithFeedback } from "./GenerateWithFeedback.js"
-import { StageTimeoutService } from "./LlmControl/StageTimeout.js"
+import { StageTimeoutService, StageTimeoutServiceLive } from "./LlmControl/StageTimeout.js"
 import { generateObjectWithRetry } from "./LlmWithRetry.js"
 
 export type { Mention }
@@ -324,7 +324,9 @@ export class EntityExtractor extends Effect.Service<EntityExtractor>()("EntityEx
     }
   }),
   dependencies: [
-    // ConfigService provided by parent scope (e.g., EnvConfigService.Live)
+    ConfigServiceDefault,
+    StageTimeoutServiceLive
+    // LanguageModel.LanguageModel provided by parent scope (runtime-selected provider)
   ],
   accessors: true
 }) {
@@ -453,7 +455,9 @@ export class MentionExtractor extends Effect.Service<MentionExtractor>()("Mentio
     }
   }),
   dependencies: [
-    // ConfigService provided by parent scope (e.g., EnvConfigService.Live)
+    ConfigServiceDefault,
+    StageTimeoutServiceLive
+    // LanguageModel.LanguageModel provided by parent scope (runtime-selected provider)
   ],
   accessors: true
 }) {
@@ -794,7 +798,9 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
     }
   }),
   dependencies: [
-    // ConfigService provided by parent scope (e.g., EnvConfigService.Live)
+    ConfigServiceDefault,
+    StageTimeoutServiceLive
+    // LanguageModel.LanguageModel provided by parent scope (runtime-selected provider)
   ],
   accessors: true
 }) {

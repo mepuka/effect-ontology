@@ -463,7 +463,8 @@ export class DocumentClassifier extends Effect.Service<DocumentClassifier>()(
       }
     }),
     dependencies: [
-      // ConfigService and LanguageModel must be provided by parent scope
+      ConfigServiceDefault
+      // LanguageModel.LanguageModel provided by parent scope (runtime-selected provider)
     ],
     accessors: true
   }

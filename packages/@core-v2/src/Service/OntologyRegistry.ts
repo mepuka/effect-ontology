@@ -16,7 +16,7 @@
 import { Effect, Option, Schema } from "effect"
 import type { OntologyRegistry } from "../Domain/Schema/OntologyRegistry.js"
 import { OntologyEntry, OntologyRegistryJson } from "../Domain/Schema/OntologyRegistry.js"
-import { ConfigService } from "./Config.js"
+import { ConfigService, ConfigServiceDefault } from "./Config.js"
 import { StorageService } from "./Storage.js"
 
 /**
@@ -218,7 +218,8 @@ export class OntologyRegistryService extends Effect.Service<OntologyRegistryServ
       }
     }),
     dependencies: [
-      // StorageService and ConfigService provided by parent scope
+      ConfigServiceDefault
+      // StorageService provided by parent scope (runtime-selected storage type)
     ],
     accessors: true
   }

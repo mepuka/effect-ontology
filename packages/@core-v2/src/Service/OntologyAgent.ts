@@ -1015,7 +1015,20 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
         reasoner.wouldInfer(store, reasoningConfig ?? ReasoningConfig.rdfs())
     }
   }),
-  dependencies: [],
+  dependencies: [
+    // Effect.Service deps with self-contained defaults
+    OntologyService.Default, // Includes RdfBuilder.Default, NlpService.Default
+    SparqlService.Default, // Includes RdfBuilder.Default
+    SparqlGenerator.Default, // No deps
+    Reasoner.Default // No deps
+    // Parent scope provides (via WorkflowLayers):
+    // - ExtractionWorkflow (Context.GenericTag)
+    // - ClaimService (needs ClaimRepository/database)
+    // - ShaclService.Default (needs StorageService)
+    // - LanguageModel.LanguageModel (runtime-selected)
+    // - StorageService (runtime-selected GCS/local)
+    // - ConfigService (via nested deps)
+  ],
   accessors: true
 }) {}
 

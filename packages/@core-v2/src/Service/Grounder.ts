@@ -15,8 +15,8 @@ import { Chunk, Effect, Layer, Schema, Stream } from "effect"
 import type { Relation } from "../Domain/Model/Entity.js"
 import type { PropertyDefinition } from "../Domain/Model/Ontology.js"
 import { LlmAttributes } from "../Telemetry/LlmAttributes.js"
-import { ConfigService } from "./Config.js"
-import { StageTimeoutService } from "./LlmControl/StageTimeout.js"
+import { ConfigService, ConfigServiceDefault } from "./Config.js"
+import { StageTimeoutService, StageTimeoutServiceLive } from "./LlmControl/StageTimeout.js"
 import { generateObjectWithRetry } from "./LlmWithRetry.js"
 
 /**
@@ -456,7 +456,9 @@ export class Grounder extends Effect.Service<Grounder>()("Grounder", {
     }
   }),
   dependencies: [
-    // ConfigService provided by parent scope (e.g., EnvConfigService.Live)
+    ConfigServiceDefault,
+    StageTimeoutServiceLive
+    // LanguageModel.LanguageModel provided by parent scope (runtime-selected provider)
   ],
   accessors: true
 }) {

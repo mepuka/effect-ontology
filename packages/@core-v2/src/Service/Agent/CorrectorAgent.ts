@@ -36,7 +36,7 @@ import * as N3 from "n3"
 import type { Agent } from "../../Domain/Model/Agent.js"
 import { AgentId, AgentMetadata, ValidationResult } from "../../Domain/Model/Agent.js"
 import type { OntologyContext } from "../../Domain/Model/Ontology.js"
-import { ConfigService } from "../Config.js"
+import { ConfigService, ConfigServiceDefault } from "../Config.js"
 import { generateObjectWithFeedback } from "../GenerateWithFeedback.js"
 import type { RdfStore } from "../Rdf.js"
 import type { ShaclValidationReport, ShaclViolation } from "../Shacl.js"
@@ -846,7 +846,10 @@ export class CorrectorAgent extends Effect.Service<CorrectorAgent>()("CorrectorA
       }
     }
   }),
-  dependencies: [],
+  dependencies: [
+    ConfigServiceDefault
+    // LanguageModel.LanguageModel provided by parent scope (runtime-selected provider)
+  ],
   accessors: true
 }) {}
 

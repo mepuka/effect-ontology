@@ -10,7 +10,7 @@
 
 import { LanguageModel } from "@effect/ai"
 import { Data, Duration, Effect, Schedule, Schema } from "effect"
-import { ConfigService } from "./Config.js"
+import { ConfigService, ConfigServiceDefault } from "./Config.js"
 import { generateObjectWithFeedback } from "./GenerateWithFeedback.js"
 import type { RdfStore } from "./Rdf.js"
 import type { ShaclViolation } from "./Shacl.js"
@@ -355,7 +355,10 @@ export class ViolationExplainer extends Effect.Service<ViolationExplainer>()("Vi
         )
     }
   }),
-  dependencies: [],
+  dependencies: [
+    ConfigServiceDefault
+    // LanguageModel.LanguageModel provided by parent scope (runtime-selected provider)
+  ],
   accessors: true
 }) {}
 

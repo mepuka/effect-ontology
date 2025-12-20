@@ -56,7 +56,7 @@ import {
   PipelineState,
   TerminationCondition
 } from "../../Domain/Model/Agent.js"
-import { ConfigService } from "../Config.js"
+import { ConfigService, ConfigServiceDefault } from "../Config.js"
 import {
   AgentExecutionError,
   AgentNotFoundError,
@@ -1138,7 +1138,7 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
       }
     }
   }),
-  dependencies: [],
+  dependencies: [ConfigServiceDefault],
   accessors: true
 }) {}
 
