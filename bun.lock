@@ -71,11 +71,15 @@
     "packages/@core-v2": {
       "name": "@effect-ontology/core-v2",
       "version": "0.0.0",
+      "bin": {
+        "effect-onto": "./src/cli.ts",
+      },
       "dependencies": {
         "@effect/ai": "^0.32.1",
         "@effect/ai-anthropic": "^0.22.0",
         "@effect/ai-google": "^0.11.0",
         "@effect/ai-openai": "^0.35.0",
+        "@effect/cli": "^0.58.0",
         "@effect/cluster": "^0.55.0",
         "@effect/experimental": "^0.57.4",
         "@effect/opentelemetry": "^0.59.1",
@@ -2506,6 +2510,8 @@
     "@comunica/utils-expression-evaluator/rdf-data-factory": ["rdf-data-factory@1.1.3", "", { "dependencies": { "@rdfjs/types": "^1.0.0" } }, "sha512-ny6CI7m2bq4lfQQmDYvcb2l1F9KtGwz9chipX4oWu2aAtVoXjb7k3d8J1EsgAsEbMXnBipB/iuRen5H2fwRWWQ=="],
 
     "@comunica/utils-query-operation/rdf-data-factory": ["rdf-data-factory@1.1.3", "", { "dependencies": { "@rdfjs/types": "^1.0.0" } }, "sha512-ny6CI7m2bq4lfQQmDYvcb2l1F9KtGwz9chipX4oWu2aAtVoXjb7k3d8J1EsgAsEbMXnBipB/iuRen5H2fwRWWQ=="],
+
+    "@effect-ontology/core-v2/@effect/cli": ["@effect/cli@0.58.4", "", { "dependencies": { "ini": "^4.1.3", "toml": "^3.0.0", "yaml": "^2.5.0" }, "peerDependencies": { "@effect/platform": "^0.79.4", "@effect/printer": "^0.41.12", "@effect/printer-ansi": "^0.41.12", "effect": "^3.13.12" } }, "sha512-wDJdpGPvjm7qPmUWmN8fJ0yXUrNJhctTmdnfY8I5By8XrVhIsV39IrqLbgdXiwNEB8n9Dc7fqhzTen4Tk2w7HA=="],
 
     "@effect/experimental/uuid": ["uuid@11.1.0", "", { "bin": { "uuid": "dist/esm/bin/uuid" } }, "sha512-0/A9rDy9P7cJ+8w1c9WD9V//9Wj15Ce2MPz8Ri6032usz+NfePxx5AcN3bN+r6ZL6jEo066/yNYB3tn4pQEx+A=="],
 

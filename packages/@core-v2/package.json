@@ -4,6 +4,9 @@
     "type": "module",
     "private": true,
     "description": "Effect-native knowledge extraction core - v2 migration",
+    "bin": {
+        "effect-onto": "./src/cli.ts"
+    },
     "exports": {
         ".": "./src/index.ts",
         "./Domain": "./src/Domain/index.ts",
@@ -31,6 +34,7 @@
     },
     "dependencies": {
         "@effect/ai": "^0.32.1",
+        "@effect/cli": "^0.58.0",
         "@effect/ai-anthropic": "^0.22.0",
         "@effect/ai-google": "^0.11.0",
         "@effect/ai-openai": "^0.35.0",

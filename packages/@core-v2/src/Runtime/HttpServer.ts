@@ -56,6 +56,7 @@ import { pollToBatchState, WorkflowOrchestrator } from "../Service/WorkflowOrche
 import { extractLocalNameFromIri } from "../Utils/Iri.js"
 import { HealthCheckService } from "./HealthCheck.js"
 import { makeAuthMiddleware, makeShutdownMiddleware } from "./HttpMiddleware.js"
+import { InferenceRouter } from "./InferenceRouter.js"
 
 type BatchWorkflowPayloadType = typeof BatchWorkflowPayload.Type
 
@@ -1335,7 +1336,8 @@ export const ApiRouter = HttpRouter.empty.pipe(
   HttpRouter.concat(ExtractionRouter),
   HttpRouter.concat(TimelineRouter),
   HttpRouter.concat(SearchRouter),
-  HttpRouter.concat(OntologyRouter)
+  HttpRouter.concat(OntologyRouter),
+  HttpRouter.concat(InferenceRouter)
 )
 
 export const HttpServerLive = Layer.unwrapEffect(
