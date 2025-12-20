@@ -84,7 +84,13 @@ const EmbeddingConfig = Config.nested("EMBEDDING")(Config.all({
   /** Transformers.js model ID for local inference */
   transformersModelId: Config.string("TRANSFORMERS_MODEL_ID").pipe(
     Config.withDefault("Xenova/nomic-embed-text-v1")
-  )
+  ),
+  /** GCS/local path for persisting embedding cache (optional, enables persistence when set) */
+  cachePath: Config.option(Config.string("CACHE_PATH")),
+  /** TTL for cached embeddings in hours (default: 24 hours) */
+  cacheTtlHours: Config.integer("CACHE_TTL_HOURS").pipe(Config.withDefault(24)),
+  /** Maximum entries in in-memory cache before LRU eviction (default: 10000) */
+  cacheMaxEntries: Config.integer("CACHE_MAX_ENTRIES").pipe(Config.withDefault(10000))
 }))
 
 const ExtractionConfig = Config.nested("EXTRACTION")(Config.all({
@@ -177,7 +183,10 @@ export const DEFAULT_CONFIG: AppConfig = {
   embedding: {
     model: "nomic-embed-text-v1.5",
     dimension: 768,
-    transformersModelId: "Xenova/nomic-embed-text-v1"
+    transformersModelId: "Xenova/nomic-embed-text-v1",
+    cachePath: Option.none(),
+    cacheTtlHours: 24,
+    cacheMaxEntries: 10000
   },
   extraction: {
     runsDir: "./output/runs",

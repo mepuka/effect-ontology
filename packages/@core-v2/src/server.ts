@@ -28,6 +28,7 @@ import { ShutdownService } from "./Runtime/Shutdown.js"
 import { ActivityDependenciesLayer, WorkflowOrchestratorFullLayer } from "./Runtime/WorkflowLayers.js"
 import { BatchStateHubLayer, BatchStatePersistenceLayer } from "./Service/BatchState.js"
 import { ClaimPersistenceService } from "./Service/ClaimPersistence.js"
+import { PersistentEmbeddingCache } from "./Service/EmbeddingCache.js"
 
 // Load port from environment
 const port = Effect.runSync(Config.number("PORT").pipe(Config.withDefault(8080)))
@@ -179,6 +180,21 @@ const ServerLive = HttpServerLive.pipe(
   Layer.provideMerge(PlatformLayer)
 )
 
+// Warm up embedding cache from GCS (if configured)
+const warmUpEmbeddingCache = Effect.gen(function*() {
+  const cacheOpt = yield* Effect.serviceOption(PersistentEmbeddingCache)
+  if (Option.isSome(cacheOpt)) {
+    const loaded = yield* cacheOpt.value.warmUp()
+    if (loaded > 0) {
+      yield* Effect.logInfo("Embedding cache warmed up", { loaded })
+    }
+  }
+}).pipe(
+  Effect.catchAll((error) =>
+    Effect.logWarning("Embedding cache warm-up failed (continuing)", { error: String(error) })
+  )
+)
+
 // Server program with graceful shutdown
 const server = Effect.gen(function*() {
   const shutdown = yield* ShutdownService
@@ -188,6 +204,9 @@ const server = Effect.gen(function*() {
     yield* checkDatabaseReady
     yield* runMigrations
   }
+
+  // Warm up embedding cache (runs in background, doesn't block startup)
+  yield* Effect.forkDaemon(warmUpEmbeddingCache)
 
   // Register SIGTERM handler for Cloud Run
   process.on("SIGTERM", () => {

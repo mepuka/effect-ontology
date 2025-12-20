@@ -17,7 +17,10 @@
 import { BunContext } from "@effect/platform-bun"
 import { Layer } from "effect"
 import { ConfigService, ConfigServiceDefault } from "../Service/Config.js"
-import { EmbeddingService, EmbeddingServiceDefault } from "../Service/Embedding.js"
+import { EmbeddingService, EmbeddingServiceLive } from "../Service/Embedding.js"
+import { EmbeddingCacheWithPersistence, PersistentEmbeddingCache } from "../Service/EmbeddingCache.js"
+import { MetricsService } from "../Telemetry/Metrics.js"
+import { NomicNlpServiceLive } from "../Service/NomicNlp.js"
 import { EntityResolutionService } from "../Service/EntityResolution.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { GraphRAG } from "../Service/GraphRAG.js"
@@ -179,8 +182,18 @@ const ShaclBundle = ShaclService.Default.pipe(
  * - Entity resolution (clustering similar entities)
  * - Ontology embeddings (semantic class/property matching)
  * - GraphRAG (query embedding for retrieval)
+ *
+ * Uses PersistentEmbeddingCache when EMBEDDING_CACHE_PATH is configured,
+ * falling back to in-memory cache otherwise. Persisted embeddings survive
+ * server restarts and can be warmed up on startup.
  */
-const EmbeddingBundle = EmbeddingServiceDefault
+const EmbeddingBundle = EmbeddingServiceLive.pipe(
+  Layer.provideMerge(NomicNlpServiceLive),
+  Layer.provideMerge(EmbeddingCacheWithPersistence),
+  Layer.provideMerge(MetricsService.Default),
+  Layer.provideMerge(StorageBundle),
+  Layer.provideMerge(CoreDependenciesLayer)
+)
 
 /**
  * Entity Resolution services with cached embeddings
