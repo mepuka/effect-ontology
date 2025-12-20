@@ -37,6 +37,8 @@
     rdfs:seeAlso <https://www.w3.org/TR/vocab-org/> ,
                  <https://www.popoloproject.com/specs/> ;
     # OWL Imports for proper ontology loading
+    # Note: For offline/production deployments, configure ONTOLOGY_EXTERNAL_VOCABS_PATH
+    # to point to ontologies/external/merged-external.ttl instead of dereferencing live HTTP IRIs
     owl:imports <http://xmlns.com/foaf/0.1/> ;
     owl:imports <http://www.w3.org/ns/org#> ;
     owl:imports <http://www.w3.org/2006/time#> ;
@@ -220,7 +222,12 @@ seattle:voteResult a owl:DatatypeProperty ;
 
 seattle:voteTally a owl:DatatypeProperty ;
     rdfs:label "vote tally"@en ;
-    rdfs:comment "The vote count (e.g., '7-2' or '9-0')."@en ;
+    rdfs:comment """The vote count in format 'X-Y' (yes-no) or 'X-Y-Z' (yes-no-abstain/absent).
+
+    Examples:
+    - '7-2' (7 yes, 2 no)
+    - '9-0' (unanimous)
+    - '6-2-1' (6 yes, 2 no, 1 abstention or absence)"""@en ;
     rdfs:domain seattle:CouncilVoteEvent ;
     rdfs:range xsd:string .
 
@@ -286,13 +293,25 @@ seattle:allocatedBudget a owl:DatatypeProperty ;
 
 seattle:startDate a owl:DatatypeProperty ;
     rdfs:label "start date"@en ;
-    rdfs:comment "Effective start date for a membership, role, or position."@en ;
+    rdfs:comment """Effective start date for a membership, role, or position.
+
+    Design Note: Denormalized convenience property for simpler queries.
+    When used on org:Membership alongside org:memberDuring, should mirror
+    the time:hasBeginning/time:inXSDDate value of the interval.
+    Provided for compatibility with systems that prefer direct date properties
+    over OWL-Time interval patterns."""@en ;
     rdfs:domain [ owl:unionOf ( org:Membership org:Post ) ] ;
     rdfs:range xsd:date .
 
 seattle:endDate a owl:DatatypeProperty ;
     rdfs:label "end date"@en ;
-    rdfs:comment "Effective end date for a membership, role, or position."@en ;
+    rdfs:comment """Effective end date for a membership, role, or position.
+
+    Design Note: Denormalized convenience property for simpler queries.
+    When used on org:Membership alongside org:memberDuring, should mirror
+    the time:hasEnd/time:inXSDDate value of the interval.
+    Provided for compatibility with systems that prefer direct date properties
+    over OWL-Time interval patterns."""@en ;
     rdfs:domain [ owl:unionOf ( org:Membership org:Post ) ] ;
     rdfs:range xsd:date .
 

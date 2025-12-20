@@ -129,19 +129,19 @@
 # Staff Announcement Event (Dec 1)
 :event-staff-announcement-1 a seattle:StaffAnnouncementEvent ;
     seattle:announcedMembership :membership-brian-deputy ;
-    time:inXSDDateTime "2025-12-01T10:00:00Z"^^xsd:dateTime ;
+    prov:startedAtTime "2025-12-01T10:00:00Z"^^xsd:dateTime ;
     prov:wasDerivedFrom :source-doc-1 .
 
 # Staff Announcement Event (Dec 5)
 :event-staff-announcement-2 a seattle:StaffAnnouncementEvent ;
     seattle:announcedMembership :membership-jane-policy ;
-    time:inXSDDateTime "2025-12-05T14:00:00Z"^^xsd:dateTime ;
+    prov:startedAtTime "2025-12-05T14:00:00Z"^^xsd:dateTime ;
     prov:wasDerivedFrom :source-doc-2 .
 
 # Policy Initiative Event (Dec 8)
 :event-policy-initiative-1 a seattle:PolicyInitiativeEvent ;
     seattle:announces :initiative-housing ;
-    time:inXSDDateTime "2025-12-08T09:00:00Z"^^xsd:dateTime ;
+    prov:startedAtTime "2025-12-08T09:00:00Z"^^xsd:dateTime ;
     prov:wasDerivedFrom :source-doc-3 .
 
 :initiative-housing a skos:Concept ;
@@ -151,14 +151,14 @@
 # Budget Action Event (Dec 10)
 :event-budget-action-1 a seattle:BudgetActionEvent ;
     seattle:impacts seattle:CityBudgetOffice ;
-    time:inXSDDateTime "2025-12-10T11:00:00Z"^^xsd:dateTime ;
+    prov:startedAtTime "2025-12-10T11:00:00Z"^^xsd:dateTime ;
     prov:wasDerivedFrom :source-doc-2 .
 
 # Council Vote Event (Dec 12)
 :event-council-vote-1 a seattle:CouncilVoteEvent ;
     seattle:voteResult "passed" ;
     seattle:voteTally "7-2" ;
-    time:inXSDDateTime "2025-12-12T15:30:00Z"^^xsd:dateTime ;
+    prov:startedAtTime "2025-12-12T15:30:00Z"^^xsd:dateTime ;
     prov:wasDerivedFrom :source-doc-3 .
 
 # =============================================================================

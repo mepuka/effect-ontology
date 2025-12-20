@@ -89,6 +89,27 @@
         sh:maxCount 1 ;
         sh:class time:Interval ;
         sh:message "Membership must have exactly one org:memberDuring interval"
+    ] ;
+
+    # Consistency: post must belong to the membership's organization
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:message "Membership post must belong to the membership's organization (org:postIn must match org:organization)" ;
+        sh:prefixes [
+            sh:declare [
+                sh:prefix "org" ;
+                sh:namespace "http://www.w3.org/ns/org#"^^xsd:anyURI
+            ]
+        ] ;
+        sh:select """
+            SELECT $this ?post ?postOrg ?membershipOrg
+            WHERE {
+                $this org:post ?post .
+                $this org:organization ?membershipOrg .
+                ?post org:postIn ?postOrg .
+                FILTER (?postOrg != ?membershipOrg)
+            }
+        """
     ] .
 
 # -----------------------------------------------------------------------------
@@ -104,17 +125,19 @@
         sh:path time:hasBeginning ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
-        sh:message "Interval must have exactly one time:hasBeginning"
+        sh:class time:Instant ;
+        sh:message "Interval must have exactly one time:hasBeginning (a time:Instant)"
     ] ;
 
     # Note: time:hasEnd is optional (omitted means ongoing)
     sh:property [
         sh:path time:hasEnd ;
         sh:maxCount 1 ;
-        sh:message "Interval may have at most one time:hasEnd"
+        sh:class time:Instant ;
+        sh:message "Interval may have at most one time:hasEnd (a time:Instant)"
     ] ;
 
-    # Temporal consistency: end must be after beginning
+    # Temporal consistency: end must be after beginning (xsd:date)
     sh:sparql [
         a sh:SPARQLConstraint ;
         sh:message "Interval end date must be after beginning date" ;
@@ -134,6 +157,30 @@
                 $this time:hasBeginning/time:inXSDDate ?beginDate .
                 $this time:hasEnd/time:inXSDDate ?endDate .
                 FILTER (?endDate <= ?beginDate)
+            }
+        """
+    ] ;
+
+    # Temporal consistency: end must be after beginning (xsd:dateTime)
+    sh:sparql [
+        a sh:SPARQLConstraint ;
+        sh:message "Interval end dateTime must be after beginning dateTime" ;
+        sh:prefixes [
+            sh:declare [
+                sh:prefix "time" ;
+                sh:namespace "http://www.w3.org/2006/time#"^^xsd:anyURI
+            ] ;
+            sh:declare [
+                sh:prefix "xsd" ;
+                sh:namespace "http://www.w3.org/2001/XMLSchema#"^^xsd:anyURI
+            ]
+        ] ;
+        sh:select """
+            SELECT $this ?beginDateTime ?endDateTime
+            WHERE {
+                $this time:hasBeginning/time:inXSDDateTime ?beginDateTime .
+                $this time:hasEnd/time:inXSDDateTime ?endDateTime .
+                FILTER (?endDateTime <= ?beginDateTime)
             }
         """
     ] .
@@ -198,12 +245,13 @@
         sh:message "Staff announcement must announce at least one membership"
     ] ;
 
+    # Use PROV-O activity timestamps (not OWL-Time which requires Instant nodes)
     sh:property [
-        sh:path time:inXSDDateTime ;
+        sh:path prov:startedAtTime ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
         sh:datatype xsd:dateTime ;
-        sh:message "Event must have exactly one time:inXSDDateTime"
+        sh:message "Event must have exactly one prov:startedAtTime"
     ] ;
 
     sh:property [
@@ -227,12 +275,13 @@
         sh:message "Policy initiative event must announce at least one initiative"
     ] ;
 
+    # Use PROV-O activity timestamps (not OWL-Time which requires Instant nodes)
     sh:property [
-        sh:path time:inXSDDateTime ;
+        sh:path prov:startedAtTime ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
         sh:datatype xsd:dateTime ;
-        sh:message "Event must have exactly one time:inXSDDateTime"
+        sh:message "Event must have exactly one prov:startedAtTime"
     ] ;
 
     sh:property [
@@ -260,12 +309,13 @@
         sh:message "Budget action must impact at least one organization"
     ] ;
 
+    # Use PROV-O activity timestamps (not OWL-Time which requires Instant nodes)
     sh:property [
-        sh:path time:inXSDDateTime ;
+        sh:path prov:startedAtTime ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
         sh:datatype xsd:dateTime ;
-        sh:message "Event must have exactly one time:inXSDDateTime"
+        sh:message "Event must have exactly one prov:startedAtTime"
     ] ;
 
     sh:property [
@@ -292,21 +342,23 @@
         sh:message "Vote must have exactly one result (passed, failed, tabled, withdrawn, or deferred)"
     ] ;
 
+    # Vote tally accepts: "X-Y" (yes-no) or "X-Y-Z" (yes-no-abstain/absent)
     sh:property [
         sh:path seattle:voteTally ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
         sh:datatype xsd:string ;
-        sh:pattern "^\\d+-\\d+$" ;
-        sh:message "Vote tally must be in format 'X-Y' (e.g., '7-2')"
+        sh:pattern "^\\d+-\\d+(-\\d+)?$" ;
+        sh:message "Vote tally must be in format 'X-Y' (yes-no) or 'X-Y-Z' (yes-no-abstain)"
     ] ;
 
+    # Use PROV-O activity timestamps (not OWL-Time which requires Instant nodes)
     sh:property [
-        sh:path time:inXSDDateTime ;
+        sh:path prov:startedAtTime ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
         sh:datatype xsd:dateTime ;
-        sh:message "Event must have exactly one time:inXSDDateTime"
+        sh:message "Event must have exactly one prov:startedAtTime"
     ] ;
 
     sh:property [
