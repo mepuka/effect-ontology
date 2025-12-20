@@ -1,6 +1,9 @@
 import type { ReactNode } from "react"
-import { useState, useEffect } from "react"
 import { Link, useLocation } from "react-router-dom"
+import { useAtomValue } from "@effect-atom/atom-react"
+import { Result } from "@effect-atom/atom"
+import { healthAtom } from "@/atoms/api"
+import { linksLink, documentsLink, timelineLink, classesLink, entitiesLink } from "../lib/routing"
 
 interface AppShellProps {
   children: ReactNode
@@ -8,29 +11,34 @@ interface AppShellProps {
 
 type HealthStatus = "checking" | "online" | "offline" | "degraded"
 
-export function AppShell({ children }: AppShellProps) {
-  const [health, setHealth] = useState<HealthStatus>("checking")
+/**
+ * Extract ontology ID from current path
+ */
+function useOntologyId(): string | null {
   const location = useLocation()
+  const match = location.pathname.match(/^\/o\/([^/]+)/)
+  return match ? match[1] : null
+}
 
-  useEffect(() => {
-    const checkHealth = async () => {
-      try {
-        const res = await fetch("/api/health/ready")
-        if (res.ok) {
-          const data = await res.json()
-          setHealth(data.status === "ok" ? "online" : "degraded")
-        } else {
-          setHealth("offline")
-        }
-      } catch {
-        setHealth("offline")
-      }
-    }
+/**
+ * Derive health status from atom result
+ */
+function useHealthStatus(): HealthStatus {
+  const result = useAtomValue(healthAtom)
 
-    checkHealth()
-    const interval = setInterval(checkHealth, 30000)
-    return () => clearInterval(interval)
-  }, [])
+  if (result.waiting) return "checking"
+
+  return Result.match(result, {
+    onInitial: () => "checking" as HealthStatus,
+    onFailure: () => "offline" as HealthStatus,
+    onSuccess: (s) => (s.value.status === "ok" ? "online" : "degraded") as HealthStatus
+  })
+}
+
+export function AppShell({ children }: AppShellProps) {
+  const health = useHealthStatus()
+  const location = useLocation()
+  const ontologyId = useOntologyId()
 
   const healthColors: Record<HealthStatus, string> = {
     checking: "bg-gray-400",
@@ -41,6 +49,21 @@ export function AppShell({ children }: AppShellProps) {
 
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + "/")
+
+  // Build ontology-scoped nav links
+  const scopedLinks = ontologyId ? {
+    links: linksLink(ontologyId),
+    documents: documentsLink(ontologyId),
+    timeline: timelineLink(ontologyId),
+    classes: classesLink(ontologyId),
+    entities: entitiesLink(ontologyId)
+  } : {
+    links: "/o/seattle/links",
+    documents: "/o/seattle/documents",
+    timeline: "/o/seattle/timeline",
+    classes: "/o/seattle/classes",
+    entities: "/o/seattle/entities"
+  }
 
   return (
     <div className="min-h-screen bg-white">
@@ -63,14 +86,28 @@ export function AppShell({ children }: AppShellProps) {
 
             {/* Navigation tabs */}
             <nav className="flex items-center gap-1">
-              <NavTab to="/ontologies" active={isActive("/ontologies")}>
+              {ontologyId && (
+                <span className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded mr-2">
+                  {ontologyId}
+                </span>
+              )}
+              <NavTab to={scopedLinks.links} active={isActive(scopedLinks.links) || isActive("/links")}>
+                Links
+              </NavTab>
+              <NavTab to={scopedLinks.documents} active={isActive(scopedLinks.documents) || isActive("/documents")}>
+                Documents
+              </NavTab>
+              <NavTab to={scopedLinks.timeline} active={isActive(scopedLinks.timeline) || isActive("/timeline")}>
+                Timeline
+              </NavTab>
+              <NavTab to={scopedLinks.classes} active={isActive(scopedLinks.classes) || isActive("/ontologies")}>
                 Schemas
               </NavTab>
-              <NavTab to="/entities" active={isActive("/entities")}>
+              <NavTab to={scopedLinks.entities} active={isActive(scopedLinks.entities) || isActive("/entities")}>
                 Entities
               </NavTab>
-              <NavTab to="/timeline" active={isActive("/timeline")}>
-                Timeline
+              <NavTab to="/ontologies" active={location.pathname === "/ontologies"}>
+                Switch
               </NavTab>
             </nav>
 

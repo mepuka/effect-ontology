@@ -1,5 +1,6 @@
 import { useParams, Link } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
+import { localName } from "@/lib/namespace"
 
 interface VocabularyRef {
   iri: string
@@ -40,11 +41,6 @@ interface OntologyDetail {
   classes: ClassSummary[]
   properties: PropertySummary[]
   seeAlso: string[]
-}
-
-function localName(iri: string): string {
-  const match = iri.match(/[#/]([^#/]+)$/)
-  return match ? match[1] : iri
 }
 
 function prefixFromIri(iri: string, imports: VocabularyRef[]): string | null {
@@ -128,19 +124,19 @@ function PropertyRow({ prop }: { prop: PropertySummary }) {
 }
 
 export function OntologySchemaPage() {
-  const { id } = useParams<{ id: string }>()
+  const { ontologyId } = useParams<{ ontologyId: string; iri?: string }>()
 
   const { data, isLoading, error } = useQuery<OntologyDetail>({
-    queryKey: ["ontology", id],
+    queryKey: ["ontology", ontologyId],
     queryFn: async () => {
-      const res = await fetch(`/api/v1/ontologies/${id}`)
+      const res = await fetch(`/api/v1/ontologies/${ontologyId}`)
       if (!res.ok) {
         if (res.status === 404) throw new Error("Ontology not found")
         throw new Error(`Failed to fetch: ${res.status}`)
       }
       return res.json()
     },
-    enabled: !!id
+    enabled: !!ontologyId
   })
 
   if (isLoading) {

@@ -35,6 +35,7 @@ import {
 } from "../Domain/Schema/Search.js"
 import type { ClaimWithRank, CorrectionSummary } from "../Domain/Schema/Timeline.js"
 import {
+  ArticleDetailResponse,
   ConflictsQuery,
   ConflictsResponse,
   TimelineClaimsQuery,
@@ -49,6 +50,7 @@ import { type ArticleMetadata, ClaimPersistenceService } from "../Service/ClaimP
 import { ConfigService } from "../Service/Config.js"
 import { ExtractionWorkflow } from "../Service/ExtractionWorkflow.js"
 import { OntologyService } from "../Service/Ontology.js"
+import { OntologyRegistryService } from "../Service/OntologyRegistry.js"
 import { RdfBuilder } from "../Service/Rdf.js"
 import { StorageService } from "../Service/Storage.js"
 import { pollToBatchState, WorkflowOrchestrator } from "../Service/WorkflowOrchestrator.js"
@@ -57,6 +59,7 @@ import { extractLocalNameFromIri } from "../Utils/Iri.js"
 import { HealthCheckService } from "./HealthCheck.js"
 import { makeAuthMiddleware, makeShutdownMiddleware } from "./HttpMiddleware.js"
 import { InferenceRouter } from "./InferenceRouter.js"
+import { LinkIngestionRouter } from "./LinkIngestionRouter.js"
 
 type BatchWorkflowPayloadType = typeof BatchWorkflowPayload.Type
 
@@ -177,6 +180,7 @@ const createManifest = (request: BatchRequest) =>
 
     return {
       batchId,
+      ontologyId: request.ontologyId,
       ontologyUri: request.ontologyUri,
       ontologyVersion: request.ontologyVersion,
       shaclUri: request.shaclUri,
@@ -212,6 +216,7 @@ const toPayload = (
 
   return {
     batchId: manifest.batchId,
+    ontologyId: manifest.ontologyId,
     manifestUri,
     ontologyVersion: manifest.ontologyVersion,
     ontologyUri: manifest.ontologyUri,
@@ -239,6 +244,8 @@ const claimRowToClaimWithRank = (
     validTo: Date | null
     confidenceScore: string | null
     evidenceText: string | null
+    evidenceStartOffset: number | null
+    evidenceEndOffset: number | null
     // Transaction time (bitemporal)
     assertedAt: Date | null
     deprecatedAt: Date | null
@@ -275,7 +282,9 @@ const claimRowToClaimWithRank = (
   derivedAt: null, // TODO: populate from derived_at column when available
   deprecatedAt: claim.deprecatedAt ? DateTime.unsafeFromDate(claim.deprecatedAt) : null,
   confidence: claim.confidenceScore ? parseFloat(claim.confidenceScore) : null,
-  evidenceText: claim.evidenceText
+  evidenceText: claim.evidenceText,
+  evidenceStartOffset: claim.evidenceStartOffset,
+  evidenceEndOffset: claim.evidenceEndOffset
 })
 
 // =============================================================================
@@ -392,6 +401,59 @@ export const TimelineRouter = HttpRouter.empty.pipe(
         limit,
         offset,
         hasMore
+      })
+    })
+  ),
+  // GET /v1/articles/:id - Get article with all claims
+  HttpRouter.get(
+    "/v1/articles/:id",
+    Effect.gen(function*() {
+      const params = yield* HttpRouter.params
+      const articleId = params.id
+      if (!articleId) {
+        return yield* HttpServerResponse.json({
+          error: "VALIDATION_ERROR",
+          message: "Article ID is required"
+        }, { status: 400 })
+      }
+
+      const articleRepo = yield* ArticleRepository
+      const claimRepo = yield* ClaimRepository
+
+      // Get article
+      const articleOpt = yield* articleRepo.getArticle(articleId)
+      if (Option.isNone(articleOpt)) {
+        return yield* HttpServerResponse.json({
+          error: "NOT_FOUND",
+          message: `Article "${articleId}" not found`
+        }, { status: 404 })
+      }
+      const article = articleOpt.value
+
+      // Get all claims for this article
+      const claims = yield* claimRepo.getClaimsByArticle(articleId)
+
+      // Transform claims
+      const claimsWithRank = claims.map((claim) => claimRowToClaimWithRank(claim, article))
+
+      // Count unique entities (subjects)
+      const uniqueSubjects = new Set(claims.map((c) => c.subjectIri))
+
+      // TODO: Count conflicts when ConflictRepository is implemented
+      const conflictCount = 0
+
+      return yield* HttpServerResponse.schemaJson(ArticleDetailResponse)({
+        article: {
+          id: article.id,
+          uri: article.uri,
+          headline: article.headline,
+          sourceName: article.sourceName,
+          publishedAt: DateTime.unsafeFromDate(article.publishedAt),
+          ingestedAt: DateTime.unsafeFromDate(article.ingestedAt ?? article.createdAt ?? new Date())
+        },
+        claims: claimsWithRank,
+        entityCount: uniqueSubjects.size,
+        conflictCount
       })
     })
   ),
@@ -792,12 +854,14 @@ export const ExtractionRouter = HttpRouter.empty.pipe(
                 const claimPersistence = claimPersistenceOpt.value
 
                 // Create claims from extracted graph
+                // Use "inline" as default ontologyId for ad-hoc extractions
                 const claims = knowledgeGraphToClaims(
                   graph.entities,
                   graph.relations,
                   {
                     baseNamespace: `${config.rdf.baseNamespace}inline/`,
                     documentId: `inline-${Date.now()}`,
+                    ontologyId: "inline",
                     defaultConfidence: 0.85
                   }
                 )
@@ -806,6 +870,7 @@ export const ExtractionRouter = HttpRouter.empty.pipe(
                 const contentHash = Crypto.createHash("sha256").update(request.text).digest("hex").slice(0, 16)
                 const articleMeta: ArticleMetadata = {
                   uri: `inline:${contentHash}`,
+                  ontologyId: "inline",
                   headline: request.text.slice(0, 100),
                   publishedAt: new Date(),
                   contentHash
@@ -976,215 +1041,101 @@ export const ExtractionRouter = HttpRouter.empty.pipe(
 // Ontology Router
 // =============================================================================
 
-// Hardcoded ontology metadata for MVP
-// In production, this would be loaded from OntologyRegistry
-const SEATTLE_ONTOLOGY: typeof OntologyDetailResponse.Type = {
-  id: "seattle",
-  iri: "http://effect-ontology.dev/seattle",
-  title: "Seattle Mayor Administration Ontology",
-  description:
-    "Production ontology for tracking Seattle city government staffing, policy, and council decisions. Extends W3C standard vocabularies for persons, organizations, and provenance.",
-  version: "1.0.0",
-  creator: "Effect Ontology Project",
-  created: "2025-12-18",
-  targetNamespace: "http://effect-ontology.dev/seattle/",
-  imports: [
-    {
-      iri: "http://xmlns.com/foaf/0.1/",
-      prefix: "foaf",
-      name: "FOAF",
-      publisher: "FOAF Project",
-      specUrl: "http://xmlns.com/foaf/spec/"
-    },
-    {
-      iri: "http://www.w3.org/ns/org#",
-      prefix: "org",
-      name: "W3C Organization Ontology",
-      publisher: "W3C",
-      specUrl: "https://www.w3.org/TR/vocab-org/"
-    },
-    {
-      iri: "http://www.w3.org/2006/time#",
-      prefix: "time",
-      name: "OWL-Time",
-      publisher: "W3C",
-      specUrl: "https://www.w3.org/TR/owl-time/"
-    },
-    {
-      iri: "http://www.w3.org/ns/prov#",
-      prefix: "prov",
-      name: "PROV-O",
-      publisher: "W3C",
-      specUrl: "https://www.w3.org/TR/prov-o/"
-    },
-    {
-      iri: "http://www.w3.org/ns/oa#",
-      prefix: "oa",
-      name: "Web Annotation",
-      publisher: "W3C",
-      specUrl: "https://www.w3.org/TR/annotation-model/"
-    },
-    {
-      iri: "http://www.w3.org/2004/02/skos/core#",
-      prefix: "skos",
-      name: "SKOS",
-      publisher: "W3C",
-      specUrl: "https://www.w3.org/TR/skos-reference/"
-    }
-  ],
-  classes: [
-    {
-      iri: "http://effect-ontology.dev/seattle/BoardOrCommission",
-      localName: "BoardOrCommission",
-      label: "Board or Commission",
-      comment: "A board, commission, task force, or advisory body within city government.",
-      superClass: "http://www.w3.org/ns/org#Organization"
-    },
-    {
-      iri: "http://effect-ontology.dev/seattle/LeadershipPost",
-      localName: "LeadershipPost",
-      label: "Leadership Post",
-      comment: "A department head or leadership position.",
-      superClass: "http://www.w3.org/ns/org#Post"
-    },
-    {
-      iri: "http://effect-ontology.dev/seattle/StaffAnnouncementEvent",
-      localName: "StaffAnnouncementEvent",
-      label: "Staff Announcement",
-      comment: "An official announcement of staff role changes, appointments, or departures.",
-      superClass: "http://www.w3.org/ns/prov#Activity"
-    },
-    {
-      iri: "http://effect-ontology.dev/seattle/PolicyInitiativeEvent",
-      localName: "PolicyInitiativeEvent",
-      label: "Policy Initiative",
-      comment: "An announcement of a policy initiative, program, or strategic priority.",
-      superClass: "http://www.w3.org/ns/prov#Activity"
-    },
-    {
-      iri: "http://effect-ontology.dev/seattle/BudgetActionEvent",
-      localName: "BudgetActionEvent",
-      label: "Budget Action",
-      comment: "A budget allocation, cut, or reallocation action.",
-      superClass: "http://www.w3.org/ns/prov#Activity"
-    },
-    {
-      iri: "http://effect-ontology.dev/seattle/CouncilVoteEvent",
-      localName: "CouncilVoteEvent",
-      label: "Council Vote",
-      comment: "A city council vote on legislation, budget, or appointments.",
-      superClass: "http://www.w3.org/ns/prov#Activity"
-    }
-  ],
-  properties: [],
-  seeAlso: ["https://www.w3.org/TR/vocab-org/", "https://www.popoloproject.com/specs/"]
+/**
+ * Known vocabulary metadata for enriching import IRIs with human-readable info.
+ * This provides metadata for well-known external vocabularies that ontologies may import.
+ */
+const KNOWN_VOCABULARIES: Record<string, { prefix: string; name: string; publisher: string; specUrl: string }> = {
+  "http://xmlns.com/foaf/0.1/": {
+    prefix: "foaf",
+    name: "FOAF",
+    publisher: "FOAF Project",
+    specUrl: "http://xmlns.com/foaf/spec/"
+  },
+  "http://www.w3.org/ns/org#": {
+    prefix: "org",
+    name: "W3C Organization Ontology",
+    publisher: "W3C",
+    specUrl: "https://www.w3.org/TR/vocab-org/"
+  },
+  "http://www.w3.org/2006/time#": {
+    prefix: "time",
+    name: "OWL-Time",
+    publisher: "W3C",
+    specUrl: "https://www.w3.org/TR/owl-time/"
+  },
+  "http://www.w3.org/ns/prov#": {
+    prefix: "prov",
+    name: "PROV-O",
+    publisher: "W3C",
+    specUrl: "https://www.w3.org/TR/prov-o/"
+  },
+  "http://www.w3.org/ns/oa#": {
+    prefix: "oa",
+    name: "Web Annotation",
+    publisher: "W3C",
+    specUrl: "https://www.w3.org/TR/annotation-model/"
+  },
+  "http://www.w3.org/2004/02/skos/core#": {
+    prefix: "skos",
+    name: "SKOS",
+    publisher: "W3C",
+    specUrl: "https://www.w3.org/TR/skos-reference/"
+  }
 }
 
-const CLAIMS_ONTOLOGY: typeof OntologyDetailResponse.Type = {
-  id: "claims",
-  iri: "http://effect-ontology.dev/claims",
-  title: "Claims Vocabulary",
-  description:
-    "Base vocabulary for news-domain claims with provenance, evidence, and conflict-friendly modeling. Extends W3C Annotation and PROV-O.",
-  version: "1.0.0",
-  creator: "Effect Ontology Project",
-  created: "2025-12-18",
-  targetNamespace: "http://effect-ontology.dev/claims#",
-  imports: [
-    {
-      iri: "http://www.w3.org/ns/prov#",
-      prefix: "prov",
-      name: "PROV-O",
-      publisher: "W3C",
-      specUrl: "https://www.w3.org/TR/prov-o/"
-    },
-    {
-      iri: "http://www.w3.org/ns/oa#",
-      prefix: "oa",
-      name: "Web Annotation",
-      publisher: "W3C",
-      specUrl: "https://www.w3.org/TR/annotation-model/"
+/**
+ * Enrich import IRIs with vocabulary metadata
+ */
+const enrichImports = (importIris: ReadonlyArray<string>) =>
+  importIris.map((iri) => {
+    const known = KNOWN_VOCABULARIES[iri]
+    if (known) {
+      return { iri, ...known }
     }
-  ],
-  classes: [
-    {
-      iri: "http://effect-ontology.dev/claims#Claim",
-      localName: "Claim",
-      label: "Claim",
-      comment: "A reified statement with provenance and evidence."
-    },
-    {
-      iri: "http://effect-ontology.dev/claims#Evidence",
-      localName: "Evidence",
-      label: "Evidence",
-      comment: "Text span evidence for a claim."
-    },
-    {
-      iri: "http://effect-ontology.dev/claims#Correction",
-      localName: "Correction",
-      label: "Correction",
-      comment: "A correction that supersedes a previous claim."
+    // For unknown vocabularies, derive prefix from IRI
+    const localName = iri.split(/[#/]/).pop() || iri
+    return {
+      iri,
+      prefix: localName.toLowerCase().slice(0, 6),
+      name: localName,
+      publisher: "Unknown",
+      specUrl: iri
     }
-  ],
-  properties: [
-    {
-      iri: "http://effect-ontology.dev/claims#subject",
-      localName: "subject",
-      label: "subject",
-      comment: "The subject of the claim.",
-      isObjectProperty: true
-    },
-    {
-      iri: "http://effect-ontology.dev/claims#predicate",
-      localName: "predicate",
-      label: "predicate",
-      comment: "The predicate of the claim.",
-      isObjectProperty: true
-    },
-    {
-      iri: "http://effect-ontology.dev/claims#object",
-      localName: "object",
-      label: "object",
-      comment: "The object of the claim.",
-      isObjectProperty: true
-    },
-    {
-      iri: "http://effect-ontology.dev/claims#rank",
-      localName: "rank",
-      label: "rank",
-      comment: "Claim rank: preferred, normal, or deprecated.",
-      isObjectProperty: false
-    },
-    {
-      iri: "http://effect-ontology.dev/claims#confidence",
-      localName: "confidence",
-      label: "confidence",
-      comment: "Extraction confidence score.",
-      isObjectProperty: false
-    }
-  ],
-  seeAlso: ["https://www.wikidata.org/wiki/Help:Ranking"]
-}
-
-const ONTOLOGIES: Record<string, typeof OntologyDetailResponse.Type> = {
-  seattle: SEATTLE_ONTOLOGY,
-  claims: CLAIMS_ONTOLOGY
-}
+  })
 
 export const OntologyRouter = HttpRouter.empty.pipe(
-  // GET /v1/ontologies - List available ontologies
+  // GET /v1/ontologies - List available ontologies from registry
   HttpRouter.get(
     "/v1/ontologies",
     Effect.gen(function*() {
-      const summaries: Array<typeof OntologySummary.Type> = Object.values(ONTOLOGIES).map((ont) => ({
-        id: ont.id,
-        iri: ont.iri,
-        title: ont.title,
-        description: ont.description,
-        version: ont.version,
-        classCount: ont.classes.length,
-        propertyCount: ont.properties.length,
-        importCount: ont.imports.length
+      const registry = yield* OntologyRegistryService
+
+      const entries = yield* registry.list.pipe(
+        Effect.catchTag("RegistryNotFoundError", () =>
+          Effect.gen(function*() {
+            yield* Effect.logWarning("Ontology registry not found, returning empty list")
+            return [] as const
+          })
+        ),
+        Effect.catchTag("RegistryParseError", (error) =>
+          Effect.gen(function*() {
+            yield* Effect.logError("Failed to parse ontology registry", { error })
+            return [] as const
+          })
+        )
+      )
+
+      // For summary counts, we need to load each ontology (can be optimized later)
+      const summaries: Array<typeof OntologySummary.Type> = entries.map((entry) => ({
+        id: entry.id,
+        iri: entry.iri,
+        title: entry.title,
+        description: entry.description,
+        version: entry.version,
+        classCount: 0, // Not loading full ontology for list view
+        propertyCount: 0,
+        importCount: entry.imports.length
       }))
 
       return yield* HttpServerResponse.schemaJson(OntologyListResponse)({
@@ -1192,7 +1143,7 @@ export const OntologyRouter = HttpRouter.empty.pipe(
       })
     })
   ),
-  // GET /v1/ontologies/:id - Get ontology details
+  // GET /v1/ontologies/:id - Get ontology details from registry + parsed data
   HttpRouter.get(
     "/v1/ontologies/:id",
     Effect.gen(function*() {
@@ -1206,16 +1157,61 @@ export const OntologyRouter = HttpRouter.empty.pipe(
         }, { status: 400 })
       }
 
-      const ontology = ONTOLOGIES[id]
-      if (!ontology) {
+      // Get registry entry for metadata
+      const entryOpt = yield* OntologyService.getRegistryEntry(id)
+      if (Option.isNone(entryOpt)) {
         return yield* HttpServerResponse.json({
           error: "NOT_FOUND",
-          message: `Ontology "${id}" not found`
+          message: `Ontology "${id}" not found in registry`
         }, { status: 404 })
       }
+      const entry = entryOpt.value
 
-      return yield* HttpServerResponse.schemaJson(OntologyDetailResponse)(ontology)
-    })
+      // Load full ontology for class/property info
+      const ontologyContext = yield* OntologyService.resolveAndLoad(id)
+
+      // Build detail response from registry entry + parsed ontology
+      const detailResponse: typeof OntologyDetailResponse.Type = {
+        id: entry.id,
+        iri: entry.iri,
+        title: entry.title,
+        description: entry.description,
+        version: entry.version,
+        creator: "Effect Ontology Project",
+        created: new Date().toISOString().split("T")[0],
+        targetNamespace: entry.targetNamespace,
+        imports: enrichImports(entry.imports),
+        classes: ontologyContext.classes.map((cls) => ({
+          iri: cls.id,
+          localName: extractLocalNameFromIri(cls.id),
+          label: cls.label || undefined,
+          comment: cls.comment || undefined,
+          superClass: ontologyContext.hierarchy[cls.id]?.[0]
+        })),
+        properties: ontologyContext.properties.map((prop) => ({
+          iri: prop.id,
+          localName: extractLocalNameFromIri(prop.id),
+          label: prop.label || undefined,
+          comment: prop.comment || undefined,
+          domain: prop.domain[0],
+          range: prop.range[0],
+          isObjectProperty: prop.rangeType === "object"
+        })),
+        seeAlso: []
+      }
+
+      return yield* HttpServerResponse.schemaJson(OntologyDetailResponse)(detailResponse)
+    }).pipe(
+      Effect.catchAll((error) =>
+        Effect.gen(function*() {
+          yield* Effect.logError("Error loading ontology details", { error })
+          return yield* HttpServerResponse.json({
+            error: "INTERNAL_ERROR",
+            message: "Failed to load ontology details"
+          }, { status: 500 })
+        })
+      )
+    )
   ),
   // GET /v1/ontologies/:id/classes - Get classes from parsed ontology
   // Uses OntologyService.resolveAndLoad which handles:
@@ -1234,11 +1230,12 @@ export const OntologyRouter = HttpRouter.empty.pipe(
         }, { status: 400 })
       }
 
-      // Check if it's a known ontology in our static metadata first
-      if (!ONTOLOGIES[id]) {
+      // Validate ontology exists in registry
+      const entryOpt = yield* OntologyService.getRegistryEntry(id)
+      if (Option.isNone(entryOpt)) {
         return yield* HttpServerResponse.json({
           error: "NOT_FOUND",
-          message: `Ontology "${id}" not found`
+          message: `Ontology "${id}" not found in registry`
         }, { status: 404 })
       }
 
@@ -1287,11 +1284,12 @@ export const OntologyRouter = HttpRouter.empty.pipe(
         }, { status: 400 })
       }
 
-      // Check if it's a known ontology in our static metadata first
-      if (!ONTOLOGIES[id]) {
+      // Validate ontology exists in registry
+      const entryOpt = yield* OntologyService.getRegistryEntry(id)
+      if (Option.isNone(entryOpt)) {
         return yield* HttpServerResponse.json({
           error: "NOT_FOUND",
-          message: `Ontology "${id}" not found`
+          message: `Ontology "${id}" not found in registry`
         }, { status: 404 })
       }
 
@@ -1325,6 +1323,442 @@ export const OntologyRouter = HttpRouter.empty.pipe(
         })
       )
     )
+  ),
+  // GET /v1/ontologies/:id/entities - List unique entities (subjects) for this ontology
+  HttpRouter.get(
+    "/v1/ontologies/:id/entities",
+    Effect.gen(function*() {
+      const params = yield* HttpRouter.params
+      const ontologyId = params.id
+
+      if (!ontologyId) {
+        return yield* HttpServerResponse.json({
+          error: "INVALID_REQUEST",
+          message: "Ontology ID is required"
+        }, { status: 400 })
+      }
+
+      // Validate ontology exists in registry
+      const entryOpt = yield* OntologyService.getRegistryEntry(ontologyId)
+      if (Option.isNone(entryOpt)) {
+        return yield* HttpServerResponse.json({
+          error: "NOT_FOUND",
+          message: `Ontology "${ontologyId}" not found in registry`
+        }, { status: 404 })
+      }
+
+      const request = yield* HttpServerRequest.HttpServerRequest
+      const url = new URL(request.url, "http://localhost")
+      const limit = parseInt(url.searchParams.get("limit") || "20")
+      const offset = parseInt(url.searchParams.get("offset") || "0")
+
+      const claimRepo = yield* ClaimRepository
+
+      // Get claims scoped to this ontology
+      const claims = yield* claimRepo.getClaims({
+        ontologyId,
+        limit: 1000 // Get more to dedupe subjects
+      })
+
+      // Extract unique subjects
+      const subjectsMap = new Map<string, { iri: string; claimCount: number; types: Set<string> }>()
+      for (const claim of claims) {
+        const existing = subjectsMap.get(claim.subjectIri)
+        if (existing) {
+          existing.claimCount++
+          // Add type from predicate if it's rdf:type
+          if (claim.predicateIri === "http://www.w3.org/1999/02/22-rdf-syntax-ns#type") {
+            existing.types.add(claim.objectValue)
+          }
+        } else {
+          const types = new Set<string>()
+          if (claim.predicateIri === "http://www.w3.org/1999/02/22-rdf-syntax-ns#type") {
+            types.add(claim.objectValue)
+          }
+          subjectsMap.set(claim.subjectIri, { iri: claim.subjectIri, claimCount: 1, types })
+        }
+      }
+
+      const entities = Array.from(subjectsMap.values())
+        .slice(offset, offset + limit)
+        .map((e) => ({
+          iri: e.iri,
+          label: extractLocalNameFromIri(e.iri),
+          types: Array.from(e.types),
+          claimCount: e.claimCount
+        }))
+
+      return yield* HttpServerResponse.json({
+        entities,
+        total: subjectsMap.size,
+        limit,
+        offset
+      })
+    }).pipe(
+      Effect.catchAll((error) =>
+        Effect.gen(function*() {
+          yield* Effect.logError("Error loading ontology entities", { error })
+          return yield* HttpServerResponse.json({
+            error: "INTERNAL_ERROR",
+            message: "Failed to load ontology entities"
+          }, { status: 500 })
+        })
+      )
+    )
+  ),
+  // GET /v1/ontologies/:id/claims - Search claims scoped to this ontology
+  HttpRouter.get(
+    "/v1/ontologies/:id/claims",
+    Effect.gen(function*() {
+      const params = yield* HttpRouter.params
+      const ontologyId = params.id
+
+      if (!ontologyId) {
+        return yield* HttpServerResponse.json({
+          error: "INVALID_REQUEST",
+          message: "Ontology ID is required"
+        }, { status: 400 })
+      }
+
+      // Validate ontology exists in registry
+      const entryOpt = yield* OntologyService.getRegistryEntry(ontologyId)
+      if (Option.isNone(entryOpt)) {
+        return yield* HttpServerResponse.json({
+          error: "NOT_FOUND",
+          message: `Ontology "${ontologyId}" not found in registry`
+        }, { status: 404 })
+      }
+
+      const queryParams = yield* HttpServerRequest.schemaSearchParams(TimelineClaimsQuery).pipe(
+        Effect.catchAll(() => Effect.succeed(new TimelineClaimsQuery({})))
+      )
+
+      const claimRepo = yield* ClaimRepository
+      const articleRepo = yield* ArticleRepository
+      const limit = queryParams.limit ?? 20
+      const offset = queryParams.offset ?? 0
+
+      // Get claims scoped to this ontology
+      const claims = yield* claimRepo.getClaims({
+        ontologyId,
+        subjectIri: queryParams.subject,
+        predicateIri: queryParams.predicate,
+        rank: queryParams.rank,
+        limit: limit + 1,
+        offset
+      })
+
+      const hasMore = claims.length > limit
+      const claimResults = hasMore ? claims.slice(0, limit) : claims
+
+      // Get articles for each claim
+      const claimsWithArticles = yield* Effect.forEach(claimResults, (claim) =>
+        Effect.gen(function*() {
+          const articleOpt = yield* articleRepo.getArticle(claim.articleId)
+          if (Option.isNone(articleOpt)) {
+            return Option.none<typeof ClaimWithRank.Type>()
+          }
+          return Option.some(claimRowToClaimWithRank(claim, articleOpt.value))
+        }))
+
+      const validClaims = claimsWithArticles
+        .filter(Option.isSome)
+        .map((opt) => opt.value)
+
+      // Get total count
+      const total = yield* claimRepo.countClaims({
+        ontologyId,
+        subjectIri: queryParams.subject,
+        predicateIri: queryParams.predicate
+      })
+
+      return yield* HttpServerResponse.schemaJson(TimelineClaimsResponse)({
+        claims: validClaims,
+        total,
+        limit,
+        offset,
+        hasMore
+      })
+    }).pipe(
+      Effect.catchAll((error) =>
+        Effect.gen(function*() {
+          yield* Effect.logError("Error searching ontology claims", { error })
+          return yield* HttpServerResponse.json({
+            error: "INTERNAL_ERROR",
+            message: "Failed to search ontology claims"
+          }, { status: 500 })
+        })
+      )
+    )
+  ),
+  // GET /v1/ontologies/:id/timeline/entities/:iri - Timeline for entity scoped to ontology
+  HttpRouter.get(
+    "/v1/ontologies/:id/timeline/entities/:iri",
+    Effect.gen(function*() {
+      const params = yield* HttpRouter.params
+      const ontologyId = params.id
+      const iri = params.iri
+
+      if (!ontologyId || !iri) {
+        return yield* HttpServerResponse.json({
+          error: "INVALID_REQUEST",
+          message: "Ontology ID and entity IRI are required"
+        }, { status: 400 })
+      }
+
+      // Validate ontology exists in registry
+      const entryOpt = yield* OntologyService.getRegistryEntry(ontologyId)
+      if (Option.isNone(entryOpt)) {
+        return yield* HttpServerResponse.json({
+          error: "NOT_FOUND",
+          message: `Ontology "${ontologyId}" not found in registry`
+        }, { status: 404 })
+      }
+
+      const decodedIri = decodeURIComponent(iri)
+      const queryParams = yield* HttpServerRequest.schemaSearchParams(TimelineEntityQuery).pipe(
+        Effect.catchAll(() => Effect.succeed(new TimelineEntityQuery({})))
+      )
+
+      const claimRepo = yield* ClaimRepository
+      const articleRepo = yield* ArticleRepository
+
+      // Get claims for this entity, scoped to ontology
+      const claims = yield* claimRepo.getClaims({
+        ontologyId,
+        subjectIri: decodedIri,
+        includeDeprecated: queryParams.includeDeprecated ?? false,
+        limit: 100
+      })
+
+      // Get articles for each claim
+      const claimsWithArticles = yield* Effect.forEach(claims, (claim) =>
+        Effect.gen(function*() {
+          const articleOpt = yield* articleRepo.getArticle(claim.articleId)
+          if (Option.isNone(articleOpt)) {
+            return Option.none<typeof ClaimWithRank.Type>()
+          }
+          return Option.some(claimRowToClaimWithRank(claim, articleOpt.value))
+        }))
+
+      const validClaims = claimsWithArticles
+        .filter(Option.isSome)
+        .map((opt) => opt.value)
+
+      const correctionsList: Array<typeof CorrectionSummary.Type> = []
+
+      return yield* HttpServerResponse.schemaJson(TimelineEntityResponse)({
+        iri: decodedIri,
+        asOf: queryParams.asOf ?? null,
+        claims: validClaims,
+        corrections: correctionsList
+      })
+    }).pipe(
+      Effect.catchAll((error) =>
+        Effect.gen(function*() {
+          yield* Effect.logError("Error loading entity timeline", { error })
+          return yield* HttpServerResponse.json({
+            error: "INTERNAL_ERROR",
+            message: "Failed to load entity timeline"
+          }, { status: 500 })
+        })
+      )
+    )
+  ),
+  // POST /v1/ontologies/:id/documents - Search documents scoped to this ontology
+  HttpRouter.post(
+    "/v1/ontologies/:id/documents",
+    Effect.gen(function*() {
+      const params = yield* HttpRouter.params
+      const ontologyId = params.id
+
+      if (!ontologyId) {
+        return yield* HttpServerResponse.json({
+          error: "INVALID_REQUEST",
+          message: "Ontology ID is required"
+        }, { status: 400 })
+      }
+
+      // Validate ontology exists in registry
+      const entryOpt = yield* OntologyService.getRegistryEntry(ontologyId)
+      if (Option.isNone(entryOpt)) {
+        return yield* HttpServerResponse.json({
+          error: "NOT_FOUND",
+          message: `Ontology "${ontologyId}" not found in registry`
+        }, { status: 404 })
+      }
+
+      return yield* HttpServerRequest.schemaBodyJson(ArticleSearchRequest).pipe(
+        Effect.matchEffect({
+          onFailure: (error) =>
+            HttpServerResponse.json({
+              error: "VALIDATION_ERROR",
+              message: TreeFormatter.formatErrorSync(error as ParseError)
+            }, { status: 400 }),
+          onSuccess: (request) =>
+            Effect.gen(function*() {
+              const articleRepo = yield* ArticleRepository
+              const claimRepo = yield* ClaimRepository
+
+              const limit = request.limit ?? 20
+              const offset = request.offset ?? 0
+
+              // Get articles scoped to this ontology
+              const articles = yield* articleRepo.getArticles({
+                ontologyId,
+                sourceName: request.sources?.[0],
+                publishedAfter: request.dateRange?.from
+                  ? new Date(DateTime.toEpochMillis(request.dateRange.from))
+                  : undefined,
+                publishedBefore: request.dateRange?.to
+                  ? new Date(DateTime.toEpochMillis(request.dateRange.to))
+                  : undefined,
+                limit: limit + 1,
+                offset
+              })
+
+              const hasMore = articles.length > limit
+              const articleResults = hasMore ? articles.slice(0, limit) : articles
+
+              // Filter by query in headline if provided
+              const queryLower = request.query?.toLowerCase()
+              const filtered = queryLower
+                ? articleResults.filter((a) => a.headline?.toLowerCase().includes(queryLower))
+                : articleResults
+
+              // Get claim counts
+              const results = yield* Effect.forEach(filtered, (article) =>
+                Effect.gen(function*() {
+                  const claims = yield* claimRepo.getClaims({
+                    articleId: article.id,
+                    ontologyId,
+                    includeDeprecated: true
+                  })
+
+                  return {
+                    article: {
+                      id: article.id,
+                      uri: article.uri,
+                      headline: article.headline,
+                      sourceName: article.sourceName,
+                      publishedAt: DateTime.unsafeFromDate(article.publishedAt),
+                      ingestedAt: DateTime.unsafeFromDate(article.ingestedAt ?? article.createdAt ?? new Date())
+                    },
+                    claimCount: claims.length,
+                    conflictCount: 0
+                  } satisfies typeof ArticleSearchResult.Type
+                }))
+
+              const total = yield* articleRepo.countArticles({
+                ontologyId,
+                sourceName: request.sources?.[0]
+              })
+
+              return yield* HttpServerResponse.schemaJson(ArticleSearchResponse)({
+                articles: results,
+                total,
+                limit,
+                offset,
+                hasMore
+              })
+            })
+        })
+      )
+    }).pipe(
+      Effect.catchAll((error) =>
+        Effect.gen(function*() {
+          yield* Effect.logError("Error searching ontology documents", { error })
+          return yield* HttpServerResponse.json({
+            error: "INTERNAL_ERROR",
+            message: "Failed to search ontology documents"
+          }, { status: 500 })
+        })
+      )
+    )
+  ),
+  // GET /v1/ontologies/:id/documents/:docId - Get document detail scoped to this ontology
+  HttpRouter.get(
+    "/v1/ontologies/:id/documents/:docId",
+    Effect.gen(function*() {
+      const params = yield* HttpRouter.params
+      const ontologyId = params.id
+      const docId = params.docId
+
+      if (!ontologyId || !docId) {
+        return yield* HttpServerResponse.json({
+          error: "INVALID_REQUEST",
+          message: "Ontology ID and document ID are required"
+        }, { status: 400 })
+      }
+
+      // Validate ontology exists in registry
+      const entryOpt = yield* OntologyService.getRegistryEntry(ontologyId)
+      if (Option.isNone(entryOpt)) {
+        return yield* HttpServerResponse.json({
+          error: "NOT_FOUND",
+          message: `Ontology "${ontologyId}" not found in registry`
+        }, { status: 404 })
+      }
+
+      const articleRepo = yield* ArticleRepository
+      const claimRepo = yield* ClaimRepository
+
+      const articleOpt = yield* articleRepo.getArticle(docId)
+      if (Option.isNone(articleOpt)) {
+        return yield* HttpServerResponse.json({
+          error: "NOT_FOUND",
+          message: "Document not found"
+        }, { status: 404 })
+      }
+
+      const article = articleOpt.value
+
+      // Get claims for this article scoped to ontology
+      const claims = yield* claimRepo.getClaims({
+        articleId: docId,
+        ontologyId,
+        includeDeprecated: true
+      })
+
+      // Unique entities
+      const uniqueSubjects = new Set(claims.map((c) => c.subjectIri))
+
+      return yield* HttpServerResponse.json({
+        article: {
+          id: article.id,
+          uri: article.uri,
+          headline: article.headline,
+          sourceName: article.sourceName,
+          publishedAt: article.publishedAt.toISOString(),
+          ingestedAt: (article.ingestedAt ?? article.createdAt ?? new Date()).toISOString()
+        },
+        claims: claims.map((claim) => ({
+          id: claim.id,
+          subjectIri: claim.subjectIri,
+          predicateIri: claim.predicateIri,
+          objectValue: claim.objectValue,
+          objectType: claim.objectType,
+          rank: claim.rank,
+          confidence: claim.confidenceScore ? Number(claim.confidenceScore) : null,
+          evidenceText: claim.evidenceText,
+          evidenceStartOffset: claim.evidenceStartOffset,
+          evidenceEndOffset: claim.evidenceEndOffset,
+          assertedAt: (claim.assertedAt ?? new Date()).toISOString()
+        })),
+        entityCount: uniqueSubjects.size,
+        conflictCount: 0
+      })
+    }).pipe(
+      Effect.catchAll((error) =>
+        Effect.gen(function*() {
+          yield* Effect.logError("Error loading document detail", { error })
+          return yield* HttpServerResponse.json({
+            error: "INTERNAL_ERROR",
+            message: "Failed to load document detail"
+          }, { status: 500 })
+        })
+      )
+    )
   )
 )
 
@@ -1337,7 +1771,8 @@ export const ApiRouter = HttpRouter.empty.pipe(
   HttpRouter.concat(TimelineRouter),
   HttpRouter.concat(SearchRouter),
   HttpRouter.concat(OntologyRouter),
-  HttpRouter.concat(InferenceRouter)
+  HttpRouter.concat(InferenceRouter),
+  HttpRouter.concat(LinkIngestionRouter)
 )
 
 export const HttpServerLive = Layer.unwrapEffect(

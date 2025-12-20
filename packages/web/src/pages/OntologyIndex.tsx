@@ -1,6 +1,8 @@
 import { useState } from "react"
-import { Link } from "react-router-dom"
+import { Link, useParams } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
+import { entityLink } from "../lib/routing"
+import { localName } from "@/lib/namespace"
 
 // Types matching backend API
 interface ClaimWithRank {
@@ -40,17 +42,6 @@ interface EntitySummary {
   types: string[]
   claimCount: number
   latestClaim: string
-}
-
-// Extract local name from IRI
-function localName(iri: string): string {
-  const match = iri.match(/[#/]([^#/]+)$/)
-  return match ? match[1] : iri
-}
-
-// Make IRI URL-safe for routing
-function encodeIri(iri: string): string {
-  return encodeURIComponent(iri)
 }
 
 function formatDate(dateStr: string): string {
@@ -115,12 +106,12 @@ function StatsCard({ label, value }: { label: string; value: string | number }) 
 }
 
 // Entity row
-function EntityRow({ entity }: { entity: EntitySummary }) {
+function EntityRow({ entity, ontologyId }: { entity: EntitySummary; ontologyId: string }) {
   return (
     <tr className="border-b border-gray-100 hover:bg-blue-50/50">
       <td className="py-3 pr-4">
         <Link
-          to={`/ontology/${encodeIri(entity.iri)}`}
+          to={entityLink(ontologyId, entity.iri)}
           className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
         >
           {entity.label}
@@ -184,13 +175,14 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
 }
 
 export function OntologyIndex() {
+  const { ontologyId = "seattle" } = useParams<{ ontologyId: string }>()
   const [search, setSearch] = useState("")
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
 
   const { data: claimsData, isLoading, error } = useQuery<TimelineClaimsResponse>({
-    queryKey: ["claims-for-entities"],
+    queryKey: ["claims-for-entities", ontologyId],
     queryFn: async () => {
-      const res = await fetch("/api/v1/timeline/claims?limit=500")
+      const res = await fetch(`/api/v1/ontologies/${ontologyId}/claims?limit=500`)
       if (!res.ok) {
         throw new Error(`Failed to fetch claims: ${res.status}`)
       }
@@ -220,11 +212,10 @@ export function OntologyIndex() {
       {/* Header */}
       <header className="mb-8">
         <h1 className="text-3xl font-serif text-gray-900 mb-2">
-          Seattle Knowledge Graph
+          {ontologyId.charAt(0).toUpperCase() + ontologyId.slice(1)} Knowledge Graph
         </h1>
         <p className="text-gray-600">
-          Structured facts extracted from local news sources about Seattle government,
-          officials, and policy decisions.
+          Structured facts extracted from source documents.
         </p>
       </header>
 
@@ -307,7 +298,7 @@ export function OntologyIndex() {
             </thead>
             <tbody>
               {entities.map((entity) => (
-                <EntityRow key={entity.iri} entity={entity} />
+                <EntityRow key={entity.iri} entity={entity} ontologyId={ontologyId} />
               ))}
             </tbody>
           </table>

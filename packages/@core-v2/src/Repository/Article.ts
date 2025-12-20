@@ -21,6 +21,7 @@ import type { ArticleInsertRow, ArticleRow } from "./schema.js"
 export type ArticleId = string
 
 export interface ArticleFilter {
+  readonly ontologyId?: string
   readonly sourceName?: string
   readonly publishedAfter?: Date
   readonly publishedBefore?: Date
@@ -116,6 +117,9 @@ export class ArticleRepository extends Effect.Service<ArticleRepository>()("Arti
       Effect.gen(function*() {
         const conditions = []
 
+        if (filter.ontologyId) {
+          conditions.push(eq(articles.ontologyId, filter.ontologyId))
+        }
         if (filter.sourceName) {
           conditions.push(eq(articles.sourceName, filter.sourceName))
         }

@@ -1,6 +1,8 @@
 import { useState } from "react"
-import { Link } from "react-router-dom"
+import { Link, useParams } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
+import { entityLink } from "@/lib/routing"
+import { toLabel } from "@/lib/namespace"
 
 // Types matching backend API
 interface ClaimWithRank {
@@ -33,25 +35,6 @@ interface TimelineClaimsResponse {
   hasMore: boolean
 }
 
-// Extract local name from IRI
-function localName(iri: string): string {
-  const match = iri.match(/[#/]([^#/]+)$/)
-  return match ? match[1] : iri
-}
-
-// Make IRI URL-safe for routing
-function encodeIri(iri: string): string {
-  return encodeURIComponent(iri)
-}
-
-// Format to human-readable label
-function toLabel(iri: string): string {
-  return localName(iri)
-    .replace(/([A-Z])/g, " $1")
-    .replace(/_/g, " ")
-    .trim()
-}
-
 // Format date for display
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -82,7 +65,7 @@ function groupByDate(claims: ClaimWithRank[]): Map<string, ClaimWithRank[]> {
 }
 
 // ClaimCard component
-function ClaimCard({ claim }: { claim: ClaimWithRank }) {
+function ClaimCard({ claim, ontologyId }: { claim: ClaimWithRank; ontologyId: string }) {
   const [expanded, setExpanded] = useState(false)
 
   const rankStyles = {
@@ -107,7 +90,7 @@ function ClaimCard({ claim }: { claim: ClaimWithRank }) {
       {/* Subject -> Predicate -> Object */}
       <div className={`flex items-baseline gap-2 flex-wrap ${claim.rank === "deprecated" ? "line-through" : ""}`}>
         <Link
-          to={`/ontology/${encodeIri(claim.subjectIri)}`}
+          to={entityLink(ontologyId, claim.subjectIri)}
           className="text-blue-600 hover:underline font-medium"
         >
           {toLabel(claim.subjectIri)}
@@ -117,7 +100,7 @@ function ClaimCard({ claim }: { claim: ClaimWithRank }) {
         </span>
         {claim.objectType === "iri" ? (
           <Link
-            to={`/ontology/${encodeIri(claim.objectValue)}`}
+            to={entityLink(ontologyId, claim.objectValue)}
             className="text-blue-600 hover:underline"
           >
             {toLabel(claim.objectValue)}
@@ -232,16 +215,17 @@ function FilterDropdown({
 
 // Main TimelinePage component
 export function TimelinePage() {
+  const { ontologyId = "seattle" } = useParams<{ ontologyId: string }>()
   const [filter, setFilter] = useState("all")
 
   const { data, isLoading, error } = useQuery<TimelineClaimsResponse>({
-    queryKey: ["timeline", filter],
+    queryKey: ["timeline", ontologyId, filter],
     queryFn: async () => {
       const params = new URLSearchParams({ limit: "100" })
       if (filter !== "all") {
         params.set("rank", filter)
       }
-      const res = await fetch(`/api/v1/timeline/claims?${params}`)
+      const res = await fetch(`/api/v1/ontologies/${ontologyId}/claims?${params}`)
       if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`)
       return res.json()
     },
@@ -312,7 +296,7 @@ export function TimelinePage() {
               <DateDivider date={date} />
               <div className="space-y-3">
                 {groupedClaims.get(date)?.map((claim) => (
-                  <ClaimCard key={claim.id} claim={claim} />
+                  <ClaimCard key={claim.id} claim={claim} ontologyId={ontologyId} />
                 ))}
               </div>
             </div>

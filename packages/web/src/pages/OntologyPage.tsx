@@ -1,6 +1,8 @@
 import { useState } from "react"
 import { useParams, Link } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
+import { entityLink, entitiesLink } from "@/lib/routing"
+import { toLabel } from "@/lib/namespace"
 
 // Types matching backend API
 interface ClaimWithRank {
@@ -31,25 +33,6 @@ interface TimelineEntityResponse {
   asOf: string | null
   claims: ClaimWithRank[]
   corrections: unknown[]
-}
-
-// Extract local name from IRI
-function localName(iri: string): string {
-  const match = iri.match(/[#/]([^#/]+)$/)
-  return match ? match[1] : iri
-}
-
-// Make IRI URL-safe for routing
-function encodeIri(iri: string): string {
-  return encodeURIComponent(iri)
-}
-
-// Format to human-readable label
-function toLabel(iri: string): string {
-  return localName(iri)
-    .replace(/([A-Z])/g, " $1")
-    .replace(/_/g, " ")
-    .trim()
 }
 
 // Format date
@@ -86,11 +69,11 @@ function RankIndicator({ rank }: { rank: ClaimWithRank["rank"] }) {
 }
 
 // Object value display - links to entity if it's an IRI
-function ObjectValue({ claim }: { claim: ClaimWithRank }) {
+function ObjectValue({ claim, ontologyId }: { claim: ClaimWithRank; ontologyId: string }) {
   if (claim.objectType === "iri") {
     return (
       <Link
-        to={`/ontology/${encodeIri(claim.objectValue)}`}
+        to={entityLink(ontologyId, claim.objectValue)}
         className="text-blue-600 hover:text-blue-800 hover:underline"
       >
         {toLabel(claim.objectValue)}
@@ -139,7 +122,7 @@ function SourceCitation({ claim }: { claim: ClaimWithRank }) {
 }
 
 // Facts table row with expandable source
-function FactRow({ claim }: { claim: ClaimWithRank }) {
+function FactRow({ claim, ontologyId }: { claim: ClaimWithRank; ontologyId: string }) {
   const [showSource, setShowSource] = useState(false)
   const deprecated = claim.rank === "deprecated"
 
@@ -152,7 +135,7 @@ function FactRow({ claim }: { claim: ClaimWithRank }) {
           </span>
         </td>
         <td className={`py-3 pr-4 align-top ${deprecated ? "line-through" : ""}`}>
-          <ObjectValue claim={claim} />
+          <ObjectValue claim={claim} ontologyId={ontologyId} />
           {claim.validFrom && (
             <div className="text-xs text-gray-500 mt-0.5">
               {formatDate(claim.validFrom)} – {claim.validTo ? formatDate(claim.validTo) : "present"}
@@ -186,7 +169,7 @@ function FactRow({ claim }: { claim: ClaimWithRank }) {
 }
 
 // Infobox component (Wikipedia-style)
-function Infobox({ iri, claims }: { iri: string; claims: ClaimWithRank[] }) {
+function Infobox({ iri, claims, ontologyId }: { iri: string; claims: ClaimWithRank[]; ontologyId: string }) {
   const label = toLabel(iri)
   const preferredClaims = claims.filter(c => c.rank === "preferred").slice(0, 6)
 
@@ -230,7 +213,7 @@ function Infobox({ iri, claims }: { iri: string; claims: ClaimWithRank[] }) {
                     <td className="py-1.5 text-gray-800">
                       {claim.objectType === "iri" ? (
                         <Link
-                          to={`/ontology/${encodeIri(claim.objectValue)}`}
+                          to={entityLink(ontologyId, claim.objectValue)}
                           className="text-blue-600 hover:underline"
                         >
                           {toLabel(claim.objectValue)}
@@ -258,15 +241,15 @@ function Infobox({ iri, claims }: { iri: string; claims: ClaimWithRank[] }) {
 
 // Main page component
 export function OntologyPage() {
-  const { entityId } = useParams<{ entityId: string }>()
+  const { ontologyId = "seattle", entityId } = useParams<{ ontologyId: string; entityId: string }>()
 
   // Decode the IRI from URL
   const iri = entityId ? decodeURIComponent(entityId) : ""
 
   const { data, isLoading, error } = useQuery<TimelineEntityResponse>({
-    queryKey: ["entity", iri],
+    queryKey: ["entity", ontologyId, iri],
     queryFn: async () => {
-      const res = await fetch(`/api/v1/timeline/entities/${encodeURIComponent(iri)}`)
+      const res = await fetch(`/api/v1/ontologies/${ontologyId}/timeline/entities/${encodeURIComponent(iri)}`)
       if (!res.ok) {
         if (res.status === 404) {
           throw new Error("Entity not found")
@@ -319,7 +302,7 @@ export function OntologyPage() {
             The entity could not be found in the knowledge base.
           </p>
           <p className="text-red-500 text-sm mt-2 font-mono">{iri}</p>
-          <Link to="/ontology" className="text-blue-600 hover:underline mt-4 inline-block">
+          <Link to={entitiesLink(ontologyId)} className="text-blue-600 hover:underline mt-4 inline-block">
             ← Back to entity browser
           </Link>
         </div>
@@ -331,7 +314,7 @@ export function OntologyPage() {
     <div className="max-w-5xl mx-auto">
       {/* Breadcrumb */}
       <nav className="text-sm text-gray-500 mb-4">
-        <Link to="/ontology" className="hover:text-blue-600">Entities</Link>
+        <Link to={entitiesLink(ontologyId)} className="hover:text-blue-600">Entities</Link>
         <span className="mx-2">›</span>
         <span className="text-gray-700">{label}</span>
       </nav>
@@ -339,7 +322,7 @@ export function OntologyPage() {
       {/* Main content area */}
       <article className="clearfix">
         {/* Infobox - floats right */}
-        {claims.length > 0 && <Infobox iri={iri} claims={claims} />}
+        {claims.length > 0 && <Infobox iri={iri} claims={claims} ontologyId={ontologyId} />}
 
         {/* Title */}
         <header className="mb-6">
@@ -367,7 +350,7 @@ export function OntologyPage() {
             <table className="w-full">
               <tbody>
                 {claims.map((claim) => (
-                  <FactRow key={claim.id} claim={claim} />
+                  <FactRow key={claim.id} claim={claim} ontologyId={ontologyId} />
                 ))}
               </tbody>
             </table>
