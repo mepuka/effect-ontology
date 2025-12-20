@@ -20,8 +20,8 @@ resource "google_cloud_run_v2_service" "main" {
 
       resources {
         limits = {
-          cpu    = "1"
-          memory = "1Gi"
+          cpu    = "2"
+          memory = "2Gi"
         }
       }
 
@@ -50,7 +50,7 @@ resource "google_cloud_run_v2_service" "main" {
         value = var.ontology_path
       }
       env {
-        name  = "EXTERNAL_VOCABS_PATH"
+        name  = "ONTOLOGY_EXTERNAL_VOCABS_PATH"
         value = var.external_vocabs_path
       }
       env {

@@ -21,7 +21,7 @@ services:
       - effect-ontology
 
   postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     container_name: workflow-postgres
     restart: unless-stopped
     environment:

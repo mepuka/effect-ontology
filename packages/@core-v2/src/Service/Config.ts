@@ -102,6 +102,23 @@ const ExtractionConfig = Config.nested("EXTRACTION")(Config.all({
   strictPersistence: Config.boolean("STRICT_PERSISTENCE").pipe(Config.withDefault(true))
 }))
 
+const EntityRegistryConfig = Config.nested("ENTITY_REGISTRY")(Config.all({
+  /** Enable cross-batch entity resolution via persistent entity registry */
+  enabled: Config.boolean("ENABLED").pipe(Config.withDefault(false)),
+  /** Minimum embedding similarity for candidate retrieval (0.0-1.0) */
+  candidateThreshold: Config.number("CANDIDATE_THRESHOLD").pipe(Config.withDefault(0.6)),
+  /** Minimum similarity for final resolution decision (0.0-1.0) */
+  resolutionThreshold: Config.number("RESOLUTION_THRESHOLD").pipe(Config.withDefault(0.8)),
+  /** Maximum candidates per entity from ANN search */
+  maxCandidatesPerEntity: Config.integer("MAX_CANDIDATES").pipe(Config.withDefault(20)),
+  /** Maximum candidates from token blocking */
+  maxBlockingCandidates: Config.integer("MAX_BLOCKING").pipe(Config.withDefault(100)),
+  /** Namespace prefix for generated canonical entity IRIs */
+  canonicalNamespace: Config.string("CANONICAL_NAMESPACE").pipe(
+    Config.withDefault("http://example.org/entities/")
+  )
+}))
+
 const ApiConfig = Config.nested("API")(Config.all({
   /**
    * API keys for authentication (comma-separated list).
@@ -142,6 +159,7 @@ export interface AppConfig {
   readonly grounder: Config.Config.Success<typeof GrounderConfig>
   readonly embedding: Config.Config.Success<typeof EmbeddingConfig>
   readonly extraction: Config.Config.Success<typeof ExtractionConfig>
+  readonly entityRegistry: Config.Config.Success<typeof EntityRegistryConfig>
   readonly rdf: Config.Config.Success<typeof RdfConfig>
   readonly api: Config.Config.Success<typeof ApiConfig>
 }
@@ -195,6 +213,14 @@ export const DEFAULT_CONFIG: AppConfig = {
     runsDir: "./output/runs",
     strictPersistence: true
   },
+  entityRegistry: {
+    enabled: false,
+    candidateThreshold: 0.6,
+    resolutionThreshold: 0.8,
+    maxCandidatesPerEntity: 20,
+    maxBlockingCandidates: 100,
+    canonicalNamespace: "http://example.org/entities/"
+  },
   rdf: {
     baseNamespace: "http://example.org/kg/",
     outputFormat: "Turtle",
@@ -217,7 +243,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 // =============================================================================
 
 const makeConfigService = Effect.gen(function*() {
-  const [llm, storage, ontology, runtime, grounder, embedding, extraction, rdf, api] = yield* Effect.all([
+  const [llm, storage, ontology, runtime, grounder, embedding, extraction, entityRegistry, rdf, api] = yield* Effect.all([
     LlmConfig,
     StorageConfig,
     OntologyConfig,
@@ -225,6 +251,7 @@ const makeConfigService = Effect.gen(function*() {
     GrounderConfig,
     EmbeddingConfig,
     ExtractionConfig,
+    EntityRegistryConfig,
     RdfConfig,
     ApiConfig
   ])
@@ -237,6 +264,7 @@ const makeConfigService = Effect.gen(function*() {
     grounder,
     embedding,
     extraction,
+    entityRegistry,
     rdf,
     api
   } satisfies AppConfig

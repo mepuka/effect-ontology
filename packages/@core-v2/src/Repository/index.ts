@@ -13,9 +13,11 @@ import { PgClient } from "@effect/sql-pg"
 import { Config, Layer, Redacted } from "effect"
 import { ArticleRepository } from "./Article.js"
 import { ClaimRepository } from "./Claim.js"
+import { EntityRegistryRepository } from "./EntityRegistry.js"
 
 export { type ArticleFilter, ArticleRepository } from "./Article.js"
 export { type ClaimFilter, ClaimRepository, type ConflictCandidate } from "./Claim.js"
+export { type BlockingCandidate, EntityRegistryRepository } from "./EntityRegistry.js"
 export * from "./schema.js"
 export * from "./types.js"
 
@@ -72,11 +74,21 @@ export const ArticleRepositoryLive = ArticleRepository.Default.pipe(
 )
 
 /**
+ * EntityRegistryRepository with Drizzle
+ *
+ * Requires pgvector extension to be enabled in PostgreSQL.
+ */
+export const EntityRegistryRepositoryLive = EntityRegistryRepository.Default.pipe(
+  Layer.provide(DrizzleLive)
+)
+
+/**
  * All repositories with Drizzle and Postgres
  */
 export const RepositoriesLive = Layer.mergeAll(
   ClaimRepositoryLive,
-  ArticleRepositoryLive
+  ArticleRepositoryLive,
+  EntityRegistryRepositoryLive
 ).pipe(
   Layer.provide(PgClientLive)
 )
@@ -93,7 +105,8 @@ export const makeTestRepositoriesLayer = (config: {
 }) =>
   Layer.mergeAll(
     ClaimRepository.Default,
-    ArticleRepository.Default
+    ArticleRepository.Default,
+    EntityRegistryRepository.Default
   ).pipe(
     Layer.provide(DrizzleLive),
     Layer.provide(

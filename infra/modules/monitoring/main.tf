@@ -29,7 +29,7 @@ resource "google_monitoring_uptime_check_config" "health" {
   period       = "60s" # Check every 60 seconds
 
   http_check {
-    path           = "/health"
+    path           = "/health/live"
     port           = 443
     use_ssl        = true
     validate_ssl   = true
@@ -204,9 +204,17 @@ resource "google_logging_metric" "llm_tokens" {
 
   metric_descriptor {
     metric_kind = "DELTA"
-    value_type  = "INT64"
+    value_type  = "DISTRIBUTION"
     unit        = "1"
   }
 
   value_extractor = "EXTRACT(jsonPayload.tokens_used)"
+
+  bucket_options {
+    exponential_buckets {
+      num_finite_buckets = 64
+      growth_factor      = 2
+      scale              = 1
+    }
+  }
 }

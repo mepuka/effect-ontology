@@ -265,6 +265,14 @@ const MockConfigService = Layer.succeed(ConfigService, {
     runsDir: "/tmp/test-runs",
     strictPersistence: false
   },
+  entityRegistry: {
+    enabled: false,
+    candidateThreshold: 0.6,
+    resolutionThreshold: 0.8,
+    maxCandidatesPerEntity: 20,
+    maxBlockingCandidates: 100,
+    canonicalNamespace: "http://example.org/entities/"
+  },
   api: {
     keys: Option.none(),
     requireAuth: false

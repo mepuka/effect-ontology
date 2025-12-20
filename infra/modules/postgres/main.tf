@@ -38,6 +38,26 @@ resource "google_vpc_access_connector" "workflow_connector" {
   max_instances = 3
 }
 
+# Cloud NAT for private VMs to access internet (pull Docker images)
+resource "google_compute_router" "workflow_router" {
+  name    = "workflow-router-${var.environment}"
+  region  = var.region
+  network = google_compute_network.workflow_vpc.id
+}
+
+resource "google_compute_router_nat" "workflow_nat" {
+  name                               = "workflow-nat-${var.environment}"
+  router                             = google_compute_router.workflow_router.name
+  region                             = var.region
+  nat_ip_allocate_option            = "AUTO_ONLY"
+  source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
+
+  log_config {
+    enable = false
+    filter = "ERRORS_ONLY"
+  }
+}
+
 # Firewall: Allow internal traffic on PostgreSQL port
 resource "google_compute_firewall" "allow_postgres" {
   name    = "allow-postgres-${var.environment}"
@@ -89,7 +109,7 @@ resource "google_compute_instance" "postgres" {
   # Attach persistent disk for PostgreSQL data
   attached_disk {
     source      = google_compute_disk.postgres_data.self_link
-    device_name = "postgres-data"
+    device_name = "postgres-data-${var.environment}"
     mode        = "READ_WRITE"
   }
 
@@ -103,14 +123,16 @@ resource "google_compute_instance" "postgres" {
   }
 
   metadata = {
-    # Cloud-init script to start PostgreSQL container
+    # Cloud-init script to start PostgreSQL container with pgvector
+    # Using pgvector/pgvector image for vector similarity search support
+    # Required for cross-batch entity resolution with embedding similarity
     # Note: Using env var for password as COS doesn't support secret volumes like K8s
     # The VM is on internal VPC only, so this is reasonably secure
     gce-container-declaration = yamlencode({
       spec = {
         containers = [{
           name  = "postgres"
-          image = "postgres:15-alpine"
+          image = "pgvector/pgvector:pg15"  # PostgreSQL 15 with pgvector extension
           env = [
             { name = "POSTGRES_USER", value = "workflow" },
             { name = "POSTGRES_DB", value = "workflow" },
@@ -123,7 +145,7 @@ resource "google_compute_instance" "postgres" {
           ports = [{ containerPort = 5432 }]
         }]
         volumes = [
-          { name = "postgres-data", gcePersistentDisk = { pdName = "postgres-data", fsType = "ext4" } }
+          { name = "postgres-data", gcePersistentDisk = { pdName = "postgres-data-${var.environment}", fsType = "ext4" } }
         ]
         restartPolicy = "Always"
       }

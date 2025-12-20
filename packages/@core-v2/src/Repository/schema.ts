@@ -8,7 +8,29 @@
  * @module Repository/schema
  */
 
-import { index, integer, jsonb, numeric, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core"
+import { customType, index, integer, jsonb, numeric, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core"
+
+// =============================================================================
+// Custom Types
+// =============================================================================
+
+/**
+ * Custom type for pgvector embedding columns.
+ * Stores 768-dimensional normalized vectors for entity similarity search.
+ */
+export const vector768 = customType<{ data: ReadonlyArray<number>; driverData: string }>({
+  dataType() {
+    return "vector(768)"
+  },
+  toDriver(value: ReadonlyArray<number>): string {
+    return `[${value.join(",")}]`
+  },
+  fromDriver(value: string): ReadonlyArray<number> {
+    // Parse "[0.1,0.2,...]" format from PostgreSQL
+    const cleaned = value.replace(/^\[|\]$/g, "")
+    return cleaned.split(",").map(Number)
+  }
+})
 
 // =============================================================================
 // Enums
@@ -168,6 +190,90 @@ export const schemaMigrations = pgTable("schema_migrations", {
 })
 
 // =============================================================================
+// Entity Registry Tables (Cross-Batch Entity Linking)
+// =============================================================================
+
+/**
+ * Canonical Entity Registry
+ *
+ * The "golden" entity records. Each unique real-world entity has one canonical entry.
+ * Enables cross-batch entity linking by persisting resolved entities with embeddings.
+ */
+export const canonicalEntities = pgTable("canonical_entities", {
+  id: uuid("id").primaryKey().defaultRandom(),
+
+  // Identity
+  iri: text("iri").unique().notNull(),
+  canonicalMention: text("canonical_mention").notNull(),
+
+  // Types (denormalized for fast filtering)
+  types: text("types").array().notNull().default([]),
+
+  // Embedding for ANN similarity search (Nomic 768-dim)
+  embedding: vector768("embedding").notNull(),
+
+  // Resolution metadata
+  mergeCount: integer("merge_count").default(1),
+  confidenceAvg: numeric("confidence_avg", { precision: 4, scale: 3 }),
+
+  // Temporal tracking
+  firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).defaultNow(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
+}, (table) => [
+  index("idx_canonical_entities_iri").on(table.iri)
+  // Note: HNSW, GIN indexes are created in migration SQL as Drizzle doesn't support them natively
+])
+
+/**
+ * Entity Aliases
+ *
+ * Alternative mentions mapped to canonical entities.
+ * Preserves provenance of how each mention was resolved.
+ */
+export const entityAliases = pgTable("entity_aliases", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  canonicalEntityId: uuid("canonical_entity_id").notNull().references(() => canonicalEntities.id, { onDelete: "cascade" }),
+
+  // Alias data
+  mention: text("mention").notNull(),
+  mentionNormalized: text("mention_normalized").notNull(),
+  embedding: vector768("embedding"),
+
+  // Resolution metadata
+  resolutionMethod: text("resolution_method").notNull(), // 'exact', 'similarity', 'containment', 'neighbor'
+  resolutionConfidence: numeric("resolution_confidence", { precision: 4, scale: 3 }).notNull(),
+
+  // Source tracking
+  firstBatchId: text("first_batch_id"),
+  sourceArticleId: uuid("source_article_id").references(() => articles.id),
+
+  // Temporal
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow()
+}, (table) => [
+  uniqueIndex("idx_entity_aliases_mention_normalized").on(table.mentionNormalized),
+  index("idx_entity_aliases_canonical").on(table.canonicalEntityId)
+])
+
+/**
+ * Entity Blocking Tokens
+ *
+ * Inverted index for fast candidate retrieval during entity resolution.
+ * Avoids O(n) scan by pre-indexing tokens from entity mentions.
+ */
+export const entityBlockingTokens = pgTable("entity_blocking_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  canonicalEntityId: uuid("canonical_entity_id").notNull().references(() => canonicalEntities.id, { onDelete: "cascade" }),
+  token: text("token").notNull(),
+  tokenType: text("token_type").default("mention") // 'mention', 'type', 'attribute'
+}, (table) => [
+  index("idx_blocking_tokens_token").on(table.token),
+  index("idx_blocking_tokens_entity").on(table.canonicalEntityId),
+  index("idx_blocking_tokens_composite").on(table.token, table.canonicalEntityId)
+])
+
+// =============================================================================
 // Type Exports for Drizzle
 // =============================================================================
 
@@ -188,3 +294,12 @@ export type ConflictInsertRow = typeof conflicts.$inferInsert
 
 export type BatchRunRow = typeof batchRuns.$inferSelect
 export type BatchRunInsertRow = typeof batchRuns.$inferInsert
+
+export type CanonicalEntityRow = typeof canonicalEntities.$inferSelect
+export type CanonicalEntityInsertRow = typeof canonicalEntities.$inferInsert
+
+export type EntityAliasRow = typeof entityAliases.$inferSelect
+export type EntityAliasInsertRow = typeof entityAliases.$inferInsert
+
+export type EntityBlockingTokenRow = typeof entityBlockingTokens.$inferSelect
+export type EntityBlockingTokenInsertRow = typeof entityBlockingTokens.$inferInsert

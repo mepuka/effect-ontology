@@ -23,6 +23,7 @@ import { BatchManifest, BatchWorkflowPayload } from "../Domain/Schema/Batch.js"
 import { EnrichedManifest } from "../Domain/Schema/DocumentMetadata.js"
 import {
   makeClaimPersistenceActivity,
+  makeCrossBatchResolutionActivity,
   makeIngestionActivity,
   makePreprocessingActivity,
   makeResolutionActivity,
@@ -656,6 +657,25 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
           batchId,
           entitiesResolved: resolutionResult.entitiesTotal
         })
+
+        // Cross-batch entity resolution (optional - requires Postgres + pgvector)
+        // Links entities to persistent canonical registry across extraction batches
+        const crossBatchResult = yield* makeCrossBatchResolutionActivity({
+          batchId,
+          resolvedGraphUri: resolutionResult.resolvedUri,
+          enabled: config.entityRegistry.enabled
+        }).execute
+
+        if (config.entityRegistry.enabled) {
+          yield* Effect.logInfo("Cross-batch resolution complete", {
+            batchId,
+            matchedToExisting: crossBatchResult.matchedToExisting,
+            newCanonicals: crossBatchResult.newCanonicals,
+            entitiesTotal: crossBatchResult.entitiesTotal
+          })
+        } else {
+          yield* Effect.logDebug("Cross-batch resolution skipped (not configured)", { batchId })
+        }
 
         currentStage = "validating"
         const validatingState: BatchState = {

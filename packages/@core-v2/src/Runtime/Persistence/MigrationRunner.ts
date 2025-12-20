@@ -292,5 +292,117 @@ CREATE INDEX IF NOT EXISTS idx_claims_derived_at ON claims(derived_at) WHERE der
     name: "003_claim_idempotency",
     sql: `-- Add unique constraint for claim idempotency
 CREATE UNIQUE INDEX IF NOT EXISTS idx_claims_natural_key ON claims (article_id, subject_iri, predicate_iri, object_value);`
+  },
+  {
+    version: 4,
+    name: "004_entity_registry_pgvector",
+    sql: `-- Entity Registry with pgvector for cross-batch entity linking
+-- Enables building up a persistent entity store across extraction batches
+
+-- Enable required extensions
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+-- Canonical Entity Registry: The "golden" entity records
+-- Each unique real-world entity has one canonical entry
+CREATE TABLE IF NOT EXISTS canonical_entities (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    -- Identity
+    iri TEXT UNIQUE NOT NULL,              -- Full IRI: http://example.org/entities/arsenal_fc
+    canonical_mention TEXT NOT NULL,        -- Best mention: "Arsenal Football Club"
+
+    -- Types (denormalized for fast filtering)
+    types TEXT[] NOT NULL DEFAULT '{}',     -- Ontology class URIs
+
+    -- Embedding for ANN similarity search (Nomic 768-dim)
+    embedding vector(768) NOT NULL,
+
+    -- Resolution metadata
+    merge_count INTEGER DEFAULT 1,          -- How many entity mentions merged into this
+    confidence_avg NUMERIC(4,3),            -- Average resolution confidence
+
+    -- Temporal tracking
+    first_seen_at TIMESTAMPTZ DEFAULT NOW(),
+    last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- HNSW index for fast ANN search (better than IVFFlat for incremental updates)
+CREATE INDEX IF NOT EXISTS idx_canonical_entities_embedding
+ON canonical_entities USING hnsw (embedding vector_cosine_ops)
+WITH (m = 16, ef_construction = 64);
+
+-- Type filtering (GIN for array containment queries)
+CREATE INDEX IF NOT EXISTS idx_canonical_entities_types
+ON canonical_entities USING GIN (types);
+
+-- Trigram index for fuzzy mention search
+CREATE INDEX IF NOT EXISTS idx_canonical_entities_mention
+ON canonical_entities USING GIN (canonical_mention gin_trgm_ops);
+
+-- IRI lookup
+CREATE INDEX IF NOT EXISTS idx_canonical_entities_iri ON canonical_entities(iri);
+
+
+-- Entity Aliases: Alternative mentions mapped to canonical entities
+-- Preserves provenance of how each mention was resolved
+CREATE TABLE IF NOT EXISTS entity_aliases (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    canonical_entity_id UUID NOT NULL REFERENCES canonical_entities(id) ON DELETE CASCADE,
+
+    -- Alias data
+    mention TEXT NOT NULL,                  -- Original mention: "The Gunners"
+    mention_normalized TEXT NOT NULL,       -- Lowercased, trimmed for lookup
+    embedding vector(768),                  -- Optional embedding for similarity search
+
+    -- Resolution metadata
+    resolution_method TEXT NOT NULL,        -- 'exact', 'similarity', 'containment', 'neighbor'
+    resolution_confidence NUMERIC(4,3) NOT NULL,
+
+    -- Source tracking
+    first_batch_id TEXT,                    -- Which batch first saw this alias
+    source_article_id UUID REFERENCES articles(id),
+
+    -- Temporal
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Fast exact alias lookup
+CREATE UNIQUE INDEX IF NOT EXISTS idx_entity_aliases_mention_normalized
+ON entity_aliases(mention_normalized);
+
+-- Lookup aliases for a canonical entity
+CREATE INDEX IF NOT EXISTS idx_entity_aliases_canonical
+ON entity_aliases(canonical_entity_id);
+
+-- HNSW index on alias embeddings (where present) for similarity search
+CREATE INDEX IF NOT EXISTS idx_entity_aliases_embedding
+ON entity_aliases USING hnsw (embedding vector_cosine_ops)
+WITH (m = 16, ef_construction = 64)
+WHERE embedding IS NOT NULL;
+
+
+-- Blocking Tokens: Inverted index for fast candidate retrieval
+-- Avoids O(n) scan by pre-indexing tokens from entity mentions
+CREATE TABLE IF NOT EXISTS entity_blocking_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    canonical_entity_id UUID NOT NULL REFERENCES canonical_entities(id) ON DELETE CASCADE,
+    token TEXT NOT NULL,                    -- Normalized token (lowercase, >2 chars)
+    token_type TEXT DEFAULT 'mention'       -- 'mention', 'type', 'attribute'
+);
+
+-- Token lookup for blocking
+CREATE INDEX IF NOT EXISTS idx_blocking_tokens_token
+ON entity_blocking_tokens(token);
+
+-- Cleanup when canonical is deleted
+CREATE INDEX IF NOT EXISTS idx_blocking_tokens_entity
+ON entity_blocking_tokens(canonical_entity_id);
+
+-- Composite for efficient blocking queries
+CREATE INDEX IF NOT EXISTS idx_blocking_tokens_composite
+ON entity_blocking_tokens(token, canonical_entity_id);`
   }
 ]

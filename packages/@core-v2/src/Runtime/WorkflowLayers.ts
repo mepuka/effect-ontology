@@ -17,7 +17,9 @@
 import { BunContext } from "@effect/platform-bun"
 import { Layer } from "effect"
 import { ConfigService, ConfigServiceDefault } from "../Service/Config.js"
+import { CrossBatchEntityResolver } from "../Service/CrossBatchEntityResolver.js"
 import { EmbeddingService, EmbeddingServiceLive } from "../Service/Embedding.js"
+import { EntityRegistryRepository } from "../Repository/EntityRegistry.js"
 import { EmbeddingCacheWithPersistence, PersistentEmbeddingCache } from "../Service/EmbeddingCache.js"
 import { MetricsService } from "../Telemetry/Metrics.js"
 import { NomicNlpServiceLive } from "../Service/NomicNlp.js"
@@ -225,6 +227,35 @@ const EntityResolutionBundle = EntityResolutionService.Live
 const GraphRAGBundle = GraphRAG.Default
 
 /**
+ * Cross-Batch Entity Resolution bundle (OPTIONAL)
+ *
+ * Provides cross-batch entity linking when Postgres with pgvector is available.
+ * This bundle is NOT included in ActivityDependenciesLayer by default because
+ * the activity uses Effect.serviceOption to gracefully handle the missing service.
+ *
+ * Dependencies:
+ * - EntityRegistryRepository (requires Drizzle + PgClient)
+ * - EmbeddingService (for computing entity embeddings)
+ *
+ * To enable cross-batch resolution:
+ * 1. Configure POSTGRES_* environment variables
+ * 2. Run migrations (v4 adds pgvector tables)
+ * 3. Merge CrossBatchEntityResolverBundle into your layer composition
+ *
+ * @example
+ * ```typescript
+ * const layerWithCrossBatch = ActivityDependenciesLayer.pipe(
+ *   Layer.provideMerge(CrossBatchEntityResolverBundle),
+ *   Layer.provide(RepositoriesLive) // Provides EntityRegistryRepository
+ * )
+ * ```
+ */
+export const CrossBatchEntityResolverBundle = CrossBatchEntityResolver.Default.pipe(
+  Layer.provideMerge(EntityRegistryRepository.Default),
+  Layer.provideMerge(EmbeddingBundle)
+)
+
+/**
  * ExtractionWorkflow service bundle
  *
  * Provides the unified streaming extraction workflow with all dependencies.
@@ -259,6 +290,10 @@ const ExtractionWorkflowBundle = ExtractionWorkflowLive.pipe(
  * - OntologyService: Ontology class/property lookup
  * - EntityResolutionService: Entity clustering with cached embeddings
  * - EmbeddingService: Embedding generation with cache-through
+ *
+ * Optional services (not included, enable separately):
+ * - CrossBatchEntityResolver: Cross-batch entity linking (requires Postgres + pgvector)
+ *   Use CrossBatchEntityResolverBundle when Postgres is configured.
  *
  * Note: ConfigService is included in output for HTTP handlers that need config.
  */

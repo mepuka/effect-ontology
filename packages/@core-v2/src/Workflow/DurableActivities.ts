@@ -49,6 +49,7 @@ import type {
 import { computePriority, estimateTokens, selectChunkingStrategy } from "../Domain/Schema/DocumentMetadata.js"
 import { ClaimPersistenceService } from "../Service/ClaimPersistence.js"
 import { ConfigService } from "../Service/Config.js"
+import { CrossBatchEntityResolver, CrossBatchResolverConfig } from "../Service/CrossBatchEntityResolver.js"
 import { EmbeddingService } from "../Service/Embedding.js"
 import { EntityResolutionService } from "../Service/EntityResolution.js"
 import { StageTimeoutService } from "../Service/LlmControl/StageTimeout.js"
@@ -98,6 +99,26 @@ export const ClaimPersistenceOutput = Schema.Struct({
   documentsFailed: Schema.Number,
   durationMs: Schema.Number
 })
+
+export const CrossBatchResolutionOutput = Schema.Struct({
+  /** Total entities processed */
+  entitiesTotal: Schema.Number,
+  /** Entities matched to existing canonical entities */
+  matchedToExisting: Schema.Number,
+  /** New canonical entities created */
+  newCanonicals: Schema.Number,
+  /** Candidates evaluated during blocking */
+  candidatesEvaluated: Schema.Number,
+  durationMs: Schema.Number
+})
+
+export interface CrossBatchResolutionInput {
+  readonly batchId: string
+  /** Path to the resolved graph from within-batch resolution */
+  readonly resolvedGraphUri: string
+  /** Whether to enable cross-batch resolution */
+  readonly enabled: boolean
+}
 
 // -----------------------------------------------------------------------------
 // Shared helpers
@@ -992,6 +1013,117 @@ export const makeClaimPersistenceActivity = (input: ClaimPersistenceInput) =>
         claimsPersisted: totalClaimsPersisted,
         documentsProcessed,
         documentsFailed,
+        durationMs: DateTime.distance(start, end)
+      }
+    }).pipe(Effect.mapError(toActivityError)),
+    interruptRetryPolicy: activityRetryPolicy
+  })
+
+// -----------------------------------------------------------------------------
+// Cross-Batch Entity Resolution Activity
+// -----------------------------------------------------------------------------
+
+/**
+ * Durable Cross-Batch Entity Resolution Activity
+ *
+ * Links entities from the current batch to the persistent entity registry.
+ * Enables building up a knowledge base over time where entities across
+ * different batches are linked to canonical IRIs.
+ *
+ * Pipeline:
+ * 1. Load resolved graph from storage
+ * 2. Parse graph and extract entities
+ * 3. Resolve entities against persistent registry
+ * 4. Update registry with new/merged entities
+ * 5. Return resolution statistics
+ *
+ * @since 2.0.0
+ */
+export const makeCrossBatchResolutionActivity = (input: CrossBatchResolutionInput) =>
+  Activity.make({
+    name: `cross-batch-resolution-${input.batchId}`,
+    success: CrossBatchResolutionOutput,
+    error: ActivityError,
+    execute: Effect.gen(function*() {
+      const start = yield* DateTime.now
+
+      // Skip if not enabled
+      if (!input.enabled) {
+        yield* Effect.logInfo("Cross-batch resolution skipped - not enabled", {
+          batchId: input.batchId
+        })
+        const end = yield* DateTime.now
+        return {
+          entitiesTotal: 0,
+          matchedToExisting: 0,
+          newCanonicals: 0,
+          candidatesEvaluated: 0,
+          durationMs: DateTime.distance(start, end)
+        }
+      }
+
+      // Get cross-batch resolver (optional - may not be configured)
+      const resolverOpt = yield* Effect.serviceOption(CrossBatchEntityResolver)
+
+      if (Option.isNone(resolverOpt)) {
+        yield* Effect.logInfo("Cross-batch resolution skipped - resolver not configured", {
+          batchId: input.batchId
+        })
+        const end = yield* DateTime.now
+        return {
+          entitiesTotal: 0,
+          matchedToExisting: 0,
+          newCanonicals: 0,
+          candidatesEvaluated: 0,
+          durationMs: DateTime.distance(start, end)
+        }
+      }
+
+      const resolver = resolverOpt.value
+      const storage = yield* StorageService
+      const rdf = yield* RdfBuilder
+
+      yield* Effect.logInfo("Cross-batch entity resolution starting", {
+        batchId: input.batchId,
+        resolvedGraphUri: input.resolvedGraphUri
+      })
+
+      // Load resolved graph
+      const graphPath = stripGsPrefix(input.resolvedGraphUri)
+      const graphContent = yield* storage.get(graphPath).pipe(
+        Effect.flatMap((opt) => requireContent(opt, graphPath))
+      )
+
+      // Parse graph and extract entities
+      const store = yield* rdf.parseTurtle(graphContent)
+      const knowledgeGraph = yield* storeToKnowledgeGraph(store)
+
+      yield* Effect.logDebug("Loaded resolved graph for cross-batch resolution", {
+        batchId: input.batchId,
+        entityCount: knowledgeGraph.entities.length,
+        relationCount: knowledgeGraph.relations.length
+      })
+
+      // Resolve against registry
+      const config = new CrossBatchResolverConfig({})
+      const result = yield* resolver.resolve(knowledgeGraph.entities, input.batchId, config)
+
+      const end = yield* DateTime.now
+
+      yield* Effect.logInfo("Cross-batch entity resolution complete", {
+        batchId: input.batchId,
+        entitiesTotal: result.stats.totalEntities,
+        matchedToExisting: result.stats.matchedToExisting,
+        newCanonicals: result.stats.createdNew,
+        candidatesEvaluated: result.stats.candidatesEvaluated,
+        durationMs: DateTime.distance(start, end)
+      })
+
+      return {
+        entitiesTotal: result.stats.totalEntities,
+        matchedToExisting: result.stats.matchedToExisting,
+        newCanonicals: result.stats.createdNew,
+        candidatesEvaluated: result.stats.candidatesEvaluated,
         durationMs: DateTime.distance(start, end)
       }
     }).pipe(Effect.mapError(toActivityError)),

@@ -20,6 +20,7 @@ import { ExtractionWorkflow } from "../Service/ExtractionWorkflow.js"
 import { Grounder } from "../Service/Grounder.js"
 import { NlpService } from "../Service/Nlp.js"
 import { OntologyService } from "../Service/Ontology.js"
+import { StorageServiceLive } from "../Service/Storage.js"
 import { annotateExtraction, LlmAttributes } from "../Telemetry/LlmAttributes.js"
 import { mergeGraphs } from "./Merge.js"
 
@@ -577,7 +578,10 @@ export const ExtractionWorkflowLive = Layer.effect(
   Layer.provideMerge(EntityExtractor.Default),
   Layer.provideMerge(RelationExtractor.Default),
   Layer.provideMerge(Grounder.Default),
-  Layer.provideMerge(ExtractionRunServiceDefault)
+  Layer.provideMerge(ExtractionRunServiceDefault),
+  // StorageService is required by OntologyService.Default but not in its dependencies array.
+  // We import StorageServiceLive here to ensure it's provided before OntologyService constructs.
+  Layer.provideMerge(StorageServiceLive)
 )
 
 /**
