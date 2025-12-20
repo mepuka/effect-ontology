@@ -15,8 +15,10 @@ import { ConfigServiceDefault } from "../Service/Config.js"
 import { RdfBuilder } from "../Service/Rdf.js"
 import { Reasoner } from "../Service/Reasoner.js"
 import { StorageServiceLive } from "../Service/Storage.js"
+import { WikidataClient } from "../Service/WikidataClient.js"
 import { inferenceCommand } from "./Commands/Inference.js"
 import { ingestCommand } from "./Commands/Ingest.js"
+import { linkCommand } from "./Commands/Link.js"
 import { reconcileCommand } from "./Commands/Reconcile.js"
 
 // =============================================================================
@@ -24,7 +26,7 @@ import { reconcileCommand } from "./Commands/Reconcile.js"
 // =============================================================================
 
 const rootCommand = Command.make("effect-onto").pipe(
-  Command.withSubcommands([inferenceCommand, ingestCommand, reconcileCommand]),
+  Command.withSubcommands([inferenceCommand, ingestCommand, reconcileCommand, linkCommand]),
   Command.withDescription("Effect Ontology CLI - Knowledge extraction and reasoning tools")
 )
 
@@ -40,12 +42,14 @@ const rootCommand = Command.make("effect-onto").pipe(
  * - RdfBuilder (Turtle parsing/serialization)
  * - Reasoner (RDFS reasoning)
  * - StorageService (file/GCS storage)
+ * - WikidataClient (Wikidata API integration)
  * - BunContext (FileSystem, Path, etc.)
  */
 const CliLive = Layer.mergeAll(
   Reasoner.Default,
   RdfBuilder.Default,
-  StorageServiceLive
+  StorageServiceLive,
+  WikidataClient.Default
 ).pipe(
   Layer.provide(ConfigServiceDefault),
   Layer.provideMerge(BunContext.layer)
