@@ -43,7 +43,7 @@ function getStatusVariant(status: string) {
 export function LinksPage() {
   const { ontologyId = "seattle" } = useParams<{ ontologyId: string }>()
   const result = useAtomValue(linksAtom(ontologyId))
-  const setFilters = useAtomSet(linksFiltersAtom)
+  const setFilters = useAtomSet(linksFiltersAtom(ontologyId))
 
   const handleRefresh = () => {
     // Trigger re-fetch by updating filters with same values

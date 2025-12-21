@@ -10,6 +10,7 @@ export { ShaclViolation, ShaclValidationReport } from "./Shacl.js"
 // Note: Timeline.ts re-exports ClaimRank from KnowledgeModel, use explicit exports to avoid conflict
 export * from "./LinkIngestion.js"
 export * from "./Search.js"
+export * from "./OntologyBrowser.js"
 export {
   ArticleDetailResponse,
   ArticleSummary,

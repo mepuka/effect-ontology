@@ -85,7 +85,7 @@ export const EventLogHandler = EventLogServer.makeHandlerHttp
  * Event Stream WebSocket Router
  *
  * Provides WebSocket endpoint for real-time event streaming per ontology:
- * - GET /api/v1/ontologies/:ontologyId/events/ws - WebSocket upgrade
+ * - GET /v1/ontologies/:ontologyId/events/ws - WebSocket upgrade
  *
  * Uses @effect/experimental/EventLogServer for protocol handling:
  * - Automatic Hello with RemoteId on connect
@@ -101,7 +101,7 @@ export const EventLogHandler = EventLogServer.makeHandlerHttp
  */
 export const EventStreamRouter = HttpRouter.empty.pipe(
   HttpRouter.get(
-    "/api/v1/ontologies/:ontologyId/events/ws",
+    "/v1/ontologies/:ontologyId/events/ws",
     Effect.gen(function*() {
       const params = yield* HttpRouter.params
       const ontologyId = params.ontologyId

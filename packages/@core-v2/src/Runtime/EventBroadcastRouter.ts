@@ -308,13 +308,13 @@ const serverId = crypto.randomUUID()
  * Event Broadcast WebSocket Router
  *
  * Provides WebSocket endpoint for real-time event streaming:
- * - GET /api/v1/ontologies/:ontologyId/events/stream - WebSocket upgrade
+ * - GET /v1/ontologies/:ontologyId/events/stream - WebSocket upgrade
  *
  * @since 2.0.0
  */
 export const EventBroadcastRouter = HttpRouter.empty.pipe(
   HttpRouter.get(
-    "/api/v1/ontologies/:ontologyId/events/stream",
+    "/v1/ontologies/:ontologyId/events/stream",
     Effect.gen(function*() {
       const params = yield* HttpRouter.params
       const ontologyId = params.ontologyId

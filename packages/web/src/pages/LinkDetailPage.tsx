@@ -36,7 +36,7 @@ function formatDate(date: unknown): string {
 
 export function LinkDetailPage() {
   const { ontologyId = "seattle", id } = useParams<{ ontologyId: string; id: string }>()
-  const result = useAtomValue(linkDetailAtom(id!))
+  const result = useAtomValue(linkDetailAtom({ ontologyId, id: id! }))
 
   return (
     <div className="space-y-6">

@@ -23,6 +23,7 @@ import {
 } from "../Domain/Schema/LinkIngestion.js"
 import { JinaReaderClient } from "../Service/JinaReaderClient.js"
 import { LinkIngestionError, LinkIngestionService } from "../Service/LinkIngestionService.js"
+import { OntologyService } from "../Service/Ontology.js"
 
 // =============================================================================
 // Query Param Schemas (use NumberFromString for URL query params)
@@ -284,7 +285,74 @@ export const LinkIngestionRouter = HttpRouter.empty.pipe(
       })
     })
   ),
-  // GET /v1/links/:id - Get link details
+  // GET /v1/ontologies/:ontologyId/links/:id - Get link details (ontology-scoped)
+  HttpRouter.get(
+    "/v1/ontologies/:ontologyId/links/:id",
+    Effect.gen(function*() {
+      const params = yield* HttpRouter.params
+      const ontologyId = params.ontologyId
+      const id = params.id
+
+      if (!ontologyId || !id) {
+        return yield* HttpServerResponse.json({
+          error: "VALIDATION_ERROR",
+          message: "Ontology ID and Link ID are required"
+        }, { status: 400 })
+      }
+
+      // Validate ontology exists in registry
+      const entryOpt = yield* OntologyService.getRegistryEntry(ontologyId)
+      if (Option.isNone(entryOpt)) {
+        return yield* HttpServerResponse.json({
+          error: "NOT_FOUND",
+          message: `Ontology "${ontologyId}" not found in registry`
+        }, { status: 404 })
+      }
+
+      const ingestion = yield* LinkIngestionService
+      const linkOpt = yield* ingestion.getById(id)
+
+      if (Option.isNone(linkOpt)) {
+        return yield* HttpServerResponse.json({
+          error: "NOT_FOUND",
+          message: `Link "${id}" not found`
+        }, { status: 404 })
+      }
+
+      const link = linkOpt.value
+
+      // Validate link belongs to the specified ontology
+      if (link.ontologyId !== ontologyId) {
+        return yield* HttpServerResponse.json({
+          error: "NOT_FOUND",
+          message: `Link "${id}" not found in ontology "${ontologyId}"`
+        }, { status: 404 })
+      }
+
+      return yield* HttpServerResponse.schemaJson(LinkDetail)({
+        id: link.id,
+        contentHash: link.contentHash,
+        sourceUri: link.sourceUri,
+        sourceType: link.sourceType,
+        headline: link.headline,
+        description: link.description,
+        author: link.author,
+        organization: link.organization,
+        language: link.language,
+        topics: (link.topics as Array<string>) ?? [],
+        keyEntities: (link.keyEntities as Array<string>) ?? [],
+        storageUri: link.storageUri,
+        status: link.status,
+        wordCount: link.wordCount,
+        publishedAt: link.publishedAt ? DateTime.unsafeFromDate(link.publishedAt) : null,
+        fetchedAt: link.fetchedAt ? DateTime.unsafeFromDate(link.fetchedAt) : null,
+        enrichedAt: link.enrichedAt ? DateTime.unsafeFromDate(link.enrichedAt) : null,
+        processedAt: link.processedAt ? DateTime.unsafeFromDate(link.processedAt) : null,
+        errorMessage: link.errorMessage
+      })
+    })
+  ),
+  // GET /v1/links/:id - Get link details (deprecated: use ontology-scoped endpoint)
   HttpRouter.get(
     "/v1/links/:id",
     Effect.gen(function*() {
@@ -297,6 +365,8 @@ export const LinkIngestionRouter = HttpRouter.empty.pipe(
           message: "Link ID is required"
         }, { status: 400 })
       }
+
+      yield* Effect.logWarning("Deprecated: Use /v1/ontologies/:ontologyId/links/:id instead of /v1/links/:id")
 
       const ingestion = yield* LinkIngestionService
       const linkOpt = yield* ingestion.getById(id)

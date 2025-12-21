@@ -22,13 +22,15 @@ import {
 // Filter State Atoms
 // =============================================================================
 
-/** Links list filter state */
-export const linksFiltersAtom = Atom.make({
-  status: undefined as string | undefined,
-  sourceType: undefined as string | undefined,
-  limit: 20,
-  offset: 0
-})
+/** Links list filter state - scoped per ontology */
+export const linksFiltersAtom = Atom.family((_ontologyId: string) =>
+  Atom.make({
+    status: undefined as string | undefined,
+    sourceType: undefined as string | undefined,
+    limit: 20,
+    offset: 0
+  })
+)
 
 /** Timeline filter state - scoped per ontology */
 export const timelineFiltersAtom = Atom.family((_ontologyId: string) =>
@@ -55,20 +57,21 @@ export const linksAtom = Atom.family((ontologyId: string) =>
   apiRuntime.atom((get) =>
     Effect.gen(function* () {
       const api: ApiClientService = yield* ApiClient
-      const filters = get(linksFiltersAtom)
+      const filters = get(linksFiltersAtom(ontologyId))
       return yield* api.listLinks(ontologyId, filters)
     })
   )
 )
 
-/** Single link detail - uses family pattern for dynamic IDs */
-export const linkDetailAtom = Atom.family((id: string) =>
-  apiRuntime.atom(() =>
-    Effect.gen(function* () {
-      const api: ApiClientService = yield* ApiClient
-      return yield* api.getLink(id)
-    })
-  )
+/** Single link detail - uses family pattern for ontologyId + id */
+export const linkDetailAtom = Atom.family(
+  ({ ontologyId, id }: { ontologyId: string; id: string }) =>
+    apiRuntime.atom(() =>
+      Effect.gen(function* () {
+        const api: ApiClientService = yield* ApiClient
+        return yield* api.getLink(ontologyId, id)
+      })
+    )
 )
 
 /** Health check - kept alive across component unmounts */

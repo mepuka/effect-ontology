@@ -1,4 +1,4 @@
-import { useAtomValue, useAtomSet } from "@effect-atom/atom-react"
+import { useAtomValue, useAtomSet, useAtom } from "@effect-atom/atom-react"
 import { Result } from "@effect-atom/atom"
 import { Link, useParams } from "react-router-dom"
 import { documentsAtom, documentsFiltersAtom } from "@/atoms/api"
@@ -145,8 +145,8 @@ function Pagination({
 export function DocumentsPage() {
   const { ontologyId = "seattle" } = useParams<{ ontologyId: string }>()
   const result = useAtomValue(documentsAtom(ontologyId))
-  const setFilters = useAtomSet(documentsFiltersAtom(ontologyId))
-  const limit = 20
+  const [filters, setFilters] = useAtom(documentsFiltersAtom(ontologyId))
+  const limit = filters.limit ?? 20
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -167,7 +167,7 @@ export function DocumentsPage() {
       {/* Filters */}
       <div className="flex items-center justify-between mb-6">
         <DocumentFiltersBar
-          filters={Result.isSuccess(result) ? { limit, offset: 0 } : { limit, offset: 0 }}
+          filters={filters}
           onChange={setFilters}
         />
         {Result.isSuccess(result) && (

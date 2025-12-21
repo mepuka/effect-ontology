@@ -23,7 +23,9 @@ const {
   LinkDetail,
   IngestLinkRequest,
   IngestLinkResponse,
-  OntologyEntry,
+  OntologyListResponse,
+  OntologyDetailResponse,
+  OntologySummary,
   TimelineClaimsResponse,
   TimelineEntityResponse,
   ArticleSearchResponse,
@@ -83,16 +85,16 @@ export interface ApiClientService {
     filters: LinksFilter
   ) => Effect.Effect<typeof ListLinksResponse.Type, ApiError>
 
-  readonly getLink: (id: string) => Effect.Effect<typeof LinkDetail.Type, ApiError>
+  readonly getLink: (ontologyId: string, id: string) => Effect.Effect<typeof LinkDetail.Type, ApiError>
 
   readonly ingestLink: (body: typeof IngestLinkRequest.Type) => Effect.Effect<typeof IngestLinkResponse.Type, ApiError>
 
   readonly previewLink: (url: string) => Effect.Effect<unknown, ApiError>
 
   // Ontologies
-  readonly listOntologies: () => Effect.Effect<ReadonlyArray<typeof OntologyEntry.Type>, ApiError>
+  readonly listOntologies: () => Effect.Effect<ReadonlyArray<typeof OntologySummary.Type>, ApiError>
 
-  readonly getOntology: (id: string) => Effect.Effect<typeof OntologyEntry.Type, ApiError>
+  readonly getOntology: (id: string) => Effect.Effect<typeof OntologyDetailResponse.Type, ApiError>
 
   // Timeline
   readonly getTimelineClaims: (
@@ -174,9 +176,9 @@ export const ApiClientLive = Layer.effect(
         )
       },
 
-      // Get single link details
-      getLink: (id) =>
-        request(HttpClientRequest.get(`/api/v1/links/${id}`), LinkDetail),
+      // Get single link details (ontology-scoped)
+      getLink: (ontologyId, id) =>
+        request(HttpClientRequest.get(`/api/v1/ontologies/${ontologyId}/links/${id}`), LinkDetail),
 
       // Ingest a new link (ontologyId from path)
       ingestLink: (body) =>
@@ -208,13 +210,13 @@ export const ApiClientLive = Layer.effect(
       listOntologies: () =>
         request(
           HttpClientRequest.get("/api/v1/ontologies"),
-          Schema.Array(OntologyEntry)
-        ),
+          OntologyListResponse
+        ).pipe(Effect.map((r) => r.ontologies)),
 
       getOntology: (id) =>
         request(
           HttpClientRequest.get(`/api/v1/ontologies/${id}`),
-          OntologyEntry
+          OntologyDetailResponse
         ),
 
       // Timeline
@@ -229,7 +231,7 @@ export const ApiClientLive = Layer.effect(
         params.set("offset", String(filters.offset ?? 0))
 
         return request(
-          HttpClientRequest.get(`/api/v1/ontologies/${ontologyId}/timeline/claims?${params.toString()}`),
+          HttpClientRequest.get(`/api/v1/ontologies/${ontologyId}/claims?${params.toString()}`),
           TimelineClaimsResponse
         )
       },
