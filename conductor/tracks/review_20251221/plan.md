@@ -2,7 +2,7 @@
 
 ## Phase 1: Analysis & Reporting
 - [x] Task: Scan `packages/@core-v2/src` for Effect anti-patterns (e.g., deeply nested pipes, `runPromise` in business logic, lack of `Effect.gen`). 8cc17eb
-- [ ] Task: Compile a prioritized list of files or modules requiring refactoring.
+- [x] Task: Compile a prioritized list of files or modules requiring refactoring. 8cc17eb
 - [ ] Task: Conductor - User Manual Verification 'Analysis & Reporting' (Protocol in workflow.md)
 
 ## Phase 2: Domain Layer Refactoring
