@@ -8,8 +8,10 @@
  * @since 2.0.0
  */
 
+import { Prompt } from "@effect/ai"
 import { Doc } from "@effect/printer"
 import type { Entity } from "../Domain/Model/Entity.js"
+import type { ImageForPrompt } from "../Domain/Model/Image.js"
 import type { ClassDefinition, PropertyDefinition } from "../Domain/Model/Ontology.js"
 import type { ScoredExample } from "../Repository/Examples.js"
 import { extractLocalNameFromIri } from "../Utils/Iri.js"
@@ -32,6 +34,8 @@ export interface OntologyPromptContext {
   readonly entityIds?: ReadonlyArray<string>
   /** Entities from Stage 1 (for relation extraction) */
   readonly entities?: ReadonlyArray<Entity>
+  /** Images for multimodal extraction (optional) */
+  readonly imageContexts?: ReadonlyArray<ImageForPrompt>
 }
 
 /**
@@ -797,3 +801,180 @@ export const generateMentionPrompt = (text: string): string => {
   const structured = generateStructuredMentionPrompt(text)
   return `${structured.systemMessage}\n\n${structured.userMessage}`
 }
+
+// =============================================================================
+// Multimodal Prompt Building (Image Support)
+// =============================================================================
+
+/**
+ * Get file extension from media type
+ */
+const getImageExtension = (mediaType: string): string => {
+  const map: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/png": "png",
+    "image/gif": "gif",
+    "image/webp": "webp",
+    "image/svg+xml": "svg"
+  }
+  return map[mediaType] ?? "bin"
+}
+
+/**
+ * Convert ImageForPrompt[] to Prompt.FilePart[]
+ *
+ * Creates FilePart objects suitable for multimodal LLM calls.
+ *
+ * @param images - Images to convert
+ * @returns Array of Prompt.FilePart objects
+ *
+ * @since 2.0.0
+ * @category Multimodal
+ */
+export const imagesToPromptParts = (
+  images: ReadonlyArray<ImageForPrompt>
+): ReadonlyArray<Prompt.FilePart> =>
+  images.map((img, index) =>
+    Prompt.makePart("file", {
+      mediaType: img.mediaType,
+      data: img.base64,
+      fileName: `image-${img.position ?? index}.${getImageExtension(img.mediaType)}`
+    })
+  )
+
+/**
+ * Build multimodal user message content with text and optional images
+ *
+ * Creates an array of UserMessagePart objects combining text and image content.
+ * Images are appended after the text with optional context.
+ *
+ * @param text - Text content
+ * @param images - Images to include (optional)
+ * @param imageIntro - Optional intro text before images
+ * @returns Array of UserMessagePart objects for user message content
+ *
+ * @example
+ * ```typescript
+ * const parts = buildMultimodalUserContent(
+ *   "Extract entities from this article...",
+ *   imageContexts,
+ *   "The following images are from the article:"
+ * )
+ * ```
+ *
+ * @since 2.0.0
+ * @category Multimodal
+ */
+export const buildMultimodalUserContent = (
+  text: string,
+  images?: ReadonlyArray<ImageForPrompt>,
+  imageIntro?: string
+): ReadonlyArray<Prompt.UserMessagePart> => {
+  const parts: Prompt.UserMessagePart[] = [
+    Prompt.makePart("text", { text })
+  ]
+
+  if (images && images.length > 0) {
+    // Add intro text for images if provided
+    if (imageIntro) {
+      parts.push(Prompt.makePart("text", { text: `\n\n${imageIntro}` }))
+    }
+
+    // Add image parts with context annotations
+    for (const img of images) {
+      // Build context string from available metadata
+      const contextParts = [img.alt, img.caption, img.context].filter(Boolean)
+      if (contextParts.length > 0) {
+        parts.push(Prompt.makePart("text", {
+          text: `\n[Image ${img.position ?? 0}: ${contextParts.join(" - ")}]`
+        }))
+      }
+
+      parts.push(
+        Prompt.makePart("file", {
+          mediaType: img.mediaType,
+          data: img.base64,
+          fileName: `image-${img.position ?? 0}.${getImageExtension(img.mediaType)}`
+        })
+      )
+    }
+  }
+
+  return parts
+}
+
+/**
+ * Build a complete multimodal Prompt object
+ *
+ * Creates a Prompt with system message and user message containing
+ * both text and image content for multimodal extraction.
+ *
+ * @param systemMessage - System instructions (cacheable)
+ * @param userText - User text content
+ * @param images - Images to include (optional)
+ * @param imageIntro - Optional intro text before images
+ * @returns Complete Prompt object for LLM call
+ *
+ * @example
+ * ```typescript
+ * const prompt = buildMultimodalPrompt(
+ *   structured.systemMessage,
+ *   structured.userMessage,
+ *   ctx.imageContexts
+ * )
+ * ```
+ *
+ * @since 2.0.0
+ * @category Multimodal
+ */
+export const buildMultimodalPrompt = (
+  systemMessage: string,
+  userText: string,
+  images?: ReadonlyArray<ImageForPrompt>,
+  imageIntro?: string
+): Prompt.Prompt => {
+  const userParts = buildMultimodalUserContent(userText, images, imageIntro)
+
+  return Prompt.fromMessages([
+    Prompt.makeMessage("system", {
+      content: systemMessage
+    }),
+    Prompt.makeMessage("user", {
+      content: userParts
+    })
+  ])
+}
+
+/**
+ * Build multimodal prompt from StructuredPrompt and context
+ *
+ * Convenience wrapper that extracts images from OntologyPromptContext
+ * and builds a multimodal Prompt.
+ *
+ * @param structured - Structured prompt with system and user messages
+ * @param ctx - Ontology context with optional imageContexts
+ * @returns Complete Prompt object for LLM call
+ *
+ * @example
+ * ```typescript
+ * const structured = generateStructuredEntityPrompt(text, classes, properties)
+ * const prompt = buildPromptFromStructured(structured, {
+ *   ...ctx,
+ *   imageContexts: loadedImages
+ * })
+ * ```
+ *
+ * @since 2.0.0
+ * @category Multimodal
+ */
+export const buildPromptFromStructured = (
+  structured: StructuredPrompt,
+  ctx?: OntologyPromptContext
+): Prompt.Prompt =>
+  buildMultimodalPrompt(
+    structured.systemMessage,
+    structured.userMessage,
+    ctx?.imageContexts,
+    ctx?.imageContexts?.length ? "Relevant images from the document:" : undefined
+  )

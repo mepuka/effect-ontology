@@ -34,6 +34,9 @@ import type { EnrichedContent } from "../Domain/Model/EnrichedContent.js"
 import { type IngestedLinkInsertRow, type IngestedLinkRow, ingestedLinks } from "../Repository/schema.js"
 import { ConfigService } from "./Config.js"
 import { ContentEnrichmentAgent } from "./ContentEnrichmentAgent.js"
+import { ImageExtractor } from "./ImageExtractor.js"
+import { ImageFetcher } from "./ImageFetcher.js"
+import { ImageStore } from "./ImageStore.js"
 import { JinaReaderClient } from "./JinaReaderClient.js"
 import { StorageService } from "./Storage.js"
 
@@ -63,6 +66,8 @@ export interface IngestOptions {
   readonly ontologyId: string
   /** Whether to run AI enrichment (default: true) */
   readonly enrich?: boolean
+  /** Whether to extract and store images (default: true) */
+  readonly extractImages?: boolean
   /** Source type override (auto-detected if not provided) */
   readonly sourceType?: string
   /** Additional metadata to store */
@@ -87,6 +92,8 @@ export interface IngestResult {
   readonly duplicate: boolean
   /** Word count */
   readonly wordCount?: number
+  /** Number of images extracted and stored */
+  readonly imageCount?: number
 }
 
 /**
@@ -145,6 +152,9 @@ export class LinkIngestionService extends Effect.Service<LinkIngestionService>()
       const enricher = yield* ContentEnrichmentAgent
       const drizzle = yield* Pg.PgDrizzle
       const config = yield* ConfigService
+      const imageExtractor = yield* ImageExtractor
+      const imageFetcher = yield* ImageFetcher
+      const imageStore = yield* ImageStore
 
       // Raw DB lookup for content hash within an ontology (used by cache)
       // Uses composite key: "ontologyId:hash" for cache lookup
@@ -188,6 +198,7 @@ export class LinkIngestionService extends Effect.Service<LinkIngestionService>()
           const {
             ontologyId,
             enrich = true,
+            extractImages = true,
             metadata = {},
             skipDuplicates = true,
             sourceType
@@ -237,6 +248,59 @@ export class LinkIngestionService extends Effect.Service<LinkIngestionService>()
               })
             )
           )
+
+          // 4.1. Extract and store images (if enabled)
+          let imageCount = 0
+          if (extractImages) {
+            // Extract image candidates from Jina response
+            const imageCandidates = imageExtractor.extractFromJina(content)
+
+            if (imageCandidates.length > 0) {
+              yield* Effect.logDebug(`Found ${imageCandidates.length} image candidates`, { url })
+
+              // Fetch images in parallel (failures logged, don't fail ingestion)
+              const fetchedImages = yield* imageFetcher.fetchAll(imageCandidates)
+
+              // Store images and create references
+              imageCount = fetchedImages.length
+
+              // Store images and add references in parallel (failures logged, don't fail ingestion)
+              yield* Effect.forEach(
+                fetchedImages,
+                (fetchResult) =>
+                  Effect.gen(function*() {
+                    // Store the image asset
+                    yield* imageStore.storeImage(
+                      fetchResult.hash,
+                      fetchResult.bytes,
+                      fetchResult.contentType,
+                      fetchResult.candidate.sourceUrl
+                    )
+
+                    // Add reference to link's image manifest
+                    yield* imageStore.addImageRef({
+                      ownerType: "link",
+                      ownerId: contentHash, // Using contentHash as stable ID
+                      assetHash: fetchResult.hash,
+                      alt: fetchResult.candidate.alt,
+                      caption: fetchResult.candidate.caption,
+                      position: fetchResult.candidate.order,
+                      role: fetchResult.candidate.role
+                    })
+                  }).pipe(
+                    Effect.catchAll((error) =>
+                      Effect.logWarning("Failed to store image, continuing", {
+                        url: fetchResult.candidate.sourceUrl,
+                        error: String(error)
+                      })
+                    )
+                  ),
+                { concurrency: 5, discard: true }
+              )
+
+              yield* Effect.logInfo(`Stored ${imageCount} images for link`, { url, imageCount })
+            }
+          }
 
           // 5. Optionally enrich metadata
           let enrichedContent: EnrichedContent | undefined
@@ -295,7 +359,8 @@ export class LinkIngestionService extends Effect.Service<LinkIngestionService>()
             storageUri: storagePath,
             headline: enrichedContent?.headline,
             duplicate: false,
-            wordCount
+            wordCount,
+            imageCount: imageCount > 0 ? imageCount : undefined
           }
         })
 

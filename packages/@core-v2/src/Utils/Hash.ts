@@ -111,3 +111,43 @@ export const sha256Sync = (input: string): string => sha256SyncFull(input).slice
  */
 export const hashEmbeddingKeySync = (text: string, taskType: string): string =>
   sha256Sync(`${text}::${taskType}`)
+
+/**
+ * Compute SHA-256 hash of bytes using WebCrypto API
+ *
+ * Works in both Node.js and browser environments.
+ *
+ * @param bytes - Uint8Array to hash
+ * @returns Hex-encoded SHA-256 hash
+ *
+ * @since 2.0.0
+ * @category Hash
+ */
+export const sha256Bytes = (bytes: Uint8Array): Effect.Effect<string> =>
+  Effect.promise(() =>
+    globalThis.crypto.subtle
+      .digest("SHA-256", bytes)
+      .then(toHex)
+  )
+
+/**
+ * Synchronous SHA-256 hash of bytes
+ *
+ * For server-side use only. Uses Node.js crypto module.
+ *
+ * @param bytes - Uint8Array to hash
+ * @returns Hex-encoded SHA-256 hash
+ *
+ * @since 2.0.0
+ * @category Hash
+ */
+export const sha256BytesSync = (bytes: Uint8Array): string => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { createHash } = require("crypto")
+    return createHash("sha256").update(bytes).digest("hex")
+  } catch {
+    // Fallback: use WebCrypto async (this path shouldn't happen in practice)
+    throw new Error("sha256BytesSync requires Node.js crypto module")
+  }
+}

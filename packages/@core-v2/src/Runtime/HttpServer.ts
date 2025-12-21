@@ -61,6 +61,7 @@ import { EventBroadcastRouter } from "./EventBroadcastRouter.js"
 import { EventStreamRouter } from "./EventStreamRouter.js"
 import { HealthCheckService } from "./HealthCheck.js"
 import { makeAuthMiddleware, makeShutdownMiddleware } from "./HttpMiddleware.js"
+import { ImageRouter } from "./ImageRouter.js"
 import { InferenceRouter } from "./InferenceRouter.js"
 import { JobPushRouter } from "./JobPushHandler.js"
 import { LinkIngestionRouter } from "./LinkIngestionRouter.js"
@@ -1778,7 +1779,8 @@ export const ApiRouter = HttpRouter.empty.pipe(
   HttpRouter.concat(JobPushRouter),
   HttpRouter.concat(EventStreamRouter),
   HttpRouter.concat(EventBroadcastRouter),
-  HttpRouter.concat(AssetRouter)
+  HttpRouter.concat(AssetRouter),
+  HttpRouter.concat(ImageRouter)
 )
 
 export const HttpServerLive = Layer.unwrapEffect(

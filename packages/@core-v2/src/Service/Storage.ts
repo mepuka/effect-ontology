@@ -52,6 +52,22 @@ export interface StorageService extends KeyValueStore.KeyValueStore {
     value: string,
     generation: string
   ) => Effect.Effect<void, SystemError | GenerationMismatchError>
+
+  /**
+   * Get a signed URL for direct access to the object (GCS only)
+   * @param key - Object key
+   * @param expiresInSeconds - URL expiry time (default: 3600 = 1 hour)
+   * @returns Signed URL or None if not supported (e.g., local storage)
+   */
+  readonly getSignedUrl: (
+    key: string,
+    expiresInSeconds?: number
+  ) => Effect.Effect<Option.Option<string>, SystemError>
+
+  /**
+   * Whether this storage backend supports signed URLs
+   */
+  readonly supportsSignedUrls: boolean
 }
 
 export const StorageService = Context.GenericTag<StorageService>("@core-v2/StorageService")
@@ -227,7 +243,24 @@ const makeGcsStore = (config: StorageConfig) =>
             }
             return handleError("setIfGenerationMatch", key, e)
           }
-        })
+        }),
+      getSignedUrl: (key, expiresInSeconds = 3600) =>
+        Effect.tryPromise({
+          try: async () => {
+            const file = bucket.file(toPath(key))
+            const [exists] = await file.exists()
+            if (!exists) return Option.none()
+
+            const [signedUrl] = await file.getSignedUrl({
+              version: "v4",
+              action: "read",
+              expires: Date.now() + expiresInSeconds * 1000
+            })
+            return Option.some(signedUrl)
+          },
+          catch: (e) => handleError("getSignedUrl", key, e)
+        }),
+      supportsSignedUrls: true
     } as StorageService
   })
 
@@ -354,7 +387,10 @@ const makeLocalStore = (config: StorageConfig) =>
 
           yield* ensureDir(p)
           yield* fs.writeFileString(p, value)
-        })
+        }),
+      // Local filesystem doesn't support signed URLs
+      getSignedUrl: () => Effect.succeed(Option.none()),
+      supportsSignedUrls: false
     } as StorageService
   })
 
@@ -419,7 +455,10 @@ const makeMemoryStore = Effect.sync(() => {
         store.set(key, value)
         incrementGeneration(key)
         return Effect.void
-      })
+      }),
+    // Memory store doesn't support signed URLs
+    getSignedUrl: () => Effect.succeed(Option.none()),
+    supportsSignedUrls: false
   } as StorageService
 })
 

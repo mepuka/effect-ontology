@@ -146,6 +146,29 @@ export const RunOutputPath = Schema.TemplateLiteralParser(
 )
 
 // =============================================================================
+// Image Paths
+// =============================================================================
+
+// Type aliases for image paths
+export type ImageOriginalPath = string
+export type ImageMetadataPath = string
+export type ImageLabelsPath = string
+export type ImageVariantPath = string
+export type ImageManifestPath = string
+
+/**
+ * Image variant size options
+ */
+export const ImageVariantSize = Schema.Literal("thumb", "medium")
+export type ImageVariantSize = typeof ImageVariantSize.Type
+
+/**
+ * Image owner type (for manifest organization)
+ */
+export const ImageOwnerType = Schema.Literal("link", "document")
+export type ImageOwnerType = typeof ImageOwnerType.Type
+
+// =============================================================================
 // Canonical Namespace Paths
 // =============================================================================
 
@@ -227,5 +250,41 @@ export const PathLayout = {
   // CANONICAL
   canonical: (ns: Namespace) => ({
     entities: `canonical/${ns}/entities.ttl` as CanonicalNamespacePath
-  })
+  }),
+
+  // IMAGE
+  image: {
+    /**
+     * Original image bytes: assets/images/{hash}/original
+     */
+    original: (hash: string): ImageOriginalPath => `assets/images/${hash}/original`,
+
+    /**
+     * Image metadata: assets/images/{hash}/metadata.json
+     */
+    metadata: (hash: string): ImageMetadataPath => `assets/images/${hash}/metadata.json`,
+
+    /**
+     * Image labels (optional): assets/images/{hash}/labels.json
+     */
+    labels: (hash: string): ImageLabelsPath => `assets/images/${hash}/labels.json`,
+
+    /**
+     * Image variant: assets/images/{hash}/variants/{size}.jpg
+     */
+    variant: (hash: string, size: ImageVariantSize): ImageVariantPath =>
+      `assets/images/${hash}/variants/${size}.jpg`,
+
+    /**
+     * Owner image manifest: assets/owners/{ownerType}/{ownerId}/images/manifest.json
+     */
+    manifest: (ownerType: ImageOwnerType, ownerId: string): ImageManifestPath =>
+      `assets/owners/${ownerType}/${ownerId}/images/manifest.json`,
+
+    /**
+     * Base path for all images of an owner
+     */
+    ownerBase: (ownerType: ImageOwnerType, ownerId: string): string =>
+      `assets/owners/${ownerType}/${ownerId}/images`
+  }
 } as const
