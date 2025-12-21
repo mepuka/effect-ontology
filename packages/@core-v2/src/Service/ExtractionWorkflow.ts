@@ -8,8 +8,7 @@
  * @module Service/ExtractionWorkflow
  */
 
-import type { Effect } from "effect"
-import { Context } from "effect"
+import { Context, Effect } from "effect"
 import type { KnowledgeGraph } from "../Domain/Model/Entity.js"
 import type { RunConfig } from "../Domain/Model/ExtractionRun.js"
 

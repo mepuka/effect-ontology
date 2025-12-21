@@ -8,20 +8,17 @@
  * @module Service/EventBus
  */
 
-import * as Event from "@effect/experimental/Event"
-import * as EventGroup from "@effect/experimental/EventGroup"
+import type * as Event from "@effect/experimental/Event"
+import type * as EventGroup from "@effect/experimental/EventGroup"
 import * as EventJournal from "@effect/experimental/EventJournal"
 import * as PersistedQueue from "@effect/experimental/PersistedQueue"
+import { SqlClient } from "@effect/sql"
 import * as SqlEventJournal from "@effect/sql/SqlEventJournal"
 import * as SqlPersistedQueue from "@effect/sql/SqlPersistedQueue"
-import { SqlClient } from "@effect/sql"
 import { Context, DateTime, Effect, Layer, Option, Queue, Schema, Scope, Stream } from "effect"
 import { EventBusError } from "../Domain/Error/EventBus.js"
-import {
-  CurationEventGroup,
-  ExtractionEventGroup
-} from "../Domain/Schema/EventSchema.js"
-import { BackgroundJobSchema, type BackgroundJob } from "../Domain/Schema/JobSchema.js"
+import { CurationEventGroup, ExtractionEventGroup } from "../Domain/Schema/EventSchema.js"
+import { type BackgroundJob, BackgroundJobSchema } from "../Domain/Schema/JobSchema.js"
 
 // =============================================================================
 // Types
@@ -169,11 +166,13 @@ export const EventBusServiceMemory = Layer.scoped(
         yield* Effect.logDebug("Event published", { event, primaryKey })
       }).pipe(
         Effect.catchAll((cause) =>
-          Effect.fail(new EventBusError({
-            method: "publishEvent",
-            message: `Failed to publish event: ${event}`,
-            cause
-          }))
+          Effect.fail(
+            new EventBusError({
+              method: "publishEvent",
+              message: `Failed to publish event: ${event}`,
+              cause
+            })
+          )
         )
       )
 
@@ -181,10 +180,12 @@ export const EventBusServiceMemory = Layer.scoped(
       Effect.gen(function*() {
         const eventDef = CurationEventGroup.events[tag]
         if (!eventDef) {
-          return yield* Effect.fail(new EventBusError({
-            method: "publishCurationEvent",
-            message: `Unknown curation event: ${tag}`
-          }))
+          return yield* Effect.fail(
+            new EventBusError({
+              method: "publishCurationEvent",
+              message: `Unknown curation event: ${tag}`
+            })
+          )
         }
         const primaryKey = (eventDef as any).primaryKey(payload)
         yield* publishEvent(tag, primaryKey, payload)
@@ -194,10 +195,12 @@ export const EventBusServiceMemory = Layer.scoped(
       Effect.gen(function*() {
         const eventDef = ExtractionEventGroup.events[tag]
         if (!eventDef) {
-          return yield* Effect.fail(new EventBusError({
-            method: "publishExtractionEvent",
-            message: `Unknown extraction event: ${tag}`
-          }))
+          return yield* Effect.fail(
+            new EventBusError({
+              method: "publishExtractionEvent",
+              message: `Unknown extraction event: ${tag}`
+            })
+          )
         }
         const primaryKey = (eventDef as any).primaryKey(payload)
         yield* publishEvent(tag, primaryKey, payload)
@@ -216,11 +219,13 @@ export const EventBusServiceMemory = Layer.scoped(
         return id
       }).pipe(
         Effect.catchAll((cause) =>
-          Effect.fail(new EventBusError({
-            method: "enqueueJob",
-            message: "Failed to enqueue job",
-            cause
-          }))
+          Effect.fail(
+            new EventBusError({
+              method: "enqueueJob",
+              message: "Failed to enqueue job",
+              cause
+            })
+          )
         )
       )
 
@@ -233,11 +238,13 @@ export const EventBusServiceMemory = Layer.scoped(
           }))
         ),
         Effect.catchAll((cause) =>
-          Effect.fail(new EventBusError({
-            method: "takeJob",
-            message: "Failed to take job",
-            cause
-          }))
+          Effect.fail(
+            new EventBusError({
+              method: "takeJob",
+              message: "Failed to take job",
+              cause
+            })
+          )
         )
       )
 
@@ -248,7 +255,7 @@ export const EventBusServiceMemory = Layer.scoped(
           return Option.none()
         }
 
-        const { job, id, attempts } = jobOpt.value
+        const { attempts, id, job } = jobOpt.value
         const maxAttempts = options?.maxAttempts ?? 5
 
         const result = yield* handler(job, { id, attempts }).pipe(
@@ -294,11 +301,13 @@ export const EventBusServiceMemory = Layer.scoped(
     const pendingJobCount: EventBusService["pendingJobCount"] = () =>
       Queue.size(jobQueue).pipe(
         Effect.catchAll((cause) =>
-          Effect.fail(new EventBusError({
-            method: "pendingJobCount",
-            message: "Failed to get pending job count",
-            cause
-          }))
+          Effect.fail(
+            new EventBusError({
+              method: "pendingJobCount",
+              message: "Failed to get pending job count",
+              cause
+            })
+          )
         )
       )
 
@@ -309,18 +318,18 @@ export const EventBusServiceMemory = Layer.scoped(
         yield* Effect.logInfo("EventBusService shut down")
       }).pipe(
         Effect.catchAll((cause) =>
-          Effect.fail(new EventBusError({
-            method: "shutdown",
-            message: "Failed to shutdown",
-            cause
-          }))
+          Effect.fail(
+            new EventBusError({
+              method: "shutdown",
+              message: "Failed to shutdown",
+              cause
+            })
+          )
         )
       )
 
     // Cleanup on scope finalization
-    yield* Effect.addFinalizer(() =>
-      shutdown().pipe(Effect.catchAll(() => Effect.void))
-    )
+    yield* Effect.addFinalizer(() => shutdown().pipe(Effect.catchAll(() => Effect.void)))
 
     return {
       publishCurationEvent,
@@ -388,11 +397,13 @@ export const EventBusServiceSql = Layer.scoped(
         effect: () => Effect.void
       }).pipe(
         Effect.catchAll((cause) =>
-          Effect.fail(new EventBusError({
-            method: "publishEvent",
-            message: `Failed to publish event: ${event}`,
-            cause
-          }))
+          Effect.fail(
+            new EventBusError({
+              method: "publishEvent",
+              message: `Failed to publish event: ${event}`,
+              cause
+            })
+          )
         )
       )
 
@@ -400,10 +411,12 @@ export const EventBusServiceSql = Layer.scoped(
       Effect.gen(function*() {
         const eventDef = CurationEventGroup.events[tag]
         if (!eventDef) {
-          return yield* Effect.fail(new EventBusError({
-            method: "publishCurationEvent",
-            message: `Unknown curation event: ${tag}`
-          }))
+          return yield* Effect.fail(
+            new EventBusError({
+              method: "publishCurationEvent",
+              message: `Unknown curation event: ${tag}`
+            })
+          )
         }
         const primaryKey = (eventDef as any).primaryKey(payload)
         yield* publishEvent(tag, primaryKey, payload)
@@ -414,10 +427,12 @@ export const EventBusServiceSql = Layer.scoped(
       Effect.gen(function*() {
         const eventDef = ExtractionEventGroup.events[tag]
         if (!eventDef) {
-          return yield* Effect.fail(new EventBusError({
-            method: "publishExtractionEvent",
-            message: `Unknown extraction event: ${tag}`
-          }))
+          return yield* Effect.fail(
+            new EventBusError({
+              method: "publishExtractionEvent",
+              message: `Unknown extraction event: ${tag}`
+            })
+          )
         }
         const primaryKey = (eventDef as any).primaryKey(payload)
         yield* publishEvent(tag, primaryKey, payload)
@@ -431,18 +446,19 @@ export const EventBusServiceSql = Layer.scoped(
         return id
       }).pipe(
         Effect.catchAll((cause) =>
-          Effect.fail(new EventBusError({
-            method: "enqueueJob",
-            message: "Failed to enqueue job",
-            cause
-          }))
+          Effect.fail(
+            new EventBusError({
+              method: "enqueueJob",
+              message: "Failed to enqueue job",
+              cause
+            })
+          )
         )
       )
 
     // Note: takeJob for SQL implementation works differently - jobs are taken via processJob
     // which handles the full lifecycle (take + complete/retry)
-    const takeJob: EventBusService["takeJob"] = () =>
-      Effect.succeed(Option.none())
+    const takeJob: EventBusService["takeJob"] = () => Effect.succeed(Option.none())
 
     const processJob: EventBusService["processJob"] = (handler, options) =>
       Effect.gen(function*() {
@@ -450,7 +466,7 @@ export const EventBusServiceSql = Layer.scoped(
 
         // Use the PersistedQueue take() which handles retry/complete lifecycle
         const result = yield* jobQueue.take(
-          (job, { id, attempts }) =>
+          (job, { attempts, id }) =>
             handler(job, { id, attempts }).pipe(
               Effect.map(Option.some)
             ),
@@ -460,11 +476,13 @@ export const EventBusServiceSql = Layer.scoped(
         return result
       }).pipe(
         Effect.catchAll((cause) =>
-          Effect.fail(new EventBusError({
-            method: "processJob",
-            message: "Failed to process job",
-            cause
-          }))
+          Effect.fail(
+            new EventBusError({
+              method: "processJob",
+              message: "Failed to process job",
+              cause
+            })
+          )
         )
       )
 
@@ -489,19 +507,20 @@ export const EventBusServiceSql = Layer.scoped(
       })
 
     // SQL implementation doesn't have a pending count API - would need custom query
-    const pendingJobCount: EventBusService["pendingJobCount"] = () =>
-      Effect.succeed(0)
+    const pendingJobCount: EventBusService["pendingJobCount"] = () => Effect.succeed(0)
 
     const shutdown: EventBusService["shutdown"] = () =>
       Effect.gen(function*() {
         yield* Effect.logInfo("EventBusService SQL shutdown")
       }).pipe(
         Effect.catchAll((cause) =>
-          Effect.fail(new EventBusError({
-            method: "shutdown",
-            message: "Failed to shutdown",
-            cause
-          }))
+          Effect.fail(
+            new EventBusError({
+              method: "shutdown",
+              message: "Failed to shutdown",
+              cause
+            })
+          )
         )
       )
 

@@ -11,7 +11,7 @@
 - [x] Task: Conductor - User Manual Verification 'Domain Layer Refactoring' (Protocol in workflow.md) 651d406
 
 ## Phase 3: Service Layer Refactoring
-- [ ] Task: Update Service definitions to use `Effect.Tag` and `Context` correctly.
+- [~] Task: Update Service definitions to use `Effect.Tag` and `Context` correctly.
 - [ ] Task: Refactor Service implementations to use `Effect.gen` for readability and error handling.
 - [ ] Task: Ensure proper Layer construction and composition.
 - [ ] Task: Conductor - User Manual Verification 'Service Layer Refactoring' (Protocol in workflow.md)

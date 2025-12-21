@@ -199,7 +199,7 @@ describe("OntologyAgent Service", () => {
   })
 
   // Mock ConfigService with required RDF prefixes
-  const MockConfigService = Layer.succeed(ConfigService, {
+  const MockConfigService = Layer.succeed(ConfigService, ConfigService.of({
     llm: {
       provider: "anthropic" as const,
       model: "claude-haiku-4-5",
@@ -283,7 +283,7 @@ describe("OntologyAgent Service", () => {
       maxConcurrent: 5,
       baseUrl: "https://r.jina.ai"
     }
-  } as ConfigService)
+  }))
 
   // Mock OntologyService - use unknown cast for Effect.Service classes
   const MockOntologyService = Layer.succeed(OntologyService, {

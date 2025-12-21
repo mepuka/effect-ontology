@@ -202,10 +202,8 @@ const createPassthroughCorrectorAgent = (): Agent<
 // Mock Layers
 // =============================================================================
 
-/**
- * Mock ConfigService for testing
- */
-const MockConfigService = Layer.succeed(ConfigService, {
+// Mock ConfigService with required fields for Agent
+const MockConfigService = Layer.succeed(ConfigService, ConfigService.of({
   llm: {
     provider: "anthropic" as const,
     model: "claude-haiku-4-5",
@@ -282,16 +280,15 @@ const MockConfigService = Layer.succeed(ConfigService, {
     keys: Option.none(),
     requireAuth: false
   },
-  jina: {
-    apiKey: Option.none(),
-    rateLimitRpm: 20,
-    timeoutMs: 30_000,
-    maxConcurrent: 5,
-    baseUrl: "https://r.jina.ai"
-  }
-} as ConfigService)
-
-// =============================================================================
+      jina: {
+        apiKey: Option.none(),
+        rateLimitRpm: 20,
+        timeoutMs: 30_000,
+        maxConcurrent: 5,
+        baseUrl: "https://r.jina.ai"
+      }
+    }))
+  // =============================================================================
 // Tests
 // =============================================================================
 
