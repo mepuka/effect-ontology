@@ -7,7 +7,7 @@
 
 ## Phase 2: Domain Layer Refactoring
 - [x] Task: Refactor Domain schemas and models to strictly use `Effect.Schema` and branded types where applicable. f184bfd
-- [~] Task: Ensure all Domain functions are pure and free of side effects (referential transparency).
+- [x] Task: Ensure all Domain functions are pure and free of side effects (referential transparency). 3760d63
 - [ ] Task: Conductor - User Manual Verification 'Domain Layer Refactoring' (Protocol in workflow.md)
 
 ## Phase 3: Service Layer Refactoring
