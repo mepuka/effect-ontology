@@ -6,7 +6,7 @@
 - [x] Task: Conductor - User Manual Verification 'Analysis & Reporting' (Protocol in workflow.md) 11bc65a
 
 ## Phase 2: Domain Layer Refactoring
-- [ ] Task: Refactor Domain schemas and models to strictly use `Effect.Schema` and branded types where applicable.
+- [x] Task: Refactor Domain schemas and models to strictly use `Effect.Schema` and branded types where applicable. f184bfd
 - [ ] Task: Ensure all Domain functions are pure and free of side effects (referential transparency).
 - [ ] Task: Conductor - User Manual Verification 'Domain Layer Refactoring' (Protocol in workflow.md)
 
