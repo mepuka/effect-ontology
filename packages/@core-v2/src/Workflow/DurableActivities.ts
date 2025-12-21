@@ -45,6 +45,7 @@ import type {
   DocumentType,
   EnrichedManifest,
   EntityDensity,
+  LanguageCode,
   PreprocessingActivityInput
 } from "../Domain/Schema/DocumentMetadata.js"
 import { computePriority, estimateTokens, selectChunkingStrategy } from "../Domain/Schema/DocumentMetadata.js"
@@ -2095,7 +2096,7 @@ export const makePreprocessingActivity = (input: typeof PreprocessingActivityInp
             ingestedAt: preprocessedAt,
             preprocessedAt,
             title: undefined,
-            language: "en",
+            language: "en" as LanguageCode,
             estimatedTokens: tokens,
             documentType: "unknown" as DocumentType,
             domainTags: [],
@@ -2213,7 +2214,7 @@ export const makePreprocessingActivity = (input: typeof PreprocessingActivityInp
               ingestedAt: preprocessedAt,
               preprocessedAt,
               title: classification.title,
-              language: (classification.language ?? "en") as string,
+              language: (classification.language ?? "en") as LanguageCode,
               estimatedTokens: tokens,
               documentType: classification.documentType,
               domainTags: classification.domainTags,
@@ -2239,7 +2240,7 @@ export const makePreprocessingActivity = (input: typeof PreprocessingActivityInp
               ingestedAt: preprocessedAt,
               preprocessedAt,
               title: undefined,
-              language: "en",
+              language: "en" as LanguageCode,
               estimatedTokens: tokens,
               documentType: "unknown" as DocumentType,
               domainTags: [],
