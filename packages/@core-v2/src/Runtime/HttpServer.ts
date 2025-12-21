@@ -751,6 +751,8 @@ export const SearchRouter = HttpRouter.empty.pipe(
 // =============================================================================
 
 export const ExtractionRouter = HttpRouter.empty.pipe(
+  // POST /v1/extract/batch - Start batch extraction (returns 202 Accepted)
+  // Use WebSocket at /v1/ontologies/:ontologyId/events/stream for real-time updates
   HttpRouter.post(
     "/v1/extract/batch",
     Effect.gen(function*() {
@@ -767,16 +769,25 @@ export const ExtractionRouter = HttpRouter.empty.pipe(
               const manifestUri = yield* stageManifest(manifest)
 
               const orchestrator = yield* WorkflowOrchestrator
-              const executionId = yield* orchestrator.start(
+              yield* orchestrator.start(
                 toPayload(manifest, manifestUri, request.preprocessing, request.ontologyEmbeddingsUri)
               )
 
-              return yield* streamBatchExtraction(executionId)
+              // Return 202 Accepted with batchId
+              // Client should subscribe to WebSocket for real-time updates
+              return yield* HttpServerResponse.json({
+                batchId: manifest.batchId,
+                ontologyId: manifest.ontologyId,
+                documentCount: manifest.documents.length,
+                wsEndpoint: `/v1/ontologies/${manifest.ontologyId}/events/stream`,
+                statusEndpoint: `/v1/extract/batch/${manifest.batchId}/status`
+              }, { status: 202 })
             })
         })
       )
     })
   ),
+  // POST /v1/extract - Alias for /v1/extract/batch (returns 202 Accepted)
   HttpRouter.post(
     "/v1/extract",
     Effect.gen(function*() {
@@ -792,13 +803,35 @@ export const ExtractionRouter = HttpRouter.empty.pipe(
               const manifest = yield* createManifest(request)
               const manifestUri = yield* stageManifest(manifest)
               const orchestrator = yield* WorkflowOrchestrator
-              const executionId = yield* orchestrator.start(
+              yield* orchestrator.start(
                 toPayload(manifest, manifestUri, request.preprocessing, request.ontologyEmbeddingsUri)
               )
-              return yield* streamBatchExtraction(executionId)
+
+              return yield* HttpServerResponse.json({
+                batchId: manifest.batchId,
+                ontologyId: manifest.ontologyId,
+                documentCount: manifest.documents.length,
+                wsEndpoint: `/v1/ontologies/${manifest.ontologyId}/events/stream`,
+                statusEndpoint: `/v1/extract/batch/${manifest.batchId}/status`
+              }, { status: 202 })
             })
         })
       )
+    })
+  ),
+  // GET /v1/extract/batch/:batchId/stream - SSE streaming (legacy, for backwards compatibility)
+  HttpRouter.get(
+    "/v1/extract/batch/:batchId/stream",
+    Effect.gen(function*() {
+      const params = yield* HttpRouter.params
+      const batchId = params.batchId
+      if (!batchId) {
+        return yield* HttpServerResponse.json({
+          error: "INVALID_REQUEST",
+          message: "Batch ID is required"
+        }, { status: 400 })
+      }
+      return yield* streamBatchExtraction(batchId)
     })
   ),
   // Inline extraction endpoint for local testing (no GCS required)

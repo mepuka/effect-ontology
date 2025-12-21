@@ -182,3 +182,26 @@ export type BatchId = typeof BatchId.Type
  */
 export const toGcsUri = (bucket: string, objectPath: string): GcsUri =>
   `gs://${bucket}/${objectPath.replace(/^\/+/, "")}` as GcsUri
+
+/**
+ * Resolve a storage path to a GCS URI
+ *
+ * If the path is already a gs:// URI, returns it unchanged.
+ * Otherwise, constructs a gs:// URI using the provided bucket.
+ *
+ * @param storagePath - Storage path or gs:// URI
+ * @param bucket - Bucket name for local paths
+ * @returns GCS URI
+ *
+ * @example
+ * ```ts
+ * resolveToGcsUri("gs://bucket/path/file.md", "other") // returns gs://bucket/path/file.md
+ * resolveToGcsUri("documents/hash/content.md", "mybucket") // returns gs://mybucket/documents/hash/content.md
+ * ```
+ */
+export const resolveToGcsUri = (storagePath: string, bucket: string): GcsUri => {
+  if (storagePath.startsWith("gs://")) {
+    return storagePath as GcsUri
+  }
+  return toGcsUri(bucket, storagePath)
+}

@@ -132,6 +132,20 @@ export const ExtractionEventGroup = EventGroup.empty
     }),
     success: Schema.Void
   })
+  .add({
+    tag: "BatchStateChanged",
+    primaryKey: (p) => `batch:${p.batchId}`,
+    payload: Schema.Struct({
+      batchId: Schema.String,
+      ontologyId: Schema.String,
+      /** The batch state tag (Pending, Extracting, Complete, etc.) */
+      stage: Schema.String,
+      /** Full state payload as JSON */
+      state: Schema.Unknown,
+      timestamp: Schema.DateFromSelf
+    }),
+    success: Schema.Void
+  })
 
 /**
  * Type of events in ExtractionEventGroup

@@ -35,6 +35,7 @@ import { AllMigrations, MigrationRunner } from "./Runtime/Persistence/MigrationR
 import { ShutdownService } from "./Runtime/Shutdown.js"
 import { ActivityDependenciesLayer, WorkflowOrchestratorFullLayer } from "./Runtime/WorkflowLayers.js"
 import { BatchStateHubLayer, BatchStatePersistenceLayer } from "./Service/BatchState.js"
+import { BatchStateBridgeLive } from "./Service/BatchStateBridge.js"
 import { ClaimPersistenceService } from "./Service/ClaimPersistence.js"
 import { PersistentEmbeddingCache } from "./Service/EmbeddingCache.js"
 import { PersistentEntityIndex } from "./Service/EntityIndex.js"
@@ -225,6 +226,7 @@ const ServerLive = HttpServerLive.pipe(
   Layer.provideMerge(BunHttpServer.layer({ port, idleTimeout: 255 })), // Bun max is 255s (Cloud Run uses longer timeouts via nginx)
   Layer.provideMerge(WorkflowEngineLive),
   Layer.provideMerge(WorkflowOrchestratorWithDependencies),
+  Layer.provideMerge(BatchStateBridgeLive), // Bridge BatchStateHub → EventBroadcastHub for WebSocket
   Layer.provideMerge(BatchStateHubLayer),
   Layer.provideMerge(BatchStatePersistenceWithDeps),
   Layer.provideMerge(HealthCheckWithDeps),

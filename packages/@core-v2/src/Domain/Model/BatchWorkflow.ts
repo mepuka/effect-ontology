@@ -39,6 +39,8 @@ export type DocumentStatus = typeof DocumentStatus.Type
  */
 const BatchBase = {
   batchId: BatchId,
+  /** Ontology ID for event routing and scoping */
+  ontologyId: Schema.String,
   manifestUri: GcsUri,
   ontologyVersion: OntologyVersion,
   createdAt: Schema.DateTimeUtc,

@@ -34,7 +34,8 @@ import { ChunkingConfig, LlmConfig, RunConfig } from "../Domain/Model/Extraction
 import { OntologyRef } from "../Domain/Model/Ontology.js"
 import { PathLayout } from "../Domain/PathLayout.js"
 import type { ExtractionActivityInput } from "../Domain/Schema/Batch.js"
-import { type ArticleMetadata, ClaimPersistenceService } from "../Service/ClaimPersistence.js"
+// Note: ClaimPersistenceService removed - claims persist only after validation
+// via makeClaimPersistenceActivity in WorkflowOrchestrator
 import { ConfigService } from "../Service/Config.js"
 import { ExtractionWorkflow } from "../Service/ExtractionWorkflow.js"
 import { RdfBuilder } from "../Service/Rdf.js"
@@ -413,55 +414,9 @@ export const makeStreamingExtractionActivity = (input: typeof ExtractionActivity
 
       const graphUri = toGcsUri(bucket, graphPath)
 
-      // 8. Persist claims to PostgreSQL (if configured)
-      // Uses serviceOption to gracefully handle missing ClaimPersistenceService
-      const claimPersistenceOpt = yield* Effect.serviceOption(ClaimPersistenceService)
-      let claimsPersisted = 0
-
-      if (Option.isSome(claimPersistenceOpt)) {
-        const claimPersistence = claimPersistenceOpt.value
-
-        // Build article metadata from extraction input
-        // Use publishedAt if available, fall back to eventTime, then current time
-        const publishedDate = input.publishedAt
-          ? new Date(input.publishedAt.epochMillis)
-          : input.eventTime
-            ? new Date(input.eventTime.epochMillis)
-            : new Date()
-
-        const articleMeta: ArticleMetadata = {
-          uri: input.sourceUri,
-          ontologyId: input.ontologyId,
-          headline: input.title,
-          publishedAt: publishedDate,
-          contentHash: computeContentHash(sourceContent)
-        }
-
-        const result = yield* claimPersistence.persistClaims(claims, articleMeta, graphUri).pipe(
-          Effect.tap((r) =>
-            Effect.logInfo("Claims persisted to PostgreSQL", {
-              documentId: input.documentId,
-              articleId: r.articleId,
-              claimsInserted: r.claimsInserted,
-              claimsTotal: r.claimsTotal,
-              duplicatesSkipped: r.claimsTotal - r.claimsInserted
-            })
-          ),
-          Effect.catchAll((error) =>
-            Effect.logWarning("Failed to persist claims to PostgreSQL (continuing)", {
-              documentId: input.documentId,
-              error: String(error)
-            }).pipe(Effect.as({ articleId: "", claimsInserted: 0, claimsTotal: claims.length }))
-          )
-        )
-
-        claimsPersisted = result.claimsInserted
-      } else {
-        yield* Effect.logDebug("ClaimPersistenceService not available, skipping PostgreSQL persistence", {
-          documentId: input.documentId,
-          claimCount: claims.length
-        })
-      }
+      // Note: Claims are persisted only after SHACL validation passes,
+      // via makeClaimPersistenceActivity in WorkflowOrchestrator.
+      // This ensures only validated claims enter the database.
 
       const end = yield* DateTime.now
 
@@ -471,7 +426,6 @@ export const makeStreamingExtractionActivity = (input: typeof ExtractionActivity
         entityCount: graph.entities.length,
         relationCount: graph.relations.length,
         claimCount: claims.length,
-        claimsPersisted,
         durationMs: DateTime.distance(start, end)
       })
 

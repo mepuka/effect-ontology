@@ -12,6 +12,17 @@ import { DateTime, Effect, Option, Schema } from "effect"
 import { TreeFormatter } from "effect/ParseResult"
 import type { ParseError } from "effect/ParseResult"
 import {
+  type BatchId,
+  type DocumentId,
+  type GcsUri,
+  type Namespace,
+  type OntologyVersion,
+  resolveToGcsUri,
+  toGcsUri
+} from "../Domain/Identity.js"
+import { PathLayout } from "../Domain/PathLayout.js"
+import { BatchManifest, type BatchWorkflowPayload } from "../Domain/Schema/Batch.js"
+import {
   BatchIngestRequest,
   BatchIngestResponse,
   BatchIngestResult,
@@ -21,9 +32,12 @@ import {
   LinkSummary,
   ListLinksResponse
 } from "../Domain/Schema/LinkIngestion.js"
+import { ConfigService } from "../Service/Config.js"
 import { JinaReaderClient } from "../Service/JinaReaderClient.js"
 import { LinkIngestionError, LinkIngestionService } from "../Service/LinkIngestionService.js"
 import { OntologyService } from "../Service/Ontology.js"
+import { StorageService } from "../Service/Storage.js"
+import { WorkflowOrchestrator } from "../Service/WorkflowOrchestrator.js"
 
 // =============================================================================
 // Query Param Schemas (use NumberFromString for URL query params)
@@ -71,6 +85,18 @@ const BatchIngestBody = Schema.Struct({
   skipEnrich: Schema.optionalWith(Schema.Boolean, { default: () => false }),
   /** Continue on individual failures */
   continueOnError: Schema.optionalWith(Schema.Boolean, { default: () => true })
+})
+
+/**
+ * Request body for creating a batch from ingested links
+ */
+const CreateBatchFromLinksBody = Schema.Struct({
+  /** IDs of ingested links to include in the batch */
+  linkIds: Schema.Array(Schema.String),
+  /** Override target namespace (defaults to ontology namespace) */
+  targetNamespace: Schema.optional(Schema.String),
+  /** Optional preprocessing configuration */
+  preprocessing: Schema.optional(Schema.Unknown)
 })
 
 // =============================================================================
@@ -439,6 +465,168 @@ export const LinkIngestionRouter = HttpRouter.empty.pipe(
               })
             }).pipe(
               Effect.catchAll((error) => HttpServerResponse.json(error, { status: 502 }))
+            )
+        })
+      )
+    })
+  ),
+  // POST /v1/ontologies/:ontologyId/batches/from-links - Create batch from ingested links
+  HttpRouter.post(
+    "/v1/ontologies/:ontologyId/batches/from-links",
+    Effect.gen(function*() {
+      const params = yield* HttpRouter.params
+      const ontologyId = params.ontologyId
+
+      if (!ontologyId) {
+        return yield* HttpServerResponse.json({
+          error: "VALIDATION_ERROR",
+          message: "ontologyId is required"
+        }, { status: 400 })
+      }
+
+      // Validate ontology exists in registry
+      const entryOpt = yield* OntologyService.getRegistryEntry(ontologyId)
+      if (Option.isNone(entryOpt)) {
+        return yield* HttpServerResponse.json({
+          error: "NOT_FOUND",
+          message: `Ontology "${ontologyId}" not found in registry`
+        }, { status: 404 })
+      }
+      const ontologyEntry = entryOpt.value
+
+      return yield* HttpServerRequest.schemaBodyJson(CreateBatchFromLinksBody).pipe(
+        Effect.matchEffect({
+          onFailure: (error) =>
+            HttpServerResponse.json({
+              error: "VALIDATION_ERROR",
+              message: TreeFormatter.formatErrorSync(error as ParseError)
+            }, { status: 400 }),
+          onSuccess: (request) =>
+            Effect.gen(function*() {
+              const config = yield* ConfigService
+              const storage = yield* StorageService
+              const ingestion = yield* LinkIngestionService
+              const orchestrator = yield* WorkflowOrchestrator
+              const now = yield* DateTime.now
+
+              // Fetch all requested links
+              const links = yield* ingestion.getByIds(request.linkIds)
+
+              if (links.length === 0) {
+                return yield* HttpServerResponse.json({
+                  error: "VALIDATION_ERROR",
+                  message: "No valid link IDs provided"
+                }, { status: 400 })
+              }
+
+              // Verify all links belong to this ontology
+              const invalidLinks = links.filter((l) => l.ontologyId !== ontologyId)
+              if (invalidLinks.length > 0) {
+                return yield* HttpServerResponse.json({
+                  error: "VALIDATION_ERROR",
+                  message: `Links do not belong to ontology "${ontologyId}": ${
+                    invalidLinks.map((l) => l.id).join(", ")
+                  }`
+                }, { status: 400 })
+              }
+
+              // Resolve bucket for GCS URIs
+              const bucket = Option.getOrElse(config.storage.bucket, () => "local-bucket")
+
+              // Generate batch ID
+              const batchId = `batch-${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}` as BatchId
+
+              // Determine target namespace
+              const targetNamespace =
+                (request.targetNamespace ?? ontologyEntry.targetNamespace ?? ontologyId) as Namespace
+
+              // Resolve ontology URI - storage path needs bucket prefix
+              const ontologyUri = resolveToGcsUri(ontologyEntry.storagePath, bucket)
+
+              // Build documents from links
+              const documents = links.map((link) => ({
+                documentId: link.id as DocumentId,
+                sourceUri: resolveToGcsUri(link.storageUri, bucket),
+                contentType: "text/markdown" as const,
+                sizeBytes: link.wordCount ? link.wordCount * 5 : 0 // Rough estimate
+              }))
+
+              // Resolve SHACL URI if provided
+              const shaclUri = ontologyEntry.shapesPath
+                ? resolveToGcsUri(ontologyEntry.shapesPath, bucket)
+                : undefined
+
+              // Create batch manifest
+              const manifest: typeof BatchManifest.Type = {
+                batchId,
+                ontologyId,
+                ontologyUri,
+                ontologyVersion: (ontologyEntry.version ?? "v1") as OntologyVersion,
+                shaclUri,
+                targetNamespace,
+                documents,
+                createdAt: now
+              }
+
+              // Stage manifest to storage
+              const encodeManifest = Schema.encode(BatchManifest)
+              const encoded = yield* encodeManifest(manifest)
+              const manifestJson = JSON.stringify(encoded)
+              const manifestPath = PathLayout.batch.manifest(batchId)
+              yield* storage.set(manifestPath, manifestJson)
+              const manifestUri = toGcsUri(bucket, manifestPath)
+
+              // Resolve embeddings URI if provided
+              const embeddingsUri = ontologyEntry.embeddingsPath
+                ? resolveToGcsUri(ontologyEntry.embeddingsPath, bucket)
+                : undefined
+
+              // Build workflow payload
+              const documentIds = documents.map((d) => d.documentId)
+              const payload: BatchWorkflowPayload = {
+                batchId,
+                ontologyId,
+                manifestUri,
+                ontologyVersion: (ontologyEntry.version ?? "v1") as OntologyVersion,
+                ontologyUri,
+                targetNamespace,
+                shaclUri,
+                documentIds,
+                ontologyEmbeddingsUri: embeddingsUri
+              }
+
+              // Start the workflow
+              yield* orchestrator.start(payload)
+
+              // Mark links as processing
+              yield* Effect.forEach(
+                links,
+                (link) => ingestion.markProcessing(link.id),
+                { concurrency: 10 }
+              )
+
+              yield* Effect.logInfo("Batch created from ingested links", {
+                ontologyId,
+                batchId,
+                linkCount: links.length
+              })
+
+              // Return 202 Accepted
+              return yield* HttpServerResponse.json({
+                batchId,
+                ontologyId,
+                linkCount: links.length,
+                documentCount: documents.length,
+                wsEndpoint: `/v1/ontologies/${ontologyId}/events/stream`,
+                statusEndpoint: `/v1/extract/batch/${batchId}/status`
+              }, { status: 202 })
+            }).pipe(
+              Effect.catchAll((error) =>
+                HttpServerResponse.json({
+                  error: "BATCH_CREATION_ERROR",
+                  message: String(error)
+                }, { status: 500 })
+              )
             )
         })
       )

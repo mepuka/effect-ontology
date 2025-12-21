@@ -28,7 +28,7 @@
 import type { PlatformError } from "@effect/platform/Error"
 import * as Pg from "@effect/sql-drizzle/Pg"
 import { createHash } from "crypto"
-import { and, eq } from "drizzle-orm"
+import { and, eq, sql } from "drizzle-orm"
 import { Cache, Data, Duration, Effect, Option } from "effect"
 import type { EnrichedContent } from "../Domain/Model/EnrichedContent.js"
 import { type IngestedLinkInsertRow, type IngestedLinkRow, ingestedLinks } from "../Repository/schema.js"
@@ -495,6 +495,41 @@ export class LinkIngestionService extends Effect.Service<LinkIngestionService>()
         })
 
       /**
+       * Mark a link as being processed by a batch
+       *
+       * Updates the link status to "processing".
+       * The link-to-batch association is tracked in the link_batch_items table.
+       */
+      const markProcessing = (id: string): Effect.Effect<Option.Option<IngestedLinkRow>> =>
+        Effect.gen(function*() {
+          const [result] = yield* Effect.promise(() =>
+            drizzle
+              .update(ingestedLinks)
+              .set({
+                status: "processing",
+                updatedAt: new Date()
+              })
+              .where(eq(ingestedLinks.id, id))
+              .returning()
+          )
+          return Option.fromNullable(result)
+        })
+
+      /**
+       * Get multiple links by their IDs
+       */
+      const getByIds = (ids: ReadonlyArray<string>): Effect.Effect<ReadonlyArray<IngestedLinkRow>> =>
+        Effect.gen(function*() {
+          if (ids.length === 0) return []
+          const results = yield* Effect.promise(() =>
+            drizzle.select().from(ingestedLinks).where(
+              sql`${ingestedLinks.id} = ANY(${ids})`
+            )
+          )
+          return results
+        })
+
+      /**
        * Get content from storage for a link
        */
       const getContent = (link: IngestedLinkRow): Effect.Effect<Option.Option<string>, PlatformError> =>
@@ -506,10 +541,12 @@ export class LinkIngestionService extends Effect.Service<LinkIngestionService>()
         ingestUrls,
         getByContentHash,
         getById,
+        getByIds,
         list,
         getPending,
         getEnriched,
         markProcessed,
+        markProcessing,
         markFailed,
         getContent
       }

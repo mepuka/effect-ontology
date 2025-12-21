@@ -352,10 +352,10 @@ export const makeResolutionActivity = (input: typeof ResolutionActivityInput.Typ
           )
         ), { concurrency: 10 })
 
-      // 2. Parse each Turtle and extract KnowledgeGraphs
-      const knowledgeGraphs = yield* Effect.forEach(graphContents, (turtle) =>
+      // 2. Parse each TriG graph and extract KnowledgeGraphs
+      const knowledgeGraphs = yield* Effect.forEach(graphContents, (trig) =>
         Effect.gen(function*() {
-          const store = yield* rdf.parseTurtle(turtle)
+          const store = yield* rdf.parseTriG(trig)
           return yield* storeToKnowledgeGraph(store)
         }).pipe(
           Effect.catchAll((err) =>
@@ -924,8 +924,8 @@ export const makeClaimPersistenceActivity = (input: ClaimPersistenceInput) =>
             Effect.flatMap((opt) => requireContent(opt, graphPath))
           )
 
-          // Parse TriG/Turtle to extract entities and relations
-          const store = yield* rdf.parseTurtle(graphContent)
+          // Parse TriG to extract entities and relations (preserves named graphs)
+          const store = yield* rdf.parseTriG(graphContent)
           const knowledgeGraph = yield* storeToKnowledgeGraph(store)
 
           // Get metadata for this document

@@ -197,6 +197,7 @@ const toFailedState = (state: BatchState, cause: Cause.Cause<unknown>): BatchSta
   return {
     _tag: "Failed",
     batchId: state.batchId,
+    ontologyId: state.ontologyId,
     manifestUri: state.manifestUri,
     ontologyVersion: state.ontologyVersion,
     createdAt: state.createdAt,
@@ -357,6 +358,7 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
         const pendingState: BatchState = {
           _tag: "Pending",
           batchId,
+          ontologyId: manifest.ontologyId,
           manifestUri,
           ontologyVersion,
           createdAt: workflowStart,
@@ -378,6 +380,7 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
         const preprocessingState: BatchState = {
           _tag: "Preprocessing",
           batchId,
+          ontologyId: manifest.ontologyId,
           manifestUri,
           ontologyVersion,
           createdAt: workflowStart,
@@ -413,6 +416,7 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
                 const updatedPreprocessingState: BatchState = {
                   _tag: "Preprocessing",
                   batchId,
+                  ontologyId: manifest.ontologyId,
                   manifestUri,
                   ontologyVersion,
                   createdAt: workflowStart,
@@ -590,6 +594,7 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
               const extractingState: BatchState = {
                 _tag: "Extracting",
                 batchId,
+                ontologyId: manifest.ontologyId,
                 manifestUri,
                 ontologyVersion,
                 createdAt: workflowStart,
@@ -640,6 +645,7 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
         const resolvingState: BatchState = {
           _tag: "Resolving",
           batchId,
+          ontologyId: manifest.ontologyId,
           manifestUri,
           ontologyVersion,
           createdAt: workflowStart,
@@ -713,6 +719,7 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
         const validatingState: BatchState = {
           _tag: "Validating",
           batchId,
+          ontologyId: manifest.ontologyId,
           manifestUri,
           ontologyVersion,
           createdAt: workflowStart,
@@ -793,6 +800,7 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
         const ingestingState: BatchState = {
           _tag: "Ingesting",
           batchId,
+          ontologyId: manifest.ontologyId,
           manifestUri,
           ontologyVersion,
           createdAt: workflowStart,
@@ -821,6 +829,7 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
         const complete: BatchState = {
           _tag: "Complete",
           batchId,
+          ontologyId: manifest.ontologyId,
           manifestUri,
           ontologyVersion,
           createdAt: workflowStart,
@@ -878,6 +887,7 @@ export const BatchExtractionWorkflowLayer = BatchExtractionWorkflow.toLayer(
             const failedState: BatchState = {
               _tag: "Failed",
               batchId,
+              ontologyId: manifest.ontologyId,
               manifestUri,
               ontologyVersion,
               createdAt: workflowStart,
