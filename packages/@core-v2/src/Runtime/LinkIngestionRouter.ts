@@ -14,7 +14,6 @@ import type { ParseError } from "effect/ParseResult"
 import {
   type BatchId,
   type DocumentId,
-  type GcsUri,
   type Namespace,
   type OntologyVersion,
   resolveToGcsUri,
@@ -23,10 +22,8 @@ import {
 import { PathLayout } from "../Domain/PathLayout.js"
 import { BatchManifest, type BatchWorkflowPayload } from "../Domain/Schema/Batch.js"
 import {
-  BatchIngestRequest,
   BatchIngestResponse,
   BatchIngestResult,
-  IngestLinkRequest,
   IngestLinkResponse,
   LinkDetail,
   LinkSummary,
