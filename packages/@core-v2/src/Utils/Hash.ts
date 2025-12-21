@@ -110,7 +110,7 @@ export const sha256Sync = (input: string): string => sha256SyncFull(input).slice
  * @category Hash
  */
 export const hashEmbeddingKeySync = (text: string, taskType: string): string =>
-  sha256Sync(`${text}::${taskType}`)
+  sha256SyncFull(`${text}::${taskType}`)
 
 /**
  * Compute SHA-256 hash of bytes using WebCrypto API
