@@ -1,24 +1,45 @@
-import { useAtomValue, useAtomSet, useAtom } from "@effect-atom/atom-react"
+/**
+ * DocumentsPage - Editorial Minimalism Layout
+ *
+ * Data-dense document list with:
+ * - Compact table-like rows
+ * - Inline claim counts and metadata
+ * - High data-ink ratio
+ * - Keyboard navigation ready
+ *
+ * @since 2.0.0
+ * @module pages/DocumentsPage
+ */
+
+import { useAtomValue, useAtom } from "@effect-atom/atom-react"
 import { Result } from "@effect-atom/atom"
 import { Link, useParams } from "react-router-dom"
 import { documentsAtom, documentsFiltersAtom } from "@/atoms/api"
 import { documentLink } from "@/lib/routing"
 import type { DocumentsFilter } from "@/services/ApiClient"
 import { Schema } from "@effect-ontology/core-v2/Domain"
+import { FileText, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react"
 
 type ArticleSearchResult = typeof Schema.ArticleSearchResult.Type
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    year: "numeric",
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
+
+  if (diffDays === 0) return "Today"
+  if (diffDays === 1) return "Yesterday"
+  if (diffDays < 7) return `${diffDays}d ago`
+
+  return date.toLocaleDateString("en-US", {
     month: "short",
-    day: "numeric"
+    day: "numeric",
+    year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined
   })
 }
 
-function DocumentCard({ result, ontologyId }: { result: ArticleSearchResult; ontologyId: string }) {
+function DocumentRow({ result, ontologyId }: { result: ArticleSearchResult; ontologyId: string }) {
   const { article, claimCount, conflictCount } = result
-  // Article from schema uses DateTime type - convert to string for display
   const publishedAt = typeof article.publishedAt === "string"
     ? article.publishedAt
     : article.publishedAt.toString()
@@ -26,70 +47,86 @@ function DocumentCard({ result, ontologyId }: { result: ArticleSearchResult; ont
   return (
     <Link
       to={documentLink(ontologyId, article.id)}
-      className="group block border-l-2 border-stone-300 hover:border-amber-600
-                 bg-stone-50/50 hover:bg-amber-50/30 transition-all duration-200
-                 pl-5 pr-6 py-5"
+      className="data-row group flex items-center gap-3 px-4 py-2.5 border-b border-border-subtle"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <h2 className="font-serif text-lg text-stone-900 group-hover:text-amber-900
-                         transition-colors leading-tight line-clamp-2">
-            {article.headline || "Untitled Document"}
-          </h2>
-          <div className="flex items-center gap-2 mt-1.5 text-xs text-stone-500">
-            {article.sourceName && (
-              <>
-                <span className="font-medium">{article.sourceName}</span>
-                <span>·</span>
-              </>
-            )}
-            <span>{formatDate(publishedAt)}</span>
-          </div>
-        </div>
-      </div>
+      {/* Icon */}
+      <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
 
-      <div className="flex items-center gap-6 mt-4 text-xs text-stone-500">
-        <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-400" />
-          {claimCount} {claimCount === 1 ? "claim" : "claims"}
-        </span>
-        {conflictCount > 0 && (
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-amber-400" />
-            {conflictCount} {conflictCount === 1 ? "conflict" : "conflicts"}
+      {/* Main content */}
+      <div className="flex-1 min-w-0 flex items-center gap-4">
+        {/* Headline */}
+        <div className="flex-1 min-w-0">
+          <span className="text-sm text-foreground group-hover:text-primary transition-colors line-clamp-1">
+            {article.headline || "Untitled"}
+          </span>
+        </div>
+
+        {/* Source badge */}
+        {article.sourceName && (
+          <span className="namespace-badge flex-shrink-0">
+            {article.sourceName}
           </span>
         )}
+
+        {/* Claims count */}
+        <div className="flex items-center gap-3 text-2xs text-muted-foreground flex-shrink-0 w-24 justify-end">
+          <span className="flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-success" />
+            {claimCount}
+          </span>
+          {conflictCount > 0 && (
+            <span className="flex items-center gap-1 text-warning">
+              <AlertCircle className="w-3 h-3" />
+              {conflictCount}
+            </span>
+          )}
+        </div>
+
+        {/* Date */}
+        <span className="text-2xs text-muted-foreground flex-shrink-0 w-16 text-right tabular-nums">
+          {formatDate(publishedAt)}
+        </span>
       </div>
     </Link>
   )
 }
 
-function DocumentFiltersBar({
+function FilterBar({
   filters,
-  onChange
+  onChange,
+  total
 }: {
   filters: DocumentsFilter
   onChange: (updater: (prev: DocumentsFilter) => DocumentsFilter) => void
+  total?: number
 }) {
   const currentSource = filters.sources?.[0] ?? ""
 
   return (
-    <div className="flex items-center gap-4 text-sm">
-      <select
-        value={currentSource}
-        onChange={(e) => onChange((prev) => ({
-          ...prev,
-          sources: e.target.value ? [e.target.value] : undefined,
-          offset: 0
-        }))}
-        className="border border-stone-300 rounded px-3 py-1.5 bg-white text-stone-700
-                   focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-      >
-        <option value="">All sources</option>
-        <option value="seattletimes.com">Seattle Times</option>
-        <option value="kuow.org">KUOW</option>
-        <option value="seattle.gov">Seattle.gov</option>
-      </select>
+    <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-background-subtle">
+      <div className="flex items-center gap-3">
+        <select
+          value={currentSource}
+          onChange={(e) => onChange((prev) => ({
+            ...prev,
+            sources: e.target.value ? [e.target.value] : undefined,
+            offset: 0
+          }))}
+          className="text-sm bg-transparent border border-border rounded px-2 py-1 text-foreground
+                     focus:outline-none focus:ring-1 focus:ring-primary/30"
+        >
+          <option value="">All sources</option>
+          <option value="seattletimes.com">Seattle Times</option>
+          <option value="kuow.org">KUOW</option>
+          <option value="seattle.gov">Seattle.gov</option>
+        </select>
+      </div>
+
+      {total !== undefined && (
+        <span className="text-2xs text-muted-foreground">
+          {total.toLocaleString()} {total === 1 ? "document" : "documents"}
+        </span>
+      )}
     </div>
   )
 }
@@ -113,31 +150,50 @@ function Pagination({
   if (totalPages <= 1) return null
 
   return (
-    <div className="flex items-center justify-between mt-8 pt-6 border-t border-stone-200">
-      <span className="text-sm text-stone-500">
-        Showing {offset + 1}–{Math.min(offset + limit, total)} of {total}
+    <div className="flex items-center justify-between px-4 py-2 border-t border-border bg-background-subtle">
+      <span className="text-2xs text-muted-foreground tabular-nums">
+        {offset + 1}&ndash;{Math.min(offset + limit, total)} of {total.toLocaleString()}
       </span>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         <button
           onClick={() => onPageChange(Math.max(0, offset - limit))}
           disabled={offset === 0}
-          className="px-3 py-1.5 text-sm border border-stone-300 rounded
-                     hover:bg-stone-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="p-1 rounded hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed
+                     text-muted-foreground hover:text-foreground transition-colors"
+          aria-label="Previous page"
         >
-          Previous
+          <ChevronLeft className="w-4 h-4" />
         </button>
-        <span className="text-sm text-stone-600 px-2">
-          Page {currentPage} of {totalPages}
+        <span className="text-2xs text-muted-foreground px-2 tabular-nums">
+          {currentPage}/{totalPages}
         </span>
         <button
           onClick={() => onPageChange(offset + limit)}
           disabled={!hasMore}
-          className="px-3 py-1.5 text-sm border border-stone-300 rounded
-                     hover:bg-stone-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="p-1 rounded hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed
+                     text-muted-foreground hover:text-foreground transition-colors"
+          aria-label="Next page"
         >
-          Next
+          <ChevronRight className="w-4 h-4" />
         </button>
       </div>
+    </div>
+  )
+}
+
+function LoadingSkeleton() {
+  return (
+    <div className="divide-y divide-border-subtle">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+          <div className="w-4 h-4 rounded bg-muted animate-pulse" />
+          <div className="flex-1 flex items-center gap-4">
+            <div className="flex-1 h-4 rounded bg-muted animate-pulse" />
+            <div className="w-20 h-4 rounded bg-muted animate-pulse" />
+            <div className="w-12 h-4 rounded bg-muted animate-pulse" />
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -148,85 +204,94 @@ export function DocumentsPage() {
   const [filters, setFilters] = useAtom(documentsFiltersAtom(ontologyId))
   const limit = filters.limit ?? 20
 
+  const total = Result.match(result, {
+    onInitial: () => undefined,
+    onFailure: () => undefined,
+    onSuccess: (s) => s.value.total
+  })
+
   return (
-    <div className="max-w-3xl mx-auto">
-      {/* Header */}
-      <header className="mb-8">
-        <p className="text-xs font-mono uppercase tracking-widest text-stone-400 mb-2">
-          Source Documents
-        </p>
-        <h1 className="font-serif text-3xl text-stone-900 mb-3">
-          Documents
-        </h1>
-        <p className="text-stone-600 leading-relaxed">
-          Source articles and documents from which claims have been extracted.
-          Click a document to view its extracted knowledge.
-        </p>
+    <div className="h-screen flex flex-col">
+      {/* Page header */}
+      <header className="px-6 py-4 border-b border-border">
+        <div className="flex items-baseline gap-3">
+          <h1 className="font-serif text-xl text-foreground">Documents</h1>
+          <span className="text-2xs text-muted-foreground font-mono uppercase tracking-wide">
+            Source Evidence
+          </span>
+        </div>
       </header>
 
-      {/* Filters */}
-      <div className="flex items-center justify-between mb-6">
-        <DocumentFiltersBar
-          filters={filters}
-          onChange={setFilters}
-        />
-        {Result.isSuccess(result) && (
-          <span className="text-sm text-stone-500">
-            {result.value.total} {result.value.total === 1 ? "document" : "documents"}
-          </span>
-        )}
-      </div>
+      {/* Filter bar */}
+      <FilterBar
+        filters={filters}
+        onChange={setFilters}
+        total={total}
+      />
 
-      {Result.match(result, {
-        onInitial: () => (
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-24 bg-stone-100 rounded animate-pulse" />
-            ))}
-          </div>
-        ),
-        onFailure: (failure) => (
-          <div className="border-l-4 border-red-400 bg-red-50 p-4">
-            <p className="text-red-800 text-sm">
-              {String(failure.cause)}
-            </p>
-            <p className="text-red-600 text-xs mt-1">
-              Ensure the API server is running at localhost:8080
-            </p>
-          </div>
-        ),
-        onSuccess: (success) => {
-          const data = success.value
+      {/* Document list */}
+      <div className="flex-1 overflow-auto scroll-subtle">
+        {Result.match(result, {
+          onInitial: () => <LoadingSkeleton />,
+          onFailure: (failure) => (
+            <div className="p-6">
+              <div className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/20 rounded">
+                <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm text-foreground">
+                    Failed to load documents
+                  </p>
+                  <p className="text-2xs text-muted-foreground mt-1">
+                    {String(failure.cause)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ),
+          onSuccess: (success) => {
+            const data = success.value
 
-          if (data.articles.length === 0) {
+            if (data.articles.length === 0) {
+              return (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <FileText className="w-8 h-8 text-muted-foreground/50 mb-3" />
+                  <h3 className="text-sm font-medium text-foreground mb-1">
+                    No documents found
+                  </h3>
+                  <p className="text-2xs text-muted-foreground">
+                    {filters.sources?.length
+                      ? "Try removing filters to see more results"
+                      : "Ingest some links to get started"}
+                  </p>
+                </div>
+              )
+            }
+
             return (
-              <div className="text-center py-16 border border-stone-200 rounded">
-                <h3 className="text-lg font-medium text-stone-700 mb-2">No documents found</h3>
-                <p className="text-stone-500 text-sm">
-                  No documents have been ingested yet
-                </p>
+              <div className="divide-y divide-border-subtle">
+                {data.articles.map((article) => (
+                  <DocumentRow
+                    key={article.article.id}
+                    result={article}
+                    ontologyId={ontologyId}
+                  />
+                ))}
               </div>
             )
           }
+        })}
+      </div>
 
-          return (
-            <>
-              <div className="space-y-3">
-                {data.articles.map((article) => (
-                  <DocumentCard key={article.article.id} result={article} ontologyId={ontologyId} />
-                ))}
-              </div>
-              <Pagination
-                total={data.total}
-                offset={data.offset}
-                limit={limit}
-                hasMore={data.hasMore}
-                onPageChange={(newOffset) => setFilters((prev) => ({ ...prev, offset: newOffset }))}
-              />
-            </>
-          )
-        }
-      })}
+      {/* Pagination */}
+      {Result.isSuccess(result) && (
+        <Pagination
+          total={result.value.total}
+          offset={result.value.offset}
+          limit={limit}
+          hasMore={result.value.hasMore}
+          onPageChange={(newOffset) => setFilters((prev) => ({ ...prev, offset: newOffset }))}
+        />
+      )}
     </div>
   )
 }

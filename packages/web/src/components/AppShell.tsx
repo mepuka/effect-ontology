@@ -1,9 +1,41 @@
+/**
+ * AppShell - Editorial Minimalism Layout
+ *
+ * Sidebar-first layout with:
+ * - Collapsible navigation sidebar
+ * - Ontology context selector
+ * - Class/namespace hierarchy browser
+ * - Data-dense content area
+ *
+ * @since 2.0.0
+ * @module components/AppShell
+ */
+
 import type { ReactNode } from "react"
-import { Link, useLocation } from "react-router-dom"
+import { useState } from "react"
+import { Link, useLocation, useNavigate } from "react-router-dom"
 import { useAtomValue } from "@effect-atom/atom-react"
 import { Result } from "@effect-atom/atom"
-import { healthAtom } from "@/atoms/api"
-import { linksLink, documentsLink, timelineLink, classesLink, entitiesLink } from "../lib/routing"
+import { healthAtom, ontologiesAtom } from "@/atoms/api"
+import {
+  linksLink,
+  documentsLink,
+  timelineLink,
+  classesLink,
+  entitiesLink
+} from "../lib/routing"
+import {
+  FileText,
+  Link2,
+  Clock,
+  Layers,
+  Database,
+  ChevronDown,
+  ChevronRight,
+  PanelLeftClose,
+  PanelLeft,
+  Circle
+} from "lucide-react"
 
 interface AppShellProps {
   children: ReactNode
@@ -36,130 +68,259 @@ function useHealthStatus(): HealthStatus {
 }
 
 export function AppShell({ children }: AppShellProps) {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const health = useHealthStatus()
   const location = useLocation()
   const ontologyId = useOntologyId()
-
-  const healthColors: Record<HealthStatus, string> = {
-    checking: "bg-gray-400",
-    online: "bg-green-500",
-    offline: "bg-red-500",
-    degraded: "bg-amber-500"
-  }
 
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + "/")
 
   // Build ontology-scoped nav links
-  const scopedLinks = ontologyId ? {
-    links: linksLink(ontologyId),
-    documents: documentsLink(ontologyId),
-    timeline: timelineLink(ontologyId),
-    classes: classesLink(ontologyId),
-    entities: entitiesLink(ontologyId)
-  } : {
-    links: "/o/seattle/links",
-    documents: "/o/seattle/documents",
-    timeline: "/o/seattle/timeline",
-    classes: "/o/seattle/classes",
-    entities: "/o/seattle/entities"
-  }
+  const scopedLinks = ontologyId
+    ? {
+        links: linksLink(ontologyId),
+        documents: documentsLink(ontologyId),
+        timeline: timelineLink(ontologyId),
+        classes: classesLink(ontologyId),
+        entities: entitiesLink(ontologyId)
+      }
+    : {
+        links: "/o/seattle/links",
+        documents: "/o/seattle/documents",
+        timeline: "/o/seattle/timeline",
+        classes: "/o/seattle/classes",
+        entities: "/o/seattle/entities"
+      }
+
+  const navItems = [
+    {
+      to: scopedLinks.documents,
+      icon: FileText,
+      label: "Documents",
+      description: "Source articles"
+    },
+    {
+      to: scopedLinks.timeline,
+      icon: Clock,
+      label: "Timeline",
+      description: "Claims history"
+    },
+    {
+      to: scopedLinks.entities,
+      icon: Database,
+      label: "Entities",
+      description: "Knowledge graph"
+    },
+    {
+      to: scopedLinks.classes,
+      icon: Layers,
+      label: "Schema",
+      description: "Ontology structure"
+    },
+    {
+      to: scopedLinks.links,
+      icon: Link2,
+      label: "Links",
+      description: "Ingestion queue"
+    }
+  ]
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Top header bar */}
-      <header className="border-b border-gray-200 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-center justify-between h-14">
-            {/* Logo / Title */}
-            <Link to="/" className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center">
-                <span className="text-white font-bold text-sm">EO</span>
+    <div className="flex min-h-screen bg-background">
+      {/* Sidebar */}
+      <aside
+        className={`
+          fixed left-0 top-0 bottom-0 z-40
+          flex flex-col
+          border-r border-border bg-background-subtle
+          transition-all duration-200 ease-out
+          ${sidebarCollapsed ? "w-12" : "w-sidebar"}
+        `}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between h-12 px-3 border-b border-border">
+          {!sidebarCollapsed && (
+            <Link to="/" className="flex items-center gap-2 min-w-0">
+              <div className="w-6 h-6 rounded bg-primary flex items-center justify-center flex-shrink-0">
+                <span className="text-primary-foreground text-xs font-semibold">EO</span>
               </div>
-              <div>
-                <h1 className="text-lg font-semibold text-gray-900 leading-tight">
-                  Effect Ontology
-                </h1>
-                <p className="text-xs text-gray-500 -mt-0.5">Knowledge Graph</p>
-              </div>
-            </Link>
-
-            {/* Navigation tabs */}
-            <nav className="flex items-center gap-1">
-              {ontologyId && (
-                <span className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded mr-2">
-                  {ontologyId}
-                </span>
-              )}
-              <NavTab to={scopedLinks.links} active={isActive(scopedLinks.links) || isActive("/links")}>
-                Links
-              </NavTab>
-              <NavTab to={scopedLinks.documents} active={isActive(scopedLinks.documents) || isActive("/documents")}>
-                Documents
-              </NavTab>
-              <NavTab to={scopedLinks.timeline} active={isActive(scopedLinks.timeline) || isActive("/timeline")}>
-                Timeline
-              </NavTab>
-              <NavTab to={scopedLinks.classes} active={isActive(scopedLinks.classes) || isActive("/ontologies")}>
-                Schemas
-              </NavTab>
-              <NavTab to={scopedLinks.entities} active={isActive(scopedLinks.entities) || isActive("/entities")}>
-                Entities
-              </NavTab>
-              <NavTab to="/ontologies" active={location.pathname === "/ontologies"}>
-                Switch
-              </NavTab>
-            </nav>
-
-            {/* Status indicator */}
-            <div className="flex items-center gap-2 text-sm">
-              <div className={`w-2 h-2 rounded-full ${healthColors[health]}`} />
-              <span className="text-gray-500 text-xs">
-                {health === "online" ? "Connected" : health}
+              <span className="font-serif text-sm font-medium text-foreground truncate">
+                Effect Ontology
               </span>
-            </div>
+            </Link>
+          )}
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {sidebarCollapsed ? (
+              <PanelLeft className="w-4 h-4" />
+            ) : (
+              <PanelLeftClose className="w-4 h-4" />
+            )}
+          </button>
+        </div>
+
+        {/* Ontology Selector */}
+        {!sidebarCollapsed && (
+          <OntologySelector currentOntologyId={ontologyId} />
+        )}
+
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto py-2 scroll-subtle">
+          {!sidebarCollapsed && (
+            <div className="nav-section-title">Navigate</div>
+          )}
+          {navItems.map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              className={`nav-item ${isActive(item.to) ? "active" : ""}`}
+              title={sidebarCollapsed ? item.label : undefined}
+            >
+              <item.icon className="nav-item-icon flex-shrink-0" />
+              {!sidebarCollapsed && (
+                <div className="min-w-0">
+                  <div className="text-sm leading-tight">{item.label}</div>
+                  <div className="text-2xs text-muted-foreground truncate">
+                    {item.description}
+                  </div>
+                </div>
+              )}
+            </Link>
+          ))}
+        </nav>
+
+        {/* Footer - Status */}
+        <div className="border-t border-border p-2">
+          <div
+            className={`flex items-center gap-2 px-2 py-1.5 rounded ${
+              sidebarCollapsed ? "justify-center" : ""
+            }`}
+          >
+            <StatusDot status={health} />
+            {!sidebarCollapsed && (
+              <span className="text-2xs text-muted-foreground">
+                {health === "online"
+                  ? "Connected"
+                  : health === "checking"
+                    ? "Connecting..."
+                    : health === "offline"
+                      ? "Offline"
+                      : "Degraded"}
+              </span>
+            )}
           </div>
         </div>
-      </header>
+      </aside>
 
       {/* Main content */}
-      <main className="py-6 px-4">
-        {children}
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t border-gray-200 bg-gray-50 mt-12">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between text-xs text-gray-500">
-            <div className="flex items-center gap-4">
-              <span>Effect Ontology</span>
-              <span>•</span>
-              <span>Built with Effect-TS</span>
-            </div>
-            <div>
-              Data licensed under{" "}
-              <a href="https://creativecommons.org/licenses/by-sa/4.0/" className="text-blue-600 hover:underline">
-                CC BY-SA 4.0
-              </a>
-            </div>
-          </div>
+      <main
+        className={`
+          flex-1 min-h-screen
+          transition-all duration-200 ease-out
+          ${sidebarCollapsed ? "ml-12" : "ml-sidebar"}
+        `}
+      >
+        <div className="min-h-full">
+          {children}
         </div>
-      </footer>
+      </main>
     </div>
   )
 }
 
-function NavTab({ to, active, children }: { to: string; active: boolean; children: ReactNode }) {
+/**
+ * Ontology selector dropdown
+ */
+function OntologySelector({ currentOntologyId }: { currentOntologyId: string | null }) {
+  const [expanded, setExpanded] = useState(false)
+  const navigate = useNavigate()
+  const result = useAtomValue(ontologiesAtom)
+
+  const ontologies = Result.match(result, {
+    onInitial: () => [],
+    onFailure: () => [],
+    onSuccess: (s) => s.value
+  })
+
+  const currentOntology = ontologies.find((o) => o.id === currentOntologyId)
+
   return (
-    <Link
-      to={to}
-      className={`px-4 py-2 text-sm rounded-t border-b-2 transition-colors ${
-        active
-          ? "border-blue-600 text-blue-700 bg-white -mb-px"
-          : "border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-      }`}
-    >
-      {children}
-    </Link>
+    <div className="border-b border-border">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/50 transition-colors"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="class-indicator owl-class" />
+          <div className="min-w-0 text-left">
+            <div className="text-sm font-medium truncate">
+              {currentOntology?.title || currentOntologyId || "Select ontology"}
+            </div>
+            {currentOntologyId && (
+              <div className="text-2xs text-muted-foreground font-mono">
+                {currentOntologyId}
+              </div>
+            )}
+          </div>
+        </div>
+        {expanded ? (
+          <ChevronDown className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+        ) : (
+          <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+        )}
+      </button>
+
+      {expanded && ontologies.length > 0 && (
+        <div className="border-t border-border-subtle bg-background">
+          {ontologies.map((ontology) => (
+            <button
+              key={ontology.id}
+              onClick={() => {
+                navigate(`/o/${ontology.id}/documents`)
+                setExpanded(false)
+              }}
+              className={`
+                w-full flex items-center gap-2 px-3 py-2 text-left
+                hover:bg-muted/50 transition-colors
+                ${ontology.id === currentOntologyId ? "bg-primary/5" : ""}
+              `}
+            >
+              <span className="class-indicator owl-class" />
+              <div className="min-w-0">
+                <div className="text-sm truncate">{ontology.title}</div>
+                <div className="text-2xs text-muted-foreground">
+                  {ontology.classCount} classes
+                </div>
+              </div>
+            </button>
+          ))}
+          <Link
+            to="/ontologies"
+            className="block px-3 py-2 text-2xs text-primary hover:bg-muted/50 transition-colors"
+            onClick={() => setExpanded(false)}
+          >
+            View all ontologies...
+          </Link>
+        </div>
+      )}
+    </div>
   )
+}
+
+/**
+ * Connection status indicator
+ */
+function StatusDot({ status }: { status: HealthStatus }) {
+  const colors: Record<HealthStatus, string> = {
+    checking: "text-muted-foreground animate-pulse",
+    online: "text-success",
+    offline: "text-destructive",
+    degraded: "text-warning"
+  }
+
+  return <Circle className={`w-2 h-2 fill-current ${colors[status]}`} />
 }
