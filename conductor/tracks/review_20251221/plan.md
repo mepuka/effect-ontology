@@ -1,9 +1,9 @@
 # Plan: Effect Code Review & Refactoring
 
-## Phase 1: Analysis & Reporting
+## Phase 1: Analysis & Reporting [checkpoint: 11bc65a]
 - [x] Task: Scan `packages/@core-v2/src` for Effect anti-patterns (e.g., deeply nested pipes, `runPromise` in business logic, lack of `Effect.gen`). 8cc17eb
-- [x] Task: Compile a prioritized list of files or modules requiring refactoring. 8cc17eb
-- [ ] Task: Conductor - User Manual Verification 'Analysis & Reporting' (Protocol in workflow.md)
+- [x] Task: Compile a prioritized list of files or modules requiring refactoring. 8ce7b42
+- [x] Task: Conductor - User Manual Verification 'Analysis & Reporting' (Protocol in workflow.md) 11bc65a
 
 ## Phase 2: Domain Layer Refactoring
 - [ ] Task: Refactor Domain schemas and models to strictly use `Effect.Schema` and branded types where applicable.
