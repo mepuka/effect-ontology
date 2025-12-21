@@ -112,7 +112,7 @@ const catHandler = (path: string, lines: number) =>
 const catCommand = Command.make(
   "cat",
   { path: catPath, lines: catLinesOption },
-  ({ path, lines }) => withErrorHandler(catHandler(path, lines))
+  ({ lines, path }) => withErrorHandler(catHandler(path, lines))
 ).pipe(Command.withDescription("Display contents of an object"))
 
 // --- Batches Command ---

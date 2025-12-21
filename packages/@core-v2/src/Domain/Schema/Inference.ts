@@ -20,10 +20,10 @@ import { Schema } from "effect"
  * @category Schema
  */
 export const ReasoningProfile = Schema.Literal(
-  "rdfs",           // Full RDFS entailment
-  "rdfs-subclass",  // Only subclass inference
-  "owl-sameas",     // OWL sameAs transitive closure
-  "custom"          // Custom N3 rules
+  "rdfs", // Full RDFS entailment
+  "rdfs-subclass", // Only subclass inference
+  "owl-sameas", // OWL sameAs transitive closure
+  "custom" // Custom N3 rules
 )
 export type ReasoningProfile = typeof ReasoningProfile.Type
 

@@ -12,7 +12,6 @@ import { LanguageModel } from "@effect/ai"
 import { Data, Duration, Effect, Schedule, Schema } from "effect"
 import { ConfigService, ConfigServiceDefault } from "./Config.js"
 import { generateObjectWithFeedback } from "./GenerateWithFeedback.js"
-import type { RdfStore } from "./Rdf.js"
 import type { ShaclViolation } from "./Shacl.js"
 
 // =============================================================================
@@ -146,8 +145,6 @@ const ExplanationResponseSchema = Schema.Struct({
     description: "Confidence in the explanation accuracy (0-1)"
   })
 })
-
-type ExplanationResponse = Schema.Schema.Type<typeof ExplanationResponseSchema>
 
 // =============================================================================
 // Service Definition

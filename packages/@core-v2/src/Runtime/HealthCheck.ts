@@ -50,7 +50,7 @@ export class HealthCheckService extends Effect.Service<HealthCheckService>()(
          * Checks dependencies (config, LLM availability, etc.)
          */
         readiness: (): Effect.Effect<HealthResult> =>
-          Effect.gen(function*() {
+          Effect.sync(() => {
             const checks: Record<string, "ok" | "error"> = {}
 
             // Check config is loaded

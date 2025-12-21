@@ -8,9 +8,9 @@
  * @module Repository/CachedArticle
  */
 
-import { Cache, Duration, Effect, Option } from "effect"
+import { Cache, Duration, Effect } from "effect"
 import { ArticleRepository } from "./Article.js"
-import type { ArticleFilter, ArticleId } from "./Article.js"
+import type { ArticleId } from "./Article.js"
 import type { ArticleInsertRow } from "./schema.js"
 
 // =============================================================================
@@ -39,7 +39,7 @@ const URI_CACHE_TTL = Duration.hours(1)
 export class CachedArticleRepository extends Effect.Service<CachedArticleRepository>()(
   "CachedArticleRepository",
   {
-    effect: Effect.gen(function* () {
+    effect: Effect.gen(function*() {
       const repo = yield* ArticleRepository
 
       // Single article lookup by ID cache

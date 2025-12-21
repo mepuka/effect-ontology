@@ -285,8 +285,6 @@ const CorrectionResponseSchema = Schema.Struct({
   })
 })
 
-type CorrectionResponse = Schema.Schema.Type<typeof CorrectionResponseSchema>
-
 // =============================================================================
 // Service Definition
 // =============================================================================
@@ -443,11 +441,19 @@ export class CorrectorAgent extends Effect.Service<CorrectorAgent>()("CorrectorA
 
       parts.push(
         "## Ontology Context",
-        "### Classes",
-        ...relevantClasses,
+        "### Classes"
+      )
+      for (const cls of relevantClasses) {
+        parts.push(cls)
+      }
+      parts.push(
         "",
-        "### Properties",
-        ...relevantProps,
+        "### Properties"
+      )
+      for (const prop of relevantProps) {
+        parts.push(prop)
+      }
+      parts.push(
         "",
         "## Response Format",
         "Return a JSON object with:",

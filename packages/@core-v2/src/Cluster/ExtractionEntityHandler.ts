@@ -190,8 +190,8 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
   )
 
   const ontology = yield* ontologyService.ontology
-  const datatypeProperties = ontology.properties.filter((p) => p.rangeType === "datatype")
-  const objectProperties = ontology.properties.filter((p) => p.rangeType === "object")
+  const datatypeProperties = ontology.properties.filter((p: any) => p.rangeType === "datatype")
+  const objectProperties = ontology.properties.filter((p: any) => p.rangeType === "object")
 
   // Return handlers directly (no .of() wrapper needed)
   return {
@@ -494,11 +494,11 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
 
                     // Build verification inputs
                     const verificationInputs: Array<RelationVerificationInput> = relationArray.map((relation) => {
-                      const subject = entityArray.find((e) => e.id === relation.subjectId)
+                      const subject = entityArray.find((e: any) => e.id === relation.subjectId)
                       const objectEntity = typeof relation.object === "string"
-                        ? entityArray.find((e) => e.id === relation.object)
+                        ? entityArray.find((e: any) => e.id === relation.object)
                         : undefined
-                      const predicate = objectProperties.find((p) => p.id === relation.predicate)
+                      const predicate = objectProperties.find((p: any) => p.id === relation.predicate)
 
                       return {
                         context: chunk.text,
@@ -542,8 +542,8 @@ export const makeExtractionEntityHandler = Effect.gen(function*() {
 
                     // Filter by confidence threshold
                     verifiedRelations = verificationResults
-                      .filter((r) => r.grounded && r.confidence >= config.grounder.confidenceThreshold)
-                      .map((r) => r.relation)
+                      .filter((r: any) => r.grounded && r.confidence >= config.grounder.confidenceThreshold)
+                      .map((r: any) => r.relation)
 
                     // Emit grounding_progress event
                     chunkEvents.push(

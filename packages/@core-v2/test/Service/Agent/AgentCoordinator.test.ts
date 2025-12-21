@@ -8,12 +8,12 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Layer, Option, Secret } from "effect"
-import { TestConfigProviderLayer } from "../../setup.js"
 import type { Agent } from "../../../src/Domain/Model/Agent.js"
 import { AgentId, AgentMetadata, TerminationCondition, ValidationResult } from "../../../src/Domain/Model/Agent.js"
 import { AgentCoordinator, type ExecutionResult } from "../../../src/Service/Agent/AgentCoordinator.js"
 import { AgentTask, PipelineConfig, RefinementConfig } from "../../../src/Service/Agent/types.js"
 import { ConfigService } from "../../../src/Service/Config.js"
+import { TestConfigProviderLayer } from "../../setup.js"
 
 // =============================================================================
 // Test Fixtures
@@ -280,16 +280,16 @@ const MockConfigService = Layer.succeed(ConfigService, {
     keys: Option.none(),
     requireAuth: false
   },
-          jina: {
-            apiKey: Option.none(),
-            rateLimitRpm: 20,
-            timeoutMs: 30_000,
-            maxConcurrent: 5,
-            baseUrl: "https://r.jina.ai"
-          }
-        } as ConfigService)
-      
-  // =============================================================================
+  jina: {
+    apiKey: Option.none(),
+    rateLimitRpm: 20,
+    timeoutMs: 30_000,
+    maxConcurrent: 5,
+    baseUrl: "https://r.jina.ai"
+  }
+} as ConfigService)
+
+// =============================================================================
 // Tests
 // =============================================================================
 

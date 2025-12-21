@@ -11,11 +11,11 @@
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "@effect/platform"
 import { Context, Duration, Effect, Layer, Schedule } from "effect"
 import {
+  type ImageError,
   ImageFetchError,
   ImageInvalidTypeError,
   ImageTimeoutError,
-  ImageTooLargeError,
-  type ImageError
+  ImageTooLargeError
 } from "../Domain/Error/Image.js"
 import type { ImageCandidate, ImageFetchResult } from "../Domain/Model/Image.js"
 import { sha256Bytes } from "../Utils/Hash.js"
@@ -210,7 +210,6 @@ export class ImageFetcher extends Context.Tag("@core-v2/ImageFetcher")<
           const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
           const maxSizeBytes = options.maxSizeBytes ?? DEFAULT_MAX_SIZE_BYTES
           const allowedTypes = options.allowedTypes ?? ALLOWED_CONTENT_TYPES
-          const enableRetry = options.retry !== false
 
           const request = HttpClientRequest.get(candidate.sourceUrl).pipe(
             HttpClientRequest.setHeaders({
@@ -222,21 +221,22 @@ export class ImageFetcher extends Context.Tag("@core-v2/ImageFetcher")<
           // Add referrer if available
           const requestWithReferrer = candidate.referrerUrl
             ? HttpClientRequest.setHeaders({
-                Referer: candidate.referrerUrl,
-                Accept: "image/*",
-                "User-Agent": "EffectOntology/2.0 ImageFetcher"
-              })(request)
+              Referer: candidate.referrerUrl,
+              Accept: "image/*",
+              "User-Agent": "EffectOntology/2.0 ImageFetcher"
+            })(request)
             : request
 
           // Execute with timeout
           const response = yield* httpClient.execute(requestWithReferrer).pipe(
             Effect.timeout(Duration.millis(timeoutMs)),
             Effect.catchTag("TimeoutException", () =>
-              Effect.fail(new ImageTimeoutError({
-                url: candidate.sourceUrl,
-                timeoutMs
-              }))
-            ),
+              Effect.fail(
+                new ImageTimeoutError({
+                  url: candidate.sourceUrl,
+                  timeoutMs
+                })
+              )),
             Effect.mapError((error) => {
               if (error instanceof ImageTimeoutError) return error
               return new ImageFetchError({
@@ -249,11 +249,13 @@ export class ImageFetcher extends Context.Tag("@core-v2/ImageFetcher")<
 
           // Check HTTP status
           if (response.status >= 400) {
-            return yield* Effect.fail(new ImageFetchError({
-              message: `HTTP ${response.status} error`,
-              url: candidate.sourceUrl,
-              statusCode: response.status
-            }))
+            return yield* Effect.fail(
+              new ImageFetchError({
+                message: `HTTP ${response.status} error`,
+                url: candidate.sourceUrl,
+                statusCode: response.status
+              })
+            )
           }
 
           // Get and validate content type
@@ -269,11 +271,13 @@ export class ImageFetcher extends Context.Tag("@core-v2/ImageFetcher")<
           }
 
           if (!allowedTypes.includes(contentType)) {
-            return yield* Effect.fail(new ImageInvalidTypeError({
-              url: candidate.sourceUrl,
-              contentType,
-              allowedTypes: [...allowedTypes]
-            }))
+            return yield* Effect.fail(
+              new ImageInvalidTypeError({
+                url: candidate.sourceUrl,
+                contentType,
+                allowedTypes: [...allowedTypes]
+              })
+            )
           }
 
           // Check content-length if available
@@ -281,11 +285,13 @@ export class ImageFetcher extends Context.Tag("@core-v2/ImageFetcher")<
           if (contentLength) {
             const size = parseInt(contentLength, 10)
             if (!isNaN(size) && size > maxSizeBytes) {
-              return yield* Effect.fail(new ImageTooLargeError({
-                url: candidate.sourceUrl,
-                sizeBytes: size,
-                maxBytes: maxSizeBytes
-              }))
+              return yield* Effect.fail(
+                new ImageTooLargeError({
+                  url: candidate.sourceUrl,
+                  sizeBytes: size,
+                  maxBytes: maxSizeBytes
+                })
+              )
             }
           }
 
@@ -304,11 +310,13 @@ export class ImageFetcher extends Context.Tag("@core-v2/ImageFetcher")<
 
           // Validate actual size
           if (bytes.length > maxSizeBytes) {
-            return yield* Effect.fail(new ImageTooLargeError({
-              url: candidate.sourceUrl,
-              sizeBytes: bytes.length,
-              maxBytes: maxSizeBytes
-            }))
+            return yield* Effect.fail(
+              new ImageTooLargeError({
+                url: candidate.sourceUrl,
+                sizeBytes: bytes.length,
+                maxBytes: maxSizeBytes
+              })
+            )
           }
 
           // Compute hash
@@ -329,7 +337,7 @@ export class ImageFetcher extends Context.Tag("@core-v2/ImageFetcher")<
 
       const fetchAll: ImageFetcherService["fetchAll"] = (candidates, options = {}) =>
         Effect.gen(function*() {
-          const results: ImageFetchResult[] = []
+          const results: Array<ImageFetchResult> = []
 
           // Fetch with bounded parallelism (5 concurrent)
           yield* Effect.forEach(

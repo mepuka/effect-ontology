@@ -42,7 +42,6 @@ import {
 } from "../Domain/Rdf/Constants.js"
 import { type IRI, Literal, type Quad } from "../Domain/Rdf/Types.js"
 import type { OntologyEntry } from "../Domain/Schema/OntologyRegistry.js"
-import { extractLocalName } from "../Utils/Rdf.js"
 import { rrfFusion } from "../Utils/Retrieval.js"
 import { ConfigService } from "./Config.js"
 import { NlpService } from "./Nlp.js"

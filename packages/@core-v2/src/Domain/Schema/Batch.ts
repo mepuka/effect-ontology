@@ -98,11 +98,13 @@ export class ValidationActivityInput extends Schema.Class<ValidationActivityInpu
   validationPolicy: Schema.optional(ValidationPolicy)
 }) {}
 
-export class ValidationActivityViolationSummary extends Schema.Class<ValidationActivityViolationSummary>("ValidationActivityViolationSummary")({
-  severity: Schema.String,
-  count: Schema.Number,
-  sampleMessages: Schema.Array(Schema.String)
-}) {}
+export class ValidationActivityViolationSummary
+  extends Schema.Class<ValidationActivityViolationSummary>("ValidationActivityViolationSummary")({
+    severity: Schema.String,
+    count: Schema.Number,
+    sampleMessages: Schema.Array(Schema.String)
+  })
+{}
 
 export class ValidationActivityOutput extends Schema.Class<ValidationActivityOutput>("ValidationActivityOutput")({
   validatedUri: GcsUri,

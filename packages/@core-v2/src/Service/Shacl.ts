@@ -8,7 +8,7 @@
  * @module Service/Shacl
  */
 
-import { Context, DateTime, Effect, Layer, Option, Ref, Schema } from "effect"
+import { Context, DateTime, Effect, Layer, Option, Ref } from "effect"
 import * as N3 from "n3"
 import { Validator as ShaclValidator } from "shacl-engine"
 // @ts-expect-error - shacl-engine/sparql.js has no type declarations
@@ -19,11 +19,7 @@ import {
   ValidationPolicyError,
   ValidationReportError
 } from "../Domain/Error/Shacl.js"
-import {
-  ShaclValidationReport,
-  ShaclViolation,
-  ValidationPolicy
-} from "../Domain/Schema/Shacl.js"
+import { ShaclValidationReport, ShaclViolation, ValidationPolicy } from "../Domain/Schema/Shacl.js"
 import { sha256Sync } from "../Utils/Hash.js"
 import type { RdfStore } from "./Rdf.js"
 import { RdfBuilder } from "./Rdf.js"

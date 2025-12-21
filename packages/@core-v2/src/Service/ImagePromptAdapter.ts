@@ -10,7 +10,7 @@
  */
 
 import { Prompt } from "@effect/ai"
-import { PlatformError } from "@effect/platform/Error"
+import type { PlatformError } from "@effect/platform/Error"
 import { Context, Effect, Layer, Option } from "effect"
 import type { ImageForPrompt, ImageRef } from "../Domain/Model/Image.js"
 import { ImageBlobStore } from "./ImageBlobStore.js"
@@ -181,7 +181,7 @@ export class ImagePromptAdapter extends Context.Tag("@core-v2/ImagePromptAdapter
         images,
         imageIntro = "Relevant images from the document:"
       ) => {
-        const parts: Prompt.UserMessagePart[] = [
+        const parts: Array<Prompt.UserMessagePart> = [
           Prompt.makePart("text", { text })
         ]
 
@@ -275,12 +275,14 @@ export const buildMultimodalContent = (
   text: string,
   images?: ReadonlyArray<ImageForPrompt>
 ): ReadonlyArray<Prompt.UserMessagePart> => {
-  const parts: Prompt.UserMessagePart[] = [
+  const parts: Array<Prompt.UserMessagePart> = [
     Prompt.makePart("text", { text })
   ]
 
   if (images && images.length > 0) {
-    parts.push(...imagesToPromptParts(images))
+    for (const part of imagesToPromptParts(images)) {
+      parts.push(part)
+    }
   }
 
   return parts

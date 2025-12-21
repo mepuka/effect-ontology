@@ -16,11 +16,13 @@ import { RdfBuilder } from "../../src/Service/Rdf.js"
 import { buildIri } from "../../src/Utils/Rdf.js"
 
 // Test config provider with known baseNamespace
-const TestConfigProvider = ConfigProvider.fromMap(new Map([
-  ["RDF.BASE_NAMESPACE", "http://example.org/kg/"],
-  ["ONTOLOGY.PATH", "test.ttl"],
-  ["LLM.API_KEY", "test-key"]
-]))
+const TestConfigProvider = ConfigProvider.fromMap(
+  new Map([
+    ["RDF.BASE_NAMESPACE", "http://example.org/kg/"],
+    ["ONTOLOGY.PATH", "test.ttl"],
+    ["LLM.API_KEY", "test-key"]
+  ])
+)
 
 const TestLayer = RdfBuilder.Default.pipe(
   Layer.provideMerge(ConfigServiceDefault),
@@ -72,12 +74,9 @@ describe("Namespace to IRI conversion", () => {
       expect(quadsArray.length).toBeGreaterThan(0)
 
       // Verify at least one quad has the correct subject IRI
-      const hasCorrectSubject = quadsArray.some((q) =>
-        q.subject === "http://example.org/seattle/alex_pedersen"
-      )
+      const hasCorrectSubject = quadsArray.some((q) => q.subject === "http://example.org/seattle/alex_pedersen")
       expect(hasCorrectSubject).toBe(true)
-    }).pipe(Effect.provide(TestLayer))
-  )
+    }).pipe(Effect.provide(TestLayer)))
 
   it.effect("should extract protocol and domain from baseNamespace", () =>
     Effect.gen(function*() {
@@ -89,7 +88,7 @@ describe("Namespace to IRI conversion", () => {
         { input: "http://example.org/foo/bar/baz/", expected: "http://example.org/" }
       ]
 
-      for (const { input, expected } of testCases) {
+      for (const { expected, input } of testCases) {
         const match = input.match(/^https?:\/\/[^/]+\//)
         const result = match ? match[0] : ""
         expect(result).toBe(expected)
@@ -102,8 +101,7 @@ describe("Namespace to IRI conversion", () => {
       const baseDomain = match ? match[0] : "http://example.org/"
       const fullIri = `${baseDomain}${targetNamespace}/`
       expect(fullIri).toBe("http://example.org/seattle/")
-    })
-  )
+    }))
 
   it.effect("should build valid IRIs for entities when using targetNamespace", () =>
     Effect.gen(function*() {
@@ -125,6 +123,5 @@ describe("Namespace to IRI conversion", () => {
         const iri = buildIri(baseNamespace, entityId)
         expect(iri).toMatch(/^http:\/\/example\.org\/seattle\/[a-z][a-z0-9_]*$/)
       }
-    }).pipe(Effect.provide(TestLayer))
-  )
+    }).pipe(Effect.provide(TestLayer)))
 })

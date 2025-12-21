@@ -298,20 +298,21 @@ export const DEFAULT_CONFIG: AppConfig = {
 // =============================================================================
 
 const makeConfigService = Effect.gen(function*() {
-  const [llm, storage, ontology, runtime, grounder, embedding, extraction, entityRegistry, inference, rdf, api, jina] = yield* Effect.all([
-    LlmConfig,
-    StorageConfig,
-    OntologyConfig,
-    RuntimeConfig,
-    GrounderConfig,
-    EmbeddingConfig,
-    ExtractionConfig,
-    EntityRegistryConfig,
-    InferenceConfig,
-    RdfConfig,
-    ApiConfig,
-    JinaConfig
-  ])
+  const [llm, storage, ontology, runtime, grounder, embedding, extraction, entityRegistry, inference, rdf, api, jina] =
+    yield* Effect.all([
+      LlmConfig,
+      StorageConfig,
+      OntologyConfig,
+      RuntimeConfig,
+      GrounderConfig,
+      EmbeddingConfig,
+      ExtractionConfig,
+      EntityRegistryConfig,
+      InferenceConfig,
+      RdfConfig,
+      ApiConfig,
+      JinaConfig
+    ])
 
   return {
     api,

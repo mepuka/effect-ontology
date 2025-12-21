@@ -247,7 +247,6 @@ function chunkBySections(
 ): Array<TextChunk> {
   const chunks: Array<TextChunk> = []
   let chunkIndex = 0
-  let lastOffset = 0
 
   // Find all section header positions
   const headerMatches: Array<{ index: number; match: string }> = []
@@ -268,10 +267,11 @@ function chunkBySections(
     const preText = text.slice(0, headerMatches[0].index).trim()
     if (preText.length > 0) {
       const preChunks = chunkBySize(preText, maxChunkSize, chunkIndex)
-      chunks.push(...preChunks)
+      for (const chunk of preChunks) {
+        chunks.push(chunk)
+      }
       chunkIndex += preChunks.length
     }
-    lastOffset = headerMatches[0].index
   }
 
   // Process each section
@@ -302,7 +302,6 @@ function chunkBySections(
         })
       }
     }
-    lastOffset = end
   }
 
   return chunks
@@ -341,7 +340,9 @@ function chunkBySpeakerTurns(
     const preText = text.slice(0, turnMatches[0].index).trim()
     if (preText.length > 0) {
       const preChunks = chunkBySize(preText, maxChunkSize, chunkIndex)
-      chunks.push(...preChunks)
+      for (const chunk of preChunks) {
+        chunks.push(chunk)
+      }
       chunkIndex += preChunks.length
     }
   }
@@ -387,7 +388,7 @@ function chunkBySpeakerTurns(
 function chunkByParagraphs(
   text: string,
   maxChunkSize: number,
-  overlapSentences: number
+  _overlapSentences: number
 ): Array<TextChunk> {
   const chunks: Array<TextChunk> = []
   let chunkIndex = 0

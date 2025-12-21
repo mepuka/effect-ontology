@@ -83,8 +83,7 @@ const hashContent = (content: string): string => sha256Hex(content)
  * Uses Schema.decodeUnknownSync to properly construct all nested
  * Schema.Class instances (RunConfig, OntologyRef, etc.)
  */
-const decodeExtractionRun = (json: string): ExtractionRun =>
-  Schema.decodeUnknownSync(ExtractionRun)(JSON.parse(json))
+const decodeExtractionRun = (json: string): ExtractionRun => Schema.decodeUnknownSync(ExtractionRun)(JSON.parse(json))
 
 // =============================================================================
 // Storage Key Helpers

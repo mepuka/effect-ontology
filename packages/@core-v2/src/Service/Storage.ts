@@ -23,7 +23,9 @@ export class GenerationMismatchError extends Error {
     readonly actualGeneration?: string
   ) {
     super(
-      `Generation mismatch for ${key}: expected ${expectedGeneration}${actualGeneration ? `, got ${actualGeneration}` : ""}`
+      `Generation mismatch for ${key}: expected ${expectedGeneration}${
+        actualGeneration ? `, got ${actualGeneration}` : ""
+      }`
     )
     this.name = "GenerationMismatchError"
   }

@@ -11,7 +11,7 @@
 import { Command, Options } from "@effect/cli"
 import { FileSystem } from "@effect/platform"
 import { Chunk, Console, Effect, Option, Schema } from "effect"
-import { type IRI, Literal } from "../../Domain/Rdf/Types.js"
+import type { IRI, Literal } from "../../Domain/Rdf/Types.js"
 import { BatchManifest } from "../../Domain/Schema/Batch.js"
 import { RdfBuilder } from "../../Service/Rdf.js"
 import { StorageService } from "../../Service/Storage.js"

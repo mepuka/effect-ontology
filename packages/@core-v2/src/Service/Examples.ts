@@ -9,16 +9,17 @@
  * @module Service/Examples
  */
 
-import { SqlError } from "@effect/sql"
-import { Effect, Option } from "effect"
-import type { LlmExampleRow } from "../Repository/schema.js"
+import type { SqlError } from "@effect/sql"
+import type { Option } from "effect"
+import { Effect } from "effect"
 import {
-  ExamplesRepository,
   type CreateExampleInput,
   type ExampleRetrievalOptions,
+  ExamplesRepository,
   type ExampleType,
   type ScoredExample
 } from "../Repository/Examples.js"
+import type { LlmExampleRow } from "../Repository/schema.js"
 import { EmbeddingService } from "./Embedding.js"
 import type { NomicNlpError } from "./NomicNlp.js"
 
@@ -99,7 +100,7 @@ export class ExamplesService extends Effect.Service<ExamplesService>()("Examples
       options: ExampleRetrievalOptions = {}
     ): Effect.Effect<ReadonlyArray<ScoredExample>, ExamplesServiceError> =>
       Effect.gen(function*() {
-        const { k = 5, includeNegatives = false } = options
+        const { includeNegatives = false, k = 5 } = options
 
         // Embed query with ontology prefix for schema bias
         const prefixedQuery = `${ontologyId}: ${queryText}`
@@ -145,7 +146,7 @@ export class ExamplesService extends Effect.Service<ExamplesService>()("Examples
       options: StageRetrievalOptions = {}
     ): Effect.Effect<StageExamples, ExamplesServiceError> =>
       Effect.gen(function*() {
-        const { k = 3, negativeK = 2, minSimilarity = 0.6, targetClass, targetPredicate } = options
+        const { k = 3, minSimilarity = 0.6, negativeK = 2, targetClass, targetPredicate } = options
 
         // Map stage to example type
         const exampleType = stageToExampleType(stage)
@@ -219,16 +220,14 @@ export class ExamplesService extends Effect.Service<ExamplesService>()("Examples
     const recordUsage = (
       exampleId: string,
       wasSuccessful: boolean
-    ): Effect.Effect<void, SqlError.SqlError> =>
-      repository.recordUsage(exampleId, wasSuccessful)
+    ): Effect.Effect<void, SqlError.SqlError> => repository.recordUsage(exampleId, wasSuccessful)
 
     /**
      * Get example by ID
      */
     const getById = (
       id: string
-    ): Effect.Effect<Option.Option<LlmExampleRow>, SqlError.SqlError> =>
-      repository.getById(id)
+    ): Effect.Effect<Option.Option<LlmExampleRow>, SqlError.SqlError> => repository.getById(id)
 
     /**
      * Get statistics for an ontology's examples
@@ -237,14 +236,12 @@ export class ExamplesService extends Effect.Service<ExamplesService>()("Examples
      */
     const stats = (
       ontologyId: string
-    ): Effect.Effect<ExampleStats, SqlError.SqlError> =>
-      repository.getStats(ontologyId)
+    ): Effect.Effect<ExampleStats, SqlError.SqlError> => repository.getStats(ontologyId)
 
     /**
      * Deactivate an example (soft delete)
      */
-    const deactivate = (id: string): Effect.Effect<void, SqlError.SqlError> =>
-      repository.deactivate(id)
+    const deactivate = (id: string): Effect.Effect<void, SqlError.SqlError> => repository.deactivate(id)
 
     return {
       retrieve,

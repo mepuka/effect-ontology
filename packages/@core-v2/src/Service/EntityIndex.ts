@@ -14,6 +14,14 @@ import { EmbeddingService, EmbeddingServiceDefault } from "./Embedding.js"
 import type { Embedding } from "./EmbeddingCache.js"
 import type { NomicNlpError } from "./NomicNlp.js"
 
+// =============================================================================
+// Persistent EntityIndex
+// =============================================================================
+
+import { StorageService } from "./Storage.js"
+
+import { ConfigService } from "./Config.js"
+
 /**
  * Scored entity result from similarity search
  *
@@ -138,13 +146,6 @@ const cosineSimilarity = (a: Embedding, b: Embedding): number => {
   const denominator = Math.sqrt(normA) * Math.sqrt(normB)
   return denominator === 0 ? 0 : dotProduct / denominator
 }
-
-/**
- * Order for sorting scored entities by score descending
- */
-const scoredEntityOrder = Order.reverse(
-  Order.mapInput(Order.number, (se: ScoredEntity) => se.score)
-)
 
 /**
  * EntityIndex - In-memory entity index with embedding-based retrieval
@@ -349,12 +350,6 @@ export class EntityIndex extends Effect.Service<EntityIndex>()("@core-v2/EntityI
  * @category Layers
  */
 export const EntityIndexDefault: Layer.Layer<EntityIndex> = EntityIndex.Default
-
-// =============================================================================
-// Persistent EntityIndex
-// =============================================================================
-
-import { StorageService } from "./Storage.js"
 
 /**
  * Serialized entity index format for GCS persistence
@@ -657,9 +652,7 @@ export const makePersistentEntityIndex = (
           let typeIndex = HashMap.empty<string, HashSet.HashSet<string>>()
 
           // Import Entity class for reconstruction
-          const { Entity: EntityClass } = yield* Effect.promise(() =>
-            import("../Domain/Model/Entity.js")
-          )
+          const { Entity: EntityClass } = yield* Effect.promise(() => import("../Domain/Model/Entity.js"))
 
           for (const entry of data.entities) {
             const entity = new EntityClass({
@@ -690,9 +683,7 @@ export const makePersistentEntityIndex = (
                 entityCount: serialized.entities.length
               })
             ),
-            Effect.catchAll((error) =>
-              Effect.logWarning("Failed to persist EntityIndex", { error: String(error) })
-            )
+            Effect.catchAll((error) => Effect.logWarning("Failed to persist EntityIndex", { error: String(error) }))
           )
         }),
 
@@ -741,8 +732,6 @@ export const makePersistentEntityIndex = (
 
     return service
   })
-
-import { ConfigService } from "./Config.js"
 
 /**
  * Layer that provides PersistentEntityIndex when EMBEDDING_ENTITY_INDEX_PATH is configured.

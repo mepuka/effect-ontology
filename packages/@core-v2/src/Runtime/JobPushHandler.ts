@@ -9,7 +9,7 @@
  */
 
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "@effect/platform"
-import { Effect, Match, Option, Schema } from "effect"
+import { Effect, Match, Schema } from "effect"
 import type { BackgroundJob } from "../Domain/Schema/JobSchema.js"
 import { BackgroundJobSchema } from "../Domain/Schema/JobSchema.js"
 
@@ -61,8 +61,7 @@ const processBackgroundJob = (
         })
         // TODO: Implement embedding recompute logic
         // This will call EmbeddingService to recompute embeddings
-      })
-    ),
+      })),
     Match.tag("PromptCacheJob", (j) =>
       Effect.gen(function*() {
         yield* Effect.logInfo("Processing PromptCacheJob", {
@@ -73,8 +72,7 @@ const processBackgroundJob = (
         })
         // TODO: Implement prompt cache update logic
         // This will update the few-shot example cache
-      })
-    ),
+      })),
     Match.tag("SimilarityRecomputeJob", (j) =>
       Effect.gen(function*() {
         yield* Effect.logInfo("Processing SimilarityRecomputeJob", {
@@ -84,8 +82,7 @@ const processBackgroundJob = (
           attempts: meta.attempts
         })
         // TODO: Implement similarity recompute logic
-      })
-    ),
+      })),
     Match.tag("BlockingTokenJob", (j) =>
       Effect.gen(function*() {
         yield* Effect.logInfo("Processing BlockingTokenJob", {
@@ -94,8 +91,7 @@ const processBackgroundJob = (
           attempts: meta.attempts
         })
         // TODO: Implement blocking token rebuild logic
-      })
-    ),
+      })),
     Match.tag("WebhookJob", (j) =>
       Effect.gen(function*() {
         yield* Effect.logInfo("Processing WebhookJob", {
@@ -105,8 +101,7 @@ const processBackgroundJob = (
           attempts: meta.attempts
         })
         // TODO: Implement webhook delivery logic
-      })
-    ),
+      })),
     Match.exhaustive
   )
 
@@ -233,7 +228,6 @@ export const JobPushRouter = HttpRouter.empty.pipe(
       )
     })
   ),
-
   // GET /v1/jobs/health - Health check for job processor
   HttpRouter.get(
     "/v1/jobs/health",

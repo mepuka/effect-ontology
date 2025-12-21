@@ -10,7 +10,7 @@
  */
 
 import { LanguageModel } from "@effect/ai"
-import { Chunk, DateTime, Duration, Effect, Layer, Match, Option, Schedule } from "effect"
+import { Chunk, DateTime, Duration, Effect, Match, Option } from "effect"
 import type { ShaclValidationError, ValidationPolicyError } from "../Domain/Error/Shacl.js"
 import type { ContentHash, Namespace, OntologyName } from "../Domain/Identity.js"
 import { ChunkingConfig, LlmConfig, RunConfig } from "../Domain/Model/ExtractionRun.js"
@@ -40,7 +40,7 @@ import {
   type RuleParseError
 } from "./Reasoner.js"
 import { ShaclService, type ShaclValidationReport, type ShaclViolation, type ValidationPolicy } from "./Shacl.js"
-import { FallbackResult, type SparqlBindings, type SparqlQuad, SparqlService, type SparqlValue } from "./Sparql.js"
+import { FallbackResult, type SparqlBindings, type SparqlQuad, SparqlService } from "./Sparql.js"
 import { type SparqlGenerationError, SparqlGenerator } from "./SparqlGenerator.js"
 import { StorageService } from "./Storage.js"
 
@@ -689,7 +689,7 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
           const byLevel = groupViolationsBySeverity(report.violations)
 
           // Generate explanations
-          const explanations = report.violations.map((v) =>
+          const explanations = report.violations.map((v: any) =>
             new ViolationExplanation({
               focusNode: v.focusNode,
               path: v.path,
@@ -806,7 +806,7 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
           const triplesForLlm = Match.value(sparqlResult_exec).pipe(
             Match.tag("FallbackResult", (result) =>
               // Fallback case - use all quads
-              result.quads.map((quad) => ({
+              result.quads.map((quad: any) => ({
                 subject: extractLocalName(quad.subject),
                 predicate: extractLocalName(quad.predicate),
                 object: quad.object.type === "uri"
@@ -832,7 +832,7 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
               })),
             Match.tag("ConstructResult", (result) =>
               // CONSTRUCT query - use the constructed quads directly
-              result.quads.map((quad) => ({
+              result.quads.map((quad: any) => ({
                 subject: extractLocalName(quad.subject),
                 predicate: extractLocalName(quad.predicate),
                 object: quad.object.type === "uri"
@@ -880,7 +880,7 @@ export class OntologyAgent extends Effect.Service<OntologyAgent>()("OntologyAgen
               })),
             Match.orElse(() =>
               // Fallback: create bindings from triples representation
-              triplesForLlm.slice(0, 10).map((t) =>
+              triplesForLlm.slice(0, 10).map((t: any) =>
                 new QueryBinding({
                   bindings: {
                     subject: t.subject,
@@ -1044,7 +1044,7 @@ const buildRunConfig = (
   configService: ConfigService,
   agentConfig?: OntologyAgentConfig
 ): Effect.Effect<RunConfig> =>
-  Effect.gen(function*() {
+  Effect.sync(() => {
     // Build ontology ref from path or use provided
     // Use branded type constructors for identity types
     const ontologyRef = agentConfig?.ontology ?? new OntologyRef({

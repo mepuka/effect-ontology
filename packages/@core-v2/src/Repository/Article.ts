@@ -12,7 +12,7 @@ import * as Pg from "@effect/sql-drizzle/Pg"
 import { and, desc, eq, gte, like, lte, sql } from "drizzle-orm"
 import { Effect, Option } from "effect"
 import { articles } from "./schema.js"
-import type { ArticleInsertRow, ArticleRow } from "./schema.js"
+import type { ArticleInsertRow } from "./schema.js"
 
 // =============================================================================
 // Types

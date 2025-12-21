@@ -10,11 +10,12 @@
  */
 
 import type { SqlError } from "@effect/sql"
-import { Duration, Effect, Fiber, Match, Option, Schedule } from "effect"
+import type { Fiber } from "effect"
+import { Duration, Effect, Match, Option, Schedule } from "effect"
+import type { EventBusError } from "../Domain/Error/EventBus.js"
 import type { BackgroundJob } from "../Domain/Schema/JobSchema.js"
 import { EntityRegistryRepository } from "../Repository/EntityRegistry.js"
 import { EmbeddingService } from "./Embedding.js"
-import { EventBusError } from "../Domain/Error/EventBus.js"
 import { EventBusService } from "./EventBus.js"
 import type { NomicNlpError } from "./NomicNlp.js"
 
@@ -93,8 +94,7 @@ export class CurationJobProcessor extends Effect.Service<CurationJobProcessor>()
               aliasCount: aliases.length,
               embeddingDim: embedding.length
             })
-          })
-        ),
+          })),
         Match.tag("PromptCacheJob", (j) =>
           Effect.gen(function*() {
             yield* Effect.logDebug("Processing PromptCacheJob", {
@@ -115,8 +115,7 @@ export class CurationJobProcessor extends Effect.Service<CurationJobProcessor>()
               exampleId: j.exampleId,
               isNegative: j.isNegative
             })
-          })
-        ),
+          })),
         Match.tag("SimilarityRecomputeJob", (j) =>
           Effect.gen(function*() {
             yield* Effect.logDebug("Processing SimilarityRecomputeJob", {
@@ -131,8 +130,7 @@ export class CurationJobProcessor extends Effect.Service<CurationJobProcessor>()
               ontologyId: j.ontologyId,
               entityId: j.entityId
             })
-          })
-        ),
+          })),
         Match.tag("BlockingTokenJob", (j) =>
           Effect.gen(function*() {
             yield* Effect.logDebug("Processing BlockingTokenJob", {
@@ -146,8 +144,7 @@ export class CurationJobProcessor extends Effect.Service<CurationJobProcessor>()
               ontologyId: j.ontologyId,
               entityId: j.entityId
             })
-          })
-        ),
+          })),
         Match.tag("WebhookJob", (j) =>
           Effect.gen(function*() {
             yield* Effect.logDebug("Processing WebhookJob", {
@@ -162,8 +159,7 @@ export class CurationJobProcessor extends Effect.Service<CurationJobProcessor>()
               url: j.url,
               eventType: j.eventType
             })
-          })
-        ),
+          })),
         Match.exhaustive
       )
 
@@ -249,9 +245,7 @@ export class CurationJobProcessor extends Effect.Service<CurationJobProcessor>()
             yield* processAllPending()
           }
         }).pipe(
-          Effect.catchAll((error) =>
-            Effect.logError("Background processor error", { error: String(error) })
-          ),
+          Effect.catchAll((error) => Effect.logError("Background processor error", { error: String(error) })),
           Effect.repeat(Schedule.spaced(pollInterval)),
           Effect.forever
         )
@@ -268,8 +262,7 @@ export class CurationJobProcessor extends Effect.Service<CurationJobProcessor>()
     /**
      * Process pending jobs once (for testing/manual triggering)
      */
-    const processOnce = (): Effect.Effect<JobProcessingStats, JobProcessorError> =>
-      processAllPending()
+    const processOnce = (): Effect.Effect<JobProcessingStats, JobProcessorError> => processAllPending()
 
     return {
       processJob,

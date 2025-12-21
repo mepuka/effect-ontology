@@ -17,7 +17,6 @@ import { withErrorHandler } from "./Cli/ErrorHandler.js"
 import { HealthCheckError } from "./Domain/Error.js"
 import type { Environment } from "./Domain/Identity.js"
 import { formatTfOutputs } from "./Domain/Schema/TfOutputs.js"
-import { ConfigLoader } from "./Service/ConfigLoader.js"
 import { DockerRunner } from "./Service/DockerRunner.js"
 import { GcloudRunner } from "./Service/GcloudRunner.js"
 import { HealthChecker } from "./Service/HealthChecker.js"
@@ -638,8 +637,6 @@ const syncOntologyCommand = Command.make(
     Effect.gen(function*() {
       yield* Console.log(`Syncing ontology files to GCS for ${env} environment...`)
 
-      const configLoader = yield* ConfigLoader
-      const config = yield* configLoader.load(env as Environment)
       const bucketName = `effect-ontology-${env}`
 
       // Sync Seattle ontology

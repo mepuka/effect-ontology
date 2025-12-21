@@ -8,11 +8,11 @@
  * @module Service/Claim
  */
 
-import { Array as Arr, DateTime, Effect, Option } from "effect"
-import { CLAIMS, PROV, RDF, XSD } from "../Domain/Rdf/Constants.js"
+import { DateTime, Effect } from "effect"
+import { CLAIMS, RDF, XSD } from "../Domain/Rdf/Constants.js"
 import { type IRI, Literal, Quad } from "../Domain/Rdf/Types.js"
-import type { Claim, ClaimId, Evidence } from "../Domain/Schema/KnowledgeModel.js"
-import { type ClaimFilter, ClaimRepository, type ConflictCandidate } from "../Repository/Claim.js"
+import { ClaimRepository } from "../Repository/Claim.js"
+import type { ClaimFilter } from "../Repository/Claim.js"
 import type { ClaimInsertRow, ClaimRow } from "../Repository/schema.js"
 import { RdfBuilder, type RdfStore } from "./Rdf.js"
 
@@ -110,7 +110,6 @@ export class ClaimService extends Effect.Service<ClaimService>()("ClaimService",
      */
     const createClaim = (input: CreateClaimInput) =>
       Effect.gen(function*() {
-        const now = yield* DateTime.now
         const id = crypto.randomUUID()
 
         const claimRow: ClaimInsertRow = {

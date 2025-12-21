@@ -10,7 +10,7 @@
  */
 
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "@effect/platform"
-import { Data, Duration, Effect, Layer, Schema } from "effect"
+import { Data, Duration, Effect, Schema } from "effect"
 
 // =============================================================================
 // Error Types
@@ -114,7 +114,7 @@ const calculateScore = (
   query: string,
   result: WikidataSearchResultType,
   position: number,
-  totalResults: number
+  _totalResults: number
 ): number => {
   const queryLower = query.toLowerCase().trim()
   const labelLower = (result.label ?? result.title).toLowerCase().trim()
@@ -176,8 +176,8 @@ export class WikidataClient extends Effect.Service<WikidataClient>()("WikidataCl
         const {
           language = "en",
           limit = 10,
-          type = "item",
-          strictLanguage = false
+          strictLanguage = false,
+          type = "item"
         } = options
 
         // Simple rate limiting
@@ -217,16 +217,20 @@ export class WikidataClient extends Effect.Service<WikidataClient>()("WikidataCl
         if (res.status === 429) {
           const retryAfter = res.headers["retry-after"]
           const seconds = retryAfter ? parseInt(retryAfter, 10) : 60
-          return yield* Effect.fail(new WikidataRateLimitError({
-            retryAfter: Duration.seconds(seconds)
-          }))
+          return yield* Effect.fail(
+            new WikidataRateLimitError({
+              retryAfter: Duration.seconds(seconds)
+            })
+          )
         }
 
         // Check for maxlag exceeded
         if (res.status === 503) {
-          return yield* Effect.fail(new WikidataRateLimitError({
-            retryAfter: Duration.seconds(5)
-          }))
+          return yield* Effect.fail(
+            new WikidataRateLimitError({
+              retryAfter: Duration.seconds(5)
+            })
+          )
         }
 
         // Parse JSON from response
@@ -242,10 +246,12 @@ export class WikidataClient extends Effect.Service<WikidataClient>()("WikidataCl
         // Parse response
         const parsed = yield* Schema.decodeUnknown(WikidataSearchResponse)(response).pipe(
           Effect.catchAll((error) =>
-            Effect.fail(new WikidataApiError({
-              message: `Failed to parse Wikidata response: ${error}`,
-              cause: error
-            }))
+            Effect.fail(
+              new WikidataApiError({
+                message: `Failed to parse Wikidata response: ${error}`,
+                cause: error
+              })
+            )
           )
         )
 

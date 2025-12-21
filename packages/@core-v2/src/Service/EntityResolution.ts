@@ -7,10 +7,9 @@
  * @module Service/EntityResolution
  */
 
-import { Context, Effect, Layer } from "effect"
+import { Effect, Option } from "effect"
 import { KnowledgeGraph } from "../Domain/Model/Entity.js"
-import type { EntityResolutionConfig } from "../Domain/Model/EntityResolution.js"
-import type { EntityResolutionGraph } from "../Domain/Model/EntityResolutionGraph.js"
+import { EntityResolutionConfig } from "../Domain/Model/EntityResolution.js"
 import { buildEntityResolutionGraph } from "../Workflow/EntityResolutionGraph.js"
 import { EmbeddingService, EmbeddingServiceDefault } from "./Embedding.js"
 
@@ -39,10 +38,15 @@ const makeEntityResolutionService = Effect.gen(function*() {
   }
 })
 
-export class EntityResolutionService extends Effect.Service<EntityResolutionService>()("@core-v2/EntityResolutionService", {
-  effect: makeEntityResolutionService,
-  dependencies: [EmbeddingServiceDefault],
-  accessors: true
-}) {
+export class EntityResolutionService
+  extends Effect.Service<EntityResolutionService>()("@core-v2/EntityResolutionService", {
+    effect: makeEntityResolutionService,
+    dependencies: [EmbeddingServiceDefault],
+    accessors: true
+  })
+{
+  /**
+   * Live layer for EntityResolutionService
+   */
   static readonly Live = EntityResolutionService.Default
 }

@@ -48,7 +48,7 @@ export type EventType = (typeof AllEventTypes)[number]
  *
  * Maps event types to UI components that should refresh when the event occurs.
  */
-export const CurationReactivityKeys: Record<CurationEventType, readonly string[]> = {
+export const CurationReactivityKeys: Record<CurationEventType, ReadonlyArray<string>> = {
   ClaimCorrected: ["claims", "timeline", "corrections"],
   ClaimDeprecated: ["claims", "timeline", "deprecations"],
   AliasAdded: ["entities", "aliases", "entity-detail"],
@@ -59,7 +59,7 @@ export const CurationReactivityKeys: Record<CurationEventType, readonly string[]
 /**
  * Reactivity keys for extraction events
  */
-export const ExtractionReactivityKeys: Record<ExtractionEventType, readonly string[]> = {
+export const ExtractionReactivityKeys: Record<ExtractionEventType, ReadonlyArray<string>> = {
   ExtractionCompleted: ["documents", "claims", "timeline", "stats"],
   ValidationFailed: ["validations", "documents"]
 }
@@ -67,7 +67,7 @@ export const ExtractionReactivityKeys: Record<ExtractionEventType, readonly stri
 /**
  * Get reactivity keys for an event type
  */
-export const getReactivityKeys = (eventType: string): readonly string[] => {
+export const getReactivityKeys = (eventType: string): ReadonlyArray<string> => {
   if (eventType in CurationReactivityKeys) {
     return CurationReactivityKeys[eventType as CurationEventType]
   }

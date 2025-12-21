@@ -9,15 +9,12 @@
  * @module Repository/EntityRegistry
  */
 
-import { SqlClient, SqlError } from "@effect/sql"
+import type { SqlError } from "@effect/sql"
+import { SqlClient } from "@effect/sql"
 import * as Pg from "@effect/sql-drizzle/Pg"
 import { and, eq, inArray } from "drizzle-orm"
 import { Effect, Option } from "effect"
-import {
-  canonicalEntities,
-  entityAliases,
-  entityBlockingTokens
-} from "./schema.js"
+import { canonicalEntities, entityAliases, entityBlockingTokens } from "./schema.js"
 import type {
   CanonicalEntityInsertRow,
   CanonicalEntityRow,
@@ -128,7 +125,7 @@ export class EntityRegistryRepository extends Effect.Service<EntityRegistryRepos
       } = {}
     ): Effect.Effect<Array<BlockingCandidate>, SqlError.SqlError> =>
       Effect.gen(function*() {
-        const { types, k = 10, minSimilarity = 0.7 } = options
+        const { k = 10, minSimilarity = 0.7, types } = options
         const vectorStr = formatVector(embedding)
 
         // Build query with ontology scoping and optional type filter
@@ -345,9 +342,7 @@ export class EntityRegistryRepository extends Effect.Service<EntityRegistryRepos
           tokenType: "mention" as const
         }))
 
-        yield* Effect.promise(() =>
-          drizzle.insert(entityBlockingTokens).values(values).onConflictDoNothing()
-        )
+        yield* Effect.promise(() => drizzle.insert(entityBlockingTokens).values(values).onConflictDoNothing())
       })
 
     /**
@@ -482,16 +477,64 @@ function formatVector(vector: ReadonlyArray<number>): string {
  */
 function tokenize(mention: string): Array<string> {
   const stopWords = new Set([
-    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
-    "of", "with", "by", "from", "as", "is", "was", "are", "were", "been",
-    "be", "have", "has", "had", "do", "does", "did", "will", "would",
-    "could", "should", "may", "might", "must", "shall", "can", "this",
-    "that", "these", "those", "i", "you", "he", "she", "it", "we", "they",
-    "inc", "corp", "llc", "ltd", "co", "company"
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "but",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "of",
+    "with",
+    "by",
+    "from",
+    "as",
+    "is",
+    "was",
+    "are",
+    "were",
+    "been",
+    "be",
+    "have",
+    "has",
+    "had",
+    "do",
+    "does",
+    "did",
+    "will",
+    "would",
+    "could",
+    "should",
+    "may",
+    "might",
+    "must",
+    "shall",
+    "can",
+    "this",
+    "that",
+    "these",
+    "those",
+    "i",
+    "you",
+    "he",
+    "she",
+    "it",
+    "we",
+    "they",
+    "inc",
+    "corp",
+    "llc",
+    "ltd",
+    "co",
+    "company"
   ])
 
   return mention
     .toLowerCase()
-    .split(/[\s\-_.,;:!?'"()\[\]{}]+/)
+    .split(/[\s\-_.,;:!?'"()[]{}]+/)
     .filter((token) => token.length > 2 && !stopWords.has(token))
 }

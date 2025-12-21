@@ -6,12 +6,17 @@
  * @since 2.0.0
  */
 
-import { Effect } from "effect"
 import { describe, expect, it } from "@effect/vitest"
+import { Effect } from "effect"
 import * as fc from "fast-check"
 import * as N3 from "n3"
-import { computeQuadDelta, filterTypeInferences, groupDeltaByPredicate, summarizeDelta } from "../../src/Utils/QuadDelta.js"
 import type { RdfStore } from "../../src/Service/Rdf.js"
+import {
+  computeQuadDelta,
+  filterTypeInferences,
+  groupDeltaByPredicate,
+  summarizeDelta
+} from "../../src/Utils/QuadDelta.js"
 
 // =============================================================================
 // Test Helpers
@@ -41,7 +46,7 @@ const quadArb = fc.record({
     literalArb // Literal object
   ),
   isLiteral: fc.boolean()
-}).map(({ subject, predicate, object, isLiteral }) =>
+}).map(({ isLiteral, object, predicate, subject }) =>
   df.quad(
     df.namedNode(subject),
     df.namedNode(predicate),
@@ -74,8 +79,7 @@ describe("QuadDelta", () => {
         expect(delta.newQuads).toHaveLength(0)
         expect(delta.originalCount).toBe(1)
         expect(delta.enrichedCount).toBe(1)
-      })
-    )
+      }))
 
     it.effect("detects new quads in enriched store", () =>
       Effect.gen(function*() {
@@ -104,8 +108,7 @@ describe("QuadDelta", () => {
         expect(delta.deltaCount).toBe(1)
         expect(delta.newQuads).toHaveLength(1)
         expect(delta.newQuads[0].predicate.value).toBe("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
-      })
-    )
+      }))
 
     it.effect("handles blank nodes correctly", () =>
       Effect.gen(function*() {
@@ -132,8 +135,7 @@ describe("QuadDelta", () => {
         const delta = yield* computeQuadDelta(original, enriched)
 
         expect(delta.deltaCount).toBe(1)
-      })
-    )
+      }))
 
     it.effect("handles literals with datatypes", () =>
       Effect.gen(function*() {
@@ -161,8 +163,7 @@ describe("QuadDelta", () => {
 
         expect(delta.deltaCount).toBe(1)
         expect(delta.originalCount).toBe(1)
-      })
-    )
+      }))
   })
 
   describe("filterTypeInferences", () => {
@@ -191,8 +192,7 @@ describe("QuadDelta", () => {
 
         expect(typeInferences).toHaveLength(1)
         expect(typeInferences[0].predicate.value).toBe(RDF_TYPE)
-      })
-    )
+      }))
   })
 
   describe("groupDeltaByPredicate", () => {
@@ -227,8 +227,7 @@ describe("QuadDelta", () => {
 
         expect(grouped.get(RDF_TYPE)).toHaveLength(2)
         expect(grouped.get(RDFS_LABEL)).toHaveLength(1)
-      })
-    )
+      }))
   })
 
   describe("summarizeDelta", () => {
@@ -267,8 +266,7 @@ describe("QuadDelta", () => {
         expect(summary.inferredTriples).toBe(2)
         expect(summary.inferenceRatio).toBe(2)
         expect(summary.predicateBreakdown["type"]).toBe(2)
-      })
-    )
+      }))
   })
 })
 

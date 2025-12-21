@@ -79,10 +79,10 @@ export interface ReconciliationResult {
 }
 
 export type ReconciliationDecision =
-  | "auto_linked"    // Score >= autoLinkThreshold, link created
-  | "queued"         // Score in queueThreshold..autoLinkThreshold, needs review
-  | "no_match"       // Score < queueThreshold or no candidates
-  | "skipped"        // Already linked or other reason to skip
+  | "auto_linked" // Score >= autoLinkThreshold, link created
+  | "queued" // Score in queueThreshold..autoLinkThreshold, needs review
+  | "no_match" // Score < queueThreshold or no candidates
+  | "skipped" // Already linked or other reason to skip
 
 /**
  * Verification task for human review
@@ -138,11 +138,13 @@ export class ReconciliationService extends Effect.Service<ReconciliationService>
 
           // Check if already linked
           const existingLinkOpt = yield* storage.get(`${LINKS_PREFIX}${encodeURIComponent(entityIri)}`).pipe(
-            Effect.mapError((e) => new ReconciliationError({
-              message: `Failed to check existing link: ${e}`,
-              entityIri,
-              cause: e
-            }))
+            Effect.mapError((e) =>
+              new ReconciliationError({
+                message: `Failed to check existing link: ${e}`,
+                entityIri,
+                cause: e
+              })
+            )
           )
 
           if (Option.isSome(existingLinkOpt)) {
@@ -246,11 +248,13 @@ export class ReconciliationService extends Effect.Service<ReconciliationService>
             `${LINKS_PREFIX}${encodeURIComponent(entityIri)}`,
             linkData
           ).pipe(
-            Effect.mapError((e) => new ReconciliationError({
-              message: `Failed to store link: ${e}`,
-              entityIri,
-              cause: e
-            }))
+            Effect.mapError((e) =>
+              new ReconciliationError({
+                message: `Failed to store link: ${e}`,
+                entityIri,
+                cause: e
+              })
+            )
           )
 
           yield* Effect.logDebug("Stored Wikidata link", { entityIri, qid })
@@ -280,11 +284,13 @@ export class ReconciliationService extends Effect.Service<ReconciliationService>
             `${QUEUE_PREFIX}${taskId}`,
             JSON.stringify(task)
           ).pipe(
-            Effect.mapError((e) => new ReconciliationError({
-              message: `Failed to queue verification: ${e}`,
-              entityIri,
-              cause: e
-            }))
+            Effect.mapError((e) =>
+              new ReconciliationError({
+                message: `Failed to queue verification: ${e}`,
+                entityIri,
+                cause: e
+              })
+            )
           )
 
           return taskId
@@ -299,22 +305,26 @@ export class ReconciliationService extends Effect.Service<ReconciliationService>
       > =>
         Effect.gen(function*() {
           const taskKeys = yield* storage.list(QUEUE_PREFIX).pipe(
-            Effect.mapError((e) => new ReconciliationError({
-              message: `Failed to list tasks: ${e}`,
-              entityIri: "",
-              cause: e
-            }))
+            Effect.mapError((e) =>
+              new ReconciliationError({
+                message: `Failed to list tasks: ${e}`,
+                entityIri: "",
+                cause: e
+              })
+            )
           )
 
           const tasks: Array<VerificationTask> = []
 
           for (const key of taskKeys) {
             const contentOpt = yield* storage.get(key).pipe(
-              Effect.mapError((e) => new ReconciliationError({
-                message: `Failed to read task: ${e}`,
-                entityIri: "",
-                cause: e
-              }))
+              Effect.mapError((e) =>
+                new ReconciliationError({
+                  message: `Failed to read task: ${e}`,
+                  entityIri: "",
+                  cause: e
+                })
+              )
             )
 
             if (Option.isSome(contentOpt)) {
@@ -330,9 +340,7 @@ export class ReconciliationService extends Effect.Service<ReconciliationService>
           }
 
           // Sort by creation date
-          tasks.sort((a, b) =>
-            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-          )
+          tasks.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
 
           return tasks
         })
@@ -347,18 +355,22 @@ export class ReconciliationService extends Effect.Service<ReconciliationService>
         Effect.gen(function*() {
           const taskKey = `${QUEUE_PREFIX}${taskId}`
           const contentOpt = yield* storage.get(taskKey).pipe(
-            Effect.mapError((e) => new ReconciliationError({
-              message: `Failed to read task: ${e}`,
-              entityIri: "",
-              cause: e
-            }))
+            Effect.mapError((e) =>
+              new ReconciliationError({
+                message: `Failed to read task: ${e}`,
+                entityIri: "",
+                cause: e
+              })
+            )
           )
 
           if (Option.isNone(contentOpt)) {
-            return yield* Effect.fail(new ReconciliationError({
-              message: `Task not found: ${taskId}`,
-              entityIri: ""
-            }))
+            return yield* Effect.fail(
+              new ReconciliationError({
+                message: `Task not found: ${taskId}`,
+                entityIri: ""
+              })
+            )
           }
 
           const task = JSON.parse(contentOpt.value) as VerificationTask
@@ -374,11 +386,13 @@ export class ReconciliationService extends Effect.Service<ReconciliationService>
           }
 
           yield* storage.set(taskKey, JSON.stringify(updatedTask)).pipe(
-            Effect.mapError((e) => new ReconciliationError({
-              message: `Failed to update task: ${e}`,
-              entityIri: task.entityIri,
-              cause: e
-            }))
+            Effect.mapError((e) =>
+              new ReconciliationError({
+                message: `Failed to update task: ${e}`,
+                entityIri: task.entityIri,
+                cause: e
+              })
+            )
           )
 
           yield* Effect.logInfo("Approved verification task", { taskId, qid })
@@ -393,18 +407,22 @@ export class ReconciliationService extends Effect.Service<ReconciliationService>
         Effect.gen(function*() {
           const taskKey = `${QUEUE_PREFIX}${taskId}`
           const contentOpt = yield* storage.get(taskKey).pipe(
-            Effect.mapError((e) => new ReconciliationError({
-              message: `Failed to read task: ${e}`,
-              entityIri: "",
-              cause: e
-            }))
+            Effect.mapError((e) =>
+              new ReconciliationError({
+                message: `Failed to read task: ${e}`,
+                entityIri: "",
+                cause: e
+              })
+            )
           )
 
           if (Option.isNone(contentOpt)) {
-            return yield* Effect.fail(new ReconciliationError({
-              message: `Task not found: ${taskId}`,
-              entityIri: ""
-            }))
+            return yield* Effect.fail(
+              new ReconciliationError({
+                message: `Task not found: ${taskId}`,
+                entityIri: ""
+              })
+            )
           }
 
           const task = JSON.parse(contentOpt.value) as VerificationTask
@@ -416,11 +434,13 @@ export class ReconciliationService extends Effect.Service<ReconciliationService>
           }
 
           yield* storage.set(taskKey, JSON.stringify(updatedTask)).pipe(
-            Effect.mapError((e) => new ReconciliationError({
-              message: `Failed to update task: ${e}`,
-              entityIri: task.entityIri,
-              cause: e
-            }))
+            Effect.mapError((e) =>
+              new ReconciliationError({
+                message: `Failed to update task: ${e}`,
+                entityIri: task.entityIri,
+                cause: e
+              })
+            )
           )
 
           yield* Effect.logInfo("Rejected verification task", { taskId })
@@ -436,11 +456,13 @@ export class ReconciliationService extends Effect.Service<ReconciliationService>
           const contentOpt = yield* storage.get(
             `${LINKS_PREFIX}${encodeURIComponent(entityIri)}`
           ).pipe(
-            Effect.mapError((e) => new ReconciliationError({
-              message: `Failed to get link: ${e}`,
-              entityIri,
-              cause: e
-            }))
+            Effect.mapError((e) =>
+              new ReconciliationError({
+                message: `Failed to get link: ${e}`,
+                entityIri,
+                cause: e
+              })
+            )
           )
 
           if (Option.isNone(contentOpt)) {
@@ -484,6 +506,6 @@ export class ReconciliationService extends Effect.Service<ReconciliationService>
         getLink,
         reconcileBatch
       }
-    }),
+    })
   }
 ) {}

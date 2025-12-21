@@ -12,9 +12,9 @@
  * @module Runtime/Persistence/EventLogStorage
  */
 
-import * as EventLogServer from "@effect/experimental/EventLogServer"
+import { type EntryId, makeRemoteId, type RemoteId } from "@effect/experimental/EventJournal"
 import { EncryptedRemoteEntry } from "@effect/experimental/EventLogEncryption"
-import { EntryId, makeRemoteId, type RemoteId } from "@effect/experimental/EventJournal"
+import * as EventLogServer from "@effect/experimental/EventLogServer"
 import { SqlClient } from "@effect/sql"
 import { Effect, Layer, Mailbox, PubSub, RcMap } from "effect"
 import type * as Scope from "effect/Scope"
@@ -152,7 +152,8 @@ export const makeStoragePostgres: Effect.Effect<
           // Insert entry
           yield* sql`
             INSERT INTO event_log_entries (public_key, sequence, entry_id, iv, encrypted_entry)
-            VALUES (${publicKey}, ${nextSequence}, ${entry.entryId as Uint8Array}, ${entry.iv as Uint8Array}, ${entry.encryptedEntry as Uint8Array})
+            VALUES (${publicKey}, ${nextSequence}, ${entry.entryId as Uint8Array}, ${entry.iv as Uint8Array}, ${entry
+            .encryptedEntry as Uint8Array})
             ON CONFLICT (public_key, entry_id) DO NOTHING
           `
 

@@ -40,7 +40,7 @@ export interface EntityResolutionConfig {
   readonly typeOverlapRatio: number
 }
 
-const DEFAULT_CONFIG: EntityResolutionConfig = {
+export const DEFAULT_CONFIG: EntityResolutionConfig = {
   mentionSimilarityThreshold: 0.7,
   requireTypeOverlap: true,
   typeOverlapRatio: 0.5

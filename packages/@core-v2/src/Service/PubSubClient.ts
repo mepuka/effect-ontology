@@ -9,8 +9,9 @@
  */
 
 import * as EventJournal from "@effect/experimental/EventJournal"
-import { PubSub, Message, Subscription, Topic } from "@google-cloud/pubsub"
-import { Config, Context, Effect, Layer, Schema, Stream } from "effect"
+import type { Topic } from "@google-cloud/pubsub"
+import { PubSub } from "@google-cloud/pubsub"
+import { Config, Context, Effect, Layer, Stream } from "effect"
 import { PubSubError } from "../Domain/Error/EventBus.js"
 
 // =============================================================================
@@ -194,16 +195,18 @@ export const PubSubClientLive = Layer.scoped(
         const dataBuffer = Buffer.from(JSON.stringify(data))
 
         const messageId = yield* Effect.tryPromise({
-          try: () => topic.publishMessage({
-            data: dataBuffer,
-            attributes: attributes ?? {}
-          }),
-          catch: (error) => new PubSubError({
-            method: "publish",
-            topic: topicId,
-            message: `Failed to publish message: ${error}`,
-            cause: error as Error
-          })
+          try: () =>
+            topic.publishMessage({
+              data: dataBuffer,
+              attributes: attributes ?? {}
+            }),
+          catch: (error) =>
+            new PubSubError({
+              method: "publish",
+              topic: topicId,
+              message: `Failed to publish message: ${error}`,
+              cause: error as Error
+            })
         })
 
         yield* Effect.logDebug("Message published", {
@@ -253,12 +256,13 @@ export const PubSubClientLive = Layer.scoped(
           void subscription
           void ackId
         },
-        catch: (error) => new PubSubError({
-          method: "acknowledge",
-          topic: subscriptionId,
-          message: `Failed to acknowledge message: ${error}`,
-          cause: error as Error
-        })
+        catch: (error) =>
+          new PubSubError({
+            method: "acknowledge",
+            topic: subscriptionId,
+            message: `Failed to acknowledge message: ${error}`,
+            cause: error as Error
+          })
       })
 
     // Cleanup on scope finalization

@@ -289,8 +289,7 @@ export const makePersistentEmbeddingCache = (
       persistentMisses: 0
     })
 
-    const isExpired = (entry: CacheEntry, now: number): boolean =>
-      now - entry.createdAt > config.ttlMs
+    const isExpired = (entry: CacheEntry, now: number): boolean => now - entry.createdAt > config.ttlMs
 
     const evictLRU = (
       map: HashMap.HashMap<string, CacheEntry>
@@ -375,8 +374,7 @@ export const makePersistentEmbeddingCache = (
               yield* Ref.update(memoryCache, HashMap.remove(hash))
             } else {
               // Memory hit - update access time
-              yield* Ref.update(memoryCache, (m) =>
-                HashMap.set(m, hash, { ...entry.value, lastAccessedAt: now }))
+              yield* Ref.update(memoryCache, (m) => HashMap.set(m, hash, { ...entry.value, lastAccessedAt: now }))
               yield* Ref.update(stats, (s) => ({ ...s, memoryHits: s.memoryHits + 1 }))
               return Option.some(entry.value.embedding)
             }
@@ -561,8 +559,7 @@ export const EmbeddingCacheWithPersistence: Layer.Layer<
           maxEntries: config.embedding.cacheMaxEntries
         }
 
-        const isExpired = (entry: CacheEntry, now: number): boolean =>
-          now - entry.createdAt > cacheConfig.ttlMs
+        const isExpired = (entry: CacheEntry, now: number): boolean => now - entry.createdAt > cacheConfig.ttlMs
 
         const evictLRU = (map: HashMap.HashMap<string, CacheEntry>): HashMap.HashMap<string, CacheEntry> => {
           if (HashMap.size(map) < cacheConfig.maxEntries) return map
@@ -588,8 +585,7 @@ export const EmbeddingCacheWithPersistence: Layer.Layer<
                 yield* Ref.update(cache, HashMap.remove(hash))
                 return Option.none()
               }
-              yield* Ref.update(cache, (m) =>
-                HashMap.set(m, hash, { ...entry.value, lastAccessedAt: now }))
+              yield* Ref.update(cache, (m) => HashMap.set(m, hash, { ...entry.value, lastAccessedAt: now }))
               return Option.some(entry.value.embedding)
             }),
           set: (hash: string, embedding: Embedding) =>

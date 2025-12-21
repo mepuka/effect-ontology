@@ -70,7 +70,7 @@ export type GcsUri = typeof GcsUri.Type
  * GCS object path (no // or leading/trailing /)
  */
 export const GcsObject = Schema.String.pipe(
-  Schema.pattern(/^[^\/].*[^\/]$/),
+  Schema.pattern(new RegExp("^[^/].*[^/]$")),
   Schema.filter((s) => !s.includes("//"), {
     message: () => "Path cannot contain //"
   }),

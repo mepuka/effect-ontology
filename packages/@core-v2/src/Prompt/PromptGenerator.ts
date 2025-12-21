@@ -871,7 +871,7 @@ export const buildMultimodalUserContent = (
   images?: ReadonlyArray<ImageForPrompt>,
   imageIntro?: string
 ): ReadonlyArray<Prompt.UserMessagePart> => {
-  const parts: Prompt.UserMessagePart[] = [
+  const parts: Array<Prompt.UserMessagePart> = [
     Prompt.makePart("text", { text })
   ]
 

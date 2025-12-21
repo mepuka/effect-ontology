@@ -24,7 +24,8 @@
 
 import { LanguageModel } from "@effect/ai"
 import { Data, Effect, JSONSchema, Schema } from "effect"
-import { EnrichedContent, JinaContent } from "../Domain/Model/EnrichedContent.js"
+import type { JinaContent } from "../Domain/Model/EnrichedContent.js"
+import { EnrichedContent } from "../Domain/Model/EnrichedContent.js"
 import { ConfigService } from "./Config.js"
 import { generateObjectWithRetry } from "./LlmWithRetry.js"
 
@@ -90,7 +91,8 @@ type EnrichmentOutput = Schema.Schema.Type<typeof EnrichmentOutputSchema>
 // Prompt Construction
 // =============================================================================
 
-const ENRICHMENT_SYSTEM_PROMPT = `You are a content analysis expert. Your task is to extract structured metadata from markdown content.
+const ENRICHMENT_SYSTEM_PROMPT =
+  `You are a content analysis expert. Your task is to extract structured metadata from markdown content.
 
 Analyze the content and extract:
 1. **Headline**: The main title or a generated summary headline if none exists

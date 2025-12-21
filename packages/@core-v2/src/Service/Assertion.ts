@@ -8,15 +8,10 @@
  * @module Service/Assertion
  */
 
-import { Array as Arr, DateTime, Effect, HashMap, Layer, Option, Ref } from "effect"
+import { DateTime, Effect, HashMap, Layer, Option, Ref } from "effect"
 import { CLAIMS, PROV, RDF, XSD } from "../Domain/Rdf/Constants.js"
 import { type IRI, Literal, Quad } from "../Domain/Rdf/Types.js"
-import {
-  type Assertion,
-  type AssertionId,
-  type AssertionStatus,
-  type ClaimId
-} from "../Domain/Schema/KnowledgeModel.js"
+import { type AssertionId, type AssertionStatus } from "../Domain/Schema/KnowledgeModel.js"
 import { ClaimRepository } from "../Repository/Claim.js"
 import type { ClaimRow } from "../Repository/schema.js"
 import { RdfBuilder } from "./Rdf.js"
@@ -159,7 +154,6 @@ const ASSERTIONS = {
 export class AssertionService extends Effect.Service<AssertionService>()("AssertionService", {
   effect: Effect.gen(function*() {
     const claimRepo = yield* ClaimRepository
-    const rdf = yield* RdfBuilder
 
     // In-memory store for assertions (can be replaced with DB repository later)
     const assertionsRef = yield* Ref.make(HashMap.empty<AssertionId, AssertionRow>())

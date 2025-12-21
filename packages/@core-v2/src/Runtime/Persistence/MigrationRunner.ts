@@ -9,7 +9,7 @@
  */
 
 import { SqlClient } from "@effect/sql"
-import { Effect, Layer, Option } from "effect"
+import { Effect, Option } from "effect"
 
 // -----------------------------------------------------------------------------
 // Types

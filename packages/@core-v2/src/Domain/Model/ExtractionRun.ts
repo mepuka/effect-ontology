@@ -70,7 +70,7 @@ export type ErrorCode = typeof ErrorCode.Type
  * Run status as TaggedEnum for pattern matching
  */
 export type RunStatus = Data.TaggedEnum<{
-  Pending: {}
+  Pending: object
   Running: { startedAt: Date }
   Complete: { completedAt: Date }
   Failed: { failedAt: Date; errorCode: ErrorCode }

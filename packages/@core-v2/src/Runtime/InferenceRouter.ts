@@ -9,16 +9,16 @@
  */
 
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "@effect/platform"
-import { Effect, Schema } from "effect"
-import { TreeFormatter, type ParseError } from "effect/ParseResult"
+import { Effect } from "effect"
+import { type ParseError, TreeFormatter } from "effect/ParseResult"
 import {
   InferenceRunRequest,
   InferenceRunResponse,
-  InferenceStatusResponse,
-  type InferenceStats
+  type InferenceStats,
+  InferenceStatusResponse
 } from "../Domain/Schema/Inference.js"
-import { Reasoner, ReasoningConfig, ReasoningError, RuleParseError } from "../Service/Reasoner.js"
 import { RdfBuilder } from "../Service/Rdf.js"
+import { Reasoner, ReasoningConfig } from "../Service/Reasoner.js"
 import { computeQuadDelta, summarizeDelta } from "../Utils/QuadDelta.js"
 
 // =============================================================================
@@ -83,15 +83,14 @@ export const InferenceRouter = HttpRouter.empty.pipe(
               const originalCount = originalStore._store.size
 
               // Build reasoning config
-              const config =
-                request.profile === "custom"
-                  ? ReasoningConfig.custom(request.customRules ?? [])
-                  : new ReasoningConfig({
-                      profile: request.profile as "rdfs" | "rdfs-subclass" | "owl-sameas"
-                    })
+              const config = request.profile === "custom"
+                ? ReasoningConfig.custom(request.customRules ?? [])
+                : new ReasoningConfig({
+                  profile: request.profile as "rdfs" | "rdfs-subclass" | "owl-sameas"
+                })
 
               // Apply reasoning (creates a copy)
-              const { store: enrichedStore, result: reasoningResult } = yield* reasoner
+              const { result: reasoningResult, store: enrichedStore } = yield* reasoner
                 .reasonCopy(originalStore, config)
                 .pipe(
                   Effect.mapError((e) => ({
@@ -123,18 +122,17 @@ export const InferenceRouter = HttpRouter.empty.pipe(
               // Build stats
               const stats: InferenceStats = delta
                 ? {
-                    ...summarizeDelta(delta),
-                    durationMs
-                  }
+                  ...summarizeDelta(delta),
+                  durationMs
+                }
                 : {
-                    originalTriples: originalCount,
-                    enrichedTriples: reasoningResult.totalTripleCount,
-                    inferredTriples: reasoningResult.inferredTripleCount,
-                    inferenceRatio:
-                      originalCount > 0 ? reasoningResult.inferredTripleCount / originalCount : 0,
-                    predicateBreakdown: {},
-                    durationMs
-                  }
+                  originalTriples: originalCount,
+                  enrichedTriples: reasoningResult.totalTripleCount,
+                  inferredTriples: reasoningResult.inferredTripleCount,
+                  inferenceRatio: originalCount > 0 ? reasoningResult.inferredTripleCount / originalCount : 0,
+                  predicateBreakdown: {},
+                  durationMs
+                }
 
               const jobId = generateJobId()
               const response = new InferenceRunResponse({
@@ -176,7 +174,6 @@ export const InferenceRouter = HttpRouter.empty.pipe(
       )
     })
   ),
-
   // GET /v1/inference/:id - Get inference job result
   HttpRouter.get(
     "/v1/inference/:id",

@@ -8,10 +8,9 @@
  * @module Service/Sparql
  */
 
-import { Data, Effect, Layer, Schema } from "effect"
+import { Data, Effect, Layer } from "effect"
 import * as oxigraph from "oxigraph"
 import { SparqlExecutionError, SparqlLoadError } from "../Domain/Error/Sparql.js"
-import type { IRI } from "../Domain/Rdf/Types.js"
 import type { RdfStore } from "./Rdf.js"
 import { RdfBuilder } from "./Rdf.js"
 

@@ -85,7 +85,7 @@ export const computeQuadDelta = (
     }
 
     // Find quads in enriched that aren't in original
-    const newQuads: N3.Quad[] = []
+    const newQuads: Array<N3.Quad> = []
     for (const quad of enrichedQuads) {
       const serialized = serializeQuad(quad)
       if (!originalSet.has(serialized)) {
@@ -113,7 +113,7 @@ export const computeQuadDelta = (
 export const groupDeltaByPredicate = (
   delta: QuadDelta
 ): Map<string, ReadonlyArray<N3.Quad>> => {
-  const grouped = new Map<string, N3.Quad[]>()
+  const grouped = new Map<string, Array<N3.Quad>>()
 
   for (const quad of delta.newQuads) {
     const predicate = quad.predicate.value

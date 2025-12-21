@@ -23,9 +23,6 @@ import { ArticleRepository } from "./Repository/Article.js"
 import { CachedArticleRepository } from "./Repository/CachedArticle.js"
 import { CachedClaimRepository } from "./Repository/CachedClaim.js"
 import { ClaimRepository } from "./Repository/Claim.js"
-import { ContentEnrichmentAgent } from "./Service/ContentEnrichmentAgent.js"
-import { JinaReaderClient } from "./Service/JinaReaderClient.js"
-import { LinkIngestionService } from "./Service/LinkIngestionService.js"
 import { EventBridgeAutoStart } from "./Runtime/EventBridge.js"
 import { EventBroadcastHubLive } from "./Runtime/EventBroadcastRouter.js"
 import { EventLogStorageMemory, EventLogStoragePostgres } from "./Runtime/EventStreamRouter.js"
@@ -37,8 +34,11 @@ import { ActivityDependenciesLayer, WorkflowOrchestratorFullLayer } from "./Runt
 import { BatchStateHubLayer, BatchStatePersistenceLayer } from "./Service/BatchState.js"
 import { BatchStateBridgeLive } from "./Service/BatchStateBridge.js"
 import { ClaimPersistenceService } from "./Service/ClaimPersistence.js"
+import { ContentEnrichmentAgent } from "./Service/ContentEnrichmentAgent.js"
 import { PersistentEmbeddingCache } from "./Service/EmbeddingCache.js"
 import { PersistentEntityIndex } from "./Service/EntityIndex.js"
+import { JinaReaderClient } from "./Service/JinaReaderClient.js"
+import { LinkIngestionService } from "./Service/LinkIngestionService.js"
 
 // Load port from environment
 const port = Effect.runSync(Config.number("PORT").pipe(Config.withDefault(8080)))
@@ -261,9 +261,7 @@ const warmUpCaches = Effect.gen(function*() {
     }
   }
 }).pipe(
-  Effect.catchAll((error) =>
-    Effect.logWarning("Cache warm-up failed (continuing)", { error: String(error) })
-  )
+  Effect.catchAll((error) => Effect.logWarning("Cache warm-up failed (continuing)", { error: String(error) }))
 )
 
 // Server program with graceful shutdown

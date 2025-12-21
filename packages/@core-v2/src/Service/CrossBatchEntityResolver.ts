@@ -9,15 +9,12 @@
  * @module Service/CrossBatchEntityResolver
  */
 
-import { SqlError } from "@effect/sql"
-import { Effect, HashMap, Layer, Option, Schema } from "effect"
+import type { SqlError } from "@effect/sql"
+import { Effect, HashMap, Option, Schema } from "effect"
 import type { Entity } from "../Domain/Model/Entity.js"
-import {
-  EntityRegistryRepository,
-  type BlockingCandidate
-} from "../Repository/EntityRegistry.js"
+import { type BlockingCandidate, EntityRegistryRepository } from "../Repository/EntityRegistry.js"
 import { EmbeddingService } from "./Embedding.js"
-import { NomicNlpError } from "./NomicNlp.js"
+import type { NomicNlpError } from "./NomicNlp.js"
 
 // =============================================================================
 // Error Types
@@ -265,7 +262,6 @@ export class CrossBatchEntityResolver extends Effect.Service<CrossBatchEntityRes
 
           // Update existing canonicals with merge info
           for (const merged of mergedEntities) {
-            const entity = unresolvedEntities.find((u) => u.entity.id === merged.entityId)
             // Get the original entity from mergedEntities - need to pass it through
             // For now, just record the alias from the mention we matched
             // The original entity mention is in the merged.entityId but we need the Entity object
@@ -285,7 +281,7 @@ export class CrossBatchEntityResolver extends Effect.Service<CrossBatchEntityRes
           }
 
           // Create new canonicals for unresolved entities
-          for (const { entity, embedding } of unresolvedEntities) {
+          for (const { embedding, entity } of unresolvedEntities) {
             // Generate IRI for new canonical
             const iri = `${config.canonicalNamespace}${entity.id}`
 
@@ -437,16 +433,64 @@ export const CrossBatchEntityResolverLive = CrossBatchEntityResolver.Default
  */
 function tokenize(mention: string): Array<string> {
   const stopWords = new Set([
-    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
-    "of", "with", "by", "from", "as", "is", "was", "are", "were", "been",
-    "be", "have", "has", "had", "do", "does", "did", "will", "would",
-    "could", "should", "may", "might", "must", "shall", "can", "this",
-    "that", "these", "those", "i", "you", "he", "she", "it", "we", "they",
-    "inc", "corp", "llc", "ltd", "co", "company"
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "but",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "of",
+    "with",
+    "by",
+    "from",
+    "as",
+    "is",
+    "was",
+    "are",
+    "were",
+    "been",
+    "be",
+    "have",
+    "has",
+    "had",
+    "do",
+    "does",
+    "did",
+    "will",
+    "would",
+    "could",
+    "should",
+    "may",
+    "might",
+    "must",
+    "shall",
+    "can",
+    "this",
+    "that",
+    "these",
+    "those",
+    "i",
+    "you",
+    "he",
+    "she",
+    "it",
+    "we",
+    "they",
+    "inc",
+    "corp",
+    "llc",
+    "ltd",
+    "co",
+    "company"
   ])
 
   return mention
     .toLowerCase()
-    .split(/[\s\-_.,;:!?'"()\[\]{}]+/)
+    .split(/[\s\-_.,;:!?'"()[]{}]+/)
     .filter((token) => token.length > 2 && !stopWords.has(token))
 }

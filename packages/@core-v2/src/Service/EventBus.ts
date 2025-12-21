@@ -12,10 +12,9 @@ import type * as Event from "@effect/experimental/Event"
 import type * as EventGroup from "@effect/experimental/EventGroup"
 import * as EventJournal from "@effect/experimental/EventJournal"
 import * as PersistedQueue from "@effect/experimental/PersistedQueue"
-import { SqlClient } from "@effect/sql"
 import * as SqlEventJournal from "@effect/sql/SqlEventJournal"
 import * as SqlPersistedQueue from "@effect/sql/SqlPersistedQueue"
-import { Context, DateTime, Effect, Layer, Option, Queue, Schema, Scope, Stream } from "effect"
+import { Context, DateTime, Effect, Layer, Option, Queue, Schema, Stream } from "effect"
 import { EventBusError } from "../Domain/Error/EventBus.js"
 import { CurationEventGroup, ExtractionEventGroup } from "../Domain/Schema/EventSchema.js"
 import { type BackgroundJob, BackgroundJobSchema } from "../Domain/Schema/JobSchema.js"
@@ -370,9 +369,6 @@ export const EventBusServiceSql = Layer.scoped(
     // Get the EventJournal from context (provided by SqlEventJournal.layer)
     const journal = yield* EventJournal.EventJournal
 
-    // Get the PersistedQueueStore from context (provided by SqlPersistedQueue.layerStore)
-    const queueStore = yield* PersistedQueue.PersistedQueueStore
-
     // Create a typed PersistedQueue for background jobs
     const jobQueue = yield* PersistedQueue.make({
       name: JOBS_QUEUE_NAME,
@@ -487,8 +483,8 @@ export const EventBusServiceSql = Layer.scoped(
       )
 
     const subscribeEvents: EventBusService["subscribeEvents"] = () =>
-      Effect.gen(function*() {
-        return Stream.fromQueue(eventChanges).pipe(
+      Effect.sync(() =>
+        Stream.fromQueue(eventChanges).pipe(
           Stream.map((entry) => ({
             id: entry.idString,
             event: entry.event,
@@ -504,7 +500,7 @@ export const EventBusServiceSql = Layer.scoped(
             })
           )
         )
-      })
+      )
 
     // SQL implementation doesn't have a pending count API - would need custom query
     const pendingJobCount: EventBusService["pendingJobCount"] = () => Effect.succeed(0)

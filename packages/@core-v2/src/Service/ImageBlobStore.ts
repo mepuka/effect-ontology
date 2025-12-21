@@ -8,7 +8,7 @@
  * @module Service/ImageBlobStore
  */
 
-import { PlatformError, SystemError } from "@effect/platform/Error"
+import type { PlatformError, SystemError } from "@effect/platform/Error"
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect"
 import type { ImageAsset } from "../Domain/Model/Image.js"
 import { ImageAssetSchema } from "../Domain/Model/Image.js"
@@ -114,11 +114,9 @@ export class ImageBlobStore extends Context.Tag("@core-v2/ImageBlobStore")<
       const storage = yield* StorageService
 
       return {
-        putBytes: (hash: string, bytes: Uint8Array) =>
-          storage.set(PathLayout.image.original(hash), bytes),
+        putBytes: (hash: string, bytes: Uint8Array) => storage.set(PathLayout.image.original(hash), bytes),
 
-        getBytes: (hash: string) =>
-          storage.getUint8Array(PathLayout.image.original(hash)),
+        getBytes: (hash: string) => storage.getUint8Array(PathLayout.image.original(hash)),
 
         hasBytes: (hash: string) =>
           storage.getUint8Array(PathLayout.image.original(hash)).pipe(

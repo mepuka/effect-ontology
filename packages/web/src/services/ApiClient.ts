@@ -8,28 +8,23 @@
  * @module services/ApiClient
  */
 
-import {
-  FetchHttpClient,
-  HttpClient,
-  HttpClientRequest,
-  HttpClientResponse
-} from "@effect/platform"
-import { Context, Effect, Layer, Schema } from "effect"
 import { Schema as DomainSchema } from "@effect-ontology/core-v2/Domain"
+import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "@effect/platform"
+import { Context, Effect, Layer, Schema } from "effect"
 
 // Re-export schema types for convenience
 const {
-  ListLinksResponse,
-  LinkDetail,
+  ArticleDetailResponse,
+  ArticleSearchResponse,
   IngestLinkRequest,
   IngestLinkResponse,
-  OntologyListResponse,
+  LinkDetail,
+  ListLinksResponse,
   OntologyDetailResponse,
+  OntologyListResponse,
   OntologySummary,
   TimelineClaimsResponse,
-  TimelineEntityResponse,
-  ArticleSearchResponse,
-  ArticleDetailResponse
+  TimelineEntityResponse
 } = DomainSchema
 
 // =============================================================================
@@ -67,7 +62,7 @@ export interface TimelineFilter {
 }
 
 export interface DocumentsFilter {
-  sources?: string[]
+  sources?: Array<string>
   query?: string
   limit?: number
   offset?: number
@@ -129,7 +124,7 @@ export class ApiClient extends Context.Tag("ApiClient")<ApiClient, ApiClientServ
 /** ApiClient implementation layer */
 export const ApiClientLive = Layer.effect(
   ApiClient,
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     const client = yield* HttpClient.HttpClient
 
     // Extract error message from response body
@@ -286,7 +281,9 @@ export const ApiClientLive = Layer.effect(
         const query = searchParams.toString()
 
         return request(
-          HttpClientRequest.get(`/api/v1/ontologies/${ontologyId}/timeline/entities/${encodeURIComponent(iri)}${query ? `?${query}` : ""}`),
+          HttpClientRequest.get(
+            `/api/v1/ontologies/${ontologyId}/timeline/entities/${encodeURIComponent(iri)}${query ? `?${query}` : ""}`
+          ),
           TimelineEntityResponse
         )
       },

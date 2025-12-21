@@ -15,8 +15,8 @@
  */
 
 import { LanguageModel } from "@effect/ai"
-import { Data, Duration, Effect, Layer, Schedule, Schema } from "effect"
-import type { ClassDefinition, OntologyContext, PropertyDefinition } from "../Domain/Model/Ontology.js"
+import { Data, Duration, Effect, Schedule, Schema } from "effect"
+import type { OntologyContext } from "../Domain/Model/Ontology.js"
 import { ConfigService } from "./Config.js"
 import { generateObjectWithFeedback } from "./GenerateWithFeedback.js"
 

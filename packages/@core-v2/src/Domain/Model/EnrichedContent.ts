@@ -284,7 +284,7 @@ export class JinaContent extends Schema.Class<JinaContent>("JinaContent")({
    * Get approximate word count
    */
   get wordCount(): number {
-    return this.content.split(/\s+/).filter(w => w.length > 0).length
+    return this.content.split(/\s+/).filter((w) => w.length > 0).length
   }
 
   toJSON() {

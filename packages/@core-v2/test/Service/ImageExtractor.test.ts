@@ -8,9 +8,9 @@
 
 import { Effect, Layer } from "effect"
 import { describe, expect, it } from "vitest"
-import type { ImageCandidate } from "../../src/Domain/Model/Image.js"
 import { JinaContent } from "../../src/Domain/Model/EnrichedContent.js"
-import { ImageExtractor, type ImageExtractionInput } from "../../src/Service/ImageExtractor.js"
+import type { ImageCandidate } from "../../src/Domain/Model/Image.js"
+import { type ImageExtractionInput, ImageExtractor } from "../../src/Service/ImageExtractor.js"
 
 // Test layer
 const TestLayer = ImageExtractor.Live

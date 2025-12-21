@@ -13,7 +13,7 @@ import * as Pg from "@effect/sql-drizzle/Pg"
 import { and, desc, eq, isNull, or, sql } from "drizzle-orm"
 import { DateTime, Effect, Option } from "effect"
 import { claims, correctionClaims, corrections } from "./schema.js"
-import type { ClaimInsertRow, ClaimRow, CorrectionInsertRow, CorrectionRow } from "./schema.js"
+import type { ClaimInsertRow, ClaimRow, CorrectionInsertRow } from "./schema.js"
 
 // =============================================================================
 // Types

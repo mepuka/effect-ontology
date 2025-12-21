@@ -10,8 +10,8 @@
 import { Command, Options } from "@effect/cli"
 import { FileSystem } from "@effect/platform"
 import { Console, Effect } from "effect"
-import { Reasoner, ReasoningConfig } from "../../Service/Reasoner.js"
 import { RdfBuilder } from "../../Service/Rdf.js"
+import { Reasoner, ReasoningConfig } from "../../Service/Reasoner.js"
 import { computeQuadDelta, summarizeDelta } from "../../Utils/QuadDelta.js"
 import { withErrorHandler } from "../ErrorHandler.js"
 
@@ -58,7 +58,7 @@ const deltaOnlyOption = Options.boolean("delta-only").pipe(
 export const inferenceCommand = Command.make(
   "inference",
   { input: inputOption, output: outputOption, profile: profileOption, deltaOnly: deltaOnlyOption },
-  ({ input, output, profile, deltaOnly }) =>
+  ({ deltaOnly, input, output, profile }) =>
     Effect.gen(function*() {
       const fs = yield* FileSystem.FileSystem
       const rdfBuilder = yield* RdfBuilder
@@ -79,7 +79,7 @@ export const inferenceCommand = Command.make(
 
       // Run reasoning (creates a copy)
       const config = new ReasoningConfig({ profile })
-      const { store: enrichedStore, result: reasoningResult } = yield* reasoner.reasonCopy(
+      const { result: reasoningResult, store: enrichedStore } = yield* reasoner.reasonCopy(
         originalStore,
         config
       )
@@ -109,12 +109,12 @@ export const inferenceCommand = Command.make(
       // Prepare output
       const outputStore = deltaOnly
         ? yield* Effect.gen(function*() {
-            const store = yield* rdfBuilder.createStore
-            for (const quad of delta.newQuads) {
-              store._store.addQuad(quad)
-            }
-            return store
-          })
+          const store = yield* rdfBuilder.createStore
+          for (const quad of delta.newQuads) {
+            store._store.addQuad(quad)
+          }
+          return store
+        })
         : enrichedStore
 
       // Serialize and write output

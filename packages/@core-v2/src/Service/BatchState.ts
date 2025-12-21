@@ -1,6 +1,6 @@
 import { Persistence } from "@effect/experimental"
 import { KeyValueStore } from "@effect/platform"
-import { Context, Effect, Layer, Option, PubSub, Schema } from "effect"
+import { Effect, Layer, Option, PubSub, Schema } from "effect"
 import type { BatchId } from "../Domain/Identity.js"
 import { BatchState } from "../Domain/Model/BatchWorkflow.js"
 import { PathLayout } from "../Domain/PathLayout.js"

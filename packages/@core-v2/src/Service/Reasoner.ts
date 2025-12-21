@@ -12,7 +12,7 @@
  * @module Service/Reasoner
  */
 
-import { Data, Effect, Layer, Schema } from "effect"
+import { Data, Effect, Schema } from "effect"
 import * as N3 from "n3"
 import type { RdfStore } from "./Rdf.js"
 
@@ -279,7 +279,7 @@ const getRulesForProfile = (profile: ReasoningProfile): ReadonlyArray<string> =>
  * @category Services
  */
 export class Reasoner extends Effect.Service<Reasoner>()("Reasoner", {
-  effect: Effect.gen(function*() {
+  effect: Effect.sync(() => {
     const n3Parser = new N3.Parser({ format: "text/n3" })
 
     /**

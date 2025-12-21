@@ -6,100 +6,103 @@ import { BunContext } from "@effect/platform-bun"
 import { Effect, Layer, Option, Secret } from "effect"
 import * as path from "node:path"
 import { describe, expect, it } from "vitest"
-import { TestConfigProviderLayer } from "./setup.js"
 import { ConfigService, DEFAULT_CONFIG } from "../src/Service/Config.js"
 import { NlpService } from "../src/Service/Nlp.js"
 import { OntologyService } from "../src/Service/Ontology.js"
 import { RdfBuilder } from "../src/Service/Rdf.js"
 import { StorageServiceLive } from "../src/Service/Storage.js"
+import { TestConfigProviderLayer } from "./setup.js"
 
 describe("OntologyService - Football Ontology", () => {
   // Mock ConfigService
-  const TestConfig = Layer.succeed(ConfigService, ConfigService.of({
-    llm: {
-      provider: "anthropic" as const,
-      model: "claude-haiku-4-5",
-      apiKey: Secret.fromString("test-key"),
-      temperature: 0,
-      maxTokens: 4096,
-      timeoutMs: 30000,
-      enablePromptCaching: true
-    },
-    runtime: {
-      concurrency: 4,
-      llmConcurrencyLimit: 2,
-      retryMaxAttempts: 3,
-      retryInitialDelayMs: 1000,
-      retryMaxDelayMs: 10000,
-      enableTracing: false
-    },
-    storage: {
-      type: "local" as const,
-      bucket: Option.none(),
-      localPath: Option.some("../../"),
-      prefix: ""
-    },
-    rdf: {
-      baseNamespace: "http://example.org/",
-      outputFormat: "Turtle" as const,
-      prefixes: {
-        schema: "http://schema.org/",
-        rdf: "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-        rdfs: "http://www.w3.org/2000/01/rdf-schema#",
-        owl: "http://www.w3.org/2002/07/owl#",
-        xsd: "http://www.w3.org/2001/XMLSchema#"
+  const TestConfig = Layer.succeed(
+    ConfigService,
+    ConfigService.of({
+      llm: {
+        provider: "anthropic" as const,
+        model: "claude-haiku-4-5",
+        apiKey: Secret.fromString("test-key"),
+        temperature: 0,
+        maxTokens: 4096,
+        timeoutMs: 30000,
+        enablePromptCaching: true
+      },
+      runtime: {
+        concurrency: 4,
+        llmConcurrencyLimit: 2,
+        retryMaxAttempts: 3,
+        retryInitialDelayMs: 1000,
+        retryMaxDelayMs: 10000,
+        enableTracing: false
+      },
+      storage: {
+        type: "local" as const,
+        bucket: Option.none(),
+        localPath: Option.some("../../"),
+        prefix: ""
+      },
+      rdf: {
+        baseNamespace: "http://example.org/",
+        outputFormat: "Turtle" as const,
+        prefixes: {
+          schema: "http://schema.org/",
+          rdf: "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+          rdfs: "http://www.w3.org/2000/01/rdf-schema#",
+          owl: "http://www.w3.org/2002/07/owl#",
+          xsd: "http://www.w3.org/2001/XMLSchema#"
+        }
+      },
+      ontology: {
+        path: "ontologies/football/ontology.ttl",
+        externalVocabsPath: "ontologies/external/merged-external.ttl",
+        registryPath: Option.none(),
+        cacheTtlSeconds: 300,
+        strictValidation: false
+      },
+      grounder: {
+        enabled: true,
+        confidenceThreshold: 0.8,
+        batchSize: 5
+      },
+      embedding: {
+        model: "nomic-embed-text-v1.5",
+        dimension: 768,
+        transformersModelId: "Xenova/nomic-embed-text-v1",
+        cachePath: Option.none(),
+        cacheTtlHours: 24,
+        cacheMaxEntries: 10000,
+        entityIndexPath: Option.none()
+      },
+      extraction: {
+        runsDir: "/tmp/test-runs",
+        strictPersistence: false
+      },
+      entityRegistry: {
+        enabled: false,
+        candidateThreshold: 0.6,
+        resolutionThreshold: 0.8,
+        maxCandidatesPerEntity: 20,
+        maxBlockingCandidates: 100,
+        canonicalNamespace: "http://example.org/entities/"
+      },
+      inference: {
+        enabled: false,
+        profile: "rdfs" as const,
+        persistDerived: true
+      },
+      api: {
+        keys: Option.none(),
+        requireAuth: false
+      },
+      jina: {
+        apiKey: Option.none(),
+        rateLimitRpm: 20,
+        timeoutMs: 30_000,
+        maxConcurrent: 5,
+        baseUrl: "https://r.jina.ai"
       }
-    },
-    ontology: {
-      path: "ontologies/football/ontology.ttl",
-      externalVocabsPath: "ontologies/external/merged-external.ttl",
-      registryPath: Option.none(),
-      cacheTtlSeconds: 300,
-      strictValidation: false
-    },
-    grounder: {
-      enabled: true,
-      confidenceThreshold: 0.8,
-      batchSize: 5
-    },
-    embedding: {
-      model: "nomic-embed-text-v1.5",
-      dimension: 768,
-      transformersModelId: "Xenova/nomic-embed-text-v1",
-      cachePath: Option.none(),
-      cacheTtlHours: 24,
-      cacheMaxEntries: 10000,
-      entityIndexPath: Option.none()
-    },
-    extraction: {
-      runsDir: "/tmp/test-runs",
-      strictPersistence: false
-    },
-    entityRegistry: {
-      enabled: false,
-      candidateThreshold: 0.6,
-      resolutionThreshold: 0.8,
-      maxCandidatesPerEntity: 20,
-      maxBlockingCandidates: 100,
-      canonicalNamespace: "http://example.org/entities/"
-    },
-    inference: {
-      enabled: false,
-      profile: "rdfs" as const,
-      persistDerived: true
-    },
-    api: {
-      keys: Option.none(),
-      requireAuth: false
-    },
-    jina: {
-      apiKey: Option.none(),
-      rateLimitRpm: 20,
-      timeoutMs: 30_000,
-      maxConcurrent: 5,
-      baseUrl: "https://r.jina.ai"
-    }
-  }))
+    })
+  )
 
   // Chain layers to satisfy dependencies:
   // Ontology -> (Nlp, Rdf, Storage)

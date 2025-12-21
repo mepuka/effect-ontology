@@ -52,7 +52,7 @@ export interface GenerateObjectWithRetryOptions<A, I extends Record<string, unkn
   /**
    * Optional callback to annotate success logs with domain-specific info
    */
-  readonly annotateSuccess?: (response: LanguageModel.GenerateObjectResponse<{}, A>) => Record<string, unknown>
+  readonly annotateSuccess?: (response: LanguageModel.GenerateObjectResponse<any, A>) => Record<string, unknown>
   /**
    * Whether to enable prompt caching (only applies when prompt is StructuredPrompt)
    */
@@ -128,7 +128,7 @@ export const generateObjectWithRetry = <A, I extends Record<string, unknown>, R>
           })
         ])
       ),
-      Effect.tap((response: LanguageModel.GenerateObjectResponse<{}, A>) =>
+      Effect.tap((response: LanguageModel.GenerateObjectResponse<any, A>) =>
         Effect.gen(function*() {
           const retries = yield* Ref.get(retryCount)
           const successAnnotations = annotateSuccess ? annotateSuccess(response) : {}

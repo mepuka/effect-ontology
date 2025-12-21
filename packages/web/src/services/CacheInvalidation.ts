@@ -11,8 +11,8 @@
 
 import { Atom, type Registry } from "@effect-atom/atom"
 import { Effect } from "effect"
-import { getReactivityKeys } from "./EventHandlers.js"
 import type { ClientEventEntry } from "./EventBusClient.js"
+import { getReactivityKeys } from "./EventHandlers.js"
 
 // =============================================================================
 // Invalidation Trigger Atoms
@@ -24,18 +24,14 @@ import type { ClientEventEntry } from "./EventBusClient.js"
  * When this atom is updated, all dependent atoms for that ontology
  * will re-fetch their data. The value is a timestamp.
  */
-export const invalidationTriggerAtom = Atom.family((_ontologyId: string) =>
-  Atom.make<number>(Date.now())
-)
+export const invalidationTriggerAtom = Atom.family((_ontologyId: string) => Atom.make<number>(Date.now()))
 
 /**
  * Per-key invalidation triggers
  *
  * Used for fine-grained invalidation of specific data types.
  */
-export const keyInvalidationTriggerAtom = Atom.family((_key: string) =>
-  Atom.make<number>(Date.now())
-)
+export const keyInvalidationTriggerAtom = Atom.family((_key: string) => Atom.make<number>(Date.now()))
 
 // =============================================================================
 // Reactivity Key to Atom Mapping
@@ -47,7 +43,7 @@ export const keyInvalidationTriggerAtom = Atom.family((_key: string) =>
  * This determines which data is invalidated when an event occurs.
  * The prefix is combined with ontologyId for scoped invalidation.
  */
-const REACTIVITY_KEY_MAPPING: Record<string, string[]> = {
+const REACTIVITY_KEY_MAPPING: Record<string, Array<string>> = {
   // From EventHandlers.ts
   claims: ["timeline", "claims"],
   timeline: ["timeline"],
@@ -148,9 +144,9 @@ export const requiresInvalidation = (eventType: string): boolean => {
 export const getInvalidationKeys = (
   eventType: string,
   ontologyId: string
-): string[] => {
+): Array<string> => {
   const reactivityKeys = getReactivityKeys(eventType)
-  const invalidationKeys: string[] = [`${ontologyId}:*`]
+  const invalidationKeys: Array<string> = [`${ontologyId}:*`]
 
   for (const key of reactivityKeys) {
     const mappings = REACTIVITY_KEY_MAPPING[key] ?? [key]

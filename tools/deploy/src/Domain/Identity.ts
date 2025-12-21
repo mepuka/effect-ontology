@@ -55,7 +55,7 @@ export type Region = typeof Region.Type
  * Format: (gcr.io|us-docker.pkg.dev)/project/repo:tag
  */
 export const DockerImage = Schema.String.pipe(
-  Schema.pattern(/^(gcr\.io|[a-z]+-docker\.pkg\.dev)\/[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._\/-]*:[a-z0-9._-]+$/),
+  Schema.pattern(/^(gcr\.io|[a-z]+-docker\.pkg\.dev)\/[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._/-]*:[a-z0-9._-]+$/),
   Schema.brand("DockerImage"),
   Schema.annotations({
     title: "Docker Image",

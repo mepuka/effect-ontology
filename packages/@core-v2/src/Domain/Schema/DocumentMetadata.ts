@@ -406,14 +406,16 @@ export class PreprocessingActivityInput extends Schema.Class<PreprocessingActivi
  * @since 2.3.0
  * @category Activity
  */
-export class PreprocessingActivityOutput extends Schema.Class<PreprocessingActivityOutput>("PreprocessingActivityOutput")({
-  /** URI of the enriched manifest */
-  enrichedManifestUri: GcsUri,
-  /** Preprocessing statistics */
-  stats: PreprocessingStats,
-  /** Duration in milliseconds */
-  durationMs: Schema.Number.pipe(Schema.greaterThanOrEqualTo(0))
-}) {}
+export class PreprocessingActivityOutput
+  extends Schema.Class<PreprocessingActivityOutput>("PreprocessingActivityOutput")({
+    /** URI of the enriched manifest */
+    enrichedManifestUri: GcsUri,
+    /** Preprocessing statistics */
+    stats: PreprocessingStats,
+    /** Duration in milliseconds */
+    durationMs: Schema.Number.pipe(Schema.greaterThanOrEqualTo(0))
+  })
+{}
 
 // =============================================================================
 // Helper Functions

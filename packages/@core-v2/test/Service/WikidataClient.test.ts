@@ -14,8 +14,7 @@ describe("WikidataClient", () => {
         expect(client.validateQid("Q42")).toBe(true)
         expect(client.validateQid("Q1")).toBe(true)
         expect(client.validateQid("Q123456789")).toBe(true)
-      }).pipe(Effect.provide(WikidataClient.Default))
-    )
+      }).pipe(Effect.provide(WikidataClient.Default)))
 
     it.effect("rejects invalid Q-IDs", () =>
       Effect.gen(function*() {
@@ -24,8 +23,7 @@ describe("WikidataClient", () => {
         expect(client.validateQid("Q")).toBe(false) // Missing number
         expect(client.validateQid("42")).toBe(false) // Missing Q prefix
         expect(client.validateQid("QAbc")).toBe(false) // Letters instead of numbers
-      }).pipe(Effect.provide(WikidataClient.Default))
-    )
+      }).pipe(Effect.provide(WikidataClient.Default)))
   })
 
   describe("scoring", () => {
@@ -57,7 +55,6 @@ describe("WikidataClient", () => {
         expect(results[0].label).toBeDefined()
         expect(results[0].score).toBeGreaterThanOrEqual(0)
         expect(results[0].score).toBeLessThanOrEqual(100)
-      }).pipe(Effect.provide(WikidataClient.Default))
-    )
+      }).pipe(Effect.provide(WikidataClient.Default)))
   })
 })

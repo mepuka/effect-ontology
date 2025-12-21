@@ -23,7 +23,8 @@ import { StorageServiceTest } from "../../src/Service/Storage.js"
 import { iri } from "../Utils/iri.js"
 
 // Sample test image data (tiny 1x1 PNG)
-const TINY_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+const TINY_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 const TINY_PNG_BYTES = Uint8Array.from(atob(TINY_PNG_BASE64), (c) => c.charCodeAt(0))
 
 // Test layers
@@ -57,7 +58,7 @@ describe("imagesToPromptParts", () => {
   })
 
   it("uses position in filename", () => {
-    const images: ImageForPrompt[] = [
+    const images: Array<ImageForPrompt> = [
       { ...sampleImage, position: 0 },
       { ...sampleImage, position: 1 },
       { ...sampleImage, position: 2 }
@@ -123,7 +124,7 @@ describe("buildMultimodalUserContent", () => {
   })
 
   it("handles multiple images", () => {
-    const images: ImageForPrompt[] = [
+    const images: Array<ImageForPrompt> = [
       { ...sampleImage, position: 0, alt: "First" },
       { ...sampleImage, position: 1, alt: "Second" }
     ]

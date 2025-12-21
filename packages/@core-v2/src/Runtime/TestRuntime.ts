@@ -134,7 +134,7 @@ export const MockShaclService = (options?: {
           durationMs: 0
         }),
       loadShapes: (turtle: string) =>
-        Effect.gen(function*() {
+        Effect.sync(() => {
           const parser = new N3.Parser()
           const store = new N3.Store()
           parser.parse(turtle).forEach((quad) => store.addQuad(quad))

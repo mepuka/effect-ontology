@@ -8,10 +8,10 @@
  * @module Repository/CachedClaim
  */
 
-import { Cache, Duration, Effect, Layer, Option } from "effect"
+import { Cache, Duration, Effect } from "effect"
 import { ClaimRepository } from "./Claim.js"
-import type { ClaimFilter, ClaimId, CorrectionId } from "./Claim.js"
-import type { ClaimInsertRow, ClaimRow, CorrectionInsertRow } from "./schema.js"
+import type { ClaimId, CorrectionId } from "./Claim.js"
+import type { ClaimInsertRow } from "./schema.js"
 
 // =============================================================================
 // Cache Configuration
@@ -39,7 +39,7 @@ const SUBJECT_CACHE_TTL = Duration.hours(1)
 export class CachedClaimRepository extends Effect.Service<CachedClaimRepository>()(
   "CachedClaimRepository",
   {
-    effect: Effect.gen(function* () {
+    effect: Effect.gen(function*() {
       const repo = yield* ClaimRepository
 
       // Single claim lookup cache
@@ -93,12 +93,10 @@ export class CachedClaimRepository extends Effect.Service<CachedClaimRepository>
       // Invalidate caches on batch insert
       const insertClaimsBatch = (claimList: Array<ClaimInsertRow>) =>
         repo.insertClaimsBatch(claimList).pipe(
-          Effect.tap((results) =>
+          Effect.tap((_results) =>
             Effect.all(
               // Invalidate subject caches for all affected subjects
-              [...new Set(claimList.map((c) => c.subjectIri))].map((iri) =>
-                subjectCache.invalidate(iri)
-              ),
+              [...new Set(claimList.map((c) => c.subjectIri))].map((iri) => subjectCache.invalidate(iri)),
               { concurrency: "unbounded", discard: true }
             )
           )
@@ -107,11 +105,9 @@ export class CachedClaimRepository extends Effect.Service<CachedClaimRepository>
       // Invalidate caches on upsert batch
       const upsertClaimsBatch = (claimList: Array<ClaimInsertRow>) =>
         repo.upsertClaimsBatch(claimList).pipe(
-          Effect.tap((results) =>
+          Effect.tap((_results) =>
             Effect.all(
-              [...new Set(claimList.map((c) => c.subjectIri))].map((iri) =>
-                subjectCache.invalidate(iri)
-              ),
+              [...new Set(claimList.map((c) => c.subjectIri))].map((iri) => subjectCache.invalidate(iri)),
               { concurrency: "unbounded", discard: true }
             )
           )

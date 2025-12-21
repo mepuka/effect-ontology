@@ -17,18 +17,10 @@
  */
 
 import { Activity } from "@effect/workflow"
-import { Chunk, Context, DateTime, Effect, Option, Schedule, Schema } from "effect"
+import { DateTime, Effect, Option, Schedule } from "effect"
 import * as Crypto from "node:crypto"
 import { ActivityError, notFoundError, toActivityError } from "../Domain/Error/Activity.js"
-import {
-  type BatchId,
-  type ContentHash,
-  DocumentId,
-  GcsUri,
-  type Namespace,
-  type OntologyName,
-  toGcsUri
-} from "../Domain/Identity.js"
+import { type BatchId, type ContentHash, type Namespace, type OntologyName, toGcsUri } from "../Domain/Identity.js"
 import { Entity, KnowledgeGraph } from "../Domain/Model/Entity.js"
 import { ChunkingConfig, LlmConfig, RunConfig } from "../Domain/Model/ExtractionRun.js"
 import { OntologyRef } from "../Domain/Model/Ontology.js"

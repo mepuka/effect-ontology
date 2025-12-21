@@ -89,9 +89,7 @@ const makeEventBridge = Effect.gen(function*() {
           })
         ),
         Stream.runDrain,
-        Effect.catchAll((error) =>
-          Effect.logError("EventBridge stream error", { error: String(error) })
-        ),
+        Effect.catchAll((error) => Effect.logError("EventBridge stream error", { error: String(error) })),
         Effect.fork
       )
 

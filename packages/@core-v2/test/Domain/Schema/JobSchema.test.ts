@@ -7,7 +7,13 @@
 
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
-import { EmbeddingJob, PromptCacheJob, SimilarityRecomputeJob, BlockingTokenJob, WebhookJob } from "../../../src/Domain/Schema/JobSchema.js"
+import {
+  BlockingTokenJob,
+  EmbeddingJob,
+  PromptCacheJob,
+  SimilarityRecomputeJob,
+  WebhookJob
+} from "../../../src/Domain/Schema/JobSchema.js"
 
 describe("JobSchema", () => {
   const now = 1734800000000 // Fixed timestamp for purity testing

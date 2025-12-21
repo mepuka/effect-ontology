@@ -9,7 +9,6 @@
 import { LanguageModel } from "@effect/ai"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Layer, Option, Secret } from "effect"
-import { TestConfigProviderLayer } from "../../setup.js"
 import * as N3 from "n3"
 import { ClassDefinition, OntologyContext, PropertyDefinition } from "../../../src/Domain/Model/Ontology.js"
 import type { IRI } from "../../../src/Domain/Rdf/Types.js"
@@ -23,6 +22,7 @@ import {
 import { ConfigService } from "../../../src/Service/Config.js"
 import type { RdfStore } from "../../../src/Service/Rdf.js"
 import type { ShaclValidationReport, ShaclViolation } from "../../../src/Service/Shacl.js"
+import { TestConfigProviderLayer } from "../../setup.js"
 
 // =============================================================================
 // Test Fixtures
@@ -232,16 +232,16 @@ const MockConfigService = Layer.succeed(ConfigService, {
     keys: Option.none(),
     requireAuth: false
   },
-          jina: {
-            apiKey: Option.none(),
-            rateLimitRpm: 20,
-            timeoutMs: 30_000,
-            maxConcurrent: 5,
-            baseUrl: "https://r.jina.ai"
-          }
-        } as ConfigService)
-      
-  /**
+  jina: {
+    apiKey: Option.none(),
+    rateLimitRpm: 20,
+    timeoutMs: 30_000,
+    maxConcurrent: 5,
+    baseUrl: "https://r.jina.ai"
+  }
+} as ConfigService)
+
+/**
  * Mock LanguageModel that returns predefined correction responses
  */
 const createMockLlm = (response: {

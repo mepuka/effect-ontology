@@ -6,11 +6,11 @@ export * from "./DocumentMetadata.js"
 export * from "./KnowledgeModel.js"
 export * from "./OntologyRegistry.js"
 // Shacl types are re-exported via Batch.js, plus the additional types:
-export { ShaclViolation, ShaclValidationReport } from "./Shacl.js"
+export { ShaclValidationReport, ShaclViolation } from "./Shacl.js"
 // Note: Timeline.ts re-exports ClaimRank from KnowledgeModel, use explicit exports to avoid conflict
 export * from "./LinkIngestion.js"
-export * from "./Search.js"
 export * from "./OntologyBrowser.js"
+export * from "./Search.js"
 export {
   ArticleDetailResponse,
   ArticleSummary,

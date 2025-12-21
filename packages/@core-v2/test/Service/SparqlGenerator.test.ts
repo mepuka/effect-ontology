@@ -167,16 +167,16 @@ const MockConfigService = Layer.succeed(ConfigService, {
     keys: Option.none(),
     requireAuth: false
   },
-          jina: {
-            apiKey: Option.none(),
-            rateLimitRpm: 20,
-            timeoutMs: 30_000,
-            maxConcurrent: 5,
-            baseUrl: "https://r.jina.ai"
-          }
-        } as ConfigService)
-      
-  /**
+  jina: {
+    apiKey: Option.none(),
+    rateLimitRpm: 20,
+    timeoutMs: 30_000,
+    maxConcurrent: 5,
+    baseUrl: "https://r.jina.ai"
+  }
+} as ConfigService)
+
+/**
  * Mock LanguageModel that returns predefined SPARQL responses
  */
 const createMockLlm = (sparql: string, confidence: number = 0.9) =>

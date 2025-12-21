@@ -272,8 +272,7 @@ export const PathLayout = {
     /**
      * Image variant: assets/images/{hash}/variants/{size}.jpg
      */
-    variant: (hash: string, size: ImageVariantSize): ImageVariantPath =>
-      `assets/images/${hash}/variants/${size}.jpg`,
+    variant: (hash: string, size: ImageVariantSize): ImageVariantPath => `assets/images/${hash}/variants/${size}.jpg`,
 
     /**
      * Owner image manifest: assets/owners/{ownerType}/{ownerId}/images/manifest.json
@@ -284,7 +283,6 @@ export const PathLayout = {
     /**
      * Base path for all images of an owner
      */
-    ownerBase: (ownerType: ImageOwnerType, ownerId: string): string =>
-      `assets/owners/${ownerType}/${ownerId}/images`
+    ownerBase: (ownerType: ImageOwnerType, ownerId: string): string => `assets/owners/${ownerType}/${ownerId}/images`
   }
 } as const

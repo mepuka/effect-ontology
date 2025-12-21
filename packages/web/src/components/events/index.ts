@@ -5,4 +5,4 @@
  */
 
 export { ConnectionIndicator, ConnectionIndicatorIcon } from "./ConnectionIndicator"
-export { EventTimeline, EventListCompact } from "./EventTimeline"
+export { EventListCompact, EventTimeline } from "./EventTimeline"

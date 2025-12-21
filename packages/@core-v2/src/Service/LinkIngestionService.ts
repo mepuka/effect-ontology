@@ -32,7 +32,6 @@ import { and, eq, sql } from "drizzle-orm"
 import { Cache, Data, Duration, Effect, Option } from "effect"
 import type { EnrichedContent } from "../Domain/Model/EnrichedContent.js"
 import { type IngestedLinkInsertRow, type IngestedLinkRow, ingestedLinks } from "../Repository/schema.js"
-import { ConfigService } from "./Config.js"
 import { ContentEnrichmentAgent } from "./ContentEnrichmentAgent.js"
 import { ImageExtractor } from "./ImageExtractor.js"
 import { ImageFetcher } from "./ImageFetcher.js"
@@ -151,7 +150,6 @@ export class LinkIngestionService extends Effect.Service<LinkIngestionService>()
       const storage = yield* StorageService
       const enricher = yield* ContentEnrichmentAgent
       const drizzle = yield* Pg.PgDrizzle
-      const config = yield* ConfigService
       const imageExtractor = yield* ImageExtractor
       const imageFetcher = yield* ImageFetcher
       const imageStore = yield* ImageStore
@@ -196,10 +194,10 @@ export class LinkIngestionService extends Effect.Service<LinkIngestionService>()
       ): Effect.Effect<IngestResult, LinkIngestionError> =>
         Effect.gen(function*() {
           const {
-            ontologyId,
             enrich = true,
             extractImages = true,
             metadata = {},
+            ontologyId,
             skipDuplicates = true,
             sourceType
           } = options

@@ -51,8 +51,7 @@ export const getIdentity = Identity
  *
  * @since 1.0.0
  */
-export const makeRandomIdentity = () =>
-  Effect.sync(() => Identity.makeRandom())
+export const makeRandomIdentity = () => Effect.sync(() => Identity.makeRandom())
 
 /**
  * Clear the stored identity
@@ -80,5 +79,4 @@ export const identityToString = (identity: typeof Identity.Service) =>
  *
  * @since 1.0.0
  */
-export const hasStoredIdentity = () =>
-  Effect.sync(() => localStorage.getItem("effect-ontology-identity") !== null)
+export const hasStoredIdentity = () => Effect.sync(() => localStorage.getItem("effect-ontology-identity") !== null)

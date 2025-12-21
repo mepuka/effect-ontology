@@ -200,7 +200,13 @@ const ingestLinkHandler = (
 
 export const ingestLinkCommand = Command.make(
   "ingest-link",
-  { url: ingestUrlArg, ontologyId: ontologyIdOption, skipEnrich: skipEnrichOption, sourceType: sourceTypeOption, allowDuplicates: noDuplicateOption },
+  {
+    url: ingestUrlArg,
+    ontologyId: ontologyIdOption,
+    skipEnrich: skipEnrichOption,
+    sourceType: sourceTypeOption,
+    allowDuplicates: noDuplicateOption
+  },
   ({ allowDuplicates, ontologyId, skipEnrich, sourceType, url }) =>
     withErrorHandler(ingestLinkHandler(url, ontologyId, skipEnrich, sourceType, allowDuplicates))
 ).pipe(
@@ -262,7 +268,7 @@ const documentsHandler = (
     })
 
     if (jsonOutput) {
-      const output = documents.map((doc) => ({
+      const output = documents.map((doc: any) => ({
         id: doc.id,
         contentHash: doc.contentHash,
         sourceUri: doc.sourceUri,
@@ -371,11 +377,11 @@ const ingestBatchHandler = (
 
     // Count results using declarative operations
     const counts = results.reduce(
-      (acc, result) => {
+      (acc, result: IngestResult | LinkIngestionError) => {
         if (result instanceof LinkIngestionError) {
           return { ...acc, errorCount: acc.errorCount + 1 }
         } else {
-          const ingestResult = result as IngestResult
+          const ingestResult = result
           if (ingestResult.duplicate) {
             return { ...acc, duplicateCount: acc.duplicateCount + 1 }
           } else {
@@ -398,7 +404,8 @@ const ingestBatchHandler = (
 export const ingestBatchCommand = Command.make(
   "ingest-batch",
   { file: urlsFileArg, ontologyId: ontologyIdOption, concurrency: concurrencyOption, skipEnrich: skipEnrichOption },
-  ({ concurrency, file, ontologyId, skipEnrich }) => withErrorHandler(ingestBatchHandler(file, ontologyId, concurrency, skipEnrich))
+  ({ concurrency, file, ontologyId, skipEnrich }) =>
+    withErrorHandler(ingestBatchHandler(file, ontologyId, concurrency, skipEnrich))
 ).pipe(
   Command.withDescription("Bulk ingest URLs from a file")
 )

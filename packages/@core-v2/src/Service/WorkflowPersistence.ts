@@ -9,7 +9,7 @@
 
 import { Persistence } from "@effect/experimental"
 import { KeyValueStore } from "@effect/platform"
-import { Context, Effect, Layer, Option } from "effect"
+import { Effect, Layer, Option } from "effect"
 import { StorageService, StorageServiceLive, StorageServiceTest } from "./Storage.js"
 
 // -----------------------------------------------------------------------------

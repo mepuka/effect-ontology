@@ -7,7 +7,6 @@
 import { LanguageModel } from "@effect/ai"
 import { describe, expect, it } from "@effect/vitest"
 import { Chunk, Context, DateTime, Effect, Layer, Option, Secret } from "effect"
-import { TestConfigProviderLayer } from "../setup.js"
 import { Entity, KnowledgeGraph, Relation } from "../../src/Domain/Model/Entity.js"
 import {
   EnhancedValidationReport,
@@ -30,6 +29,7 @@ import { ShaclService, ShaclValidationReport, ShaclViolation, ValidationPolicy }
 import { SparqlService } from "../../src/Service/Sparql.js"
 import { SparqlGenerator } from "../../src/Service/SparqlGenerator.js"
 import { StorageService } from "../../src/Service/Storage.js"
+import { TestConfigProviderLayer } from "../setup.js"
 
 describe("OntologyAgent Domain Models", () => {
   describe("OntologyAgentConfig", () => {
@@ -115,11 +115,13 @@ describe("OntologyAgent Domain Models", () => {
         const now = yield* DateTime.now
         const report = new ShaclValidationReport({
           conforms: false,
-          violations: [new ShaclViolation({
-            focusNode: "http://example.org/entity1",
-            message: "Missing required property",
-            severity: "Violation" as const
-          })],
+          violations: [
+            new ShaclViolation({
+              focusNode: "http://example.org/entity1",
+              message: "Missing required property",
+              severity: "Violation" as const
+            })
+          ],
           validatedAt: now,
           dataGraphTripleCount: 10,
           shapesGraphTripleCount: 5,

@@ -7,9 +7,9 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Layer } from "effect"
 import { InferenceRunRequest } from "../../src/Domain/Schema/Inference.js"
-import { Reasoner } from "../../src/Service/Reasoner.js"
-import { RdfBuilder } from "../../src/Service/Rdf.js"
 import { ConfigServiceDefault } from "../../src/Service/Config.js"
+import { RdfBuilder } from "../../src/Service/Rdf.js"
+import { Reasoner } from "../../src/Service/Reasoner.js"
 import { TestConfigProviderLayer } from "../setup.js"
 
 // =============================================================================
@@ -36,16 +36,13 @@ describe("InferenceRunRequest Schema", () => {
         inputGraph: sampleTurtle
       }
 
-      const request = yield* Effect.try(() =>
-        InferenceRunRequest.make(input)
-      )
+      const request = yield* Effect.try(() => InferenceRunRequest.make(input))
 
       expect(request.inputGraph).toBe(sampleTurtle)
       expect(request.format).toBe("turtle")
       expect(request.profile).toBe("rdfs")
       expect(request.returnDeltaOnly).toBe(true)
-    })
-  )
+    }))
 
   it.effect("parses request with custom profile", () =>
     Effect.gen(function*() {
@@ -55,14 +52,11 @@ describe("InferenceRunRequest Schema", () => {
         returnDeltaOnly: false
       }
 
-      const request = yield* Effect.try(() =>
-        InferenceRunRequest.make(input)
-      )
+      const request = yield* Effect.try(() => InferenceRunRequest.make(input))
 
       expect(request.profile).toBe("rdfs-subclass")
       expect(request.returnDeltaOnly).toBe(false)
-    })
-  )
+    }))
 
   it.effect("parses request with custom rules", () =>
     Effect.gen(function*() {
@@ -74,14 +68,11 @@ describe("InferenceRunRequest Schema", () => {
         ]
       }
 
-      const request = yield* Effect.try(() =>
-        InferenceRunRequest.make(input)
-      )
+      const request = yield* Effect.try(() => InferenceRunRequest.make(input))
 
       expect(request.profile).toBe("custom")
       expect(request.customRules).toHaveLength(1)
-    })
-  )
+    }))
 })
 
 describe("Inference Integration", () => {
@@ -101,7 +92,7 @@ describe("Inference Integration", () => {
       const originalCount = store._store.size
 
       // Run reasoning
-      const { store: enrichedStore, result } = yield* reasoner.reasonCopy(
+      const { result, store: enrichedStore } = yield* reasoner.reasonCopy(
         store,
         { profile: "rdfs", customRules: [], maxIterations: 100 }
       )
@@ -109,8 +100,7 @@ describe("Inference Integration", () => {
       // Should have inferred ex:John rdf:type ex:Agent
       expect(result.inferredTripleCount).toBeGreaterThan(0)
       expect(enrichedStore._store.size).toBeGreaterThan(originalCount)
-    }).pipe(Effect.provide(TestLayer))
-  )
+    }).pipe(Effect.provide(TestLayer)))
 
   it.effect("handles empty graph", () =>
     Effect.gen(function*() {
@@ -124,6 +114,5 @@ describe("Inference Integration", () => {
       )
 
       expect(result.inferredTripleCount).toBe(0)
-    }).pipe(Effect.provide(TestLayer))
-  )
+    }).pipe(Effect.provide(TestLayer)))
 })

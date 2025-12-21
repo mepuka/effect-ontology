@@ -14,8 +14,8 @@
  * @module services/EventBusClient
  */
 
-import * as EventLog from "@effect/experimental/EventLog"
-import { Entry } from "@effect/experimental/EventJournal"
+import type { Entry } from "@effect/experimental/EventJournal"
+import type * as EventLog from "@effect/experimental/EventLog"
 import * as EventLogRemote from "@effect/experimental/EventLogRemote"
 import * as Socket from "@effect/platform/Socket"
 import { Context, Effect, Layer, PubSub, Stream } from "effect"
@@ -126,7 +126,7 @@ export const makeEventBusClient = (ontologyId: string, baseUrl: string) =>
     const eventPubSub = yield* PubSub.bounded<ClientEventEntry>(1000)
 
     // Track seen event IDs to avoid duplicates
-    let seenEventIds = new Set<string>()
+    const seenEventIds = new Set<string>()
 
     /**
      * Poll for new entries and publish to PubSub

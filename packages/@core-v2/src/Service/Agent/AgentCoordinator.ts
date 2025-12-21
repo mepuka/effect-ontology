@@ -39,7 +39,23 @@
  * @module Service/Agent/AgentCoordinator
  */
 
-import { Chunk, Clock, Effect, HashMap, Option, Queue, Ref } from "effect"
+import {
+
+  Clock,
+
+  Deferred,
+
+  Effect,
+
+  HashMap,
+
+  Option,
+
+  Ref
+
+} from "effect"
+
+
 import {
   type Agent,
   AgentCompleted,
@@ -60,11 +76,11 @@ import { ConfigService, ConfigServiceDefault } from "../Config.js"
 import {
   AgentExecutionError,
   AgentNotFoundError,
-  PipelineExecutionError,
-  RefinementResult,
   type AgentTask,
   type PipelineConfig,
+  PipelineExecutionError,
   type RefinementConfig,
+  RefinementResult,
   type RefinementStatus,
   type RegisteredAgent
 } from "./types.js"
@@ -963,9 +979,6 @@ export class AgentCoordinator extends Effect.Service<AgentCoordinator>()("AgentC
             status = "conformant"
             break
           }
-
-          // Count violations for metrics
-          const violationCount = validationReport.violations?.length ?? 0
 
           // Step 2: Correct violations
           const correctionResult = yield* executeAgent(

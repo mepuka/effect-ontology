@@ -15,7 +15,7 @@
 
 import { Effect, Option, Schema } from "effect"
 import type { OntologyRegistry } from "../Domain/Schema/OntologyRegistry.js"
-import { OntologyEntry, OntologyRegistryJson } from "../Domain/Schema/OntologyRegistry.js"
+import { OntologyRegistryJson } from "../Domain/Schema/OntologyRegistry.js"
 import { ConfigService, ConfigServiceDefault } from "./Config.js"
 import { StorageService } from "./Storage.js"
 

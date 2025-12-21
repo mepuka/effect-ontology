@@ -22,7 +22,8 @@
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "@effect/platform"
 import type * as Socket from "@effect/platform/Socket"
 import { PubSub as GCloudPubSub } from "@google-cloud/pubsub"
-import { Config, Context, Effect, FiberMap, Layer, Option, PubSub, Queue, Schema, Stream } from "effect"
+import type { Queue } from "effect"
+import { Config, Context, Effect, FiberMap, Layer, Option, PubSub, Schema, Stream } from "effect"
 import type * as Scope from "effect/Scope"
 import { OntologyService } from "../Service/Ontology.js"
 
@@ -151,8 +152,7 @@ const makeEventBroadcastHubMemory = Effect.gen(function*() {
       return queue
     })
 
-  const getClientCount = (ontologyId: string) =>
-    Effect.succeed(clientCounts.get(ontologyId) ?? 0)
+  const getClientCount = (ontologyId: string) => Effect.succeed(clientCounts.get(ontologyId) ?? 0)
 
   yield* Effect.logInfo("EventBroadcastHub started (memory mode)")
 
@@ -259,8 +259,7 @@ const makeEventBroadcastHubPubSub = Effect.gen(function*() {
       return queue
     })
 
-  const getClientCount = (ontologyId: string) =>
-    Effect.succeed(clientCounts.get(ontologyId) ?? 0)
+  const getClientCount = (ontologyId: string) => Effect.succeed(clientCounts.get(ontologyId) ?? 0)
 
   return EventBroadcastHub.of({
     broadcast,

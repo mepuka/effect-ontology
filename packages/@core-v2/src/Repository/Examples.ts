@@ -9,12 +9,13 @@
  * @module Repository/Examples
  */
 
-import { SqlClient, SqlError } from "@effect/sql"
+import type { SqlError } from "@effect/sql"
+import { SqlClient } from "@effect/sql"
 import * as Pg from "@effect/sql-drizzle/Pg"
-import { and, desc, eq, sql as drizzleSql } from "drizzle-orm"
+import { and, desc, eq } from "drizzle-orm"
 import { Effect, Option } from "effect"
 import { llmExamples } from "./schema.js"
-import type { LlmExampleInsertRow, LlmExampleRow } from "./schema.js"
+import type { LlmExampleRow } from "./schema.js"
 
 // =============================================================================
 // Types
@@ -168,7 +169,7 @@ export class ExamplesRepository extends Effect.Service<ExamplesRepository>()("Ex
       options: ExampleRetrievalOptions = {}
     ): Effect.Effect<Array<ScoredExample>, SqlError.SqlError> =>
       Effect.gen(function*() {
-        const { k = 5, minSimilarity = 0.6, targetClass, targetPredicate, includeNegatives = false } = options
+        const { includeNegatives = false, k = 5, minSimilarity = 0.6, targetClass, targetPredicate } = options
         const vectorStr = formatVector(embedding)
 
         // Build dynamic query based on filters

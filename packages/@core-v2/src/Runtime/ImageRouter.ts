@@ -117,7 +117,6 @@ export const ImageRouter = HttpRouter.empty.pipe(
       })
     })
   ),
-
   // -------------------------------------------------------------------------
   // GET /v1/images/:hash/metadata
   // Get image metadata as JSON
@@ -153,7 +152,6 @@ export const ImageRouter = HttpRouter.empty.pipe(
       })
     })
   ),
-
   // -------------------------------------------------------------------------
   // GET /v1/ontologies/:ontologyId/links/:linkId/images
   // List images for a link (uses contentHash as owner ID)
@@ -162,7 +160,7 @@ export const ImageRouter = HttpRouter.empty.pipe(
     "/v1/ontologies/:ontologyId/links/:linkId/images",
     Effect.gen(function*() {
       const params = yield* HttpRouter.params
-      const { ontologyId, linkId } = params
+      const { linkId, ontologyId } = params
 
       if (!ontologyId || !linkId) {
         return yield* HttpServerResponse.json({
@@ -190,7 +188,6 @@ export const ImageRouter = HttpRouter.empty.pipe(
       })
     })
   ),
-
   // -------------------------------------------------------------------------
   // GET /v1/ontologies/:ontologyId/links/:contentHash/images
   // List images for a link by content hash (preferred)
@@ -222,7 +219,6 @@ export const ImageRouter = HttpRouter.empty.pipe(
       })
     })
   ),
-
   // -------------------------------------------------------------------------
   // GET /v1/ontologies/:ontologyId/documents/:docId/images
   // List images for a document
@@ -231,7 +227,7 @@ export const ImageRouter = HttpRouter.empty.pipe(
     "/v1/ontologies/:ontologyId/documents/:docId/images",
     Effect.gen(function*() {
       const params = yield* HttpRouter.params
-      const { ontologyId, docId } = params
+      const { docId, ontologyId } = params
 
       if (!ontologyId || !docId) {
         return yield* HttpServerResponse.json({
@@ -254,7 +250,6 @@ export const ImageRouter = HttpRouter.empty.pipe(
       })
     })
   ),
-
   // -------------------------------------------------------------------------
   // GET /v1/images/:hash/manifest
   // Get full manifest for an owner (if you know owner type and ID)
@@ -263,7 +258,7 @@ export const ImageRouter = HttpRouter.empty.pipe(
     "/v1/images/manifests/:ownerType/:ownerId",
     Effect.gen(function*() {
       const params = yield* HttpRouter.params
-      const { ownerType, ownerId } = params
+      const { ownerId, ownerType } = params
 
       if (!ownerType || !ownerId) {
         return yield* HttpServerResponse.json({

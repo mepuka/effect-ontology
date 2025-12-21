@@ -8,9 +8,9 @@
  * @module Service/ImageExtractor
  */
 
-import { Context, Effect, Layer } from "effect"
-import type { ImageCandidate } from "../Domain/Model/Image.js"
+import { Context, Layer } from "effect"
 import type { JinaContent } from "../Domain/Model/EnrichedContent.js"
+import type { ImageCandidate } from "../Domain/Model/Image.js"
 
 // =============================================================================
 // Types
@@ -88,32 +88,6 @@ export interface ImageExtractorService {
 const MARKDOWN_IMAGE_PATTERN = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g
 
 /**
- * Check if URL is likely an image based on extension or common patterns
- */
-const isLikelyImageUrl = (url: string): boolean => {
-  const imageExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".bmp", ".ico"]
-  const lowerUrl = url.toLowerCase()
-
-  // Check file extension
-  if (imageExtensions.some((ext) => lowerUrl.includes(ext))) {
-    return true
-  }
-
-  // Common image CDN patterns
-  if (
-    lowerUrl.includes("/image/") ||
-    lowerUrl.includes("/images/") ||
-    lowerUrl.includes("/img/") ||
-    lowerUrl.includes("/photo/") ||
-    lowerUrl.includes("/media/")
-  ) {
-    return true
-  }
-
-  return false
-}
-
-/**
  * Normalize image URL (resolve relative URLs, clean up)
  */
 const normalizeImageUrl = (imageUrl: string, sourceUrl: string): string | null => {
@@ -150,8 +124,8 @@ const parseMarkdownImages = (
   markdown: string,
   sourceUrl: string,
   startOrder: number = 1
-): ImageCandidate[] => {
-  const candidates: ImageCandidate[] = []
+): Array<ImageCandidate> => {
+  const candidates: Array<ImageCandidate> = []
   let order = startOrder
 
   // Reset regex lastIndex
@@ -201,7 +175,7 @@ export class ImageExtractor extends Context.Tag("@core-v2/ImageExtractor")<
     ImageExtractor,
     {
       extractFromJina: (content: JinaContent): ReadonlyArray<ImageCandidate> => {
-        const candidates: ImageCandidate[] = []
+        const candidates: Array<ImageCandidate> = []
 
         // 1. Add featured image as hero (if present)
         if (content.image) {
@@ -218,13 +192,15 @@ export class ImageExtractor extends Context.Tag("@core-v2/ImageExtractor")<
 
         // 2. Extract inline images from markdown content
         const inlineImages = parseMarkdownImages(content.content, content.url, 1)
-        candidates.push(...inlineImages)
+        for (const img of inlineImages) {
+          candidates.push(img)
+        }
 
         return candidates
       },
 
       extract: (input: ImageExtractionInput): ReadonlyArray<ImageCandidate> => {
-        const candidates: ImageCandidate[] = []
+        const candidates: Array<ImageCandidate> = []
 
         // 1. Add featured image as hero (if present)
         if (input.featuredImage) {
@@ -241,7 +217,9 @@ export class ImageExtractor extends Context.Tag("@core-v2/ImageExtractor")<
 
         // 2. Extract inline images from content
         const inlineImages = parseMarkdownImages(input.content, input.sourceUrl, 1)
-        candidates.push(...inlineImages)
+        for (const img of inlineImages) {
+          candidates.push(img)
+        }
 
         return candidates
       },

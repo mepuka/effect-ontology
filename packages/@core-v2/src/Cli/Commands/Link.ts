@@ -12,7 +12,6 @@ import { FileSystem } from "@effect/platform"
 import { Console, Effect, Option, Schema } from "effect"
 import { IriSchema } from "../../Domain/Rdf/Types.js"
 import { RdfBuilder } from "../../Service/Rdf.js"
-import { StorageService } from "../../Service/Storage.js"
 import { WikidataClient } from "../../Service/WikidataClient.js"
 import { withErrorHandler } from "../ErrorHandler.js"
 
@@ -76,7 +75,6 @@ const linkHandler = (
   Effect.gen(function*() {
     const wikidata = yield* WikidataClient
     const rdf = yield* RdfBuilder
-    const storage = yield* StorageService
 
     // Handle search mode
     if (Option.isSome(search)) {
@@ -198,15 +196,15 @@ const linkHandler = (
 export const linkCommand = Command.make(
   "link",
   {
+    dryRun: dryRunOption,
     entityIri: entityIriOption,
-    wikidataId: wikidataIdOption,
     graph: graphOption,
+    limit: limitOption,
     output: outputOption,
     search: searchOption,
-    limit: limitOption,
-    dryRun: dryRunOption
+    wikidataId: wikidataIdOption
   },
-  ({ entityIri, wikidataId, graph, output, search, limit, dryRun }) =>
+  ({ dryRun, entityIri, graph, limit, output, search, wikidataId }) =>
     withErrorHandler(
       linkHandler(entityIri, wikidataId, graph, output, search, limit, dryRun)
     )

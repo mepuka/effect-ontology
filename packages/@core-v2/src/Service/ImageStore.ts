@@ -8,13 +8,13 @@
  * @module Service/ImageStore
  */
 
-import { PlatformError, SystemError } from "@effect/platform/Error"
+import type { PlatformError } from "@effect/platform/Error"
 import { Context, DateTime, Effect, Layer, Option, Schema } from "effect"
 import type { ImageAsset, ImageManifest, ImageOwnerType, ImageRef } from "../Domain/Model/Image.js"
-import { ImageManifestSchema, ImageRefSchema } from "../Domain/Model/Image.js"
+import { ImageManifestSchema } from "../Domain/Model/Image.js"
 import { PathLayout } from "../Domain/PathLayout.js"
 import { ImageBlobStore } from "./ImageBlobStore.js"
-import { GenerationMismatchError, StorageService, StorageServiceLive } from "./Storage.js"
+import { type GenerationMismatchError, StorageService, StorageServiceLive } from "./Storage.js"
 
 // =============================================================================
 // Service Interface
@@ -161,17 +161,6 @@ export class ImageStore extends Context.Tag("@core-v2/ImageStore")<
           yield* storage.setIfGenerationMatch(path, json, generation)
         })
 
-      /**
-       * Create a new empty manifest
-       */
-      const createManifest = (ownerType: ImageOwnerType, ownerId: string): ImageManifest => ({
-        ownerType,
-        ownerId,
-        images: [],
-        totalCount: 0,
-        updatedAt: DateTime.unsafeNow()
-      })
-
       return {
         storeImage: (hash, bytes, contentType, sourceUrl) =>
           Effect.gen(function*() {
@@ -198,7 +187,7 @@ export class ImageStore extends Context.Tag("@core-v2/ImageStore")<
 
             if (Option.isSome(existing)) {
               // Update existing manifest
-              const { manifest, generation } = existing.value
+              const { generation, manifest } = existing.value
 
               // Check if this ref already exists (by assetHash and position)
               const alreadyExists = manifest.images.some(
@@ -248,7 +237,7 @@ export class ImageStore extends Context.Tag("@core-v2/ImageStore")<
             const existing = yield* loadManifestWithGeneration(ownerType, ownerId)
             if (Option.isNone(existing)) return
 
-            const { manifest, generation } = existing.value
+            const { generation, manifest } = existing.value
             const filtered = manifest.images.filter((img) => img.assetHash !== assetHash)
 
             if (filtered.length !== manifest.images.length) {
