@@ -155,7 +155,7 @@ export function DocumentDetailPage() {
   const { ontologyId = "seattle", id } = useParams<{ ontologyId: string; id: string }>()
   const [activeClaimId, setActiveClaimId] = useState<string | null>(null)
 
-  const result = useAtomValue(documentDetailAtom({ ontologyId, id: id! }))
+  const result = useAtomValue(documentDetailAtom(`${ontologyId}:${id}`))
 
   const hasEvidence = Result.isSuccess(result) && result.value.claims.some((c) => c.evidenceText)
 

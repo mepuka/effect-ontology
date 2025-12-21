@@ -63,16 +63,16 @@ export const linksAtom = Atom.family((ontologyId: string) =>
   )
 )
 
-/** Single link detail - uses family pattern for ontologyId + id */
-export const linkDetailAtom = Atom.family(
-  ({ ontologyId, id }: { ontologyId: string; id: string }) =>
-    apiRuntime.atom(() =>
-      Effect.gen(function* () {
-        const api: ApiClientService = yield* ApiClient
-        return yield* api.getLink(ontologyId, id)
-      })
-    )
-)
+/** Single link detail - uses string key "ontologyId:id" for stable identity */
+export const linkDetailAtom = Atom.family((key: string) => {
+  const [ontologyId, id] = key.split(":")
+  return apiRuntime.atom(() =>
+    Effect.gen(function* () {
+      const api: ApiClientService = yield* ApiClient
+      return yield* api.getLink(ontologyId, id)
+    })
+  )
+})
 
 /** Health check - kept alive across component unmounts */
 export const healthAtom = apiRuntime
@@ -148,16 +148,17 @@ export const timelineAtom = Atom.family((ontologyId: string) =>
   )
 )
 
-/** Entity detail - family by ontologyId + iri */
-export const entityDetailAtom = Atom.family(
-  ({ ontologyId, iri }: { ontologyId: string; iri: string }) =>
-    apiRuntime.atom(() =>
-      Effect.gen(function* () {
-        const api: ApiClientService = yield* ApiClient
-        return yield* api.getEntity(ontologyId, iri)
-      })
-    )
-)
+/** Entity detail - uses string key "ontologyId:iri" for stable identity */
+export const entityDetailAtom = Atom.family((key: string) => {
+  const [ontologyId, ...iriParts] = key.split(":")
+  const iri = iriParts.join(":") // IRIs contain colons, rejoin them
+  return apiRuntime.atom(() =>
+    Effect.gen(function* () {
+      const api: ApiClientService = yield* ApiClient
+      return yield* api.getEntity(ontologyId, iri)
+    })
+  )
+})
 
 // =============================================================================
 // Document Atoms
@@ -174,13 +175,13 @@ export const documentsAtom = Atom.family((ontologyId: string) =>
   )
 )
 
-/** Document detail - family by ontologyId + id */
-export const documentDetailAtom = Atom.family(
-  ({ ontologyId, id }: { ontologyId: string; id: string }) =>
-    apiRuntime.atom(() =>
-      Effect.gen(function* () {
-        const api: ApiClientService = yield* ApiClient
-        return yield* api.getDocument(ontologyId, id)
-      })
-    )
-)
+/** Document detail - uses string key "ontologyId:id" for stable identity */
+export const documentDetailAtom = Atom.family((key: string) => {
+  const [ontologyId, id] = key.split(":")
+  return apiRuntime.atom(() =>
+    Effect.gen(function* () {
+      const api: ApiClientService = yield* ApiClient
+      return yield* api.getDocument(ontologyId, id)
+    })
+  )
+})

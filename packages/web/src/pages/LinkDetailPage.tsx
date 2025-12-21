@@ -61,7 +61,7 @@ function DetailCard({ title, children }: { title: string; children: React.ReactN
 
 export function LinkDetailPage() {
   const { ontologyId = "seattle", id } = useParams<{ ontologyId: string; id: string }>()
-  const result = useAtomValue(linkDetailAtom({ ontologyId, id: id! }))
+  const result = useAtomValue(linkDetailAtom(`${ontologyId}:${id}`))
 
   return (
     <PageContainer size="lg">
