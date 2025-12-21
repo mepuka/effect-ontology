@@ -5,10 +5,10 @@
 - [x] Task: Compile a prioritized list of files or modules requiring refactoring. 8ce7b42
 - [x] Task: Conductor - User Manual Verification 'Analysis & Reporting' (Protocol in workflow.md) 11bc65a
 
-## Phase 2: Domain Layer Refactoring
+## Phase 2: Domain Layer Refactoring [checkpoint: 651d406]
 - [x] Task: Refactor Domain schemas and models to strictly use `Effect.Schema` and branded types where applicable. f184bfd
 - [x] Task: Ensure all Domain functions are pure and free of side effects (referential transparency). 3760d63
-- [ ] Task: Conductor - User Manual Verification 'Domain Layer Refactoring' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Domain Layer Refactoring' (Protocol in workflow.md) 651d406
 
 ## Phase 3: Service Layer Refactoring
 - [ ] Task: Update Service definitions to use `Effect.Tag` and `Context` correctly.
