@@ -1,7 +1,7 @@
 # Plan: Effect Code Review & Refactoring
 
 ## Phase 1: Analysis & Reporting
-- [ ] Task: Scan `packages/@core-v2/src` for Effect anti-patterns (e.g., deeply nested pipes, `runPromise` in business logic, lack of `Effect.gen`).
+- [x] Task: Scan `packages/@core-v2/src` for Effect anti-patterns (e.g., deeply nested pipes, `runPromise` in business logic, lack of `Effect.gen`). 8cc17eb
 - [ ] Task: Compile a prioritized list of files or modules requiring refactoring.
 - [ ] Task: Conductor - User Manual Verification 'Analysis & Reporting' (Protocol in workflow.md)
 
