@@ -212,14 +212,14 @@ export class ShaclService extends Context.Tag("@core-v2/ShaclService")<
         const makeReport = (dataStore: N3.Store, shapesStore: N3.Store): Effect.Effect<ShaclValidationReport> =>
           Effect.gen(function*() {
             const now = yield* DateTime.now
-            return {
+            return new ShaclValidationReport({
               conforms,
-              violations: [...violations],
+              violations: violations.map((v) => new ShaclViolation(v)),
               validatedAt: now,
               dataGraphTripleCount: dataStore.size,
               shapesGraphTripleCount: shapesStore.size,
               durationMs: 0
-            }
+            })
           })
 
         return {
@@ -661,14 +661,14 @@ export class ShaclService extends Context.Tag("@core-v2/ShaclService")<
               sourceShape: result.sourceShape?.value
             })) ?? []
 
-            const validationReport: ShaclValidationReport = {
+            const validationReport = new ShaclValidationReport({
               conforms: report.conforms,
-              violations,
+              violations: violations.map((v: any) => new ShaclViolation(v)),
               validatedAt: start,
               dataGraphTripleCount: dataStore.size,
               shapesGraphTripleCount: shapesStore.size,
               durationMs: DateTime.distance(start, end)
-            }
+            })
 
             // Count by severity
             const violationCount = violations.filter((v: ShaclViolation) => v.severity === "Violation").length

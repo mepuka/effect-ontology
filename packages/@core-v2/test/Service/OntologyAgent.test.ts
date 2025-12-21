@@ -26,7 +26,7 @@ import { OntologyService } from "../../src/Service/Ontology.js"
 import { OntologyAgent } from "../../src/Service/OntologyAgent.js"
 import { RdfBuilder } from "../../src/Service/Rdf.js"
 import { Reasoner, ReasoningConfig, ReasoningResult } from "../../src/Service/Reasoner.js"
-import { ShaclService, type ShaclValidationReport } from "../../src/Service/Shacl.js"
+import { ShaclService, ShaclValidationReport, ShaclViolation, ValidationPolicy } from "../../src/Service/Shacl.js"
 import { SparqlService } from "../../src/Service/Sparql.js"
 import { SparqlGenerator } from "../../src/Service/SparqlGenerator.js"
 import { StorageService } from "../../src/Service/Storage.js"
@@ -45,7 +45,7 @@ describe("OntologyAgent Domain Models", () => {
       Effect.gen(function*() {
         const config = new OntologyAgentConfig({
           concurrency: 8,
-          validationPolicy: { failOnViolation: true, failOnWarning: false },
+          validationPolicy: new ValidationPolicy({ failOnViolation: true, failOnWarning: false }),
           chunking: { maxChunkSize: 3000, preserveSentences: true }
         })
         expect(config.concurrency).toBe(8)
@@ -113,18 +113,18 @@ describe("OntologyAgent Domain Models", () => {
           durationMs: 500
         })
         const now = yield* DateTime.now
-        const report: ShaclValidationReport = {
+        const report = new ShaclValidationReport({
           conforms: false,
-          violations: [{
+          violations: [new ShaclViolation({
             focusNode: "http://example.org/entity1",
             message: "Missing required property",
             severity: "Violation" as const
-          }],
+          })],
           validatedAt: now,
           dataGraphTripleCount: 10,
           shapesGraphTripleCount: 5,
           durationMs: 100
-        }
+        })
         const result = new ExtractionResult({
           graph,
           metrics,
