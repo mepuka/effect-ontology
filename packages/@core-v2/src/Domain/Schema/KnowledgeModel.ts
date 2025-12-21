@@ -98,7 +98,7 @@ export type RuleId = typeof RuleId.Type
  * @since 2.0.0
  * @category Evidence
  */
-export const TextSpan = Schema.Struct({
+export class TextSpan extends Schema.Class<TextSpan>("TextSpan")({
   /** Start character offset in source document */
   start: Schema.Number.pipe(
     Schema.int(),
@@ -122,11 +122,16 @@ export const TextSpan = Schema.Struct({
     title: "Text",
     description: "Extracted text from the span"
   })
-}).annotations({
-  title: "Text Span",
-  description: "Character span in source document"
-})
-export type TextSpan = typeof TextSpan.Type
+}) {
+  toJSON() {
+    return {
+      _tag: "TextSpan" as const,
+      start: this.start,
+      end: this.end,
+      text: this.text
+    }
+  }
+}
 
 /**
  * Evidence supporting a claim
@@ -136,7 +141,7 @@ export type TextSpan = typeof TextSpan.Type
  * @since 2.0.0
  * @category Evidence
  */
-export const Evidence = Schema.Struct({
+export class Evidence extends Schema.Class<Evidence>("Evidence")({
   /** Source document URI (GCS or HTTP) */
   documentUri: Schema.Union(GcsUri, Schema.String).annotations({
     title: "Document URI",
@@ -152,11 +157,16 @@ export const Evidence = Schema.Struct({
     title: "Context",
     description: "Section or paragraph context"
   })
-}).annotations({
-  title: "Evidence",
-  description: "Evidence supporting a claim"
-})
-export type Evidence = typeof Evidence.Type
+}) {
+  toJSON() {
+    return {
+      _tag: "Evidence" as const,
+      documentUri: this.documentUri,
+      spans: this.spans.map((s) => s.toJSON()),
+      context: this.context
+    }
+  }
+}
 
 // =============================================================================
 // RDF Object Value
@@ -205,22 +215,22 @@ export type ClaimRank = typeof ClaimRank.Type
  *
  * @example
  * ```typescript
- * const claim = {
+ * const claim = new Claim({
  *   id: "claim-abc123def456" as ClaimId,
  *   subject: "http://example.org/entity/123" as IRI,
  *   predicate: "http://schema.org/name" as IRI,
  *   object: new Literal({ value: "John Doe" }),
  *   documentUri: "gs://bucket/docs/article.txt" as GcsUri,
- *   evidence: { documentUri: "gs://...", spans: [...] },
+ *   evidence: new Evidence({ documentUri: "gs://...", spans: [...] }),
  *   extractedAt: new Date(),
  *   confidence: 0.95
- * }
+ * })
  * ```
  *
  * @since 2.0.0
  * @category Claim
  */
-export const Claim = Schema.Struct({
+export class Claim extends Schema.Class<Claim>("Claim")({
   /** Unique claim identifier */
   id: ClaimId,
   /** Subject IRI of the claim */
@@ -274,11 +284,24 @@ export const Claim = Schema.Struct({
     title: "Valid To",
     description: "End of temporal validity period"
   })
-}).annotations({
-  title: "Claim",
-  description: "Reported fact extracted from a source document"
-})
-export type Claim = typeof Claim.Type
+}) {
+  toJSON() {
+    return {
+      _tag: "Claim" as const,
+      id: this.id,
+      subject: this.subject,
+      predicate: this.predicate,
+      object: this.object instanceof Literal ? this.object.toJSON() : this.object,
+      documentUri: this.documentUri,
+      evidence: this.evidence.toJSON(),
+      extractedAt: this.extractedAt,
+      confidence: this.confidence,
+      rank: this.rank,
+      validFrom: this.validFrom,
+      validTo: this.validTo
+    }
+  }
+}
 
 // =============================================================================
 // Assertion
@@ -304,7 +327,7 @@ export type AssertionStatus = typeof AssertionStatus.Type
  *
  * @example
  * ```typescript
- * const assertion = {
+ * const assertion = new Assertion({
  *   id: "assertion-abc123def456" as AssertionId,
  *   subject: "http://example.org/entity/123" as IRI,
  *   predicate: "http://schema.org/name" as IRI,
@@ -312,13 +335,13 @@ export type AssertionStatus = typeof AssertionStatus.Type
  *   assertedAt: new Date(),
  *   derivedFrom: ["claim-abc123def456" as ClaimId],
  *   status: "accepted"
- * }
+ * })
  * ```
  *
  * @since 2.0.0
  * @category Assertion
  */
-export const Assertion = Schema.Struct({
+export class Assertion extends Schema.Class<Assertion>("Assertion")({
   /** Unique assertion identifier */
   id: AssertionId,
   /** Subject IRI of the assertion */
@@ -358,11 +381,22 @@ export const Assertion = Schema.Struct({
     title: "Valid To",
     description: "End of temporal validity period"
   })
-}).annotations({
-  title: "Assertion",
-  description: "Normalized, curated RDF triple"
-})
-export type Assertion = typeof Assertion.Type
+}) {
+  toJSON() {
+    return {
+      _tag: "Assertion" as const,
+      id: this.id,
+      subject: this.subject,
+      predicate: this.predicate,
+      object: this.object instanceof Literal ? this.object.toJSON() : this.object,
+      assertedAt: this.assertedAt,
+      derivedFrom: this.derivedFrom,
+      status: this.status,
+      validFrom: this.validFrom,
+      validTo: this.validTo
+    }
+  }
+}
 
 // =============================================================================
 // DerivedAssertion
@@ -376,19 +410,19 @@ export type Assertion = typeof Assertion.Type
  *
  * @example
  * ```typescript
- * const derived = {
+ * const derived = new DerivedAssertion({
  *   id: "derived-abc123def456" as DerivedAssertionId,
- *   assertion: { ... },
+ *   assertion: new Assertion({ ... }),
  *   ruleId: "rule-transitivity" as RuleId,
  *   supportingFacts: ["assertion-111..." as AssertionId, ...],
  *   derivedAt: new Date()
- * }
+ * })
  * ```
  *
  * @since 2.0.0
  * @category DerivedAssertion
  */
-export const DerivedAssertion = Schema.Struct({
+export class DerivedAssertion extends Schema.Class<DerivedAssertion>("DerivedAssertion")({
   /** Unique derived assertion identifier */
   id: DerivedAssertionId,
   /** The inferred assertion */
@@ -405,11 +439,18 @@ export const DerivedAssertion = Schema.Struct({
     title: "Derived At",
     description: "Timestamp when derivation was computed"
   })
-}).annotations({
-  title: "Derived Assertion",
-  description: "Assertion inferred by reasoning rule"
-})
-export type DerivedAssertion = typeof DerivedAssertion.Type
+}) {
+  toJSON() {
+    return {
+      _tag: "DerivedAssertion" as const,
+      id: this.id,
+      assertion: this.assertion.toJSON(),
+      ruleId: this.ruleId,
+      supportingFacts: this.supportingFacts,
+      derivedAt: this.derivedAt
+    }
+  }
+}
 
 // =============================================================================
 // Event - First-Class Node
@@ -469,7 +510,7 @@ export type EventType = typeof EventType.Type
  * @since 2.0.0
  * @category Event
  */
-export const EntityRef = Schema.Struct({
+export class EntityRef extends Schema.Class<EntityRef>("EntityRef")({
   /** Entity IRI */
   iri: IriSchema.annotations({
     title: "Entity IRI",
@@ -485,11 +526,16 @@ export const EntityRef = Schema.Struct({
     title: "Label",
     description: "Human-readable label for display"
   })
-}).annotations({
-  title: "Entity Reference",
-  description: "Reference to an entity participating in an event"
-})
-export type EntityRef = typeof EntityRef.Type
+}) {
+  toJSON() {
+    return {
+      _tag: "EntityRef" as const,
+      iri: this.iri,
+      role: this.role,
+      label: this.label
+    }
+  }
+}
 
 /**
  * Event - First-class node for timeline representation
@@ -501,25 +547,25 @@ export type EntityRef = typeof EntityRef.Type
  *
  * @example
  * ```typescript
- * const event = {
+ * const event = new Event({
  *   id: "event-abc123def456" as EventId,
  *   type: "StaffAnnouncement",
  *   title: "City Manager Announces New Finance Director",
- *   eventTime: DateTime.unsafeMake("2024-01-15T09:00:00Z"),
- *   publishedAt: DateTime.unsafeMake("2024-01-15T14:30:00Z"),
+ *   eventTime: new Date("2024-01-15T09:00:00Z"),
+ *   publishedAt: new Date("2024-01-15T14:30:00Z"),
  *   participants: [
- *     { iri: "http://example.org/person/jane_doe" as IRI, role: "appointee" },
- *     { iri: "http://example.org/person/city_manager" as IRI, role: "announcer" }
+ *     new EntityRef({ iri: "http://example.org/person/jane_doe" as IRI, role: "appointee" }),
+ *     new EntityRef({ iri: "http://example.org/person/city_manager" as IRI, role: "announcer" })
  *   ],
  *   factGroup: ["assertion-111..." as AssertionId],
  *   sourceDocuments: ["gs://bucket/docs/press-release.txt" as GcsUri]
- * }
+ * })
  * ```
  *
  * @since 2.0.0
  * @category Event
  */
-export const Event = Schema.Struct({
+export class Event extends Schema.Class<Event>("Event")({
   /** Unique event identifier */
   id: EventId,
 
@@ -607,11 +653,24 @@ export const Event = Schema.Struct({
     title: "Tags",
     description: "Additional categorization tags"
   })
-}).annotations({
-  title: "Event",
-  description: "First-class event node for timeline representation"
-})
-export type Event = typeof Event.Type
+}) {
+  toJSON() {
+    return {
+      _tag: "Event" as const,
+      id: this.id,
+      type: this.type,
+      title: this.title,
+      eventTime: this.eventTime,
+      publishedAt: this.publishedAt,
+      ingestedAt: this.ingestedAt,
+      participants: this.participants.map((p) => p.toJSON()),
+      factGroup: this.factGroup,
+      sourceDocuments: this.sourceDocuments,
+      summary: this.summary,
+      tags: this.tags
+    }
+  }
+}
 
 // =============================================================================
 // Helper Constructors

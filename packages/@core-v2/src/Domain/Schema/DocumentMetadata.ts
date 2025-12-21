@@ -90,7 +90,7 @@ export type ChunkingStrategy = typeof ChunkingStrategy.Type
  * @since 2.3.0
  * @category Chunking
  */
-export const ChunkingParams = Schema.Struct({
+export class ChunkingParams extends Schema.Class<ChunkingParams>("ChunkingParams")({
   /** Target chunk size in characters */
   chunkSize: Schema.Number.pipe(
     Schema.greaterThan(0),
@@ -103,11 +103,7 @@ export const ChunkingParams = Schema.Struct({
   ),
   /** Whether to preserve sentence boundaries */
   preserveSentences: Schema.optional(Schema.Boolean)
-}).annotations({
-  title: "Chunking Parameters",
-  description: "Configuration for text chunking"
-})
-export type ChunkingParams = typeof ChunkingParams.Type
+}) {}
 
 /**
  * Default chunking parameters by strategy
@@ -116,12 +112,12 @@ export type ChunkingParams = typeof ChunkingParams.Type
  * @category Chunking
  */
 export const defaultChunkingParams: Record<ChunkingStrategy, ChunkingParams> = {
-  standard: { chunkSize: 500, overlapSentences: 2, preserveSentences: true },
-  fine_grained: { chunkSize: 300, overlapSentences: 3, preserveSentences: true },
-  high_overlap: { chunkSize: 400, overlapSentences: 4, preserveSentences: true },
-  section_aware: { chunkSize: 800, overlapSentences: 1, preserveSentences: true },
-  speaker_aware: { chunkSize: 1000, overlapSentences: 3, preserveSentences: false },
-  paragraph_based: { chunkSize: 600, overlapSentences: 2, preserveSentences: true }
+  standard: new ChunkingParams({ chunkSize: 500, overlapSentences: 2, preserveSentences: true }),
+  fine_grained: new ChunkingParams({ chunkSize: 300, overlapSentences: 3, preserveSentences: true }),
+  high_overlap: new ChunkingParams({ chunkSize: 400, overlapSentences: 4, preserveSentences: true }),
+  section_aware: new ChunkingParams({ chunkSize: 800, overlapSentences: 1, preserveSentences: true }),
+  speaker_aware: new ChunkingParams({ chunkSize: 1000, overlapSentences: 3, preserveSentences: false }),
+  paragraph_based: new ChunkingParams({ chunkSize: 600, overlapSentences: 2, preserveSentences: true })
 }
 
 // =============================================================================
@@ -137,7 +133,7 @@ export const defaultChunkingParams: Record<ChunkingStrategy, ChunkingParams> = {
  * @since 2.3.0
  * @category Preprocessing
  */
-export const PreprocessingOptions = Schema.Struct({
+export class PreprocessingOptions extends Schema.Class<PreprocessingOptions>("PreprocessingOptions")({
   /**
    * Enable preprocessing stage (default: true)
    *
@@ -185,11 +181,7 @@ export const PreprocessingOptions = Schema.Struct({
     Schema.Number.pipe(Schema.greaterThan(0), Schema.lessThanOrEqualTo(50)),
     { default: () => 10 }
   )
-}).annotations({
-  title: "Preprocessing Options",
-  description: "Configuration for document preprocessing stage"
-})
-export type PreprocessingOptions = typeof PreprocessingOptions.Type
+}) {}
 
 /**
  * Default preprocessing options
@@ -197,14 +189,14 @@ export type PreprocessingOptions = typeof PreprocessingOptions.Type
  * @since 2.3.0
  * @category Preprocessing
  */
-export const defaultPreprocessingOptions: PreprocessingOptions = {
+export const defaultPreprocessingOptions: PreprocessingOptions = new PreprocessingOptions({
   enabled: true,
   classifyDocuments: true,
   adaptiveChunking: true,
   priorityOrdering: true,
   chunkingStrategyOverride: undefined,
   classificationBatchSize: 10
-}
+})
 
 // =============================================================================
 // Document Metadata
@@ -218,6 +210,7 @@ export const defaultPreprocessingOptions: PreprocessingOptions = {
  */
 export const LanguageCode = Schema.String.pipe(
   Schema.pattern(/^[a-z]{2}$/),
+  Schema.brand("LanguageCode"),
   Schema.annotations({
     title: "Language Code",
     description: "ISO 639-1 two-letter language code (e.g., 'en', 'es')"
@@ -250,7 +243,7 @@ export type ComplexityScore = typeof ComplexityScore.Type
  * @since 2.3.0
  * @category Metadata
  */
-export const DocumentMetadata = Schema.Struct({
+export class DocumentMetadata extends Schema.Class<DocumentMetadata>("DocumentMetadata")({
   // === Original ManifestDocument fields ===
   /** Unique document identifier */
   documentId: DocumentId,
@@ -315,11 +308,7 @@ export const DocumentMetadata = Schema.Struct({
   priority: Schema.Number,
   /** Estimated LLM cost for extraction (token estimate) */
   estimatedExtractionCost: Schema.Number.pipe(Schema.greaterThanOrEqualTo(0))
-}).annotations({
-  title: "Document Metadata",
-  description: "Preprocessing metadata for a document including classification and chunking strategy"
-})
-export type DocumentMetadata = typeof DocumentMetadata.Type
+}) {}
 
 // =============================================================================
 // Preprocessing Stats
@@ -331,7 +320,7 @@ export type DocumentMetadata = typeof DocumentMetadata.Type
  * @since 2.3.0
  * @category Stats
  */
-export const PreprocessingStats = Schema.Struct({
+export class PreprocessingStats extends Schema.Class<PreprocessingStats>("PreprocessingStats")({
   /** Total documents in batch */
   totalDocuments: Schema.Number.pipe(Schema.greaterThanOrEqualTo(0)),
   /** Documents successfully classified */
@@ -346,11 +335,7 @@ export const PreprocessingStats = Schema.Struct({
   averageComplexity: ComplexityScore,
   /** Distribution of document types */
   documentTypeDistribution: Schema.Record({ key: Schema.String, value: Schema.Number })
-}).annotations({
-  title: "Preprocessing Stats",
-  description: "Aggregated statistics from document preprocessing"
-})
-export type PreprocessingStats = typeof PreprocessingStats.Type
+}) {}
 
 // =============================================================================
 // Enriched Manifest
@@ -365,7 +350,7 @@ export type PreprocessingStats = typeof PreprocessingStats.Type
  * @since 2.3.0
  * @category Manifest
  */
-export const EnrichedManifest = Schema.Struct({
+export class EnrichedManifest extends Schema.Class<EnrichedManifest>("EnrichedManifest")({
   /** Batch identifier */
   batchId: BatchId,
   /** Ontology URI for extraction */
@@ -384,11 +369,7 @@ export const EnrichedManifest = Schema.Struct({
   preprocessedAt: Schema.DateTimeUtc,
   /** Aggregated preprocessing statistics */
   preprocessingStats: PreprocessingStats
-}).annotations({
-  title: "Enriched Manifest",
-  description: "Batch manifest with preprocessing metadata for all documents"
-})
-export type EnrichedManifest = typeof EnrichedManifest.Type
+}) {}
 
 // =============================================================================
 // Preprocessing Activity I/O
@@ -400,7 +381,7 @@ export type EnrichedManifest = typeof EnrichedManifest.Type
  * @since 2.3.0
  * @category Activity
  */
-export const PreprocessingActivityInput = Schema.Struct({
+export class PreprocessingActivityInput extends Schema.Class<PreprocessingActivityInput>("PreprocessingActivityInput")({
   /** Batch identifier */
   batchId: BatchId,
   /** URI of the original manifest */
@@ -417,11 +398,7 @@ export const PreprocessingActivityInput = Schema.Struct({
    * Optional: skip classification (use defaults)
    */
   skipClassification: Schema.optional(Schema.Boolean)
-}).annotations({
-  title: "Preprocessing Activity Input",
-  description: "Input payload for the preprocessing durable activity"
-})
-export type PreprocessingActivityInput = typeof PreprocessingActivityInput.Type
+}) {}
 
 /**
  * Output from preprocessing activity
@@ -429,18 +406,14 @@ export type PreprocessingActivityInput = typeof PreprocessingActivityInput.Type
  * @since 2.3.0
  * @category Activity
  */
-export const PreprocessingActivityOutput = Schema.Struct({
+export class PreprocessingActivityOutput extends Schema.Class<PreprocessingActivityOutput>("PreprocessingActivityOutput")({
   /** URI of the enriched manifest */
   enrichedManifestUri: GcsUri,
   /** Preprocessing statistics */
   stats: PreprocessingStats,
   /** Duration in milliseconds */
   durationMs: Schema.Number.pipe(Schema.greaterThanOrEqualTo(0))
-}).annotations({
-  title: "Preprocessing Activity Output",
-  description: "Output from the preprocessing durable activity"
-})
-export type PreprocessingActivityOutput = typeof PreprocessingActivityOutput.Type
+}) {}
 
 // =============================================================================
 // Helper Functions

@@ -5,7 +5,7 @@ import { defaultPreprocessingOptions, PreprocessingOptions } from "./DocumentMet
 // Re-export for backwards compatibility
 export { defaultPreprocessingOptions, PreprocessingOptions }
 
-export const BatchRequestDocument = Schema.Struct({
+export class BatchRequestDocument extends Schema.Class<BatchRequestDocument>("BatchRequestDocument")({
   sourceUri: GcsUri,
   contentType: Schema.String,
   sizeBytes: Schema.optional(Schema.Number),
@@ -23,9 +23,9 @@ export const BatchRequestDocument = Schema.Struct({
    * Publication date from the original source (newspaper, website, etc.).
    */
   publishedAt: Schema.optional(Schema.DateTimeUtc)
-})
+}) {}
 
-export const BatchRequest = Schema.Struct({
+export class BatchRequest extends Schema.Class<BatchRequest>("BatchRequest")({
   batchId: Schema.optional(BatchId),
   /** Ontology registry ID (e.g., "seattle") */
   ontologyId: Schema.String,
@@ -51,6 +51,4 @@ export const BatchRequest = Schema.Struct({
    * When omitted, all preprocessing features are enabled with defaults.
    */
   preprocessing: Schema.optional(PreprocessingOptions)
-})
-
-export type BatchRequest = typeof BatchRequest.Type
+}) {}

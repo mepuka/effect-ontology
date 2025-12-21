@@ -16,15 +16,14 @@ import { Schema } from "effect"
  * @since 2.0.0
  * @category Schema
  */
-export const ShaclViolation = Schema.Struct({
+export class ShaclViolation extends Schema.Class<ShaclViolation>("ShaclViolation")({
   focusNode: Schema.String,
   path: Schema.optional(Schema.String),
   value: Schema.optional(Schema.String),
   message: Schema.String,
   severity: Schema.Literal("Violation", "Warning", "Info"),
   sourceShape: Schema.optional(Schema.String)
-})
-export type ShaclViolation = typeof ShaclViolation.Type
+}) {}
 
 /**
  * Validation report structure
@@ -32,15 +31,14 @@ export type ShaclViolation = typeof ShaclViolation.Type
  * @since 2.0.0
  * @category Schema
  */
-export const ShaclValidationReport = Schema.Struct({
+export class ShaclValidationReport extends Schema.Class<ShaclValidationReport>("ShaclValidationReport")({
   conforms: Schema.Boolean,
   violations: Schema.Array(ShaclViolation),
   validatedAt: Schema.DateTimeUtc,
   dataGraphTripleCount: Schema.Number,
   shapesGraphTripleCount: Schema.Number,
   durationMs: Schema.Number
-})
-export type ShaclValidationReport = typeof ShaclValidationReport.Type
+}) {}
 
 /**
  * Validation policy for controlling workflow behavior based on severity
@@ -48,10 +46,9 @@ export type ShaclValidationReport = typeof ShaclValidationReport.Type
  * @since 2.0.0
  * @category Schema
  */
-export const ValidationPolicy = Schema.Struct({
+export class ValidationPolicy extends Schema.Class<ValidationPolicy>("ValidationPolicy")({
   /** Fail if any Violation-level results are present (default: true) */
   failOnViolation: Schema.optional(Schema.Boolean),
   /** Fail if any Warning-level results are present (default: false) */
   failOnWarning: Schema.optional(Schema.Boolean)
-})
-export type ValidationPolicy = typeof ValidationPolicy.Type
+}) {}

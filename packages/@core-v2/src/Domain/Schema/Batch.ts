@@ -15,14 +15,14 @@ import { ValidationPolicy } from "./Shacl.js"
 // Re-export for backward compatibility
 export { ValidationPolicy }
 
-export const ManifestDocument = Schema.Struct({
+export class ManifestDocument extends Schema.Class<ManifestDocument>("ManifestDocument")({
   documentId: DocumentId,
   sourceUri: GcsUri,
   contentType: Schema.String,
   sizeBytes: Schema.Number
-})
+}) {}
 
-export const BatchManifest = Schema.Struct({
+export class BatchManifest extends Schema.Class<BatchManifest>("BatchManifest")({
   batchId: BatchId,
   /** Ontology registry ID (e.g., "seattle") */
   ontologyId: Schema.String,
@@ -42,10 +42,9 @@ export const BatchManifest = Schema.Struct({
    * (useful for development/debugging or when violations are acceptable).
    */
   validationPolicy: Schema.optional(ValidationPolicy)
-})
-export type BatchManifest = typeof BatchManifest.Type
+}) {}
 
-export const ExtractionActivityInput = Schema.Struct({
+export class ExtractionActivityInput extends Schema.Class<ExtractionActivityInput>("ExtractionActivityInput")({
   batchId: BatchId,
   documentId: DocumentId,
   sourceUri: GcsUri,
@@ -82,14 +81,14 @@ export const ExtractionActivityInput = Schema.Struct({
    * Helps with language-specific extraction.
    */
   language: Schema.optional(Schema.String)
-})
+}) {}
 
-export const ResolutionActivityInput = Schema.Struct({
+export class ResolutionActivityInput extends Schema.Class<ResolutionActivityInput>("ResolutionActivityInput")({
   batchId: BatchId,
   documentGraphUris: Schema.Array(GcsUri)
-})
+}) {}
 
-export const ValidationActivityInput = Schema.Struct({
+export class ValidationActivityInput extends Schema.Class<ValidationActivityInput>("ValidationActivityInput")({
   batchId: BatchId,
   resolvedGraphUri: GcsUri,
   /** Ontology URI for generating SHACL shapes (when shaclUri not provided) */
@@ -97,28 +96,30 @@ export const ValidationActivityInput = Schema.Struct({
   shaclUri: Schema.optional(GcsUri),
   /** Policy for handling validation violations (default: failOnViolation=true) */
   validationPolicy: Schema.optional(ValidationPolicy)
-})
-export const ValidationActivityViolationSummary = Schema.Struct({
+}) {}
+
+export class ValidationActivityViolationSummary extends Schema.Class<ValidationActivityViolationSummary>("ValidationActivityViolationSummary")({
   severity: Schema.String,
   count: Schema.Number,
   sampleMessages: Schema.Array(Schema.String)
-})
-export const ValidationActivityOutput = Schema.Struct({
+}) {}
+
+export class ValidationActivityOutput extends Schema.Class<ValidationActivityOutput>("ValidationActivityOutput")({
   validatedUri: GcsUri,
   conforms: Schema.Boolean,
   violations: Schema.Number,
   violationSummary: Schema.optional(Schema.Array(ValidationActivityViolationSummary)),
   reportUri: GcsUri,
   durationMs: Schema.Number
-})
+}) {}
 
-export const IngestionActivityInput = Schema.Struct({
+export class IngestionActivityInput extends Schema.Class<IngestionActivityInput>("IngestionActivityInput")({
   batchId: BatchId,
   validatedGraphUri: GcsUri,
   targetNamespace: Namespace
-})
+}) {}
 
-export const BatchWorkflowPayload = Schema.Struct({
+export class BatchWorkflowPayload extends Schema.Class<BatchWorkflowPayload>("BatchWorkflowPayload")({
   batchId: BatchId,
   /** Ontology registry ID (e.g., "seattle") */
   ontologyId: Schema.String,
@@ -144,5 +145,4 @@ export const BatchWorkflowPayload = Schema.Struct({
    * When omitted, all preprocessing features are enabled with defaults.
    */
   preprocessing: Schema.optional(PreprocessingOptions)
-})
-export type BatchWorkflowPayload = typeof BatchWorkflowPayload.Type
+}) {}
