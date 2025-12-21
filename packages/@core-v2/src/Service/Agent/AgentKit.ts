@@ -20,7 +20,7 @@ import { OntologyService } from "../Ontology.js"
 import { OntologyAgent } from "../OntologyAgent.js"
 import { RdfBuilder, type RdfStore } from "../Rdf.js"
 import { ShaclService } from "../Shacl.js"
-import { StorageService } from "../Storage.js"
+import { StorageService, StorageServiceLive } from "../Storage.js"
 import { AgentCoordinator } from "./AgentCoordinator.js"
 import { CorrectorAgent } from "./CorrectorAgent.js"
 import { AgentTask } from "./types.js"
@@ -223,7 +223,7 @@ export class AgentKit extends Effect.Service<AgentKit>()("AgentKit", {
             ? ValidationResult.pass()
             : ValidationResult.fail(["text is required"])
         ),
-      execute: (task) =>
+      execute: (task): Effect.Effect<AgentTask, AgentInputError | unknown, never> =>
         Effect.gen(function*() {
           if (!task.text) {
             return yield* Effect.fail(
@@ -264,7 +264,7 @@ export class AgentKit extends Effect.Service<AgentKit>()("AgentKit", {
             ? ValidationResult.pass()
             : ValidationResult.fail(["rdfStore, turtle, or knowledgeGraph is required"])
         ),
-      execute: (task) =>
+      execute: (task): Effect.Effect<AgentTask, AgentInputError | unknown, never> =>
         Effect.gen(function*() {
           const rdfStore = yield* resolveStore(task)
           const shapesStore = yield* getShapesStore
@@ -293,7 +293,7 @@ export class AgentKit extends Effect.Service<AgentKit>()("AgentKit", {
             ? ValidationResult.pass()
             : ValidationResult.fail(["validationReport is required"])
         ),
-      execute: (task) =>
+      execute: (task): Effect.Effect<AgentTask, AgentInputError | unknown, never> =>
         Effect.gen(function*() {
           if (!task.validationReport) {
             return yield* Effect.fail(
@@ -337,6 +337,15 @@ export class AgentKit extends Effect.Service<AgentKit>()("AgentKit", {
       registerDefaults
     }
   }),
-  dependencies: [ConfigServiceDefault],
+  dependencies: [
+    ConfigServiceDefault,
+    OntologyAgent.Default,
+    OntologyService.Default,
+    RdfBuilder.Default,
+    ShaclService.Default,
+    StorageServiceLive,
+    CorrectorAgent.Default,
+    AgentCoordinator.Default
+  ],
   accessors: true
 }) {}

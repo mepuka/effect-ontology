@@ -155,7 +155,7 @@ const createTypeViolation = (): ShaclViolation => ({
 // =============================================================================
 
 // Mock ConfigService with required fields for Agent
-const MockConfigService = Layer.succeed(ConfigService, ConfigService.of({
+const MockConfigService = Layer.succeed(ConfigService, {
   llm: {
     provider: "anthropic" as const,
     model: "claude-haiku-4-5",
@@ -232,14 +232,15 @@ const MockConfigService = Layer.succeed(ConfigService, ConfigService.of({
     keys: Option.none(),
     requireAuth: false
   },
-      jina: {
-        apiKey: Option.none(),
-        rateLimitRpm: 20,
-        timeoutMs: 30_000,
-        maxConcurrent: 5,
-        baseUrl: "https://r.jina.ai"
-      }
-    }))
+          jina: {
+            apiKey: Option.none(),
+            rateLimitRpm: 20,
+            timeoutMs: 30_000,
+            maxConcurrent: 5,
+            baseUrl: "https://r.jina.ai"
+          }
+        } as ConfigService)
+      
   /**
  * Mock LanguageModel that returns predefined correction responses
  */

@@ -34,9 +34,9 @@ describe("OntologyService - Football Ontology", () => {
       enableTracing: false
     },
     storage: {
-      type: "memory" as const,
+      type: "local" as const,
       bucket: Option.none(),
-      localPath: Option.none(),
+      localPath: Option.some("../../"),
       prefix: ""
     },
     rdf: {
