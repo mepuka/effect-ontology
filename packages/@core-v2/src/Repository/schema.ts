@@ -359,8 +359,8 @@ export type EntityBlockingTokenInsertRow = typeof entityBlockingTokens.$inferIns
 export const ingestedLinks = pgTable("ingested_links", {
   id: uuid("id").primaryKey().defaultRandom(),
 
-  // Content identification (content-addressed)
-  contentHash: text("content_hash").unique().notNull(),
+  // Content identification (content-addressed, unique per ontology)
+  contentHash: text("content_hash").notNull(),
 
   // Ontology scoping
   ontologyId: text("ontology_id").notNull(),
@@ -411,7 +411,9 @@ export const ingestedLinks = pgTable("ingested_links", {
   index("idx_ingested_links_source_type").on(table.sourceType),
   index("idx_ingested_links_organization").on(table.organization),
   index("idx_ingested_links_ontology_id").on(table.ontologyId),
-  index("idx_ingested_links_ontology_status").on(table.ontologyId, table.status)
+  index("idx_ingested_links_ontology_status").on(table.ontologyId, table.status),
+  // Composite unique: same content can exist in multiple ontologies
+  uniqueIndex("idx_ingested_links_ontology_content_unique").on(table.ontologyId, table.contentHash)
 ])
 
 /**

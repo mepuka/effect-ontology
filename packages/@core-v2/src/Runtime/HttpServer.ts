@@ -56,6 +56,7 @@ import { StorageService } from "../Service/Storage.js"
 import { pollToBatchState, WorkflowOrchestrator } from "../Service/WorkflowOrchestrator.js"
 import { knowledgeGraphToClaims } from "../Utils/ClaimFactory.js"
 import { extractLocalNameFromIri } from "../Utils/Iri.js"
+import { AssetRouter } from "./AssetRouter.js"
 import { EventBroadcastRouter } from "./EventBroadcastRouter.js"
 import { EventStreamRouter } from "./EventStreamRouter.js"
 import { HealthCheckService } from "./HealthCheck.js"
@@ -1776,7 +1777,8 @@ export const ApiRouter = HttpRouter.empty.pipe(
   HttpRouter.concat(LinkIngestionRouter),
   HttpRouter.concat(JobPushRouter),
   HttpRouter.concat(EventStreamRouter),
-  HttpRouter.concat(EventBroadcastRouter)
+  HttpRouter.concat(EventBroadcastRouter),
+  HttpRouter.concat(AssetRouter)
 )
 
 export const HttpServerLive = Layer.unwrapEffect(

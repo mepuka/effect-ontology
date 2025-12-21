@@ -132,32 +132,85 @@ export const ApiClientLive = Layer.effect(
   Effect.gen(function* () {
     const client = yield* HttpClient.HttpClient
 
+    // Extract error message from response body
+    const extractErrorMessage = (body: string, status: number): string => {
+      try {
+        const json = JSON.parse(body)
+        return json.message || json.error || `HTTP ${status}`
+      } catch {
+        return body || `HTTP ${status}`
+      }
+    }
+
+    // Preserve ApiError if already created, otherwise wrap
+    const wrapError = (e: unknown): ApiError => {
+      if (e instanceof ApiError) return e
+      return new ApiError({
+        status: 0, // Network/parse error
+        message: e instanceof Error ? e.message : String(e)
+      })
+    }
+
     // Helper for typed requests with schema validation
     const request = <A, I, R>(
       req: HttpClientRequest.HttpClientRequest,
       schema: Schema.Schema<A, I, R>
-    ) =>
+    ): Effect.Effect<A, ApiError, R> =>
       client.execute(req).pipe(
-        Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)),
-        Effect.mapError((e) =>
-          new ApiError({
-            status: 500,
-            message: e instanceof Error ? e.message : String(e)
-          })
-        ),
+        Effect.flatMap((response) => {
+          const status = response.status
+          if (status >= 400) {
+            return response.text.pipe(
+              Effect.flatMap((body) =>
+                Effect.fail(
+                  new ApiError({
+                    status,
+                    message: extractErrorMessage(body, status)
+                  })
+                )
+              )
+            )
+          }
+          return HttpClientResponse.schemaBodyJson(schema)(response).pipe(
+            Effect.mapError((parseError) =>
+              new ApiError({
+                status: 422,
+                message: `Parse error: ${parseError.message}`
+              })
+            )
+          )
+        }),
+        Effect.mapError(wrapError),
         Effect.scoped
       )
 
-    // Helper for requests without body parsing (unknown response)
-    const requestUnknown = (req: HttpClientRequest.HttpClientRequest) =>
+    // Helper for requests without body parsing (returns unknown JSON)
+    const requestUnknown = (req: HttpClientRequest.HttpClientRequest): Effect.Effect<unknown, ApiError> =>
       client.execute(req).pipe(
-        Effect.flatMap((response) => response.json),
-        Effect.mapError((e) =>
-          new ApiError({
-            status: 500,
-            message: e instanceof Error ? e.message : String(e)
-          })
-        ),
+        Effect.flatMap((response) => {
+          const status = response.status
+          if (status >= 400) {
+            return response.text.pipe(
+              Effect.flatMap((body) =>
+                Effect.fail(
+                  new ApiError({
+                    status,
+                    message: extractErrorMessage(body, status)
+                  })
+                )
+              )
+            )
+          }
+          return response.json.pipe(
+            Effect.mapError((parseError) =>
+              new ApiError({
+                status: 422,
+                message: `JSON parse error: ${parseError.message}`
+              })
+            )
+          )
+        }),
+        Effect.mapError(wrapError),
         Effect.scoped
       )
 
@@ -185,12 +238,7 @@ export const ApiClientLive = Layer.effect(
         HttpClientRequest.post(`/api/v1/ontologies/${body.ontologyId}/links`).pipe(
           HttpClientRequest.bodyJson(body),
           Effect.flatMap((req) => request(req, IngestLinkResponse)),
-          Effect.mapError((e) =>
-            new ApiError({
-              status: 500,
-              message: e instanceof Error ? e.message : String(e)
-            })
-          )
+          Effect.mapError(wrapError)
         ),
 
       // Preview a link without storing
@@ -198,12 +246,7 @@ export const ApiClientLive = Layer.effect(
         HttpClientRequest.post("/api/v1/links/preview").pipe(
           HttpClientRequest.bodyJson({ url }),
           Effect.flatMap(requestUnknown),
-          Effect.mapError((e) =>
-            new ApiError({
-              status: 500,
-              message: e instanceof Error ? e.message : String(e)
-            })
-          )
+          Effect.mapError(wrapError)
         ),
 
       // Ontologies
@@ -259,12 +302,7 @@ export const ApiClientLive = Layer.effect(
         return HttpClientRequest.post(`/api/v1/ontologies/${ontologyId}/documents`).pipe(
           HttpClientRequest.bodyJson(body),
           Effect.flatMap((r) => request(r, ArticleSearchResponse)),
-          Effect.mapError((e) =>
-            new ApiError({
-              status: 500,
-              message: e instanceof Error ? e.message : String(e)
-            })
-          )
+          Effect.mapError(wrapError)
         )
       },
 

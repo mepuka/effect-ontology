@@ -15,9 +15,10 @@
  */
 
 import * as EventLog from "@effect/experimental/EventLog"
+import { Entry } from "@effect/experimental/EventJournal"
 import * as EventLogRemote from "@effect/experimental/EventLogRemote"
 import * as Socket from "@effect/platform/Socket"
-import { Context, Effect, Layer, Stream } from "effect"
+import { Context, Effect, Layer, PubSub, Stream } from "effect"
 import type * as DateTime from "effect/DateTime"
 import { OntologyEventJournalLayer } from "./EventJournalClient.js"
 import { Identity, IdentityLayer } from "./IdentityClient.js"
@@ -121,6 +122,34 @@ export const makeEventBusClient = (ontologyId: string, baseUrl: string) =>
     // Identity is used by EventLogRemote internally
     yield* Identity
 
+    // Create a PubSub for broadcasting new events to subscribers
+    const eventPubSub = yield* PubSub.bounded<ClientEventEntry>(1000)
+
+    // Track seen event IDs to avoid duplicates
+    let seenEventIds = new Set<string>()
+
+    /**
+     * Poll for new entries and publish to PubSub
+     */
+    const pollForNewEntries = Effect.gen(function*() {
+      const entries = yield* eventLog.entries.pipe(
+        Effect.catchAll(() => Effect.succeed([] as ReadonlyArray<Entry>))
+      )
+
+      for (const entry of entries) {
+        if (!seenEventIds.has(entry.idString)) {
+          seenEventIds.add(entry.idString)
+          yield* PubSub.publish(eventPubSub, {
+            id: entry.idString,
+            event: entry.event,
+            primaryKey: entry.primaryKey,
+            payload: entry.payload,
+            createdAt: entry.createdAt
+          })
+        }
+      }
+    })
+
     /**
      * Connect to WebSocket and start sync
      */
@@ -146,11 +175,16 @@ export const makeEventBusClient = (ontologyId: string, baseUrl: string) =>
     const getConnectionStatus = () => Effect.succeed(connectionStatus)
 
     /**
-     * Subscribe to events from the local journal
+     * Subscribe to events as a real-time stream
+     *
+     * This returns a Stream that emits events as they arrive.
+     * Existing events are yielded first, then new events as they come in.
+     * The stream manages its own subscription lifecycle.
      */
     const subscribeEvents = () =>
       Effect.gen(function*() {
-        const changes = yield* eventLog.entries.pipe(
+        // Get current entries first
+        const currentEntries = yield* eventLog.entries.pipe(
           Effect.map((entries) =>
             entries.map((entry) => ({
               id: entry.idString,
@@ -163,9 +197,25 @@ export const makeEventBusClient = (ontologyId: string, baseUrl: string) =>
           Effect.catchAll(() => Effect.succeed([] as Array<ClientEventEntry>))
         )
 
-        // For now, return a stream that yields the current entries
-        // In full implementation, would use journal.changes for real-time updates
-        return Stream.fromIterable(changes)
+        // Create a stream that yields current entries, then live events from PubSub
+        const initialStream = Stream.fromIterable(currentEntries)
+
+        // Create a scoped stream that subscribes to PubSub and cleans up on done
+        const liveStream = Stream.asyncScoped<ClientEventEntry>((emit) =>
+          Effect.gen(function*() {
+            const subscription = yield* PubSub.subscribe(eventPubSub)
+            // Read from subscription and emit events
+            yield* Effect.forever(
+              Effect.flatMap(
+                subscription.take,
+                (event) => Effect.sync(() => emit.single(event))
+              )
+            )
+          })
+        )
+
+        // Concatenate initial entries with live stream
+        return Stream.concat(initialStream, liveStream)
       })
 
     /**
@@ -202,7 +252,8 @@ export const makeEventBusClient = (ontologyId: string, baseUrl: string) =>
       Effect.gen(function*() {
         connectionStatus = "syncing"
         yield* Effect.logInfo("Forcing sync", { ontologyId })
-        // In full implementation, would trigger a RequestChanges
+        // Poll for new entries after sync
+        yield* pollForNewEntries
         connectionStatus = "connected"
       })
 
@@ -213,10 +264,19 @@ export const makeEventBusClient = (ontologyId: string, baseUrl: string) =>
       Effect.gen(function*() {
         connectionStatus = "disconnected"
         yield* Effect.logInfo("Disconnecting", { ontologyId })
+        // Shutdown the PubSub
+        yield* PubSub.shutdown(eventPubSub)
       })
 
     // Start connection in background
     yield* connect.pipe(Effect.forkDaemon)
+
+    // Start polling for new entries in background (every 2 seconds)
+    yield* pollForNewEntries.pipe(
+      Effect.delay("2 seconds"),
+      Effect.forever,
+      Effect.forkDaemon
+    )
 
     return {
       ontologyId,
@@ -265,27 +325,46 @@ export const EventBusClientLayer = (ontologyId: string, baseUrl: string) => {
 export const EventBusClientMemoryLayer = (ontologyId: string) =>
   Layer.scoped(
     EventBusClient,
-    Effect.sync(() => {
+    Effect.gen(function*() {
       const events: Array<ClientEventEntry> = []
       const connectionStatus: ConnectionStatus = "connected"
+      const eventPubSub = yield* PubSub.bounded<ClientEventEntry>(1000)
 
       return {
         ontologyId,
         getConnectionStatus: () => Effect.succeed(connectionStatus),
-        subscribeEvents: () => Effect.succeed(Stream.fromIterable(events)),
+        subscribeEvents: () =>
+          Effect.succeed(
+            Stream.concat(
+              Stream.fromIterable(events),
+              Stream.asyncScoped<ClientEventEntry>((emit) =>
+                Effect.gen(function*() {
+                  const subscription = yield* PubSub.subscribe(eventPubSub)
+                  yield* Effect.forever(
+                    Effect.flatMap(
+                      subscription.take,
+                      (event) => Effect.sync(() => emit.single(event))
+                    )
+                  )
+                })
+              )
+            )
+          ),
         getEvents: () => Effect.succeed(events),
         publishCurationEvent: (tag, payload) =>
-          Effect.sync(() => {
-            events.push({
+          Effect.gen(function*() {
+            const entry: ClientEventEntry = {
               id: `evt_${Date.now()}`,
               event: tag,
               primaryKey: String(Date.now()),
               payload,
               createdAt: new Date() as any // Simplified
-            })
+            }
+            events.push(entry)
+            yield* PubSub.publish(eventPubSub, entry)
           }),
         sync: () => Effect.void,
-        disconnect: () => Effect.void
+        disconnect: () => PubSub.shutdown(eventPubSub)
       } satisfies EventBusClient
     })
   )

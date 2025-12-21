@@ -12,11 +12,14 @@
  */
 
 import type { ReactNode } from "react"
-import { useState } from "react"
+import { useContext, useEffect, useState } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
-import { useAtomValue } from "@effect-atom/atom-react"
+import { useAtomValue, RegistryContext } from "@effect-atom/atom-react"
 import { Result } from "@effect-atom/atom"
+import { Effect, Fiber, Stream } from "effect"
 import { healthAtom, ontologiesAtom } from "@/atoms/api"
+import { invalidateForEvent, requiresInvalidation } from "@/services/CacheInvalidation"
+import { EventBusClient, EventBusClientMemoryLayer } from "@/services/EventBusClient"
 import {
   linksLink,
   documentsLink,
@@ -53,6 +56,55 @@ function useOntologyId(): string | null {
 }
 
 /**
+ * Hook to subscribe to events and trigger cache invalidation
+ */
+function useEventSubscription(ontologyId: string | null) {
+  const registry = useContext(RegistryContext)
+
+  useEffect(() => {
+    if (!ontologyId) return
+
+    // Create a fiber handle for cleanup
+    let subscriptionFiber: Fiber.RuntimeFiber<void, unknown> | null = null
+
+    // Subscribe to events and invalidate caches
+    const subscription = Effect.gen(function* () {
+      const eventBus = yield* EventBusClient
+      const eventStream = yield* eventBus.subscribeEvents()
+
+      yield* Stream.runForEach(eventStream, (event) =>
+        Effect.gen(function* () {
+          // Only invalidate if this event type requires it
+          if (requiresInvalidation(event.event)) {
+            yield* invalidateForEvent(event, ontologyId, registry)
+            yield* Effect.logDebug("Cache invalidated for event", {
+              eventType: event.event,
+              ontologyId
+            })
+          }
+        })
+      )
+    }).pipe(
+      Effect.provide(EventBusClientMemoryLayer(ontologyId)),
+      Effect.catchAll((error) =>
+        Effect.logWarning("Event subscription error", { error })
+      )
+    )
+
+    // Run the subscription in the background
+    const fiber = Effect.runFork(subscription)
+    subscriptionFiber = fiber
+
+    // Cleanup on unmount or ontologyId change
+    return () => {
+      if (subscriptionFiber) {
+        Effect.runFork(Fiber.interrupt(subscriptionFiber))
+      }
+    }
+  }, [ontologyId, registry])
+}
+
+/**
  * Derive health status from atom result
  */
 function useHealthStatus(): HealthStatus {
@@ -72,6 +124,9 @@ export function AppShell({ children }: AppShellProps) {
   const health = useHealthStatus()
   const location = useLocation()
   const ontologyId = useOntologyId()
+
+  // Subscribe to events for cache invalidation
+  useEventSubscription(ontologyId)
 
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + "/")

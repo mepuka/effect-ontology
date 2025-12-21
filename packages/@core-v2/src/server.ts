@@ -20,6 +20,8 @@ import { SqlClient } from "@effect/sql/SqlClient"
 import { WorkflowEngine } from "@effect/workflow"
 import { Cause, Config, Effect, Layer, Option, Schedule } from "effect"
 import { ArticleRepository } from "./Repository/Article.js"
+import { CachedArticleRepository } from "./Repository/CachedArticle.js"
+import { CachedClaimRepository } from "./Repository/CachedClaim.js"
 import { ClaimRepository } from "./Repository/Claim.js"
 import { ContentEnrichmentAgent } from "./Service/ContentEnrichmentAgent.js"
 import { JinaReaderClient } from "./Service/JinaReaderClient.js"
@@ -45,6 +47,11 @@ const postgresHost = Effect.runSync(
   Config.string("POSTGRES_HOST").pipe(Config.option)
 )
 const usePostgres = Option.isSome(postgresHost)
+
+// Check if repository caching is enabled (default: true in production)
+const useCaching = Effect.runSync(
+  Config.boolean("ENABLE_REPO_CACHING").pipe(Config.withDefault(true))
+)
 
 // Base platform layer (provides FileSystem, Path, etc.)
 const PlatformLayer = BunContext.layer
@@ -156,13 +163,30 @@ const PgDrizzleLive = PgDrizzle.layer.pipe(
   Layer.provideMerge(PgClientLive)
 )
 
-// Repositories bundle - ClaimRepository + ArticleRepository
-const RepositoriesLayer = usePostgres
+// Base repositories bundle - ClaimRepository + ArticleRepository
+const BaseRepositoriesLayer = usePostgres
   ? Layer.mergeAll(
     ClaimRepository.Default,
     ArticleRepository.Default
   ).pipe(Layer.provideMerge(PgDrizzleLive))
   : Layer.empty // No repositories without PostgreSQL
+
+// Cached repositories layer (wraps base repositories with Effect.Cache)
+const CachedRepositoriesLayer = usePostgres && useCaching
+  ? Layer.mergeAll(
+    CachedClaimRepository.Default,
+    CachedArticleRepository.Default
+  ).pipe(Layer.provideMerge(BaseRepositoriesLayer))
+  : Layer.empty
+
+// Combined repositories layer
+// When caching is enabled, provides both base and cached repos
+// When disabled, provides only base repos
+const RepositoriesLayer = usePostgres
+  ? useCaching
+    ? Layer.mergeAll(BaseRepositoriesLayer, CachedRepositoriesLayer)
+    : BaseRepositoriesLayer
+  : Layer.empty
 
 // ClaimPersistenceService layer (depends on repositories)
 const ClaimPersistenceLayer = usePostgres
@@ -190,6 +214,7 @@ const EventLogStorageLive = usePostgres
 // Log which storage is in use
 if (usePostgres) {
   console.log("EventLog storage: PostgreSQL (persistent)")
+  console.log(`Repository caching: ${useCaching ? "enabled" : "disabled"}`)
 } else {
   console.log("EventLog storage: Memory (events lost on restart)")
 }

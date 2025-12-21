@@ -28,8 +28,8 @@
 import type { PlatformError } from "@effect/platform/Error"
 import * as Pg from "@effect/sql-drizzle/Pg"
 import { createHash } from "crypto"
-import { eq } from "drizzle-orm"
-import { Data, Effect, Option } from "effect"
+import { and, eq } from "drizzle-orm"
+import { Cache, Data, Duration, Effect, Option } from "effect"
 import type { EnrichedContent } from "../Domain/Model/EnrichedContent.js"
 import { type IngestedLinkInsertRow, type IngestedLinkRow, ingestedLinks } from "../Repository/schema.js"
 import { ConfigService } from "./Config.js"
@@ -129,6 +129,13 @@ const buildStoragePath = (contentHash: string): string => `documents/${contentHa
 // Service
 // =============================================================================
 
+// =============================================================================
+// Cache Configuration
+// =============================================================================
+
+const CONTENT_HASH_CACHE_CAPACITY = 50_000
+const CONTENT_HASH_CACHE_TTL = Duration.days(7) // Content hashes are immutable
+
 export class LinkIngestionService extends Effect.Service<LinkIngestionService>()(
   "LinkIngestionService",
   {
@@ -138,6 +145,33 @@ export class LinkIngestionService extends Effect.Service<LinkIngestionService>()
       const enricher = yield* ContentEnrichmentAgent
       const drizzle = yield* Pg.PgDrizzle
       const config = yield* ConfigService
+
+      // Raw DB lookup for content hash within an ontology (used by cache)
+      // Uses composite key: "ontologyId:hash" for cache lookup
+      const lookupByContentHash = (compositeKey: string): Effect.Effect<Option.Option<IngestedLinkRow>> =>
+        Effect.gen(function*() {
+          const [ontologyId, hash] = compositeKey.split(":", 2)
+          if (!ontologyId || !hash) {
+            return Option.none()
+          }
+          const [result] = yield* Effect.promise(() =>
+            drizzle.select().from(ingestedLinks)
+              .where(and(
+                eq(ingestedLinks.ontologyId, ontologyId),
+                eq(ingestedLinks.contentHash, hash)
+              ))
+              .limit(1)
+          )
+          return Option.fromNullable(result)
+        })
+
+      // Content hash cache with long TTL (immutable content)
+      // Cache key format: "ontologyId:contentHash"
+      const contentHashCache = yield* Cache.make({
+        capacity: CONTENT_HASH_CACHE_CAPACITY,
+        timeToLive: CONTENT_HASH_CACHE_TTL,
+        lookup: lookupByContentHash
+      })
 
       // -----------------------------------------------------------------------
       // Core Ingestion
@@ -176,9 +210,9 @@ export class LinkIngestionService extends Effect.Service<LinkIngestionService>()
           // 2. Compute content hash
           const contentHash = computeContentHash(content.content)
 
-          // 3. Check for duplicate
+          // 3. Check for duplicate (scoped by ontology)
           if (skipDuplicates) {
-            const existing = yield* getByContentHash(contentHash)
+            const existing = yield* getByContentHash(ontologyId, contentHash)
             if (Option.isSome(existing)) {
               return {
                 id: existing.value.id,
@@ -301,15 +335,10 @@ export class LinkIngestionService extends Effect.Service<LinkIngestionService>()
       // -----------------------------------------------------------------------
 
       /**
-       * Get ingested link by content hash
+       * Get ingested link by content hash within an ontology (cached)
        */
-      const getByContentHash = (hash: string): Effect.Effect<Option.Option<IngestedLinkRow>> =>
-        Effect.gen(function*() {
-          const [result] = yield* Effect.promise(() =>
-            drizzle.select().from(ingestedLinks).where(eq(ingestedLinks.contentHash, hash)).limit(1)
-          )
-          return Option.fromNullable(result)
-        })
+      const getByContentHash = (ontologyId: string, hash: string): Effect.Effect<Option.Option<IngestedLinkRow>> =>
+        contentHashCache.get(`${ontologyId}:${hash}`)
 
       /**
        * Get ingested link by ID

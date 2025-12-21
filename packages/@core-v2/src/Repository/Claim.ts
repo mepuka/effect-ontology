@@ -10,7 +10,7 @@
  */
 
 import * as Pg from "@effect/sql-drizzle/Pg"
-import { and, desc, eq, isNull, or } from "drizzle-orm"
+import { and, desc, eq, isNull, or, sql } from "drizzle-orm"
 import { DateTime, Effect, Option } from "effect"
 import { claims, correctionClaims, corrections } from "./schema.js"
 import type { ClaimInsertRow, ClaimRow, CorrectionInsertRow, CorrectionRow } from "./schema.js"
@@ -70,30 +70,39 @@ export class ClaimRepository extends Effect.Service<ClaimRepository>()("ClaimRep
       })
 
     /**
+     * Build WHERE conditions from a filter
+     */
+    const buildWhereConditions = (filter: ClaimFilter) => {
+      const conditions = []
+
+      if (filter.ontologyId) {
+        conditions.push(eq(claims.ontologyId, filter.ontologyId))
+      }
+      if (filter.articleId) {
+        conditions.push(eq(claims.articleId, filter.articleId))
+      }
+      if (filter.subjectIri) {
+        conditions.push(eq(claims.subjectIri, filter.subjectIri))
+      }
+      if (filter.predicateIri) {
+        conditions.push(eq(claims.predicateIri, filter.predicateIri))
+      }
+      if (filter.rank) {
+        conditions.push(eq(claims.rank, filter.rank))
+      }
+      if (!filter.includeDeprecated) {
+        conditions.push(isNull(claims.deprecatedAt))
+      }
+
+      return conditions
+    }
+
+    /**
      * Get claims with filters
      */
     const getClaims = (filter: ClaimFilter) =>
       Effect.gen(function*() {
-        const conditions = []
-
-        if (filter.ontologyId) {
-          conditions.push(eq(claims.ontologyId, filter.ontologyId))
-        }
-        if (filter.articleId) {
-          conditions.push(eq(claims.articleId, filter.articleId))
-        }
-        if (filter.subjectIri) {
-          conditions.push(eq(claims.subjectIri, filter.subjectIri))
-        }
-        if (filter.predicateIri) {
-          conditions.push(eq(claims.predicateIri, filter.predicateIri))
-        }
-        if (filter.rank) {
-          conditions.push(eq(claims.rank, filter.rank))
-        }
-        if (!filter.includeDeprecated) {
-          conditions.push(isNull(claims.deprecatedAt))
-        }
+        const conditions = buildWhereConditions(filter)
 
         let query = drizzle
           .select()
@@ -322,12 +331,22 @@ export class ClaimRepository extends Effect.Service<ClaimRepository>()("ClaimRep
       })
 
     /**
-     * Count claims with filters
+     * Count claims with filters using SQL COUNT
      */
     const countClaims = (filter: ClaimFilter) =>
       Effect.gen(function*() {
-        const result = yield* getClaims({ ...filter, limit: undefined, offset: undefined })
-        return result.length
+        const conditions = buildWhereConditions(filter)
+
+        let query = drizzle
+          .select({ count: sql<number>`count(*)::int` })
+          .from(claims)
+
+        if (conditions.length > 0) {
+          query = query.where(and(...conditions)) as typeof query
+        }
+
+        const result = yield* Effect.promise(() => query)
+        return result[0]?.count ?? 0
       })
 
     return {

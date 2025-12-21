@@ -9,7 +9,7 @@
  */
 
 import * as Pg from "@effect/sql-drizzle/Pg"
-import { and, desc, eq, gte, like, lte } from "drizzle-orm"
+import { and, desc, eq, gte, like, lte, sql } from "drizzle-orm"
 import { Effect, Option } from "effect"
 import { articles } from "./schema.js"
 import type { ArticleInsertRow, ArticleRow } from "./schema.js"
@@ -111,27 +111,36 @@ export class ArticleRepository extends Effect.Service<ArticleRepository>()("Arti
     // -------------------------------------------------------------------------
 
     /**
+     * Build WHERE conditions from a filter
+     */
+    const buildWhereConditions = (filter: ArticleFilter) => {
+      const conditions = []
+
+      if (filter.ontologyId) {
+        conditions.push(eq(articles.ontologyId, filter.ontologyId))
+      }
+      if (filter.sourceName) {
+        conditions.push(eq(articles.sourceName, filter.sourceName))
+      }
+      if (filter.publishedAfter) {
+        conditions.push(gte(articles.publishedAt, filter.publishedAfter))
+      }
+      if (filter.publishedBefore) {
+        conditions.push(lte(articles.publishedAt, filter.publishedBefore))
+      }
+      if (filter.uriPattern) {
+        conditions.push(like(articles.uri, `%${filter.uriPattern}%`))
+      }
+
+      return conditions
+    }
+
+    /**
      * Get articles with filters
      */
     const getArticles = (filter: ArticleFilter) =>
       Effect.gen(function*() {
-        const conditions = []
-
-        if (filter.ontologyId) {
-          conditions.push(eq(articles.ontologyId, filter.ontologyId))
-        }
-        if (filter.sourceName) {
-          conditions.push(eq(articles.sourceName, filter.sourceName))
-        }
-        if (filter.publishedAfter) {
-          conditions.push(gte(articles.publishedAt, filter.publishedAfter))
-        }
-        if (filter.publishedBefore) {
-          conditions.push(lte(articles.publishedAt, filter.publishedBefore))
-        }
-        if (filter.uriPattern) {
-          conditions.push(like(articles.uri, `%${filter.uriPattern}%`))
-        }
+        const conditions = buildWhereConditions(filter)
 
         let query = drizzle
           .select()
@@ -168,12 +177,22 @@ export class ArticleRepository extends Effect.Service<ArticleRepository>()("Arti
     const getRecentArticles = (limit: number = 10) => getArticles({ limit })
 
     /**
-     * Count articles with filters
+     * Count articles with filters using SQL COUNT
      */
     const countArticles = (filter: ArticleFilter = {}) =>
       Effect.gen(function*() {
-        const result = yield* getArticles({ ...filter, limit: undefined, offset: undefined })
-        return result.length
+        const conditions = buildWhereConditions(filter)
+
+        let query = drizzle
+          .select({ count: sql<number>`count(*)::int` })
+          .from(articles)
+
+        if (conditions.length > 0) {
+          query = query.where(and(...conditions)) as typeof query
+        }
+
+        const result = yield* Effect.promise(() => query)
+        return result[0]?.count ?? 0
       })
 
     // -------------------------------------------------------------------------

@@ -11,12 +11,8 @@
 import { Atom } from "@effect-atom/atom"
 import { Effect } from "effect"
 import { apiRuntime } from "../lib/runtime"
-import {
-  ApiClient,
-  type ApiClientService,
-  type TimelineFilter,
-  type DocumentsFilter
-} from "../services/ApiClient"
+import { ApiClient, type ApiClientService, type DocumentsFilter, type TimelineFilter } from "../services/ApiClient"
+import { invalidationTriggerAtom } from "../services/CacheInvalidation"
 
 // =============================================================================
 // Filter State Atoms
@@ -52,10 +48,12 @@ export const documentsFiltersAtom = Atom.family((_ontologyId: string) =>
 // Data Fetching Atoms
 // =============================================================================
 
-/** Links list - re-fetches when filters change, scoped by ontologyId */
+/** Links list - re-fetches when filters change or invalidated, scoped by ontologyId */
 export const linksAtom = Atom.family((ontologyId: string) =>
   apiRuntime.atom((get) =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
+      // Subscribe to invalidation trigger for event-driven refresh
+      get(invalidationTriggerAtom(ontologyId))
       const api: ApiClientService = yield* ApiClient
       const filters = get(linksFiltersAtom(ontologyId))
       return yield* api.listLinks(ontologyId, filters)
@@ -67,7 +65,7 @@ export const linksAtom = Atom.family((ontologyId: string) =>
 export const linkDetailAtom = Atom.family((key: string) => {
   const [ontologyId, id] = key.split(":")
   return apiRuntime.atom(() =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const api: ApiClientService = yield* ApiClient
       return yield* api.getLink(ontologyId, id)
     })
@@ -77,7 +75,7 @@ export const linkDetailAtom = Atom.family((key: string) => {
 /** Health check - kept alive across component unmounts */
 export const healthAtom = apiRuntime
   .atom(() =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const api: ApiClientService = yield* ApiClient
       return yield* api.healthCheck()
     }).pipe(Effect.catchAll(() => Effect.succeed({ status: "offline" })))
@@ -90,7 +88,7 @@ export const healthAtom = apiRuntime
 
 /** Ingest a URL */
 export const ingestAtom = apiRuntime.fn(
-  Effect.fnUntraced(function* (params: { url: string; ontologyId: string }) {
+  Effect.fnUntraced(function*(params: { url: string; ontologyId: string }) {
     const api: ApiClientService = yield* ApiClient
     return yield* api.ingestLink({
       url: params.url,
@@ -103,7 +101,7 @@ export const ingestAtom = apiRuntime.fn(
 
 /** Preview a URL without storing */
 export const previewAtom = apiRuntime.fn(
-  Effect.fnUntraced(function* (url: string) {
+  Effect.fnUntraced(function*(url: string) {
     const api: ApiClientService = yield* ApiClient
     return yield* api.previewLink(url)
   })
@@ -116,7 +114,7 @@ export const previewAtom = apiRuntime.fn(
 /** List all ontologies - kept alive for navigation */
 export const ontologiesAtom = apiRuntime
   .atom(() =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const api: ApiClientService = yield* ApiClient
       return yield* api.listOntologies()
     })
@@ -126,7 +124,7 @@ export const ontologiesAtom = apiRuntime
 /** Single ontology detail - family by id */
 export const ontologyDetailAtom = Atom.family((id: string) =>
   apiRuntime.atom(() =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const api: ApiClientService = yield* ApiClient
       return yield* api.getOntology(id)
     })
@@ -137,10 +135,12 @@ export const ontologyDetailAtom = Atom.family((id: string) =>
 // Timeline Atoms
 // =============================================================================
 
-/** Timeline claims - family by ontologyId, re-fetches when filters change */
+/** Timeline claims - family by ontologyId, re-fetches when filters change or invalidated */
 export const timelineAtom = Atom.family((ontologyId: string) =>
   apiRuntime.atom((get) =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
+      // Subscribe to invalidation trigger for event-driven refresh
+      get(invalidationTriggerAtom(ontologyId))
       const api: ApiClientService = yield* ApiClient
       const filters = get(timelineFiltersAtom(ontologyId))
       return yield* api.getTimelineClaims(ontologyId, filters)
@@ -153,7 +153,7 @@ export const entityDetailAtom = Atom.family((key: string) => {
   const [ontologyId, ...iriParts] = key.split(":")
   const iri = iriParts.join(":") // IRIs contain colons, rejoin them
   return apiRuntime.atom(() =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const api: ApiClientService = yield* ApiClient
       return yield* api.getEntity(ontologyId, iri)
     })
@@ -164,10 +164,12 @@ export const entityDetailAtom = Atom.family((key: string) => {
 // Document Atoms
 // =============================================================================
 
-/** Documents search - family by ontologyId, re-fetches when filters change */
+/** Documents search - family by ontologyId, re-fetches when filters change or invalidated */
 export const documentsAtom = Atom.family((ontologyId: string) =>
   apiRuntime.atom((get) =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
+      // Subscribe to invalidation trigger for event-driven refresh
+      get(invalidationTriggerAtom(ontologyId))
       const api: ApiClientService = yield* ApiClient
       const filters = get(documentsFiltersAtom(ontologyId))
       return yield* api.searchDocuments(ontologyId, filters)
@@ -179,7 +181,7 @@ export const documentsAtom = Atom.family((ontologyId: string) =>
 export const documentDetailAtom = Atom.family((key: string) => {
   const [ontologyId, id] = key.split(":")
   return apiRuntime.atom(() =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const api: ApiClientService = yield* ApiClient
       return yield* api.getDocument(ontologyId, id)
     })

@@ -511,5 +511,23 @@ DO $$ BEGIN
         CREATE INDEX idx_llm_examples_input_text_trgm ON llm_examples USING gin (input_text gin_trgm_ops);
     END IF;
 END $$;`
+  },
+  {
+    version: 8,
+    name: "008_content_hash_scoping",
+    sql: `-- Change content_hash unique constraint to be scoped by ontology_id
+-- Previously content_hash was globally unique, preventing the same content
+-- from being ingested into multiple ontologies.
+
+-- Drop the old global unique constraint on content_hash
+ALTER TABLE ingested_links DROP CONSTRAINT IF EXISTS ingested_links_content_hash_key;
+
+-- Add composite unique constraint scoped by ontology_id
+ALTER TABLE ingested_links ADD CONSTRAINT ingested_links_ontology_content_unique
+    UNIQUE (ontology_id, content_hash);
+
+-- Index for looking up by content hash within an ontology
+CREATE INDEX IF NOT EXISTS idx_ingested_links_ontology_content_hash
+    ON ingested_links(ontology_id, content_hash);`
   }
 ]
