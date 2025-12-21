@@ -32,8 +32,8 @@ export class EmbeddingJob extends Schema.TaggedClass<EmbeddingJob>()(
   /**
    * Generate a unique job ID
    */
-  static makeId(ontologyId: string, entityId: string): string {
-    return `embed:${ontologyId}:${entityId}:${Date.now()}`
+  static makeId(ontologyId: string, entityId: string, now: number): string {
+    return `embed:${ontologyId}:${entityId}:${now}`
   }
 }
 
@@ -55,8 +55,8 @@ export class PromptCacheJob extends Schema.TaggedClass<PromptCacheJob>()(
   /**
    * Generate a unique job ID
    */
-  static makeId(ontologyId: string, exampleId: string): string {
-    return `cache:${ontologyId}:${exampleId}:${Date.now()}`
+  static makeId(ontologyId: string, exampleId: string, now: number): string {
+    return `cache:${ontologyId}:${exampleId}:${now}`
   }
 }
 
@@ -79,8 +79,8 @@ export class SimilarityRecomputeJob extends Schema.TaggedClass<SimilarityRecompu
     createdAt: Schema.DateTimeUtcFromSelf
   }
 ) {
-  static makeId(ontologyId: string, entityId: string): string {
-    return `similarity:${ontologyId}:${entityId}:${Date.now()}`
+  static makeId(ontologyId: string, entityId: string, now: number): string {
+    return `similarity:${ontologyId}:${entityId}:${now}`
   }
 }
 
@@ -99,8 +99,8 @@ export class BlockingTokenJob extends Schema.TaggedClass<BlockingTokenJob>()(
     createdAt: Schema.DateTimeUtcFromSelf
   }
 ) {
-  static makeId(ontologyId: string, entityId: string): string {
-    return `blocking:${ontologyId}:${entityId}:${Date.now()}`
+  static makeId(ontologyId: string, entityId: string, now: number): string {
+    return `blocking:${ontologyId}:${entityId}:${now}`
   }
 }
 
@@ -123,8 +123,8 @@ export class WebhookJob extends Schema.TaggedClass<WebhookJob>()(
     createdAt: Schema.DateTimeUtcFromSelf
   }
 ) {
-  static makeId(eventType: string): string {
-    return `webhook:${eventType}:${Date.now()}`
+  static makeId(eventType: string, now: number): string {
+    return `webhook:${eventType}:${now}`
   }
 }
 

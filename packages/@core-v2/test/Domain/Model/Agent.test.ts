@@ -366,7 +366,7 @@ describe("Agent Domain Model", () => {
         status: "running"
       })
 
-      expect(state.elapsedMs).toBeGreaterThanOrEqual(5000)
+      expect(state.getElapsedMs(now)).toBeGreaterThanOrEqual(5000)
     })
 
     it("should serialize to JSON", () => {

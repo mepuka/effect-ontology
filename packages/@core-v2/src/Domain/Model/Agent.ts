@@ -615,9 +615,11 @@ export class PipelineState extends Schema.Class<PipelineState>("PipelineState")(
 
   /**
    * Get total duration so far
+   *
+   * @param now - Current time (epoch ms)
    */
-  get elapsedMs(): number {
-    const end = this.completedAt ?? Date.now()
+  getElapsedMs(now: number): number {
+    const end = this.completedAt ?? now
     return end - this.startedAt
   }
 
@@ -640,7 +642,7 @@ export class PipelineState extends Schema.Class<PipelineState>("PipelineState")(
       status: this.status,
       error: this.error,
       iterationCount: this.iterationCount,
-      elapsedMs: this.elapsedMs
+      elapsedMs: this.completedAt ? this.getElapsedMs(this.completedAt) : undefined
     }
   }
 }

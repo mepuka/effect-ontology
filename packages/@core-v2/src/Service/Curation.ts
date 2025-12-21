@@ -151,7 +151,7 @@ export class CurationService extends Effect.Service<CurationService>()("Curation
           // Queue prompt cache update job via EventBusService
           yield* eventBus.enqueueJob(
             new PromptCacheJob({
-              id: PromptCacheJob.makeId(action.ontologyId, example.id),
+              id: PromptCacheJob.makeId(action.ontologyId, example.id, DateTime.toEpochMillis(now)),
               ontologyId: action.ontologyId,
               exampleId: example.id,
               isNegative: false,
@@ -221,7 +221,7 @@ export class CurationService extends Effect.Service<CurationService>()("Curation
           // Queue prompt cache update job via EventBusService
           yield* eventBus.enqueueJob(
             new PromptCacheJob({
-              id: PromptCacheJob.makeId(action.ontologyId, example.id),
+              id: PromptCacheJob.makeId(action.ontologyId, example.id, DateTime.toEpochMillis(now)),
               ontologyId: action.ontologyId,
               exampleId: example.id,
               isNegative: true,
@@ -291,7 +291,7 @@ export class CurationService extends Effect.Service<CurationService>()("Curation
         // Queue embedding job to update canonical entity embedding via EventBusService
         yield* eventBus.enqueueJob(
           new EmbeddingJob({
-            id: EmbeddingJob.makeId(action.ontologyId, canonical.id),
+            id: EmbeddingJob.makeId(action.ontologyId, canonical.id, DateTime.toEpochMillis(now)),
             ontologyId: action.ontologyId,
             canonicalEntityId: canonical.id,
             reason: "alias_added",
