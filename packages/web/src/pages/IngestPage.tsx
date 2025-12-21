@@ -10,30 +10,25 @@
 import { useState, useEffect } from "react"
 import { useAtomValue, useAtomSet } from "@effect-atom/atom-react"
 import { Result } from "@effect-atom/atom"
-import { useNavigate, Link, useParams } from "react-router-dom"
-import { ArrowLeft, Eye, Upload } from "lucide-react"
+import { useNavigate, useParams } from "react-router-dom"
+import { Eye, Upload } from "lucide-react"
 import { toast } from "sonner"
 import { ingestAtom, previewAtom } from "@/atoms/api"
 import { linksLink, linkLink } from "@/lib/routing"
 import {
-  Card,
-  CardHeader,
-  CardContent,
-  CardFooter,
-  CardTitle,
-  CardDescription
-} from "@/components/ui/card"
+  PageContainer,
+  PageHeader,
+  ErrorState,
+  LoadingState
+} from "@/components/PageLayout"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Skeleton } from "@/components/ui/skeleton"
 
 export function IngestPage() {
   const { ontologyId = "seattle" } = useParams<{ ontologyId: string }>()
   const [url, setUrl] = useState("")
   const navigate = useNavigate()
 
-  // Function atoms - trigger with set, observe result
   const ingest = useAtomSet(ingestAtom)
   const ingestResult = useAtomValue(ingestAtom)
 
@@ -52,7 +47,6 @@ export function IngestPage() {
     }
   }
 
-  // React to ingest success
   useEffect(() => {
     if (Result.isSuccess(ingestResult)) {
       const data = ingestResult.value
@@ -69,24 +63,15 @@ export function IngestPage() {
   const isValidUrl = url.trim().match(/^https?:\/\/.+/)
 
   return (
-    <div className="space-y-6 max-w-2xl mx-auto">
-      <div className="flex items-center gap-4">
-        <Link to={linksLink(ontologyId)}>
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Button>
-        </Link>
-      </div>
+    <PageContainer size="sm">
+      <PageHeader
+        title="Ingest URL"
+        subtitle="Fetch and store content using Jina Reader"
+        backTo={{ label: "Links", href: linksLink(ontologyId) }}
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Ingest URL</CardTitle>
-          <CardDescription>
-            Fetch and store content from a URL using Jina Reader
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div className="border border-border rounded-lg overflow-hidden">
+        <div className="p-6 space-y-4">
           <div className="space-y-2">
             <label className="text-sm text-muted-foreground">URL</label>
             <Input
@@ -100,7 +85,7 @@ export function IngestPage() {
               }}
             />
             {url && !isValidUrl && (
-              <p className="text-sm text-destructive">
+              <p className="text-2xs text-destructive">
                 Please enter a valid URL starting with http:// or https://
               </p>
             )}
@@ -108,59 +93,48 @@ export function IngestPage() {
 
           {/* Preview Result */}
           {previewResult.waiting && (
-            <Card className="bg-muted/50">
-              <CardContent className="py-4">
-                <Skeleton className="h-4 w-48 mb-2" />
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-3/4 mt-2" />
-              </CardContent>
-            </Card>
+            <div className="p-4 bg-muted/30 rounded">
+              <LoadingState rows={2} />
+            </div>
           )}
 
           {Result.isSuccess(previewResult) && (
-            <Card className="bg-muted/50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Preview</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm space-y-2">
-                <pre className="whitespace-pre-wrap overflow-auto max-h-64 text-xs">
-                  {JSON.stringify(previewResult.value, null, 2)}
-                </pre>
-              </CardContent>
-            </Card>
+            <div className="border border-border rounded overflow-hidden">
+              <div className="px-4 py-2 bg-muted/30 border-b border-border">
+                <span className="text-xs font-mono uppercase tracking-wide text-muted-foreground">
+                  Preview
+                </span>
+              </div>
+              <pre className="p-4 text-xs overflow-auto max-h-64 bg-background">
+                {JSON.stringify(previewResult.value, null, 2)}
+              </pre>
+            </div>
           )}
 
           {Result.isFailure(previewResult) && (
-            <Alert variant="destructive">
-              <AlertDescription>
-                Preview failed: {String(previewResult.cause)}
-              </AlertDescription>
-            </Alert>
+            <ErrorState title="Preview failed" message={String(previewResult.cause)} />
           )}
 
           {Result.isFailure(ingestResult) && (
-            <Alert variant="destructive">
-              <AlertDescription>
-                Ingestion failed: {String(ingestResult.cause)}
-              </AlertDescription>
-            </Alert>
+            <ErrorState title="Ingestion failed" message={String(ingestResult.cause)} />
           )}
-        </CardContent>
-        <CardFooter className="gap-2">
+        </div>
+
+        <div className="flex gap-2 px-6 py-4 bg-muted/30 border-t border-border">
           <Button
             variant="outline"
             onClick={handlePreview}
             disabled={!isValidUrl || isLoading}
           >
-            <Eye className="h-4 w-4" />
+            <Eye className="w-4 h-4" />
             Preview
           </Button>
           <Button onClick={handleIngest} disabled={!isValidUrl || isLoading}>
-            <Upload className="h-4 w-4" />
+            <Upload className="w-4 h-4" />
             {ingestResult.waiting ? "Ingesting..." : "Ingest"}
           </Button>
-        </CardFooter>
-      </Card>
-    </div>
+        </div>
+      </div>
+    </PageContainer>
   )
 }

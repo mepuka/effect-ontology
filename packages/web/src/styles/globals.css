@@ -218,7 +218,8 @@
 
   /* Sidebar panel */
   .sidebar {
-    @apply border-r border-border bg-background-subtle;
+    border-right: 1px solid hsl(var(--border));
+    background: hsl(var(--background-subtle));
     width: var(--sidebar-width);
     display: flex;
     flex-direction: column;
@@ -237,7 +238,8 @@
 
   /* Inspector panel */
   .inspector-pane {
-    @apply border-l border-border bg-background;
+    border-left: 1px solid hsl(var(--border));
+    background: hsl(var(--background));
     width: 320px;
     overflow: auto;
   }

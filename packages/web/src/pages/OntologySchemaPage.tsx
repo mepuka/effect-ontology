@@ -1,6 +1,23 @@
+/**
+ * OntologySchemaPage
+ *
+ * Displays ontology schema with classes and properties.
+ *
+ * @since 2.0.0
+ * @module pages/OntologySchemaPage
+ */
+
 import { useParams, Link } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { localName } from "@/lib/namespace"
+import {
+  PageContainer,
+  PageHeader,
+  PageSection,
+  ErrorState,
+  LoadingState
+} from "@/components/PageLayout"
+import { ExternalLink } from "lucide-react"
 
 interface VocabularyRef {
   iri: string
@@ -54,24 +71,25 @@ function prefixFromIri(iri: string, imports: VocabularyRef[]): string | null {
 
 function ImportCard({ vocab }: { vocab: VocabularyRef }) {
   return (
-    <div className="border border-stone-200 bg-white px-4 py-3">
+    <div className="border border-border bg-background px-4 py-3 rounded">
       <div className="flex items-baseline justify-between gap-3">
-        <code className="text-sm font-mono font-medium text-amber-700">
+        <code className="text-sm font-mono font-medium text-primary">
           {vocab.prefix}:
         </code>
         {vocab.publisher && (
-          <span className="text-xs text-stone-400">{vocab.publisher}</span>
+          <span className="text-2xs text-muted-foreground">{vocab.publisher}</span>
         )}
       </div>
-      <p className="text-sm text-stone-700 mt-1">{vocab.name}</p>
+      <p className="text-sm text-foreground mt-1">{vocab.name}</p>
       {vocab.specUrl && (
         <a
           href={vocab.specUrl}
           target="_blank"
           rel="noopener"
-          className="text-xs text-blue-600 hover:text-blue-800 hover:underline mt-1 inline-block"
+          className="text-2xs text-primary hover:underline mt-1 inline-flex items-center gap-1"
         >
-          Specification →
+          Specification
+          <ExternalLink className="w-3 h-3" />
         </a>
       )}
     </div>
@@ -83,19 +101,19 @@ function ClassRow({ cls, imports }: { cls: ClassSummary; imports: VocabularyRef[
   const superLocal = cls.superClass ? localName(cls.superClass) : null
 
   return (
-    <tr className="border-b border-stone-100 hover:bg-stone-50/50">
+    <tr className="border-b border-border-subtle hover:bg-muted/30">
       <td className="py-3 pr-4 align-top">
-        <code className="text-sm font-mono text-emerald-700">{cls.localName}</code>
+        <code className="text-sm font-mono text-success">{cls.localName}</code>
       </td>
       <td className="py-3 pr-4 align-top">
         {cls.superClass && (
-          <code className="text-xs font-mono text-stone-500">
+          <code className="text-2xs font-mono text-muted-foreground">
             {superPrefix ? `${superPrefix}:${superLocal}` : superLocal}
           </code>
         )}
       </td>
-      <td className="py-3 align-top text-sm text-stone-600 max-w-md">
-        {cls.comment || <span className="text-stone-300">—</span>}
+      <td className="py-3 align-top text-sm text-muted-foreground max-w-md">
+        {cls.comment || <span className="text-muted-foreground/50">—</span>}
       </td>
     </tr>
   )
@@ -103,21 +121,21 @@ function ClassRow({ cls, imports }: { cls: ClassSummary; imports: VocabularyRef[
 
 function PropertyRow({ prop }: { prop: PropertySummary }) {
   return (
-    <tr className="border-b border-stone-100 hover:bg-stone-50/50">
+    <tr className="border-b border-border-subtle hover:bg-muted/30">
       <td className="py-3 pr-4 align-top">
-        <code className="text-sm font-mono text-blue-700">{prop.localName}</code>
+        <code className="text-sm font-mono text-primary">{prop.localName}</code>
       </td>
       <td className="py-3 pr-4 align-top">
-        <span className={`text-xs px-1.5 py-0.5 rounded ${
+        <span className={`text-2xs px-1.5 py-0.5 rounded ${
           prop.isObjectProperty
-            ? "bg-violet-100 text-violet-700"
-            : "bg-stone-100 text-stone-600"
+            ? "bg-primary/10 text-primary"
+            : "bg-muted text-muted-foreground"
         }`}>
           {prop.isObjectProperty ? "Object" : "Datatype"}
         </span>
       </td>
-      <td className="py-3 align-top text-sm text-stone-600 max-w-md">
-        {prop.comment || <span className="text-stone-300">—</span>}
+      <td className="py-3 align-top text-sm text-muted-foreground max-w-md">
+        {prop.comment || <span className="text-muted-foreground/50">—</span>}
       </td>
     </tr>
   )
@@ -139,181 +157,146 @@ export function OntologySchemaPage() {
     enabled: !!ontologyId
   })
 
-  if (isLoading) {
-    return (
-      <div className="max-w-4xl mx-auto py-16 text-center text-stone-500">
-        Loading ontology schema...
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="max-w-4xl mx-auto">
-        <div className="border-l-4 border-red-400 bg-red-50 p-4">
-          <p className="text-red-800 text-sm">
-            {error instanceof Error ? error.message : "Failed to load ontology"}
-          </p>
-        </div>
-        <Link to="/ontologies" className="text-sm text-blue-600 hover:underline mt-4 inline-block">
-          ← Back to ontologies
-        </Link>
-      </div>
-    )
-  }
-
-  if (!data) return null
-
   return (
-    <div className="max-w-4xl mx-auto">
-      {/* Breadcrumb */}
-      <nav className="mb-6">
-        <Link
-          to="/ontologies"
-          className="text-sm text-stone-500 hover:text-amber-700 hover:underline"
-        >
-          ← Ontologies
-        </Link>
-      </nav>
+    <PageContainer size="lg">
+      <PageHeader
+        title={data?.title || "Schema"}
+        subtitle={data?.iri}
+        backTo={{ label: "Ontologies", href: "/ontologies" }}
+        actions={
+          data && (
+            <span className="text-sm font-mono text-muted-foreground bg-muted px-3 py-1 rounded">
+              v{data.version}
+            </span>
+          )
+        }
+      />
 
-      {/* Header */}
-      <header className="mb-10 border-b border-stone-200 pb-8">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="font-serif text-3xl text-stone-900 mb-2">
-              {data.title}
-            </h1>
-            <code className="text-sm font-mono text-stone-500 break-all">
-              {data.iri}
-            </code>
-          </div>
-          <span className="text-sm font-mono text-stone-400 bg-stone-100 px-3 py-1 rounded shrink-0">
-            v{data.version}
-          </span>
-        </div>
+      {isLoading && <LoadingState rows={5} />}
 
-        {data.description && (
-          <p className="text-stone-600 mt-4 leading-relaxed max-w-2xl">
-            {data.description}
-          </p>
-        )}
+      {error && (
+        <ErrorState
+          title="Failed to load ontology"
+          message={(error as Error).message}
+        />
+      )}
 
-        <dl className="grid grid-cols-2 gap-x-8 gap-y-2 mt-6 text-sm">
-          <div className="flex gap-2">
-            <dt className="text-stone-400">Namespace:</dt>
-            <dd className="font-mono text-stone-600 truncate">{data.targetNamespace}</dd>
-          </div>
-          {data.creator && (
-            <div className="flex gap-2">
-              <dt className="text-stone-400">Creator:</dt>
-              <dd className="text-stone-600">{data.creator}</dd>
-            </div>
+      {data && (
+        <>
+          {/* Description */}
+          {data.description && (
+            <p className="text-muted-foreground mb-6 leading-relaxed max-w-2xl">
+              {data.description}
+            </p>
           )}
-          {data.created && (
+
+          {/* Metadata */}
+          <dl className="grid grid-cols-2 gap-x-8 gap-y-2 mb-8 text-sm">
             <div className="flex gap-2">
-              <dt className="text-stone-400">Created:</dt>
-              <dd className="text-stone-600">{data.created}</dd>
+              <dt className="text-muted-foreground">Namespace:</dt>
+              <dd className="font-mono text-foreground truncate">{data.targetNamespace}</dd>
             </div>
+            {data.creator && (
+              <div className="flex gap-2">
+                <dt className="text-muted-foreground">Creator:</dt>
+                <dd className="text-foreground">{data.creator}</dd>
+              </div>
+            )}
+            {data.created && (
+              <div className="flex gap-2">
+                <dt className="text-muted-foreground">Created:</dt>
+                <dd className="text-foreground">{data.created}</dd>
+              </div>
+            )}
+          </dl>
+
+          {/* Imports */}
+          <PageSection title={`Imported Vocabularies (${data.imports.length})`}>
+            <div className="grid grid-cols-2 gap-3">
+              {data.imports.map((vocab) => (
+                <ImportCard key={vocab.iri} vocab={vocab} />
+              ))}
+            </div>
+          </PageSection>
+
+          {/* Classes */}
+          {data.classes.length > 0 && (
+            <PageSection title={`Domain Classes (${data.classes.length})`}>
+              <div className="border border-border rounded overflow-hidden">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-muted/30 border-b border-border">
+                      <th className="py-2 px-4 text-2xs font-mono uppercase tracking-wide text-muted-foreground">
+                        Class
+                      </th>
+                      <th className="py-2 px-4 text-2xs font-mono uppercase tracking-wide text-muted-foreground">
+                        Extends
+                      </th>
+                      <th className="py-2 px-4 text-2xs font-mono uppercase tracking-wide text-muted-foreground">
+                        Description
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.classes.map((cls) => (
+                      <ClassRow key={cls.iri} cls={cls} imports={data.imports} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </PageSection>
           )}
-        </dl>
-      </header>
 
-      {/* Imports */}
-      <section className="mb-10">
-        <h2 className="text-xs font-mono uppercase tracking-widest text-stone-400 mb-4">
-          Imported Vocabularies ({data.imports.length})
-        </h2>
-        <div className="grid grid-cols-2 gap-3">
-          {data.imports.map((vocab) => (
-            <ImportCard key={vocab.iri} vocab={vocab} />
-          ))}
-        </div>
-      </section>
+          {/* Properties */}
+          {data.properties.length > 0 && (
+            <PageSection title={`Properties (${data.properties.length})`}>
+              <div className="border border-border rounded overflow-hidden">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-muted/30 border-b border-border">
+                      <th className="py-2 px-4 text-2xs font-mono uppercase tracking-wide text-muted-foreground">
+                        Property
+                      </th>
+                      <th className="py-2 px-4 text-2xs font-mono uppercase tracking-wide text-muted-foreground">
+                        Type
+                      </th>
+                      <th className="py-2 px-4 text-2xs font-mono uppercase tracking-wide text-muted-foreground">
+                        Description
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.properties.map((prop) => (
+                      <PropertyRow key={prop.iri} prop={prop} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </PageSection>
+          )}
 
-      {/* Classes */}
-      {data.classes.length > 0 && (
-        <section className="mb-10">
-          <h2 className="text-xs font-mono uppercase tracking-widest text-stone-400 mb-4">
-            Domain Classes ({data.classes.length})
-          </h2>
-          <div className="border border-stone-200 rounded overflow-hidden">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-stone-50 border-b border-stone-200">
-                  <th className="py-2 px-4 text-xs font-mono uppercase tracking-wide text-stone-500">
-                    Class
-                  </th>
-                  <th className="py-2 px-4 text-xs font-mono uppercase tracking-wide text-stone-500">
-                    Extends
-                  </th>
-                  <th className="py-2 px-4 text-xs font-mono uppercase tracking-wide text-stone-500">
-                    Description
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.classes.map((cls) => (
-                  <ClassRow key={cls.iri} cls={cls} imports={data.imports} />
+          {/* References */}
+          {data.seeAlso.length > 0 && (
+            <PageSection title="References">
+              <ul className="space-y-1">
+                {data.seeAlso.map((url) => (
+                  <li key={url}>
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener"
+                      className="text-sm text-primary hover:underline font-mono inline-flex items-center gap-1"
+                    >
+                      {url}
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </li>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+              </ul>
+            </PageSection>
+          )}
+        </>
       )}
-
-      {/* Properties */}
-      {data.properties.length > 0 && (
-        <section className="mb-10">
-          <h2 className="text-xs font-mono uppercase tracking-widest text-stone-400 mb-4">
-            Properties ({data.properties.length})
-          </h2>
-          <div className="border border-stone-200 rounded overflow-hidden">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-stone-50 border-b border-stone-200">
-                  <th className="py-2 px-4 text-xs font-mono uppercase tracking-wide text-stone-500">
-                    Property
-                  </th>
-                  <th className="py-2 px-4 text-xs font-mono uppercase tracking-wide text-stone-500">
-                    Type
-                  </th>
-                  <th className="py-2 px-4 text-xs font-mono uppercase tracking-wide text-stone-500">
-                    Description
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.properties.map((prop) => (
-                  <PropertyRow key={prop.iri} prop={prop} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      {/* See Also */}
-      {data.seeAlso.length > 0 && (
-        <section className="mb-10">
-          <h2 className="text-xs font-mono uppercase tracking-widest text-stone-400 mb-3">
-            References
-          </h2>
-          <ul className="space-y-1">
-            {data.seeAlso.map((url) => (
-              <li key={url}>
-                <a
-                  href={url}
-                  target="_blank"
-                  rel="noopener"
-                  className="text-sm text-blue-600 hover:text-blue-800 hover:underline font-mono"
-                >
-                  {url}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-    </div>
+    </PageContainer>
   )
 }

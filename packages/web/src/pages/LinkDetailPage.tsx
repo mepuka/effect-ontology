@@ -9,18 +9,21 @@
 
 import { useAtomValue } from "@effect-atom/atom-react"
 import { Result } from "@effect-atom/atom"
-import { useParams, Link } from "react-router-dom"
-import { ArrowLeft, ExternalLink } from "lucide-react"
+import { useParams } from "react-router-dom"
+import { ExternalLink } from "lucide-react"
 import { linkDetailAtom } from "@/atoms/api"
 import { linksLink } from "@/lib/routing"
-import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card"
+import {
+  PageContainer,
+  PageHeader,
+  PageSection,
+  ErrorState,
+  LoadingState
+} from "@/components/PageLayout"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 
 function formatDate(date: unknown): string {
-  if (!date) return "-"
+  if (!date) return "—"
   try {
     return new Date(date as string).toLocaleDateString("en-US", {
       year: "numeric",
@@ -30,8 +33,30 @@ function formatDate(date: unknown): string {
       minute: "2-digit"
     })
   } catch {
-    return "-"
+    return "—"
   }
+}
+
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex justify-between py-2 border-b border-border-subtle last:border-0">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-sm text-foreground">{value}</span>
+    </div>
+  )
+}
+
+function DetailCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="border border-border rounded-lg overflow-hidden">
+      <div className="px-4 py-2 bg-muted/30 border-b border-border">
+        <h3 className="text-xs font-mono uppercase tracking-wide text-muted-foreground">
+          {title}
+        </h3>
+      </div>
+      <div className="px-4 py-2">{children}</div>
+    </div>
+  )
 }
 
 export function LinkDetailPage() {
@@ -39,198 +64,120 @@ export function LinkDetailPage() {
   const result = useAtomValue(linkDetailAtom({ ontologyId, id: id! }))
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Link to={linksLink(ontologyId)}>
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Button>
-        </Link>
-      </div>
+    <PageContainer size="lg">
+      <PageHeader
+        title="Link Details"
+        backTo={{ label: "Links", href: linksLink(ontologyId) }}
+      />
 
       {Result.match(result, {
-        onInitial: () => <DetailSkeleton />,
+        onInitial: () => <LoadingState rows={4} />,
         onFailure: (failure) => (
-          <Alert variant="destructive">
-            <AlertDescription>
-              Failed to load link: {String(failure.cause)}
-            </AlertDescription>
-          </Alert>
+          <ErrorState
+            title="Failed to load link"
+            message={String(failure.cause)}
+          />
         ),
         onSuccess: (success) => {
           const link = success.value
           return (
             <div className="space-y-6">
-              {/* Header */}
+              {/* Header info */}
               <div>
-                <h1 className="text-2xl font-bold">
+                <h2 className="font-serif text-xl text-foreground mb-2">
                   {link.headline || "Untitled"}
-                </h1>
+                </h2>
                 {link.description && (
-                  <p className="text-muted-foreground mt-1">{link.description}</p>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {link.description}
+                  </p>
                 )}
                 {link.sourceUri && (
                   <a
                     href={link.sourceUri}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-primary hover:underline inline-flex items-center gap-1 mt-2"
+                    className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
                   >
                     {link.sourceUri}
-                    <ExternalLink className="h-3 w-3" />
+                    <ExternalLink className="w-3 h-3" />
                   </a>
                 )}
               </div>
 
-              {/* Metadata */}
+              {/* Details and Timestamps */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Details</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Status</span>
-                      <Badge>{link.status}</Badge>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Type</span>
-                      <span>{link.sourceType}</span>
-                    </div>
-                    {link.author && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Author</span>
-                        <span>{link.author}</span>
-                      </div>
-                    )}
-                    {link.organization && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Organization</span>
-                        <span>{link.organization}</span>
-                      </div>
-                    )}
-                    {link.language && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Language</span>
-                        <span>{link.language}</span>
-                      </div>
-                    )}
-                    {link.wordCount && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Word Count</span>
-                        <span>{link.wordCount.toLocaleString()}</span>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+                <DetailCard title="Details">
+                  <DetailRow label="Status" value={<Badge>{link.status}</Badge>} />
+                  <DetailRow label="Type" value={link.sourceType} />
+                  {link.author && <DetailRow label="Author" value={link.author} />}
+                  {link.organization && <DetailRow label="Organization" value={link.organization} />}
+                  {link.language && <DetailRow label="Language" value={link.language} />}
+                  {link.wordCount && (
+                    <DetailRow label="Word Count" value={link.wordCount.toLocaleString()} />
+                  )}
+                </DetailCard>
 
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Timestamps</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Published</span>
-                      <span>{formatDate(link.publishedAt)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Fetched</span>
-                      <span>{formatDate(link.fetchedAt)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Enriched</span>
-                      <span>{formatDate(link.enrichedAt)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Processed</span>
-                      <span>{formatDate(link.processedAt)}</span>
-                    </div>
-                  </CardContent>
-                </Card>
+                <DetailCard title="Timestamps">
+                  <DetailRow label="Published" value={formatDate(link.publishedAt)} />
+                  <DetailRow label="Fetched" value={formatDate(link.fetchedAt)} />
+                  <DetailRow label="Enriched" value={formatDate(link.enrichedAt)} />
+                  <DetailRow label="Processed" value={formatDate(link.processedAt)} />
+                </DetailCard>
               </div>
 
               {/* Topics & Entities */}
               {(link.topics.length > 0 || link.keyEntities.length > 0) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {link.topics.length > 0 && (
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm">Topics</CardTitle>
-                      </CardHeader>
-                      <CardContent className="flex flex-wrap gap-2">
+                    <DetailCard title="Topics">
+                      <div className="flex flex-wrap gap-2 py-1">
                         {link.topics.map((topic: string, i: number) => (
                           <Badge key={i} variant="secondary">
                             {topic}
                           </Badge>
                         ))}
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </DetailCard>
                   )}
 
                   {link.keyEntities.length > 0 && (
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm">Key Entities</CardTitle>
-                      </CardHeader>
-                      <CardContent className="flex flex-wrap gap-2">
+                    <DetailCard title="Key Entities">
+                      <div className="flex flex-wrap gap-2 py-1">
                         {link.keyEntities.map((entity: string, i: number) => (
                           <Badge key={i} variant="outline">
                             {entity}
                           </Badge>
                         ))}
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </DetailCard>
                   )}
                 </div>
               )}
 
               {/* Storage Info */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Storage</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm font-mono">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">ID</span>
-                    <span>{link.id}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Content Hash</span>
-                    <span className="truncate max-w-xs">{link.contentHash}</span>
-                  </div>
-                  {link.storageUri && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Storage URI</span>
-                      <span className="truncate max-w-xs">{link.storageUri}</span>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              <DetailCard title="Storage">
+                <DetailRow label="ID" value={<code className="text-xs">{link.id}</code>} />
+                <DetailRow
+                  label="Content Hash"
+                  value={<code className="text-xs truncate max-w-xs">{link.contentHash}</code>}
+                />
+                {link.storageUri && (
+                  <DetailRow
+                    label="Storage URI"
+                    value={<code className="text-xs truncate max-w-xs">{link.storageUri}</code>}
+                  />
+                )}
+              </DetailCard>
 
               {/* Error */}
               {link.errorMessage && (
-                <Alert variant="destructive">
-                  <AlertDescription>{link.errorMessage}</AlertDescription>
-                </Alert>
+                <ErrorState title="Processing Error" message={link.errorMessage} />
               )}
             </div>
           )
         }
       })}
-    </div>
-  )
-}
-
-function DetailSkeleton() {
-  return (
-    <div className="space-y-6">
-      <Skeleton className="h-8 w-64" />
-      <Skeleton className="h-4 w-96" />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Skeleton className="h-48" />
-        <Skeleton className="h-48" />
-      </div>
-    </div>
+    </PageContainer>
   )
 }

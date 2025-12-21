@@ -10,22 +10,18 @@
 import { useAtomValue, useAtomSet } from "@effect-atom/atom-react"
 import { Result } from "@effect-atom/atom"
 import { Link, useParams } from "react-router-dom"
-import { Plus, RefreshCw } from "lucide-react"
+import { Plus, RefreshCw, FileText } from "lucide-react"
 import { linksAtom, linksFiltersAtom } from "@/atoms/api"
 import { ingestLink, linkLink } from "@/lib/routing"
-import { Card, CardHeader, CardContent } from "@/components/ui/card"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from "@/components/ui/table"
+  PageContainer,
+  PageHeader,
+  EmptyState,
+  ErrorState,
+  LoadingState
+} from "@/components/PageLayout"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 
 function getStatusVariant(status: string) {
   switch (status) {
@@ -40,120 +36,141 @@ function getStatusVariant(status: string) {
   }
 }
 
+function LinkRow({
+  link,
+  ontologyId
+}: {
+  link: {
+    id: string
+    headline?: string
+    sourceUri?: string
+    organization?: string
+    status: string
+    sourceType: string
+    wordCount?: number
+  }
+  ontologyId: string
+}) {
+  return (
+    <Link
+      to={linkLink(ontologyId, link.id)}
+      className="data-row flex items-center gap-4 px-4 py-3 border-b border-border-subtle"
+    >
+      <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+
+      <div className="flex-1 min-w-0">
+        <div className="text-sm text-foreground truncate">
+          {link.headline || link.sourceUri || link.id}
+        </div>
+        {link.organization && (
+          <div className="text-2xs text-muted-foreground">{link.organization}</div>
+        )}
+      </div>
+
+      <Badge variant={getStatusVariant(link.status)} className="flex-shrink-0">
+        {link.status}
+      </Badge>
+
+      <span className="text-2xs text-muted-foreground w-16 text-right flex-shrink-0">
+        {link.sourceType}
+      </span>
+
+      <span className="text-2xs text-muted-foreground tabular-nums w-16 text-right flex-shrink-0">
+        {link.wordCount?.toLocaleString() ?? "—"}
+      </span>
+    </Link>
+  )
+}
+
 export function LinksPage() {
   const { ontologyId = "seattle" } = useParams<{ ontologyId: string }>()
   const result = useAtomValue(linksAtom(ontologyId))
   const setFilters = useAtomSet(linksFiltersAtom(ontologyId))
 
   const handleRefresh = () => {
-    // Trigger re-fetch by updating filters with same values
     setFilters((prev) => ({ ...prev }))
   }
 
   const isLoading = result.waiting
+  const linkCount = Result.isSuccess(result) ? result.value.links.length : 0
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Ingested Links</h1>
-          <p className="text-muted-foreground">
-            Manage documents fetched via Jina Reader
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
-            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-          <Link to={ingestLink(ontologyId)}>
-            <Button size="sm">
-              <Plus className="h-4 w-4" />
-              Ingest URL
+    <PageContainer size="lg">
+      <PageHeader
+        title="Ingested Links"
+        subtitle="Documents fetched via Jina Reader"
+        actions={
+          <>
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
+              <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+              Refresh
             </Button>
-          </Link>
-        </div>
+            <Link to={ingestLink(ontologyId)}>
+              <Button size="sm">
+                <Plus className="w-4 h-4" />
+                Ingest URL
+              </Button>
+            </Link>
+          </>
+        }
+      />
+
+      {/* Header row */}
+      <div className="flex items-center gap-4 px-4 py-2 border-b border-border bg-muted/30 text-2xs font-mono uppercase tracking-wide text-muted-foreground">
+        <div className="w-4" />
+        <div className="flex-1">Document</div>
+        <div className="w-20">Status</div>
+        <div className="w-16 text-right">Type</div>
+        <div className="w-16 text-right">Words</div>
       </div>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">
-              {Result.isSuccess(result)
-                ? `${result.value.links.length} links`
-                : "Loading..."}
-            </span>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {Result.match(result, {
-            onInitial: () => (
-              <div className="space-y-2">
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
-              </div>
-            ),
-            onFailure: (failure) => (
-              <Alert variant="destructive">
-                <AlertDescription>
-                  Failed to load links: {String(failure.cause)}
-                </AlertDescription>
-              </Alert>
-            ),
-            onSuccess: (success) =>
-              success.value.links.length === 0 ? (
-                <div className="py-8 text-center text-muted-foreground">
-                  No links ingested yet.{" "}
-                  <Link to={ingestLink(ontologyId)} className="text-primary underline">
-                    Ingest your first URL
+      {/* Content */}
+      <div className="border border-border rounded-lg overflow-hidden">
+        {Result.match(result, {
+          onInitial: () => (
+            <div className="p-4">
+              <LoadingState rows={5} />
+            </div>
+          ),
+          onFailure: (failure) => (
+            <div className="p-4">
+              <ErrorState
+                title="Failed to load links"
+                message={String(failure.cause)}
+              />
+            </div>
+          ),
+          onSuccess: (success) =>
+            success.value.links.length === 0 ? (
+              <EmptyState
+                icon={<FileText className="w-6 h-6" />}
+                title="No links ingested yet"
+                description="Start by ingesting your first URL"
+                action={
+                  <Link to={ingestLink(ontologyId)}>
+                    <Button size="sm">
+                      <Plus className="w-4 h-4" />
+                      Ingest URL
+                    </Button>
                   </Link>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Headline</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead className="text-right">Words</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {success.value.links.map((link) => (
-                      <TableRow key={link.id}>
-                        <TableCell>
-                          <Link
-                            to={linkLink(ontologyId, link.id)}
-                            className="hover:underline text-foreground"
-                          >
-                            {link.headline || link.sourceUri || link.id}
-                          </Link>
-                          {link.organization && (
-                            <div className="text-xs text-muted-foreground">
-                              {link.organization}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={getStatusVariant(link.status)}>
-                            {link.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {link.sourceType}
-                        </TableCell>
-                        <TableCell className="text-right text-muted-foreground">
-                          {link.wordCount?.toLocaleString() ?? "-"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )
-          })}
-        </CardContent>
-      </Card>
-    </div>
+                }
+              />
+            ) : (
+              <div>
+                {success.value.links.map((link) => (
+                  <LinkRow key={link.id} link={link} ontologyId={ontologyId} />
+                ))}
+              </div>
+            )
+        })}
+      </div>
+
+      {/* Footer */}
+      {linkCount > 0 && (
+        <div className="mt-4 text-2xs text-muted-foreground text-center">
+          {linkCount} {linkCount === 1 ? "link" : "links"}
+        </div>
+      )}
+    </PageContainer>
   )
 }
