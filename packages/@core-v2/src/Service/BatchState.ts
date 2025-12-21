@@ -11,8 +11,6 @@ const stateKey = (batchId: BatchId) => PathLayout.batch.status(batchId)
 const encodeState = Schema.encode(BatchState)
 const decodeState = Schema.decodeUnknown(Schema.parseJson(BatchState))
 
-export const BatchStateHub = Context.GenericTag<PubSub.PubSub<BatchState>>("@core-v2/BatchStateHub")
-
 /**
  * Maximum number of pending state updates in the PubSub.
  * Uses sliding strategy (drops oldest) to prevent memory growth.
@@ -22,10 +20,11 @@ export const BatchStateHub = Context.GenericTag<PubSub.PubSub<BatchState>>("@cor
  */
 const BATCH_STATE_HUB_CAPACITY = 1000
 
-export const BatchStateHubLayer = Layer.effect(
-  BatchStateHub,
-  PubSub.sliding<BatchState>(BATCH_STATE_HUB_CAPACITY)
-)
+export class BatchStateHub extends Effect.Service<BatchStateHub>()("@core-v2/BatchStateHub", {
+  effect: PubSub.sliding<BatchState>(BATCH_STATE_HUB_CAPACITY)
+}) {}
+
+export const BatchStateHubLayer = BatchStateHub.Default
 
 const storageAsKeyValueStore = Effect.gen(function*() {
   const storage = yield* StorageService
