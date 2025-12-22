@@ -9,3 +9,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## [~] Track: End-to-End Data Path Coherence Review
 *Link: [./conductor/tracks/data_path_coherence_review/](./conductor/tracks/data_path_coherence_review/)*
+
+---
+
+## [~] Track: Core Capabilities Evaluation (Seattle Ontology Case Study)
+*Link: [./conductor/tracks/seattle_eval_20251222/](./conductor/tracks/seattle_eval_20251222/)*
