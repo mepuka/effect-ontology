@@ -347,14 +347,42 @@ const makeLocalStore = (config: StorageConfig) =>
       })
     })
 
+    // Recursive walk helper for list() - defined outside to avoid closure issues
+    const walkDirRecursive = (
+      currentDir: string,
+      relativePath: string
+    ): Effect.Effect<Array<string>> =>
+      Effect.gen(function*() {
+        const entries = yield* fs.readDirectory(currentDir).pipe(
+          Effect.catchAll(() => Effect.succeed([] as ReadonlyArray<string>))
+        )
+        const results: Array<string> = []
+
+        for (const entry of entries) {
+          const fullPath = path.join(currentDir, entry)
+          const entryRelativePath = relativePath ? `${relativePath}/${entry}` : entry
+          const stat = yield* fs.stat(fullPath).pipe(Effect.orElseSucceed(() => null))
+
+          if (stat === null) continue
+
+          if (stat.type === "Directory") {
+            const subResults = yield* walkDirRecursive(fullPath, entryRelativePath)
+            results.push(...subResults)
+          } else {
+            results.push(entryRelativePath)
+          }
+        }
+        return results
+      })
+
     return {
       ...impl,
+      // Recursive list to match GCS behavior - returns full relative paths
       list: (prefix) =>
         Effect.gen(function*() {
           const dir = path.join(basePath, globalPrefix, prefix)
           if (!(yield* fs.exists(dir))) return []
-          const files = yield* fs.readDirectory(dir)
-          return files
+          return yield* walkDirRecursive(dir, "")
         }),
       getWithGeneration: (key) =>
         Effect.gen(function*() {

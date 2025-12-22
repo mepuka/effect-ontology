@@ -15,7 +15,8 @@ import { EmbeddingProvider } from "../Service/EmbeddingProvider.js"
 import {
   EmbeddingRateLimiter,
   EmbeddingRateLimiterLocal,
-  EmbeddingRateLimiterVoyage
+  EmbeddingRateLimiterVoyage,
+  makeEmbeddingRateLimiter
 } from "../Service/EmbeddingRateLimiter.js"
 import { NomicEmbeddingProviderDefault, NomicEmbeddingProviderLive } from "../Service/NomicEmbeddingProvider.js"
 import {
@@ -62,7 +63,10 @@ export const EmbeddingProviderFromConfig: Layer.Layer<
 )
 
 /**
- * Dynamic rate limiter selection based on config
+ * Dynamic rate limiter based on config values
+ *
+ * Uses EMBEDDING_RATE_LIMIT_RPM and EMBEDDING_MAX_CONCURRENT from config.
+ * Falls back to provider defaults if not specified.
  *
  * @since 2.0.0
  * @category Layers
@@ -71,9 +75,14 @@ export const EmbeddingRateLimiterFromConfig: Layer.Layer<EmbeddingRateLimiter, n
   Layer.unwrapEffect(
     Effect.gen(function* () {
       const config = yield* ConfigService
-      return config.embedding.provider === "voyage"
-        ? EmbeddingRateLimiterVoyage
-        : EmbeddingRateLimiterLocal
+      const { provider, rateLimitRpm, maxConcurrent } = config.embedding
+
+      // Use config values to create rate limiter
+      return makeEmbeddingRateLimiter({
+        provider,
+        requestsPerMinute: rateLimitRpm,
+        maxConcurrent
+      })
     })
   )
 

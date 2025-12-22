@@ -205,17 +205,19 @@ export const makeVoyageProvider = (
               const inputType = mapInputType(requests[0].taskType)
               const texts = requests.map((r) => r.text)
 
-              const request = yield* HttpClientRequest.post(VOYAGE_API_URL).pipe(
+              // Build request (pure value, not Effect)
+              // Note: bodyUnsafeJson is synchronous and returns HttpClientRequest directly,
+              // unlike bodyJson which returns Effect<HttpClientRequest, HttpBodyError>
+              const request = HttpClientRequest.post(VOYAGE_API_URL).pipe(
                 HttpClientRequest.setHeaders({
                   Authorization: `Bearer ${config.apiKey}`,
                   "Content-Type": "application/json"
                 }),
-                HttpClientRequest.bodyJson({
+                HttpClientRequest.bodyUnsafeJson({
                   input: texts,
                   model,
                   input_type: inputType
-                }),
-                Effect.mapError((e) => mapVoyageError(e, timeoutMs))
+                })
               )
 
               const httpResponse = yield* httpClient.execute(request).pipe(

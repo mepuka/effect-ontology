@@ -22,7 +22,9 @@ import { BunContext } from "@effect/platform-bun"
 import { ConfigProvider, DateTime, Effect, Layer, ManagedRuntime, Stream } from "effect"
 import * as N3 from "n3"
 import { ConfigServiceDefault } from "../Service/Config.js"
+import { EmbeddingCache } from "../Service/EmbeddingCache.js"
 import { EmbeddingProvider, type EmbeddingProviderMethods } from "../Service/EmbeddingProvider.js"
+import { MetricsService } from "../Telemetry/Metrics.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { Grounder } from "../Service/Grounder.js"
 import {
@@ -198,18 +200,32 @@ const MockEmbeddingProvider = Layer.succeed(
  *
  * @since 2.0.0
  */
+// Embedding infrastructure for NlpService.Default
+const EmbeddingInfraLayer = Layer.mergeAll(
+  MockEmbeddingProvider,
+  EmbeddingCache.Default,
+  MetricsService.Default
+)
+
+// OntologyService.Default includes NlpService.Default which needs embedding infrastructure
 const ontologyLayer = OntologyService.Default.pipe(
+  Layer.provide(EmbeddingInfraLayer),
   Layer.provide(StorageServiceTest),
   Layer.provideMerge(BunContext.layer)
 )
 
+// NlpService bundle with embedding infrastructure provided
+const NlpBundle = NlpService.Default.pipe(
+  Layer.provide(EmbeddingInfraLayer)
+)
+
 export const TestLayers = Layer.mergeAll(
-  NlpService.Default,
+  NlpBundle,
   RdfBuilder.Default,
   ontologyLayer,
   MockShaclService(),
   MockLanguageModel,
-  MockEmbeddingProvider,
+  EmbeddingInfraLayer,  // Export for other services that may need it
   EntityExtractor.Test,
   RelationExtractor.Test,
   Grounder.Test,

@@ -9,7 +9,31 @@
 import { Effect, Layer, Option } from "effect"
 import { describe, expect, it } from "vitest"
 import { ConfigService } from "../../src/Service/Config.js"
+import { EmbeddingCache } from "../../src/Service/EmbeddingCache.js"
+import { EmbeddingProvider, type EmbeddingProviderMethods } from "../../src/Service/EmbeddingProvider.js"
 import { NlpService } from "../../src/Service/Nlp.js"
+import { MetricsService } from "../../src/Telemetry/Metrics.js"
+
+// Mock EmbeddingProvider for tests - returns zero vectors
+const MockEmbeddingProvider = Layer.succeed(
+  EmbeddingProvider,
+  {
+    metadata: {
+      providerId: "nomic" as const,
+      modelId: "mock-embed",
+      dimension: 768
+    },
+    embedBatch: (_requests) => Effect.succeed(_requests.map(() => new Array(768).fill(0))),
+    cosineSimilarity: (_a, _b) => 0
+  } satisfies EmbeddingProviderMethods
+)
+
+// Embedding infrastructure for NlpService.Default
+const EmbeddingInfraLayer = Layer.mergeAll(
+  MockEmbeddingProvider,
+  EmbeddingCache.Default,
+  MetricsService.Default
+)
 
 // Mock ConfigService for testing
 const TestConfigService = Layer.succeed(ConfigService, {
@@ -104,7 +128,10 @@ const TestConfigService = Layer.succeed(ConfigService, {
   }
 })
 
-const TestNlpLayer = NlpService.Default.pipe(Layer.provide(TestConfigService))
+const TestNlpLayer = NlpService.Default.pipe(
+  Layer.provide(EmbeddingInfraLayer),
+  Layer.provide(TestConfigService)
+)
 
 // -----------------------------------------------------------------------------
 // Test Fixtures

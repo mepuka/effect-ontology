@@ -18,10 +18,7 @@ import type { OntologyEmbeddings } from "../Domain/Model/OntologyEmbeddings.js"
 import { type ChunkingStrategy, defaultChunkingParams } from "../Domain/Schema/DocumentMetadata.js"
 import { MetricsService } from "../Telemetry/Metrics.js"
 import { enhanceTextForSearch, generateNGrams } from "../Utils/Text.js"
-import { EmbeddingService, EmbeddingServiceLive } from "./Embedding.js"
-import { EmbeddingCache } from "./EmbeddingCache.js"
-import { NomicEmbeddingProviderDefault } from "./NomicEmbeddingProvider.js"
-import { NomicNlpService, NomicNlpServiceDefault } from "./NomicNlp.js"
+import { EmbeddingService, EmbeddingServiceDefault } from "./Embedding.js"
 
 /**
  * Tokenization result
@@ -508,7 +505,6 @@ export class NlpService extends Effect.Service<NlpService>()(
   "NlpService",
   {
     effect: Effect.gen(function*() {
-      const nomic = yield* NomicNlpService
       const embedding = yield* EmbeddingService
 
       // Initialize wink-nlp with model, pipes (sbd+pos for embeddings)
@@ -604,8 +600,8 @@ export class NlpService extends Effect.Service<NlpService>()(
           k: number = 5
         ) =>
           Effect.gen(function*() {
-            // Get query vector
-            const queryVector = yield* nomic.embed(query, "search_query").pipe(
+            // Get query vector using provider-agnostic EmbeddingService
+            const queryVector = yield* embedding.embed(query, "search_query").pipe(
               Effect.retry(embeddingRetrySchedule),
               Effect.timeout(Duration.millis(EMBEDDING_TIMEOUT_MS))
             )
@@ -613,10 +609,10 @@ export class NlpService extends Effect.Service<NlpService>()(
             // Compute embeddings for all docs (in parallel with concurrency limit)
             const docEmbeddings = yield* Effect.all(
               docs.map((doc, index) =>
-                nomic.embed(doc, "search_document").pipe(
+                embedding.embed(doc, "search_document").pipe(
                   Effect.retry(embeddingRetrySchedule),
                   Effect.timeout(Duration.millis(EMBEDDING_TIMEOUT_MS)),
-                  Effect.map((embedding) => ({ doc, index, embedding })),
+                  Effect.map((docVector) => ({ doc, index, embedding: docVector })),
                   Effect.tapError((error) =>
                     Effect.logWarning("Embedding failed after retries", {
                       docPreview: doc.slice(0, 100),
@@ -632,8 +628,8 @@ export class NlpService extends Effect.Service<NlpService>()(
             // Compute cosine similarity for each document
             const results = docEmbeddings
               .filter((item): item is NonNullable<typeof item> => item !== null)
-              .map(({ doc, embedding, index }) => {
-                const score = nomic.cosineSimilarity(queryVector, embedding)
+              .map(({ doc, embedding: docVector, index }) => {
+                const score = embedding.cosineSimilarity(queryVector, docVector)
                 return { doc, index, score }
               })
               .filter((r) => r.score > 0)
@@ -1121,8 +1117,8 @@ export class NlpService extends Effect.Service<NlpService>()(
               return yield* Effect.fail(new Error("Invalid semantic index reference"))
             }
 
-            // Compute query embedding
-            const queryEmbedding = yield* nomic.embed(query, "search_query").pipe(
+            // Compute query embedding using provider-agnostic EmbeddingService
+            const queryEmbedding = yield* embedding.embed(query, "search_query").pipe(
               Effect.retry(embeddingRetrySchedule),
               Effect.timeout(Duration.millis(EMBEDDING_TIMEOUT_MS))
             )
@@ -1130,7 +1126,7 @@ export class NlpService extends Effect.Service<NlpService>()(
             // Compute cosine similarity for each document
             const results: Array<OntologySearchResult & { score: number }> = []
             for (const [iri, docEmbedding] of embeddingMap.entries()) {
-              const score = nomic.cosineSimilarity(queryEmbedding, docEmbedding)
+              const score = embedding.cosineSimilarity(queryEmbedding, docEmbedding)
 
               if (score > 0) {
                 const domainModel = domainModelMap.get(iri)
@@ -1157,17 +1153,10 @@ export class NlpService extends Effect.Service<NlpService>()(
       }
     }),
     dependencies: [
-      // Bundle provides NomicNlpService and EmbeddingService with its dependencies
-      // EmbeddingServiceLive requires EmbeddingProvider | EmbeddingCache | MetricsService
-      // NomicEmbeddingProviderDefault provides EmbeddingProvider using NomicNlpService
-      Layer.mergeAll(
-        NomicNlpServiceDefault,
-        EmbeddingServiceLive.pipe(
-          Layer.provide(NomicEmbeddingProviderDefault),
-          Layer.provide(EmbeddingCache.Default),
-          Layer.provide(MetricsService.Default)
-        )
-      )
+      // EmbeddingServiceDefault requires EmbeddingProvider | EmbeddingCache | MetricsService
+      // Provider selection (Nomic vs Voyage) is handled by runtime layer composition
+      // This ensures NlpService uses the same provider as the rest of the system
+      EmbeddingServiceDefault
     ],
     accessors: true
   }

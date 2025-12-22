@@ -28,7 +28,7 @@ import { GraphRAG } from "../Service/GraphRAG.js"
 import { StageTimeoutServiceLive } from "../Service/LlmControl/StageTimeout.js"
 import { TokenBudgetServiceLive } from "../Service/LlmControl/TokenBudget.js"
 import { NlpService } from "../Service/Nlp.js"
-import { NomicNlpServiceLive } from "../Service/NomicNlp.js"
+import { EmbeddingInfrastructure } from "./EmbeddingLayers.js"
 import { OntologyService } from "../Service/Ontology.js"
 import { OntologyRegistryService } from "../Service/OntologyRegistry.js"
 import { RdfBuilder } from "../Service/Rdf.js"
@@ -192,7 +192,10 @@ const ShaclBundle = ShaclService.Default.pipe(
  * server restarts and can be warmed up on startup.
  */
 const EmbeddingBundle = EmbeddingServiceLive.pipe(
-  Layer.provideMerge(NomicNlpServiceLive),
+  // EmbeddingInfrastructure provides: EmbeddingProvider | EmbeddingRateLimiter | EmbeddingCache
+  // This respects EMBEDDING_PROVIDER config (nomic vs voyage)
+  Layer.provideMerge(EmbeddingInfrastructure),
+  // Override cache with persistent version when EMBEDDING_CACHE_PATH is configured
   Layer.provideMerge(EmbeddingCacheWithPersistence),
   Layer.provideMerge(MetricsService.Default),
   Layer.provideMerge(StorageBundle),

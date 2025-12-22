@@ -7,11 +7,35 @@ import { Effect, Layer, Option, Secret } from "effect"
 import * as path from "node:path"
 import { describe, expect, it } from "vitest"
 import { ConfigService, DEFAULT_CONFIG } from "../src/Service/Config.js"
+import { EmbeddingCache } from "../src/Service/EmbeddingCache.js"
+import { EmbeddingProvider, type EmbeddingProviderMethods } from "../src/Service/EmbeddingProvider.js"
 import { NlpService } from "../src/Service/Nlp.js"
 import { OntologyService } from "../src/Service/Ontology.js"
 import { RdfBuilder } from "../src/Service/Rdf.js"
 import { StorageServiceLive } from "../src/Service/Storage.js"
+import { MetricsService } from "../src/Telemetry/Metrics.js"
 import { TestConfigProviderLayer } from "./setup.js"
+
+// Mock EmbeddingProvider for tests - returns zero vectors
+const MockEmbeddingProvider = Layer.succeed(
+  EmbeddingProvider,
+  {
+    metadata: {
+      providerId: "nomic" as const,
+      modelId: "mock-embed",
+      dimension: 768
+    },
+    embedBatch: (_requests) => Effect.succeed(_requests.map(() => new Array(768).fill(0))),
+    cosineSimilarity: (_a, _b) => 0
+  } satisfies EmbeddingProviderMethods
+)
+
+// Embedding infrastructure for NlpService.Default
+const EmbeddingInfraLayer = Layer.mergeAll(
+  MockEmbeddingProvider,
+  EmbeddingCache.Default,
+  MetricsService.Default
+)
 
 describe("OntologyService - Football Ontology", () => {
   // Mock ConfigService
@@ -115,6 +139,7 @@ describe("OntologyService - Football Ontology", () => {
   // Storage, Nlp, Rdf -> Config
   const TestLayer = OntologyService.Default.pipe(
     Layer.provide(NlpService.Default),
+    Layer.provide(EmbeddingInfraLayer),
     Layer.provide(RdfBuilder.Default),
     Layer.provide(StorageServiceLive),
     Layer.provide(TestConfig),

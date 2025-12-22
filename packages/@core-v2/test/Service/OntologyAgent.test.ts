@@ -20,6 +20,8 @@ import {
 import { EntityId } from "../../src/Domain/Model/shared.js"
 import { ClaimService } from "../../src/Service/Claim.js"
 import { ConfigService } from "../../src/Service/Config.js"
+import { EmbeddingCache } from "../../src/Service/EmbeddingCache.js"
+import { EmbeddingProvider, type EmbeddingProviderMethods } from "../../src/Service/EmbeddingProvider.js"
 import { ExtractionWorkflow } from "../../src/Service/ExtractionWorkflow.js"
 import { OntologyService } from "../../src/Service/Ontology.js"
 import { OntologyAgent } from "../../src/Service/OntologyAgent.js"
@@ -29,7 +31,29 @@ import { ShaclService, ShaclValidationReport, ShaclViolation, ValidationPolicy }
 import { SparqlService } from "../../src/Service/Sparql.js"
 import { SparqlGenerator } from "../../src/Service/SparqlGenerator.js"
 import { StorageService } from "../../src/Service/Storage.js"
+import { MetricsService } from "../../src/Telemetry/Metrics.js"
 import { TestConfigProviderLayer } from "../setup.js"
+
+// Mock EmbeddingProvider for tests - returns zero vectors
+const MockEmbeddingProvider = Layer.succeed(
+  EmbeddingProvider,
+  {
+    metadata: {
+      providerId: "nomic" as const,
+      modelId: "mock-embed",
+      dimension: 768
+    },
+    embedBatch: (_requests) => Effect.succeed(_requests.map(() => new Array(768).fill(0))),
+    cosineSimilarity: (_a, _b) => 0
+  } satisfies EmbeddingProviderMethods
+)
+
+// Embedding infrastructure for NlpService.Default (used by OntologyService)
+const EmbeddingInfraLayer = Layer.mergeAll(
+  MockEmbeddingProvider,
+  EmbeddingCache.Default,
+  MetricsService.Default
+)
 
 describe("OntologyAgent Domain Models", () => {
   describe("OntologyAgentConfig", () => {
@@ -436,7 +460,7 @@ schema:name a owl:DatatypeProperty ;
     claimsToTurtle: () => Effect.succeed("")
   } as unknown as ClaimService)
 
-  // Combined test layer
+  // Combined test layer with embedding infrastructure for OntologyAgent.Default
   const TestLayer = Layer.mergeAll(
     MockExtractionWorkflow,
     MockConfigService,
@@ -446,6 +470,7 @@ schema:name a owl:DatatypeProperty ;
     MockReasoner,
     MockStorageService,
     MockClaimService,
+    EmbeddingInfraLayer,  // Required by OntologyAgent.Default -> OntologyService -> NlpService
     ShaclService.Test(),
     RdfBuilder.Default,
     SparqlService.Default
@@ -591,6 +616,7 @@ schema:name a owl:DatatypeProperty ;
         MockReasoner,
         MockStorageService,
         MockClaimService,
+        EmbeddingInfraLayer,
         ShaclService.Test(),
         RdfBuilder.Default,
         SparqlService.Default
@@ -711,6 +737,7 @@ schema:name a owl:DatatypeProperty ;
         FailingReasoner,
         MockStorageService,
         MockClaimService,
+        EmbeddingInfraLayer,
         ShaclService.Test(),
         RdfBuilder.Default,
         SparqlService.Default

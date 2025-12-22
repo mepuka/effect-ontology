@@ -1397,8 +1397,13 @@ export const makeComputeEmbeddingsActivity = (input: ComputeEmbeddingsInput) =>
       const embedding = yield* EmbeddingService
       const bucket = resolveBucket(config)
 
+      // Get actual provider metadata for accurate model tracking
+      const providerMetadata = yield* embedding.getProviderMetadata()
+
       yield* Effect.logInfo("Computing ontology embeddings", {
-        ontologyUri: input.ontologyUri
+        ontologyUri: input.ontologyUri,
+        provider: providerMetadata.providerId,
+        model: providerMetadata.modelId
       })
 
       // 1. Load ontology content
@@ -1461,10 +1466,11 @@ export const makeComputeEmbeddingsActivity = (input: ComputeEmbeddingsInput) =>
       const dimension = classEmbeddings[0]?.embedding.length ?? propertyEmbeddings[0]?.embedding.length ?? 0
 
       // 7. Build OntologyEmbeddings blob
+      // Use actual provider model from metadata, not hardcoded fallback
       const embeddingsBlob: OntologyEmbeddings = {
         ontologyUri: input.ontologyUri,
         version,
-        model: input.model ?? "nomic-embed-text-v1.5",
+        model: input.model ?? providerMetadata.modelId,
         dimension,
         createdAt: start,
         classes: classEmbeddings,
