@@ -29,7 +29,7 @@ import type { PlatformError } from "@effect/platform/Error"
 import * as Pg from "@effect/sql-drizzle/Pg"
 import { createHash } from "crypto"
 import { and, eq, sql } from "drizzle-orm"
-import { Cache, Data, Duration, Effect, Option } from "effect"
+import { Cache, Data, Duration, Effect, Layer, Option } from "effect"
 import type { EnrichedContent } from "../Domain/Model/EnrichedContent.js"
 import { type IngestedLinkInsertRow, type IngestedLinkRow, ingestedLinks } from "../Repository/schema.js"
 import { ContentEnrichmentAgent } from "./ContentEnrichmentAgent.js"
@@ -551,4 +551,32 @@ export class LinkIngestionService extends Effect.Service<LinkIngestionService>()
     }),
     accessors: true
   }
-) {}
+) {
+  /**
+   * Disabled layer for when PostgreSQL is not configured.
+   * All methods fail with a descriptive error indicating Postgres is required.
+   */
+  static readonly Disabled: Layer.Layer<LinkIngestionService> = Layer.succeed(
+    LinkIngestionService,
+    {
+      ingestUrl: () => Effect.fail(new LinkIngestionError({
+        message: "LinkIngestionService requires PostgreSQL. Configure POSTGRES_HOST.",
+        phase: "fetch"
+      })),
+      ingestUrls: () => Effect.fail(new LinkIngestionError({
+        message: "LinkIngestionService requires PostgreSQL. Configure POSTGRES_HOST.",
+        phase: "fetch"
+      })),
+      getByContentHash: () => Effect.succeed(Option.none()),
+      getById: () => Effect.succeed(Option.none()),
+      getByIds: () => Effect.succeed([]),
+      list: () => Effect.succeed([]),
+      getPending: () => Effect.succeed([]),
+      getEnriched: () => Effect.succeed([]),
+      markProcessed: () => Effect.succeed(Option.none()),
+      markProcessing: () => Effect.succeed(Option.none()),
+      markFailed: () => Effect.succeed(Option.none()),
+      getContent: () => Effect.succeed(Option.none())
+    } as unknown as LinkIngestionService
+  )
+}

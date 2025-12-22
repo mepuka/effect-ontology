@@ -9,22 +9,29 @@
  */
 
 import { Command } from "@effect/cli"
+import { FetchHttpClient } from "@effect/platform"
 import { BunContext, BunRuntime } from "@effect/platform-bun"
-import { Effect, Layer } from "effect"
+import * as PgDrizzle from "@effect/sql-drizzle/Pg"
+import { PgClient } from "@effect/sql-pg"
+import { Config, Effect, Layer, Option } from "effect"
+import { makeLanguageModelLayer } from "../Runtime/ProductionRuntime.js"
 import { ConfigServiceDefault } from "../Service/Config.js"
+import { ContentEnrichmentAgent } from "../Service/ContentEnrichmentAgent.js"
+import { ImageExtractor } from "../Service/ImageExtractor.js"
+import { ImageFetcher } from "../Service/ImageFetcher.js"
+import { ImageStore } from "../Service/ImageStore.js"
 import { JinaReaderClient } from "../Service/JinaReaderClient.js"
+import { LinkIngestionService } from "../Service/LinkIngestionService.js"
 import { RdfBuilder } from "../Service/Rdf.js"
 import { Reasoner } from "../Service/Reasoner.js"
 import { StorageServiceLive } from "../Service/Storage.js"
 import { WikidataClient } from "../Service/WikidataClient.js"
-import { fetchCommand } from "./Commands/Fetch.js"
+import { documentsCommand, fetchCommand, ingestBatchCommand, ingestLinkCommand } from "./Commands/Fetch.js"
 import { inferenceCommand } from "./Commands/Inference.js"
 import { ingestCommand } from "./Commands/Ingest.js"
 import { linkCommand } from "./Commands/Link.js"
 import { reconcileCommand } from "./Commands/Reconcile.js"
 import { storageCommand } from "./Commands/Storage.js"
-// Note: ingestLinkCommand, ingestBatchCommand, documentsCommand require PostgreSQL and LLM layers
-// They are available in Cli/Commands/Fetch.ts but not registered in the base CLI
 
 // =============================================================================
 // Root Command
@@ -37,7 +44,10 @@ const rootCommand = Command.make("effect-onto").pipe(
     reconcileCommand,
     linkCommand,
     storageCommand,
-    fetchCommand
+    fetchCommand,
+    ingestLinkCommand,
+    ingestBatchCommand,
+    documentsCommand
   ]),
   Command.withDescription("Effect Ontology CLI - Knowledge extraction and reasoning tools")
 )
@@ -45,6 +55,55 @@ const rootCommand = Command.make("effect-onto").pipe(
 // =============================================================================
 // Layer Composition
 // =============================================================================
+
+/**
+ * PostgreSQL client layer
+ */
+const PgClientLayer = PgClient.layerConfig({
+  host: Config.string("POSTGRES_HOST"),
+  port: Config.number("POSTGRES_PORT").pipe(Config.withDefault(5432)),
+  database: Config.string("POSTGRES_DATABASE").pipe(Config.withDefault("workflow")),
+  username: Config.string("POSTGRES_USER").pipe(Config.withDefault("workflow")),
+  password: Config.redacted("POSTGRES_PASSWORD")
+})
+
+/**
+ * PgDrizzle layer with PgClient dependency
+ */
+const PgDrizzleLayer = PgDrizzle.layer.pipe(Layer.provideMerge(PgClientLayer))
+
+/**
+ * Full LinkIngestion stack when PostgreSQL is configured
+ */
+const LinkIngestionLive = LinkIngestionService.Default.pipe(
+  Layer.provideMerge(ContentEnrichmentAgent.Default),
+  Layer.provideMerge(JinaReaderClient.Default),
+  Layer.provideMerge(PgDrizzleLayer),
+  Layer.provideMerge(ImageExtractor.Default),
+  Layer.provideMerge(ImageFetcher.Default),
+  Layer.provideMerge(ImageStore.Default),
+  Layer.provideMerge(makeLanguageModelLayer),
+  Layer.provideMerge(FetchHttpClient.layer),
+  Layer.provideMerge(StorageServiceLive),
+  Layer.provideMerge(ConfigServiceDefault)
+)
+
+/**
+ * Dynamic LinkIngestion layer selection based on POSTGRES_HOST config.
+ * Uses Layer.unwrapEffect for config-driven layer selection.
+ */
+const LinkIngestionLayer = Layer.unwrapEffect(
+  Effect.gen(function*() {
+    const postgresHost = yield* Config.string("POSTGRES_HOST").pipe(Config.option)
+
+    if (Option.isSome(postgresHost)) {
+      return LinkIngestionLive
+    } else {
+      // Use the service's built-in Disabled layer
+      return LinkIngestionService.Disabled
+    }
+  })
+)
 
 /**
  * CLI runtime layer with all required services
@@ -56,17 +115,16 @@ const rootCommand = Command.make("effect-onto").pipe(
  * - StorageService (file/GCS storage)
  * - WikidataClient (Wikidata API integration)
  * - JinaReaderClient (Jina Reader API for URL fetching)
+ * - LinkIngestionService (mocked if Postgres not configured)
  * - BunContext (FileSystem, Path, etc.)
- *
- * Note: Commands that need LLM (ContentEnrichmentAgent) or Postgres
- * (LinkIngestionService) require additional layer setup.
  */
 const CliLive = Layer.mergeAll(
   Reasoner.Default,
   RdfBuilder.Default,
   StorageServiceLive,
   WikidataClient.Default,
-  JinaReaderClient.Default
+  JinaReaderClient.Default,
+  LinkIngestionLayer
 ).pipe(
   Layer.provide(ConfigServiceDefault),
   Layer.provideMerge(BunContext.layer)
