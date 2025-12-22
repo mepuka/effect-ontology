@@ -2,7 +2,7 @@
  * Voyage AI Embedding Provider
  *
  * HTTP-based provider for Voyage AI embeddings API.
- * Supports voyage-3, voyage-3-lite, voyage-code-3, voyage-law-2.
+ * Supports voyage-3, voyage-3.5-lite, voyage-code-3, voyage-law-2.
  *
  * @see https://docs.voyageai.com/docs/embeddings
  * @since 2.0.0
@@ -12,11 +12,11 @@
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "@effect/platform"
 import { Duration, Effect, Layer, Match, Redacted, Schema } from "effect"
 import {
+  type AnyEmbeddingError,
   EmbeddingError,
   EmbeddingInvalidResponseError,
   EmbeddingRateLimitError,
-  EmbeddingTimeoutError,
-  type AnyEmbeddingError
+  EmbeddingTimeoutError
 } from "../Domain/Error/Embedding.js"
 import { ConfigService } from "./Config.js"
 import {
@@ -45,7 +45,7 @@ const VOYAGE_API_URL = "https://api.voyageai.com/v1/embeddings"
  */
 export const VOYAGE_MODELS: Record<string, number> = {
   "voyage-3": 1024,
-  "voyage-3-lite": 512,
+  "voyage-3.5-lite": 512,
   "voyage-code-3": 1024,
   "voyage-finance-2": 1024,
   "voyage-multilingual-2": 1024,
@@ -55,7 +55,7 @@ export const VOYAGE_MODELS: Record<string, number> = {
 /**
  * Default Voyage model
  */
-export const DEFAULT_VOYAGE_MODEL = "voyage-3-lite"
+export const DEFAULT_VOYAGE_MODEL = "voyage-3.5-lite"
 
 /**
  * Default timeout in milliseconds
@@ -146,7 +146,7 @@ const mapVoyageError = (error: unknown, timeoutMs: number): AnyEmbeddingError =>
 export interface VoyageProviderConfig {
   /** Voyage API key */
   readonly apiKey: string
-  /** Model to use (default: voyage-3-lite) */
+  /** Model to use (default: voyage-3.5-lite) */
   readonly model?: string
   /** Request timeout in ms (default: 30000) */
   readonly timeoutMs?: number
@@ -161,7 +161,7 @@ export interface VoyageProviderConfig {
 export const makeVoyageProvider = (
   config: VoyageProviderConfig
 ): Effect.Effect<EmbeddingProviderMethods, never, HttpClient.HttpClient | EmbeddingRateLimiter> =>
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     const httpClient = yield* HttpClient.HttpClient
     const rateLimiter = yield* EmbeddingRateLimiter
 
@@ -197,7 +197,7 @@ export const makeVoyageProvider = (
         Effect.acquireUseRelease(
           rateLimiter.acquire(),
           () =>
-            Effect.gen(function* () {
+            Effect.gen(function*() {
               if (requests.length === 0) {
                 return []
               }
@@ -260,7 +260,7 @@ export const VoyageEmbeddingProviderLive: Layer.Layer<
   ConfigService | EmbeddingRateLimiter | HttpClient.HttpClient
 > = Layer.effect(
   EmbeddingProvider,
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     const config = yield* ConfigService
 
     // Get API key from config (will be added in Config.ts update)

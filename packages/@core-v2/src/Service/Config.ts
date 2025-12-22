@@ -8,7 +8,8 @@
  * @module Service/Config
  */
 
-import { Config, Context, Effect, Layer, Option, Redacted, Secret } from "effect"
+import type { Redacted } from "effect"
+import { Config, Context, Effect, Layer, Option, Secret } from "effect"
 
 // =============================================================================
 // Config Groups
@@ -93,8 +94,8 @@ const EmbeddingConfig = Config.nested("EMBEDDING")(Config.all({
   // --- Voyage (API) configuration ---
   /** Voyage AI API key */
   voyageApiKey: Config.option(Config.redacted("VOYAGE_API_KEY")),
-  /** Voyage model to use (voyage-3-lite, voyage-3, voyage-code-3, voyage-law-2) */
-  voyageModel: Config.string("VOYAGE_MODEL").pipe(Config.withDefault("voyage-3-lite")),
+  /** Voyage model to use (voyage-3.5-lite, voyage-3, voyage-code-3, voyage-law-2) */
+  voyageModel: Config.string("VOYAGE_MODEL").pipe(Config.withDefault("voyage-3.5-lite")),
   /** Request timeout in milliseconds */
   timeoutMs: Config.integer("TIMEOUT_MS").pipe(Config.withDefault(30_000)),
   /** Requests per minute limit for Voyage API */
@@ -267,7 +268,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     dimension: 768,
     transformersModelId: "Xenova/nomic-embed-text-v1",
     voyageApiKey: Option.none<Redacted.Redacted<string>>(),
-    voyageModel: "voyage-3-lite",
+    voyageModel: "voyage-3.5-lite",
     timeoutMs: 30_000,
     rateLimitRpm: 100,
     maxConcurrent: 10,

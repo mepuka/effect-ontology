@@ -11,12 +11,13 @@
 3. [Component Architecture](#component-architecture)
 4. [Workflow Pipeline](#workflow-pipeline)
 5. [Service Layer](#service-layer)
-6. [Data Model](#data-model)
-7. [Infrastructure](#infrastructure)
-8. [Layer Composition](#layer-composition)
-9. [API Reference](#api-reference)
-10. [Document Preprocessing](#document-preprocessing)
-11. [GraphRAG: Knowledge Graph Querying](#graphrag-knowledge-graph-querying)
+6. [Embedding Infrastructure](#embedding-infrastructure)
+7. [Data Model](#data-model)
+8. [Infrastructure](#infrastructure)
+9. [Layer Composition](#layer-composition)
+10. [API Reference](#api-reference)
+11. [Document Preprocessing](#document-preprocessing)
+12. [GraphRAG: Knowledge Graph Querying](#graphrag-knowledge-graph-querying)
 
 ---
 
@@ -95,8 +96,10 @@ graph TB
 
         subgraph "Embedding"
             ES[EmbeddingService]
+            EP[EmbeddingProvider]
             EC[EmbeddingCache]
-            Nomic[NomicNlpService]
+            ER[EmbeddingResolver]
+            ERL[EmbeddingRateLimiter]
         end
 
         subgraph "GraphRAG"
@@ -173,8 +176,11 @@ graph TB
 
     ERS --> ES
     SS2 --> ES
+    ES --> EP
     ES --> EC
-    ES --> Nomic
+    ES --> ER
+    EP --> ERL
+    ER --> EP
 
     OL --> ES
     OL --> RB
@@ -427,8 +433,11 @@ graph LR
 
     subgraph "Embedding"
         ES[EmbeddingService]
+        EP[EmbeddingProvider]
         EC[EmbeddingCache]
-        Nomic[NomicNlpService]
+        ERL[EmbeddingRateLimiter]
+        Nomic[NomicEmbeddingProvider]
+        Voyage[VoyageEmbeddingProvider]
     end
 
     subgraph "GraphRAG"
@@ -500,8 +509,11 @@ graph LR
     RLink --> ERS
     SS2 --> ES
 
-    ES --> Nomic
+    ES --> EP
     ES --> EC
+    EP --> Nomic
+    EP --> Voyage
+    EP --> ERL
 
     OL --> RB
     OL --> ES
@@ -517,6 +529,7 @@ graph LR
     SS --> CS
     NLP --> CS
     Nomic --> CS
+    Voyage --> CS
 
     ER --> SS
     ECa --> SS
@@ -557,9 +570,13 @@ graph LR
 | `EntityIndex` | In-memory k-NN entity index via embeddings | Service | EmbeddingService |
 | `SubgraphExtractor` | N-hop subgraph extraction around seeds | Service | EntityIndex |
 | **Embedding** ||||
-| `EmbeddingService` | Cache-through embedding wrapper | Service | NomicNlpService, EmbeddingCache |
-| `EmbeddingCache` | Content-addressable embedding cache | Service | Clock, Ref |
-| `NomicNlpService` | Local Nomic embedding model | Service | ConfigService |
+| `EmbeddingService` | Provider-agnostic embedding service with caching | Service | EmbeddingProvider, EmbeddingCache, EmbeddingResolver |
+| `EmbeddingProvider` | Abstract embedding interface (Nomic/Voyage) | Service | ConfigService, EmbeddingRateLimiter |
+| `EmbeddingCache` | Content-addressable embedding cache with TTL | Service | Clock, Ref |
+| `EmbeddingResolver` | Request API batching and deduplication | Resolver | EmbeddingProvider |
+| `EmbeddingRateLimiter` | RPM and concurrency control for API providers | Service | Clock, Ref, Semaphore |
+| `NomicEmbeddingProvider` | Local Transformers.js embedding provider | Service | NomicNlpService, ConfigService |
+| `VoyageEmbeddingProvider` | Voyage AI API embedding provider | Service | ConfigService, HttpClient, EmbeddingRateLimiter |
 | **Ontology** ||||
 | `OntologyService` | SKOS/OWL ontology operations | Core | RdfBuilder, StorageService |
 | `OntologyLoader` | Ontology + embeddings loading | Service | RdfBuilder, EmbeddingService, StorageService |
@@ -573,6 +590,228 @@ graph LR
 | `ExtractionRun` | Run management with artifact storage | Service | StorageService |
 | `ExtractionCache` | Filesystem extraction result cache | Service | FileSystem |
 | `ExecutionDeduplicator` | Idempotency key deduplication | Service | Ref |
+
+---
+
+## Embedding Infrastructure
+
+### Overview
+
+The embedding infrastructure provides provider-agnostic vector embeddings with automatic batching, caching, and rate limiting. It supports both local inference (Nomic via Transformers.js) and API providers (Voyage AI), with dynamic provider selection via configuration.
+
+### Architecture
+
+```mermaid
+graph TB
+    subgraph "Public API"
+        ES[EmbeddingService]
+    end
+
+    subgraph "Request Processing"
+        REQ[Effect Request API]
+        RESOLVER[EmbeddingResolver<br/>Batching + Deduplication]
+    end
+
+    subgraph "Provider Abstraction"
+        EP[EmbeddingProvider<br/>Interface]
+        NOMIC[NomicEmbeddingProvider<br/>Local Transformers.js]
+        VOYAGE[VoyageEmbeddingProvider<br/>Voyage AI API]
+    end
+
+    subgraph "Infrastructure"
+        CACHE[EmbeddingCache<br/>Versioned Cache Keys]
+        RL[EmbeddingRateLimiter<br/>RPM + Concurrency]
+        HTTP[HttpClient]
+    end
+
+    ES --> CACHE
+    ES --> REQ
+    REQ --> RESOLVER
+    RESOLVER --> EP
+    EP -.implements.-> NOMIC
+    EP -.implements.-> VOYAGE
+    NOMIC --> NLP[NomicNlpService]
+    VOYAGE --> HTTP
+    VOYAGE --> RL
+
+    style ES fill:#e1bee7
+    style EP fill:#b39ddb
+    style CACHE fill:#fff9c4
+    style RL fill:#ffcc80
+```
+
+### Key Features
+
+| Feature | Description | Implementation |
+|---------|-------------|----------------|
+| **Provider Abstraction** | Switch between Nomic (local) and Voyage (API) via config | `EmbeddingProvider` interface |
+| **Automatic Batching** | Collects requests into batches for efficient processing | Effect Request API via `EmbeddingResolver` |
+| **Deduplication** | Same text+taskType returns same instance | Request hash: `provider::model::taskType::text` |
+| **Versioned Caching** | Cache keys include model ID and dimension | `hashVersionedEmbeddingKey()` |
+| **Rate Limiting** | RPM and concurrency control for API providers | `EmbeddingRateLimiter` with sliding window |
+| **Multi-Dimension** | Supports different embedding dimensions per provider | Nomic: 64-768, Voyage: 512-1024 |
+| **Task Types** | Optimized embeddings for search/clustering/classification | Voyage-compatible superset |
+
+### Provider Selection
+
+The system selects the embedding provider based on the `EMBEDDING_PROVIDER` environment variable:
+
+```typescript
+// Dynamic provider selection via Layer.unwrapEffect
+export const EmbeddingProviderFromConfig: Layer.Layer<
+  EmbeddingProvider,
+  never,
+  ConfigService | NomicNlpService | EmbeddingRateLimiter | HttpClient
+> = Layer.unwrapEffect(
+  Effect.gen(function* () {
+    const config = yield* ConfigService
+    return config.embedding.provider === "voyage"
+      ? VoyageEmbeddingProviderLive
+      : NomicEmbeddingProviderLive
+  })
+)
+```
+
+### Request API Batching
+
+The system uses Effect's Request API for automatic batching and deduplication:
+
+```mermaid
+sequenceDiagram
+    participant App
+    participant ES as EmbeddingService
+    participant Cache
+    participant Resolver
+    participant Provider
+    participant API
+
+    App->>ES: embedBatch(["text1", "text2", "text3"])
+    ES->>Cache: get("hash1")
+    Cache-->>ES: Some(embedding1)
+    ES->>Cache: get("hash2")
+    Cache-->>ES: None
+    ES->>Cache: get("hash3")
+    Cache-->>ES: None
+
+    Note over ES,Resolver: Batch window collects requests
+    ES->>Resolver: Request("text2", taskType)
+    ES->>Resolver: Request("text3", taskType)
+
+    Resolver->>Resolver: Group by taskType<br/>Deduplicate by hash
+    Resolver->>Provider: embedBatch([req2, req3])
+    Provider->>API: POST /embeddings
+    API-->>Provider: [emb2, emb3]
+    Provider-->>Resolver: [emb2, emb3]
+    Resolver-->>ES: emb2, emb3
+
+    ES->>Cache: set("hash2", emb2)
+    ES->>Cache: set("hash3", emb3)
+    ES-->>App: [embedding1, emb2, emb3]
+```
+
+### Cache Key Versioning
+
+Cache keys include provider, model, and dimension to prevent cross-contamination:
+
+```typescript
+// Format: sha256(provider:model:dimension:taskType:text)
+const hash = await hashVersionedEmbeddingKey(
+  "Hello world",
+  "search_document",
+  { providerId: "voyage", modelId: "voyage-3-lite", dimension: 512 }
+)
+// Result: "a1b2c3d4..." (64 hex chars)
+```
+
+This ensures that changing the model invalidates the cache automatically.
+
+### Rate Limiting
+
+API providers enforce rate limits via `EmbeddingRateLimiter`:
+
+```typescript
+// Voyage AI limits: 100 RPM, 10 concurrent
+export const VOYAGE_RATE_LIMITS: EmbeddingRateLimiterConfig = {
+  provider: "voyage",
+  requestsPerMinute: 100,
+  maxConcurrent: 10
+}
+
+// Local models: effectively unlimited
+export const LOCAL_RATE_LIMITS: EmbeddingRateLimiterConfig = {
+  provider: "nomic",
+  requestsPerMinute: 10000,
+  maxConcurrent: 50
+}
+```
+
+The rate limiter uses a sliding window for RPM tracking and a semaphore for concurrency control.
+
+### Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `EMBEDDING_PROVIDER` | Provider to use (nomic \| voyage) | nomic |
+| `VOYAGE_API_KEY` | Voyage AI API key | - |
+| `VOYAGE_MODEL` | Voyage model (voyage-3 \| voyage-3-lite) | voyage-3-lite |
+| `EMBEDDING_DIMENSION` | Embedding dimension (provider-specific) | 768 (nomic), 512 (voyage-3-lite) |
+| `EMBEDDING_CACHE_TTL_HOURS` | Cache TTL in hours | 1 |
+| `EMBEDDING_CACHE_MAX_ENTRIES` | Max cache entries | 10000 |
+
+### Layer Composition
+
+```typescript
+// Production: Config-driven provider selection
+export const EmbeddingInfrastructure: Layer.Layer<
+  EmbeddingProvider | EmbeddingRateLimiter | EmbeddingCache,
+  never,
+  ConfigService
+> = Layer.mergeAll(
+  EmbeddingProviderFromConfig,
+  EmbeddingRateLimiterFromConfig,
+  EmbeddingCache.Default
+)
+
+// Development: Force Nomic (local)
+export const NomicEmbeddingInfrastructure = Layer.mergeAll(
+  NomicEmbeddingProviderDefault,
+  EmbeddingRateLimiterLocal,
+  EmbeddingCache.Default
+)
+
+// Production: Force Voyage (API)
+export const VoyageEmbeddingInfrastructure = Layer.mergeAll(
+  VoyageEmbeddingProviderDefault,
+  EmbeddingRateLimiterVoyage,
+  EmbeddingCache.Default
+)
+```
+
+### Testing Patterns
+
+```typescript
+import { EmbeddingProvider } from "./EmbeddingProvider.js"
+import { Layer } from "effect"
+
+// Mock provider for deterministic tests
+const MockEmbeddingProvider = Layer.succeed(EmbeddingProvider, {
+  metadata: { providerId: "mock", modelId: "mock", dimension: 768 },
+  embedBatch: (requests) => Effect.succeed(
+    requests.map(() => Array(768).fill(0))
+  ),
+  cosineSimilarity: (a, b) => 0.9
+})
+
+// Use in tests
+const program = Effect.gen(function* () {
+  const embeddings = yield* EmbeddingService
+  const result = yield* embeddings.embed("test")
+  // result: [0, 0, 0, ..., 0] (768 dimensions)
+}).pipe(
+  Effect.provide(EmbeddingService.Default),
+  Effect.provide(MockEmbeddingProvider)
+)
+```
 
 ---
 
@@ -1102,6 +1341,15 @@ const BatchManifest = Schema.Struct({
 | `src/Service/Storage.ts` | Storage abstraction (GCS/Local/Memory) |
 | `src/Service/Extraction.ts` | Entity/Relation extractors |
 | `src/Service/Grounder.ts` | Entity grounding |
+| `src/Service/Embedding.ts` | Provider-agnostic embedding service with caching |
+| `src/Service/EmbeddingProvider.ts` | Embedding provider interface |
+| `src/Service/EmbeddingCache.ts` | Versioned embedding cache with TTL and LRU |
+| `src/Service/EmbeddingResolver.ts` | Request API batching resolver |
+| `src/Service/EmbeddingRateLimiter.ts` | RPM and concurrency rate limiting |
+| `src/Service/EmbeddingRequest.ts` | Request types for batching |
+| `src/Service/NomicEmbeddingProvider.ts` | Local Transformers.js embedding provider |
+| `src/Service/VoyageEmbeddingProvider.ts` | Voyage AI API embedding provider |
+| `src/Runtime/EmbeddingLayers.ts` | Layer composition for embedding infrastructure |
 | `src/Service/GraphRAG.ts` | **NEW**: GraphRAG retrieval and generation |
 | `src/Service/EntityIndex.ts` | **NEW**: Entity embedding k-NN index |
 | `src/Service/SubgraphExtractor.ts` | **NEW**: N-hop subgraph extraction |

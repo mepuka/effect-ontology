@@ -27,7 +27,7 @@ export const TestConfigProvider = ConfigProvider.fromMap(
     ["EMBEDDING_MODEL", "nomic-embed-text-v1.5"],
     ["EMBEDDING_DIMENSION", "768"],
     ["EMBEDDING_TRANSFORMERS_MODEL_ID", "Xenova/nomic-embed-text-v1"],
-    ["EMBEDDING_VOYAGE_MODEL", "voyage-3-lite"],
+    ["EMBEDDING_VOYAGE_MODEL", "voyage-3.5-lite"],
     ["EMBEDDING_TIMEOUT_MS", "30000"],
     ["EMBEDDING_RATE_LIMIT_RPM", "100"],
     ["EMBEDDING_MAX_CONCURRENT", "10"],

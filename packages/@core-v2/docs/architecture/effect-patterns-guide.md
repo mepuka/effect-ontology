@@ -13,6 +13,7 @@
 6. [Workflow & Activity Patterns](#6-workflow--activity-patterns)
 7. [Critical Issues to Address](#7-critical-issues-to-address)
 8. [Templates](#8-templates)
+9. [Request API & Batching Patterns](#9-request-api--batching-patterns)
 
 ---
 
@@ -621,6 +622,219 @@ export const MyActivity = Activity.make("my-activity", {
   )
 })
 ```
+
+---
+
+## 9. Request API & Batching Patterns
+
+### Overview
+
+The Effect Request API enables automatic batching and deduplication of operations. This is essential for:
+- Reducing API calls to external services
+- Deduplicating identical requests within a time window
+- Implementing efficient batch processing
+
+**When to use:**
+- External API calls that support batching (e.g., embeddings, LLM calls)
+- Database queries that can be batched
+- Any operation where multiple concurrent requests can be combined
+
+### Request Definition
+
+```typescript
+import { Request } from "effect"
+
+/**
+ * Define a request type using Request.tagged
+ *
+ * The request includes all input parameters and extends Request<Success, Error>
+ */
+export interface EmbedTextRequest extends Request.Request<Embedding, EmbeddingError> {
+  readonly _tag: "EmbedTextRequest"
+  readonly text: string
+  readonly taskType: EmbeddingTaskType
+  readonly metadata: ProviderMetadata
+}
+
+export const EmbedTextRequest = Request.tagged<EmbedTextRequest>("EmbedTextRequest")
+```
+
+### Request Deduplication
+
+Effect automatically deduplicates requests within a batch window based on structural equality:
+
+```typescript
+/**
+ * Generate hash for custom deduplication logic
+ *
+ * Useful when you need more control over what constitutes "same request"
+ */
+export const embedRequestHash = (req: EmbedTextRequest): string =>
+  `${req.metadata.providerId}::${req.metadata.modelId}::${req.taskType}::${req.text}`
+```
+
+### RequestResolver Pattern
+
+```typescript
+import { RequestResolver, Effect, Exit, Array } from "effect"
+
+/**
+ * Create a batched resolver
+ *
+ * The resolver:
+ * 1. Receives an array of requests
+ * 2. Performs batched operation
+ * 3. Completes each request with its result
+ */
+export const makeEmbeddingResolver = (
+  provider: EmbeddingProviderMethods,
+  maxBatchSize: number = 128
+): RequestResolver.RequestResolver<EmbedTextRequest, never> =>
+  RequestResolver.makeBatched((requests: ReadonlyArray<EmbedTextRequest>) =>
+    Effect.gen(function* () {
+      if (requests.length === 0) return
+
+      // Group by common property (e.g., taskType)
+      const grouped = Array.groupBy(requests, (r) => r.taskType)
+
+      for (const [_taskType, batch] of Object.entries(grouped)) {
+        // Chunk into maxBatchSize to respect API limits
+        const chunks = Array.chunksOf(batch, maxBatchSize)
+
+        for (const chunk of chunks) {
+          if (chunk.length === 0) continue
+
+          // Process chunk and complete requests
+          yield* provider.embedBatch(chunk.map((r) => ({ text: r.text, taskType: r.taskType }))).pipe(
+            Effect.matchEffect({
+              onSuccess: (embeddings) =>
+                Effect.forEach(
+                  chunk,
+                  (req, i) => Request.complete(req, Exit.succeed(embeddings[i])),
+                  { discard: true }
+                ),
+              onFailure: (error) =>
+                Effect.forEach(
+                  chunk,
+                  (req) => Request.complete(req, Exit.fail(error)),
+                  { discard: true }
+                )
+            })
+          )
+        }
+      }
+    })
+  ).pipe(RequestResolver.batchN(maxBatchSize))
+```
+
+### Using Requests
+
+```typescript
+// In service implementation
+export const EmbeddingServiceLive = Layer.effect(
+  EmbeddingService,
+  Effect.gen(function* () {
+    const provider = yield* EmbeddingProvider
+    const cache = yield* EmbeddingCache
+
+    const resolver = makeEmbeddingResolver(provider)
+
+    return {
+      embed: (text, taskType = "search_document") =>
+        Effect.gen(function* () {
+          const hash = yield* hashCacheKey(text, taskType)
+          const cached = yield* cache.get(hash)
+          if (Option.isSome(cached)) return cached.value
+
+          // Create request and resolve via batching
+          const request = EmbedTextRequest({ text, taskType, metadata: provider.metadata })
+          const embedding = yield* Effect.request(request, resolver)
+
+          yield* cache.set(hash, embedding)
+          return embedding
+        }),
+
+      embedBatch: (texts, taskType = "search_document") =>
+        // Effect.forEach with batching:true enables Request API
+        Effect.forEach(
+          texts,
+          (text) => embedWithCache(text, taskType),
+          { concurrency: "unbounded", batching: true }
+        )
+    }
+  })
+)
+```
+
+### Batch Window Configuration
+
+The default batch window is **10ms**. Requests arriving within this window are collected:
+
+```typescript
+// Adjust globally (rarely needed)
+Layer.setRequestBatching(true)   // Enable batching
+Layer.setRequestCache(true)       // Enable request caching
+```
+
+### Best Practices
+
+**DO:**
+- Use Request API for external API calls that support batching
+- Group requests by common properties before batching
+- Respect API batch size limits via `Array.chunksOf`
+- Complete all requests (success or failure) to prevent hangs
+- Use `Effect.ensuring` to guarantee request completion
+
+**DON'T:**
+- Use batching for operations that don't benefit from it
+- Forget to handle errors (complete failed requests with `Exit.fail`)
+- Exceed provider batch size limits
+- Mix incompatible request types in a single batch
+
+### Testing Batching
+
+```typescript
+import { it } from "@effect/vitest"
+import { Effect } from "effect"
+
+it.effect("batches multiple concurrent requests", () =>
+  Effect.gen(function* () {
+    const calls = yield* Ref.make(0)
+
+    const resolver = RequestResolver.makeBatched((requests) =>
+      Effect.gen(function* () {
+        yield* Ref.update(calls, (n) => n + 1)
+        // Complete all requests
+        yield* Effect.forEach(
+          requests,
+          (req) => Request.complete(req, Exit.succeed(req.input.length)),
+          { discard: true }
+        )
+      })
+    )
+
+    // Create 10 concurrent requests
+    const results = yield* Effect.all(
+      Array.range(0, 9).map((i) => Effect.request(MyRequest({ input: `text${i}` }), resolver)),
+      { concurrency: "unbounded", batching: true }
+    )
+
+    expect(results).toHaveLength(10)
+
+    // Should batch into single call
+    const callCount = yield* Ref.get(calls)
+    expect(callCount).toBe(1)
+  })
+)
+```
+
+### Example: Embedding Service
+
+See **embedding architecture** for full implementation:
+- `Service/EmbeddingProvider.ts` - Provider interface
+- `Service/EmbeddingRequest.ts` - Request definition
+- `Service/EmbeddingResolver.ts` - Batching resolver
+- `Service/Embedding.ts` - Service with Request API integration
 
 ---
 

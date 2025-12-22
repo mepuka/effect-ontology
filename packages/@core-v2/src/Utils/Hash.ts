@@ -128,7 +128,7 @@ export interface EmbeddingKeyMetadata {
  *
  * Includes provider, model, and dimension to prevent collisions when:
  * - Switching providers (nomic -> voyage)
- * - Changing models (voyage-3 -> voyage-3-lite)
+ * - Changing models (voyage-3 -> voyage-3.5-lite)
  * - Using different dimensions (768 vs 1024)
  *
  * Format: SHA-256(providerId::modelId::dimension::taskType::text)
@@ -163,8 +163,7 @@ export const hashVersionedEmbeddingKeySync = (
   text: string,
   taskType: string,
   metadata: EmbeddingKeyMetadata
-): string =>
-  sha256SyncFull(`${metadata.providerId}::${metadata.modelId}::${metadata.dimension}::${taskType}::${text}`)
+): string => sha256SyncFull(`${metadata.providerId}::${metadata.modelId}::${metadata.dimension}::${taskType}::${text}`)
 
 /**
  * Compute SHA-256 hash of bytes using WebCrypto API

@@ -8,7 +8,8 @@
  * @module Service/EmbeddingProvider
  */
 
-import { Context, Effect } from "effect"
+import type { Effect } from "effect"
+import { Context } from "effect"
 import type { AnyEmbeddingError } from "../Domain/Error/Embedding.js"
 
 /**
@@ -61,7 +62,7 @@ export interface ProviderMetadata {
   readonly providerId: "nomic" | "voyage" | "openai"
 
   /**
-   * Model identifier (e.g., "voyage-3-lite", "nomic-embed-text-v1.5")
+   * Model identifier (e.g., "voyage-3.5-lite", "nomic-embed-text-v1.5")
    */
   readonly modelId: string
 

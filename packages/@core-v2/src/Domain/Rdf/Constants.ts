@@ -402,3 +402,49 @@ export const SKOS_RELATED = SKOS.related
 export const SKOS_EXACTMATCH = SKOS.exactMatch
 // @deprecated Use SKOS.closeMatch instead
 export const SKOS_CLOSEMATCH = SKOS.closeMatch
+
+/**
+ * Known vocabulary metadata for enriching import IRIs with human-readable info.
+ * This provides metadata for well-known external vocabularies that ontologies may import.
+ *
+ * @since 2.0.0
+ */
+export const KNOWN_VOCABULARIES: Record<string, { prefix: string; name: string; publisher: string; specUrl: string }> =
+  {
+    "http://xmlns.com/foaf/0.1/": {
+      prefix: "foaf",
+      name: "FOAF",
+      publisher: "FOAF Project",
+      specUrl: "http://xmlns.com/foaf/spec/"
+    },
+    "http://www.w3.org/ns/org#": {
+      prefix: "org",
+      name: "W3C Organization Ontology",
+      publisher: "W3C",
+      specUrl: "https://www.w3.org/TR/vocab-org/"
+    },
+    "http://www.w3.org/2006/time#": {
+      prefix: "time",
+      name: "OWL-Time",
+      publisher: "W3C",
+      specUrl: "https://www.w3.org/TR/owl-time/"
+    },
+    "http://www.w3.org/ns/prov#": {
+      prefix: "prov",
+      name: "PROV-O",
+      publisher: "W3C",
+      specUrl: "https://www.w3.org/TR/prov-o/"
+    },
+    "http://www.w3.org/ns/oa#": {
+      prefix: "oa",
+      name: "Web Annotation",
+      publisher: "W3C",
+      specUrl: "https://www.w3.org/TR/annotation-model/"
+    },
+    "http://www.w3.org/2004/02/skos/core#": {
+      prefix: "skos",
+      name: "SKOS",
+      publisher: "W3C",
+      specUrl: "https://www.w3.org/TR/skos-reference/"
+    }
+  }

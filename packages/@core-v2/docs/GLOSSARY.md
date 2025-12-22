@@ -46,6 +46,22 @@ Quick reference for domain terminology used across the Effect Ontology codebase.
 
 ---
 
+## Embedding & Vector Search
+
+| Term | Definition | See Also |
+|------|------------|----------|
+| **Embedding** | Dense vector representation of text for semantic similarity. Typically 512-1024 dimensions. | `architecture/embedding-architecture.md` |
+| **EmbeddingProvider** | Abstract interface for embedding backends (Nomic, Voyage, etc.). Enables provider switching via config. | `Service/EmbeddingProvider.ts` |
+| **Nomic** | Local embedding provider using Transformers.js. CPU-bound, no API limits. | `Service/NomicEmbeddingProvider.ts` |
+| **Voyage** | Cloud embedding provider via API. Rate-limited (100 RPM, 10 concurrent). | `Service/VoyageEmbeddingProvider.ts` |
+| **Request API** | Effect pattern for automatic batching and deduplication of requests. | `Service/EmbeddingResolver.ts` |
+| **Versioned Cache Key** | Cache key including provider/model/dimension to prevent stale embeddings on model change. | `architecture/embedding-architecture.md` |
+| **Task Type** | Embedding optimization hint (search_query, search_document, clustering, classification). | `Service/EmbeddingProvider.ts` |
+| **Rate Limiter** | Sliding window + semaphore for enforcing API limits (RPM, concurrency). | `Service/EmbeddingRateLimiter.ts` |
+| **RRF** | Reciprocal Rank Fusion. Combines BM25 (lexical) and semantic rankings for hybrid search. | `Utils/Retrieval.ts` |
+
+---
+
 ## Effect Patterns
 
 | Term | Definition | Reference |
@@ -58,6 +74,8 @@ Quick reference for domain terminology used across the Effect Ontology codebase.
 | **Default Layer** | Standard production implementation of a service (e.g., `MyService.Default`). | `EFFECT_MODULE_STYLE_GUIDE.md` |
 | **DefaultWithoutDependencies** | Layer providing a service without its transitive dependencies (for composition). | `EFFECT_MODULE_STYLE_GUIDE.md` |
 | **Accessor** | Auto-generated static methods on a service class for calling service methods. Enabled with `accessors: true`. | `EFFECT_MODULE_STYLE_GUIDE.md` |
+| **Request** | Effect type for batched operations. Automatically groups requests within a time window for efficiency. | Effect docs |
+| **RequestResolver** | Handler that processes batches of requests. Implements the actual batching logic. | Effect docs |
 
 ---
 
