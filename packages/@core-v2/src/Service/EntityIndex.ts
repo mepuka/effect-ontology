@@ -9,10 +9,10 @@
  */
 
 import { Context, Effect, HashMap, HashSet, Layer, Option, Order, Ref } from "effect"
+import type { AnyEmbeddingError } from "../Domain/Error/Embedding.js"
 import type { Entity, KnowledgeGraph } from "../Domain/Model/Entity.js"
 import { EmbeddingService, EmbeddingServiceDefault } from "./Embedding.js"
 import type { Embedding } from "./EmbeddingCache.js"
-import type { NomicNlpError } from "./NomicNlp.js"
 
 // =============================================================================
 // Persistent EntityIndex
@@ -75,7 +75,7 @@ export interface EntityIndexService {
    * Index all entities from a knowledge graph
    * Computes embeddings for all entity mentions
    */
-  readonly index: (graph: KnowledgeGraph) => Effect.Effect<number, NomicNlpError>
+  readonly index: (graph: KnowledgeGraph) => Effect.Effect<number, AnyEmbeddingError>
 
   /**
    * Find entities similar to query string using k-NN
@@ -88,7 +88,7 @@ export interface EntityIndexService {
     query: string,
     k: number,
     options?: FindSimilarOptions
-  ) => Effect.Effect<ReadonlyArray<ScoredEntity>, NomicNlpError>
+  ) => Effect.Effect<ReadonlyArray<ScoredEntity>, AnyEmbeddingError>
 
   /**
    * Find entities by type IRI
@@ -104,7 +104,7 @@ export interface EntityIndexService {
   /**
    * Add a single entity to the index (incremental update)
    */
-  readonly add: (entity: Entity) => Effect.Effect<void, NomicNlpError>
+  readonly add: (entity: Entity) => Effect.Effect<void, AnyEmbeddingError>
 
   /**
    * Remove an entity from the index
@@ -346,10 +346,12 @@ export class EntityIndex extends Effect.Service<EntityIndex>()("@core-v2/EntityI
 /**
  * In-memory EntityIndex layer (default)
  *
+ * Requires EmbeddingService dependencies to be provided.
+ *
  * @since 2.0.0
  * @category Layers
  */
-export const EntityIndexDefault: Layer.Layer<EntityIndex> = EntityIndex.Default
+export const EntityIndexDefault = EntityIndex.Default
 
 /**
  * Serialized entity index format for GCS persistence

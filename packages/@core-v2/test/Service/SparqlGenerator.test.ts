@@ -138,9 +138,15 @@ const MockConfigService = Layer.succeed(ConfigService, {
     batchSize: 5
   },
   embedding: {
+    provider: "nomic" as const,
     model: "nomic-embed-text-v1.5",
     dimension: 768,
     transformersModelId: "Xenova/nomic-embed-text-v1",
+    voyageApiKey: Option.none(),
+    voyageModel: "voyage-3-lite",
+    timeoutMs: 30_000,
+    rateLimitRpm: 100,
+    maxConcurrent: 10,
     cachePath: Option.none(),
     cacheTtlHours: 24,
     cacheMaxEntries: 10000,

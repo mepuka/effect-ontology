@@ -112,6 +112,61 @@ export const sha256Sync = (input: string): string => sha256SyncFull(input).slice
 export const hashEmbeddingKeySync = (text: string, taskType: string): string => sha256SyncFull(`${text}::${taskType}`)
 
 /**
+ * Provider metadata for versioned cache keys
+ *
+ * @since 2.0.0
+ * @category Types
+ */
+export interface EmbeddingKeyMetadata {
+  readonly providerId: string
+  readonly modelId: string
+  readonly dimension: number
+}
+
+/**
+ * Generate versioned cache key for embeddings
+ *
+ * Includes provider, model, and dimension to prevent collisions when:
+ * - Switching providers (nomic -> voyage)
+ * - Changing models (voyage-3 -> voyage-3-lite)
+ * - Using different dimensions (768 vs 1024)
+ *
+ * Format: SHA-256(providerId::modelId::dimension::taskType::text)
+ *
+ * @param text - Text to embed
+ * @param taskType - Embedding task type
+ * @param metadata - Provider metadata (providerId, modelId, dimension)
+ * @returns Effect yielding SHA-256 hash for cache lookup
+ *
+ * @since 2.0.0
+ * @category Hash
+ */
+export const hashVersionedEmbeddingKey = (
+  text: string,
+  taskType: string,
+  metadata: EmbeddingKeyMetadata
+): Effect.Effect<string> =>
+  sha256(`${metadata.providerId}::${metadata.modelId}::${metadata.dimension}::${taskType}::${text}`)
+
+/**
+ * Synchronous version of hashVersionedEmbeddingKey for pure contexts
+ *
+ * @param text - Text to embed
+ * @param taskType - Embedding task type
+ * @param metadata - Provider metadata (providerId, modelId, dimension)
+ * @returns SHA-256 hash for cache lookup
+ *
+ * @since 2.0.0
+ * @category Hash
+ */
+export const hashVersionedEmbeddingKeySync = (
+  text: string,
+  taskType: string,
+  metadata: EmbeddingKeyMetadata
+): string =>
+  sha256SyncFull(`${metadata.providerId}::${metadata.modelId}::${metadata.dimension}::${taskType}::${text}`)
+
+/**
  * Compute SHA-256 hash of bytes using WebCrypto API
  *
  * Works in both Node.js and browser environments.

@@ -20,6 +20,7 @@ import { MetricsService } from "../Telemetry/Metrics.js"
 import { enhanceTextForSearch, generateNGrams } from "../Utils/Text.js"
 import { EmbeddingService, EmbeddingServiceLive } from "./Embedding.js"
 import { EmbeddingCache } from "./EmbeddingCache.js"
+import { NomicEmbeddingProviderDefault } from "./NomicEmbeddingProvider.js"
 import { NomicNlpService, NomicNlpServiceDefault } from "./NomicNlp.js"
 
 /**
@@ -1156,12 +1157,13 @@ export class NlpService extends Effect.Service<NlpService>()(
       }
     }),
     dependencies: [
-      // Bundle provides both NomicNlpService and EmbeddingService
-      // EmbeddingServiceLive requires NomicNlpService | EmbeddingCache | MetricsService
-      Layer.merge(
+      // Bundle provides NomicNlpService and EmbeddingService with its dependencies
+      // EmbeddingServiceLive requires EmbeddingProvider | EmbeddingCache | MetricsService
+      // NomicEmbeddingProviderDefault provides EmbeddingProvider using NomicNlpService
+      Layer.mergeAll(
         NomicNlpServiceDefault,
         EmbeddingServiceLive.pipe(
-          Layer.provide(NomicNlpServiceDefault),
+          Layer.provide(NomicEmbeddingProviderDefault),
           Layer.provide(EmbeddingCache.Default),
           Layer.provide(MetricsService.Default)
         )

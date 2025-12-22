@@ -20,8 +20,8 @@ import {
   type ScoredExample
 } from "../Repository/Examples.js"
 import type { LlmExampleRow } from "../Repository/schema.js"
+import type { AnyEmbeddingError } from "../Domain/Error/Embedding.js"
 import { EmbeddingService } from "./Embedding.js"
-import type { NomicNlpError } from "./NomicNlp.js"
 
 // =============================================================================
 // Types
@@ -30,7 +30,7 @@ import type { NomicNlpError } from "./NomicNlp.js"
 /**
  * Combined error type for examples service operations
  */
-export type ExamplesServiceError = SqlError.SqlError | NomicNlpError
+export type ExamplesServiceError = SqlError.SqlError | AnyEmbeddingError
 
 /**
  * Extraction stage for context-aware example retrieval

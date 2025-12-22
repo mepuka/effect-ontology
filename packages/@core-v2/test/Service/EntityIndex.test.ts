@@ -48,7 +48,8 @@ const cosineSimilarity = (a: ReadonlyArray<number>, b: ReadonlyArray<number>): n
 const MockEmbeddingService = Layer.succeed(EmbeddingService, {
   embed: (text: string, _taskType) => Effect.succeed(mockEmbed(text)),
   embedBatch: (texts: ReadonlyArray<string>, _taskType) => Effect.succeed(texts.map((t) => mockEmbed(t))),
-  cosineSimilarity
+  cosineSimilarity,
+  getProviderMetadata: () => Effect.succeed({ providerId: "nomic", modelId: "test-model", dimension: 4 })
 })
 
 /**

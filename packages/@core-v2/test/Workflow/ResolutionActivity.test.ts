@@ -13,8 +13,11 @@ import { Entity, KnowledgeGraph, Relation } from "../../src/Domain/Model/Entity.
 import { EntityResolutionConfig, defaultEntityResolutionConfig } from "../../src/Domain/Model/EntityResolution.js"
 import { type EntityResolutionGraph } from "../../src/Domain/Model/EntityResolutionGraph.js"
 import { EntityId } from "../../src/Domain/Model/shared.js"
-import { EmbeddingService, EmbeddingServiceDefault } from "../../src/Service/Embedding.js"
+import { EmbeddingService, EmbeddingServiceLive } from "../../src/Service/Embedding.js"
+import { EmbeddingCache } from "../../src/Service/EmbeddingCache.js"
+import { EmbeddingProvider, type EmbeddingProviderMethods } from "../../src/Service/EmbeddingProvider.js"
 import { EntityResolutionService } from "../../src/Service/EntityResolution.js"
+import { MetricsService } from "../../src/Telemetry/Metrics.js"
 
 /**
  * Test ConfigProvider
@@ -35,28 +38,37 @@ const TestConfigProvider = ConfigProvider.fromMap(
 )
 
 /**
- * Mock EmbeddingService that returns deterministic embeddings
+ * Mock EmbeddingProvider that returns deterministic embeddings
  */
 const mockEmbedding = [0.1, 0.2, 0.3, 0.4, 0.5]
-const MockEmbeddingService = Layer.succeed(EmbeddingService, {
-  embed: (_text, _taskType) => Effect.succeed(mockEmbedding),
-  embedBatch: (texts, _taskType) => Effect.succeed(texts.map(() => mockEmbedding)),
-  cosineSimilarity: (a, b) => {
-    // Simple cosine similarity
-    let dot = 0
-    let normA = 0
-    let normB = 0
-    for (let i = 0; i < a.length; i++) {
-      dot += a[i] * b[i]
-      normA += a[i] * a[i]
-      normB += b[i] * b[i]
+const MockEmbeddingProvider = Layer.succeed(
+  EmbeddingProvider,
+  {
+    metadata: { providerId: "nomic", modelId: "test-model", dimension: 5 },
+    embedBatch: (requests) => Effect.succeed(requests.map(() => mockEmbedding)),
+    cosineSimilarity: (a, b) => {
+      // Simple cosine similarity
+      let dot = 0
+      let normA = 0
+      let normB = 0
+      for (let i = 0; i < a.length; i++) {
+        dot += a[i] * b[i]
+        normA += a[i] * a[i]
+        normB += b[i] * b[i]
+      }
+      return dot / (Math.sqrt(normA) * Math.sqrt(normB))
     }
-    return dot / (Math.sqrt(normA) * Math.sqrt(normB))
-  }
-})
+  } as EmbeddingProviderMethods
+)
 
-const TestLayers = EntityResolutionService.Default.pipe(
-  Layer.provideMerge(MockEmbeddingService),
+const EmbeddingServiceTest = EmbeddingServiceLive.pipe(
+  Layer.provide(MockEmbeddingProvider),
+  Layer.provide(EmbeddingCache.Default),
+  Layer.provide(MetricsService.Default)
+)
+
+const TestLayers = EntityResolutionService.DefaultWithoutDependencies.pipe(
+  Layer.provideMerge(EmbeddingServiceTest),
   Layer.provideMerge(BunContext.layer),
   Layer.provideMerge(Layer.setConfigProvider(TestConfigProvider))
 )

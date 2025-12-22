@@ -15,9 +15,9 @@ import { Duration, Effect, Match, Option, Schedule } from "effect"
 import type { EventBusError } from "../Domain/Error/EventBus.js"
 import type { BackgroundJob } from "../Domain/Schema/JobSchema.js"
 import { EntityRegistryRepository } from "../Repository/EntityRegistry.js"
+import type { AnyEmbeddingError } from "../Domain/Error/Embedding.js"
 import { EmbeddingService } from "./Embedding.js"
 import { EventBusService } from "./EventBus.js"
-import type { NomicNlpError } from "./NomicNlp.js"
 
 // =============================================================================
 // Types
@@ -26,7 +26,7 @@ import type { NomicNlpError } from "./NomicNlp.js"
 /**
  * Combined error type for job processing
  */
-export type JobProcessorError = SqlError.SqlError | NomicNlpError | EventBusError
+export type JobProcessorError = SqlError.SqlError | AnyEmbeddingError | EventBusError
 
 /**
  * Job processing statistics

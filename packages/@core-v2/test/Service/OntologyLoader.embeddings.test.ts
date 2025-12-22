@@ -15,12 +15,31 @@ import {
 } from "../../src/Domain/Model/OntologyEmbeddings.js"
 import type { OntologyEmbeddings } from "../../src/Domain/Model/OntologyEmbeddings.js"
 import { ConfigServiceDefault } from "../../src/Service/Config.js"
-import { EmbeddingServiceDefault } from "../../src/Service/Embedding.js"
+import { EmbeddingService, EmbeddingServiceLive } from "../../src/Service/Embedding.js"
+import { EmbeddingCache } from "../../src/Service/EmbeddingCache.js"
+import { EmbeddingProvider, type EmbeddingProviderMethods } from "../../src/Service/EmbeddingProvider.js"
 import { NlpService } from "../../src/Service/Nlp.js"
 import { OntologyLoader } from "../../src/Service/OntologyLoader.js"
 import { RdfBuilder } from "../../src/Service/Rdf.js"
 import { StorageService, StorageServiceTest } from "../../src/Service/Storage.js"
+import { MetricsService } from "../../src/Telemetry/Metrics.js"
 import { TestConfigProvider } from "../setup.js"
+
+const mockEmbedding = [0.1, 0.2, 0.3, 0.4, 0.5]
+const MockEmbeddingProvider = Layer.succeed(
+  EmbeddingProvider,
+  {
+    metadata: { providerId: "nomic", modelId: "test-model", dimension: 5 },
+    embedBatch: (requests) => Effect.succeed(requests.map(() => mockEmbedding)),
+    cosineSimilarity: (_a, _b) => 0.95
+  } as EmbeddingProviderMethods
+)
+
+const EmbeddingServiceTest = EmbeddingServiceLive.pipe(
+  Layer.provideMerge(MockEmbeddingProvider),
+  Layer.provideMerge(EmbeddingCache.Default),
+  Layer.provideMerge(MetricsService.Default)
+)
 
 // Minimal test ontology
 const TEST_ONTOLOGY = `
@@ -58,7 +77,7 @@ describe("OntologyLoader.loadOntologyWithEmbeddings", () => {
     Layer.provideMerge(StorageServiceTest),
     Layer.provideMerge(RdfBuilder.Default),
     Layer.provideMerge(NlpService.Default),
-    Layer.provideMerge(EmbeddingServiceDefault),
+    Layer.provideMerge(EmbeddingServiceTest),
     Layer.provideMerge(ConfigServiceDefault),
     Layer.provideMerge(Layer.setConfigProvider(TestConfigProvider))
   )

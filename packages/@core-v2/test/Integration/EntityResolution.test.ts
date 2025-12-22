@@ -26,7 +26,8 @@ const MockEmbeddingLayer = Layer.succeed(
   {
     embed: (_text) => Effect.succeed([]),
     embedBatch: (texts) => Effect.succeed(texts.map(() => [])),
-    cosineSimilarity: (_a, _b) => 0.0
+    cosineSimilarity: (_a, _b) => 0.0,
+    getProviderMetadata: () => Effect.succeed({ providerId: "nomic", modelId: "test", dimension: 768 })
   }
 )
 

@@ -8,7 +8,7 @@
  * @module Service/Config
  */
 
-import { Config, Context, Effect, Layer, Option, Secret } from "effect"
+import { Config, Context, Effect, Layer, Option, Redacted, Secret } from "effect"
 
 // =============================================================================
 // Config Groups
@@ -79,12 +79,30 @@ const GrounderConfig = Config.nested("GROUNDER")(Config.all({
 }))
 
 const EmbeddingConfig = Config.nested("EMBEDDING")(Config.all({
+  /** Embedding provider: nomic (local), voyage (API) */
+  provider: Config.literal("nomic", "voyage")("PROVIDER").pipe(Config.withDefault("nomic")),
+
+  // --- Nomic (local) configuration ---
   model: Config.string("MODEL").pipe(Config.withDefault("nomic-embed-text-v1.5")),
   dimension: Config.integer("DIMENSION").pipe(Config.withDefault(768)),
   /** Transformers.js model ID for local inference */
   transformersModelId: Config.string("TRANSFORMERS_MODEL_ID").pipe(
     Config.withDefault("Xenova/nomic-embed-text-v1")
   ),
+
+  // --- Voyage (API) configuration ---
+  /** Voyage AI API key */
+  voyageApiKey: Config.option(Config.redacted("VOYAGE_API_KEY")),
+  /** Voyage model to use (voyage-3-lite, voyage-3, voyage-code-3, voyage-law-2) */
+  voyageModel: Config.string("VOYAGE_MODEL").pipe(Config.withDefault("voyage-3-lite")),
+  /** Request timeout in milliseconds */
+  timeoutMs: Config.integer("TIMEOUT_MS").pipe(Config.withDefault(30_000)),
+  /** Requests per minute limit for Voyage API */
+  rateLimitRpm: Config.integer("RATE_LIMIT_RPM").pipe(Config.withDefault(100)),
+  /** Maximum concurrent requests to Voyage API */
+  maxConcurrent: Config.integer("MAX_CONCURRENT").pipe(Config.withDefault(10)),
+
+  // --- Cache configuration ---
   /** GCS/local path for persisting embedding cache (optional, enables persistence when set) */
   cachePath: Config.option(Config.string("CACHE_PATH")),
   /** TTL for cached embeddings in hours (default: 24 hours) */
@@ -244,9 +262,15 @@ export const DEFAULT_CONFIG: AppConfig = {
     batchSize: 5
   },
   embedding: {
+    provider: "nomic" as const,
     model: "nomic-embed-text-v1.5",
     dimension: 768,
     transformersModelId: "Xenova/nomic-embed-text-v1",
+    voyageApiKey: Option.none<Redacted.Redacted<string>>(),
+    voyageModel: "voyage-3-lite",
+    timeoutMs: 30_000,
+    rateLimitRpm: 100,
+    maxConcurrent: 10,
     cachePath: Option.none(),
     cacheTtlHours: 24,
     cacheMaxEntries: 10000,

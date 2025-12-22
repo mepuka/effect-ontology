@@ -7,28 +7,106 @@
  * @module test/Service/Nlp.lemma
  */
 
-import { Effect, Layer } from "effect"
+import { Effect, Layer, Option } from "effect"
 import { describe, expect, it } from "vitest"
-import { EmbeddingCache } from "../../src/Service/EmbeddingCache.js"
+import { ConfigService } from "../../src/Service/Config.js"
 import { NlpService } from "../../src/Service/Nlp.js"
-import type { NomicTaskType } from "../../src/Service/NomicNlp.js"
-import { NomicNlpService } from "../../src/Service/NomicNlp.js"
 
-const mockEmbedding = [0.1, 0.2, 0.3, 0.4, 0.5]
-
-// Mock NomicNlpService for tests
-const NomicNlpServiceTest = Layer.succeed(NomicNlpService, {
-  embed: (_text: string, _taskType?: NomicTaskType) => Effect.succeed(mockEmbedding),
-  embedBatch: (texts: ReadonlyArray<string>, _taskType?: NomicTaskType) =>
-    Effect.succeed(texts.map(() => mockEmbedding)),
-  cosineSimilarity: (_a: ReadonlyArray<number>, _b: ReadonlyArray<number>) => 0.5
+// Mock ConfigService for testing
+const TestConfigService = Layer.succeed(ConfigService, {
+  llm: {
+    provider: "anthropic" as const,
+    model: "claude-haiku-4-5",
+    apiKey: { _tag: "Redacted", value: "test-key" } as any,
+    temperature: 0,
+    maxTokens: 4096,
+    timeoutMs: 30000,
+    enablePromptCaching: true
+  },
+  runtime: {
+    concurrency: 4,
+    llmConcurrencyLimit: 2,
+    retryMaxAttempts: 3,
+    retryInitialDelayMs: 1000,
+    retryMaxDelayMs: 10000,
+    enableTracing: false
+  },
+  storage: {
+    type: "memory" as const,
+    bucket: Option.none(),
+    localPath: Option.none(),
+    prefix: ""
+  },
+  rdf: {
+    baseNamespace: "http://example.org/",
+    outputFormat: "Turtle" as const,
+    prefixes: {
+      schema: "http://schema.org/",
+      rdf: "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+      rdfs: "http://www.w3.org/2000/01/rdf-schema#",
+      owl: "http://www.w3.org/2002/07/owl#",
+      xsd: "http://www.w3.org/2001/XMLSchema#"
+    }
+  },
+  ontology: {
+    path: "/tmp/test.ttl",
+    externalVocabsPath: "ontologies/external/merged-external.ttl",
+    registryPath: Option.none(),
+    cacheTtlSeconds: 300,
+    strictValidation: false
+  },
+  grounder: {
+    enabled: true,
+    confidenceThreshold: 0.8,
+    batchSize: 5
+  },
+  embedding: {
+    provider: "nomic" as const,
+    model: "nomic-embed-text-v1.5",
+    dimension: 768,
+    transformersModelId: "Xenova/nomic-embed-text-v1",
+    voyageApiKey: Option.none(),
+    voyageModel: "voyage-3-lite",
+    timeoutMs: 30_000,
+    rateLimitRpm: 100,
+    maxConcurrent: 10,
+    cachePath: Option.none(),
+    cacheTtlHours: 24,
+    cacheMaxEntries: 10000,
+    entityIndexPath: Option.none()
+  },
+  extraction: {
+    runsDir: "/tmp/test-runs",
+    strictPersistence: false
+  },
+  entityRegistry: {
+    enabled: false,
+    candidateThreshold: 0.6,
+    resolutionThreshold: 0.8,
+    maxCandidatesPerEntity: 20,
+    maxBlockingCandidates: 100,
+    canonicalNamespace: "http://example.org/entities/"
+  },
+  inference: {
+    enabled: false,
+    profile: "rdfs" as const,
+    persistDerived: true
+  },
+  api: {
+    keys: Option.none(),
+    requireAuth: false
+  },
+  jina: {
+    apiKey: Option.none(),
+    rateLimitRpm: 20,
+    timeoutMs: 30_000,
+    maxConcurrent: 5,
+    baseUrl: "https://r.jina.ai"
+  }
 })
 
 describe("NlpService BM25 lemmatization", () => {
-  const TestLayer = NlpService.Default.pipe(
-    Layer.provideMerge(NomicNlpServiceTest),
-    Layer.provideMerge(EmbeddingCache.Default)
-  )
+  const TestLayer = NlpService.Default.pipe(Layer.provide(TestConfigService))
 
   describe("morphological variant matching", () => {
     it("matches 'running' when searching for 'run'", async () => {

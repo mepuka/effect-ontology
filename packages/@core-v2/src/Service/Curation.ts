@@ -25,9 +25,9 @@ import { EmbeddingJob, PromptCacheJob } from "../Domain/Schema/JobSchema.js"
 import { ClaimRepository } from "../Repository/Claim.js"
 import { EntityRegistryRepository } from "../Repository/EntityRegistry.js"
 import { ExamplesRepository } from "../Repository/Examples.js"
+import type { AnyEmbeddingError } from "../Domain/Error/Embedding.js"
 import { EmbeddingService } from "./Embedding.js"
 import { EventBusService, type EventEntry } from "./EventBus.js"
-import type { NomicNlpError } from "./NomicNlp.js"
 
 // =============================================================================
 // Types
@@ -36,7 +36,7 @@ import type { NomicNlpError } from "./NomicNlp.js"
 /**
  * Combined error type for curation service operations
  */
-export type CurationServiceError = SqlError.SqlError | NomicNlpError | EventBusError
+export type CurationServiceError = SqlError.SqlError | AnyEmbeddingError | EventBusError
 
 /**
  * Result of applying a curation action

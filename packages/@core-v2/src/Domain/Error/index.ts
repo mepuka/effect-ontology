@@ -8,6 +8,7 @@
 export * from "./Activity.js"
 export * from "./Base.js"
 export * from "./Circuit.js"
+export * from "./Embedding.js"
 export * from "./Extraction.js"
 export * from "./Image.js"
 export * from "./Jina.js"

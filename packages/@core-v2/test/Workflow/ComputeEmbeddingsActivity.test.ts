@@ -5,15 +5,14 @@
  * @module test/Workflow/ComputeEmbeddingsActivity
  */
 
-import { DateTime, Effect, Layer, Option, Schema } from "effect"
+import { DateTime, Effect, Layer, Option, Request, Schema } from "effect"
 import { describe, expect, it } from "vitest"
 import type { OntologyEmbeddings } from "../../src/Domain/Model/OntologyEmbeddings.js"
 import { OntologyEmbeddingsJson } from "../../src/Domain/Model/OntologyEmbeddings.js"
 import { ConfigServiceDefault } from "../../src/Service/Config.js"
 import { EmbeddingService, EmbeddingServiceLive } from "../../src/Service/Embedding.js"
 import { EmbeddingCache } from "../../src/Service/EmbeddingCache.js"
-import type { NomicTaskType } from "../../src/Service/NomicNlp.js"
-import { NomicNlpService } from "../../src/Service/NomicNlp.js"
+import { EmbeddingProvider, type EmbeddingProviderMethods } from "../../src/Service/EmbeddingProvider.js"
 import { parseOntologyFromStore } from "../../src/Service/Ontology.js"
 import { RdfBuilder } from "../../src/Service/Rdf.js"
 import { MetricsService } from "../../src/Telemetry/Metrics.js"
@@ -49,6 +48,12 @@ const MINIMAL_ONTOLOGY = `
 `
 
 const mockEmbedding = [0.1, 0.2, 0.3, 0.4, 0.5]
+
+// Enable request batching for tests
+const BatchingEnabled = Layer.mergeAll(
+  Layer.setRequestBatching(true),
+  Layer.setRequestCaching(true)
+)
 
 describe("ComputeEmbeddingsActivity", () => {
   const RdfTestLayer = RdfBuilder.Default.pipe(
@@ -86,23 +91,24 @@ describe("ComputeEmbeddingsActivity", () => {
   it("generates embeddings for classes and properties", async () => {
     const embeddedTexts: Array<string> = []
 
-    const NomicNlpServiceTest = Layer.succeed(NomicNlpService, {
-      embed: (text: string, _taskType?: NomicTaskType) => {
-        embeddedTexts.push(text)
-        return Effect.succeed(mockEmbedding)
-      },
-      embedBatch: (texts: ReadonlyArray<string>, _taskType?: NomicTaskType) => {
-        texts.forEach((text) => embeddedTexts.push(text))
-        return Effect.succeed(texts.map(() => mockEmbedding))
-      },
-      cosineSimilarity: (_a: ReadonlyArray<number>, _b: ReadonlyArray<number>) => 0.95
-    })
+    const MockEmbeddingProvider = Layer.succeed(
+      EmbeddingProvider,
+      {
+        metadata: { providerId: "nomic", modelId: "test-model", dimension: 5 },
+        embedBatch: (requests) => {
+          requests.forEach((r) => embeddedTexts.push(r.text))
+          return Effect.succeed(requests.map(() => mockEmbedding))
+        },
+        cosineSimilarity: (_a, _b) => 0.95
+      } as EmbeddingProviderMethods
+    )
 
     const TestLayer = EmbeddingServiceLive.pipe(
-      Layer.provideMerge(NomicNlpServiceTest),
+      Layer.provideMerge(MockEmbeddingProvider),
       Layer.provideMerge(EmbeddingCache.Default),
       Layer.provideMerge(MetricsService.Default),
-      Layer.provideMerge(RdfTestLayer)
+      Layer.provideMerge(RdfTestLayer),
+      Layer.provideMerge(BatchingEnabled)
     )
 
     const result = await Effect.gen(function*() {

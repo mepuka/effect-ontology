@@ -22,6 +22,7 @@ import { BunContext } from "@effect/platform-bun"
 import { ConfigProvider, DateTime, Effect, Layer, ManagedRuntime, Stream } from "effect"
 import * as N3 from "n3"
 import { ConfigServiceDefault } from "../Service/Config.js"
+import { EmbeddingProvider, type EmbeddingProviderMethods } from "../Service/EmbeddingProvider.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { Grounder } from "../Service/Grounder.js"
 import {
@@ -164,6 +165,26 @@ export const MockShaclService = (options?: {
   )
 
 /**
+ * Mock EmbeddingProvider for testing
+ *
+ * Returns deterministic zero vectors for all embedding requests.
+ *
+ * @since 2.0.0
+ */
+const MockEmbeddingProvider = Layer.succeed(
+  EmbeddingProvider,
+  {
+    metadata: {
+      providerId: "nomic",
+      modelId: "test-model",
+      dimension: 768
+    },
+    embedBatch: (_requests) => Effect.succeed(_requests.map(() => new Array(768).fill(0))),
+    cosineSimilarity: (_a, _b) => 0
+  } as EmbeddingProviderMethods
+)
+
+/**
  * Test Layers
  *
  * Uses test/mock implementations for deterministic testing:
@@ -171,6 +192,7 @@ export const MockShaclService = (options?: {
  * - RelationExtractor.Test: Returns deterministic fake relations
  * - Grounder.Test: Returns deterministic pass for all relations
  * - MockLanguageModel: Stub LLM that returns empty responses
+ * - MockEmbeddingProvider: Returns zero vectors
  * - LLM Control: Test layers with high limits
  * - Other services use Default layers (can be mocked per test)
  *
@@ -187,6 +209,7 @@ export const TestLayers = Layer.mergeAll(
   ontologyLayer,
   MockShaclService(),
   MockLanguageModel,
+  MockEmbeddingProvider,
   EntityExtractor.Test,
   RelationExtractor.Test,
   Grounder.Test,

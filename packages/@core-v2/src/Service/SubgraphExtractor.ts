@@ -10,9 +10,9 @@
 
 import type { Layer } from "effect"
 import { Effect, HashSet } from "effect"
+import type { AnyEmbeddingError } from "../Domain/Error/Embedding.js"
 import type { Entity, KnowledgeGraph, Relation } from "../Domain/Model/Entity.js"
 import { EntityIndex, type FindSimilarOptions } from "./EntityIndex.js"
-import type { NomicNlpError } from "./NomicNlp.js"
 
 /**
  * Extracted subgraph containing nodes and edges
@@ -100,7 +100,7 @@ export interface SubgraphExtractorService {
     query: string,
     maxNodes: number,
     options?: ExtractRelevantOptions
-  ) => Effect.Effect<Subgraph, NomicNlpError>
+  ) => Effect.Effect<Subgraph, AnyEmbeddingError>
 }
 
 /**
@@ -295,7 +295,9 @@ export class SubgraphExtractor extends Effect.Service<SubgraphExtractor>()(
 /**
  * Default SubgraphExtractor layer
  *
+ * Requires EmbeddingService dependencies to be provided.
+ *
  * @since 2.0.0
  * @category Layers
  */
-export const SubgraphExtractorDefault: Layer.Layer<SubgraphExtractor> = SubgraphExtractor.Default
+export const SubgraphExtractorDefault = SubgraphExtractor.Default

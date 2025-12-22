@@ -19,9 +19,9 @@ import type { Layer } from "effect"
 import { Data, Effect, Schema } from "effect"
 import type { TimeoutException } from "effect/Cause"
 import type { Entity, KnowledgeGraph, Relation } from "../Domain/Model/Entity.js"
+import type { AnyEmbeddingError } from "../Domain/Error/Embedding.js"
 import { EntityIndex } from "./EntityIndex.js"
 import { generateObjectWithFeedback } from "./GenerateWithFeedback.js"
-import type { NomicNlpError } from "./NomicNlp.js"
 import { type Subgraph, SubgraphExtractor } from "./SubgraphExtractor.js"
 
 /**
@@ -266,7 +266,7 @@ export interface GraphRAGService {
    * @param graph - Knowledge graph to index
    * @returns Number of entities indexed
    */
-  readonly index: (graph: KnowledgeGraph) => Effect.Effect<number, NomicNlpError>
+  readonly index: (graph: KnowledgeGraph) => Effect.Effect<number, AnyEmbeddingError>
 
   /**
    * Retrieve relevant context for a query
@@ -285,7 +285,7 @@ export interface GraphRAGService {
     graph: KnowledgeGraph,
     query: string,
     options?: RetrievalOptions
-  ) => Effect.Effect<RetrievalResult, NomicNlpError>
+  ) => Effect.Effect<RetrievalResult, AnyEmbeddingError>
 
   /**
    * Generate a grounded answer using LLM
@@ -319,7 +319,7 @@ export interface GraphRAGService {
     graph: KnowledgeGraph,
     query: string,
     options?: AnswerOptions
-  ) => Effect.Effect<GroundedAnswer, NomicNlpError | GraphRAGGenerationError | AiError.AiError | TimeoutException>
+  ) => Effect.Effect<GroundedAnswer, AnyEmbeddingError | GraphRAGGenerationError | AiError.AiError | TimeoutException>
 
   /**
    * Format a subgraph as LLM context
@@ -865,7 +865,9 @@ For the step explanations:
 /**
  * Default GraphRAG layer
  *
+ * Requires EmbeddingService dependencies to be provided.
+ *
  * @since 2.0.0
  * @category Layers
  */
-export const GraphRAGDefault: Layer.Layer<GraphRAG> = GraphRAG.Default
+export const GraphRAGDefault = GraphRAG.Default

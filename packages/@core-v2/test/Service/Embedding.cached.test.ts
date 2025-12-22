@@ -5,40 +5,46 @@
  * @module test/Service/Embedding.cached
  */
 
-import { Effect, Layer, Ref } from "effect"
+import { Effect, Layer } from "effect"
 import { describe, expect, it } from "vitest"
 import { EmbeddingService, EmbeddingServiceLive } from "../../src/Service/Embedding.js"
 import { EmbeddingCache } from "../../src/Service/EmbeddingCache.js"
-import type { NomicTaskType } from "../../src/Service/NomicNlp.js"
-import { NomicNlpService } from "../../src/Service/NomicNlp.js"
+import { EmbeddingProvider, type EmbeddingProviderMethods } from "../../src/Service/EmbeddingProvider.js"
 import { MetricsService } from "../../src/Telemetry/Metrics.js"
 
 const mockEmbedding = [0.1, 0.2, 0.3, 0.4, 0.5]
 
+// Enable request batching for all tests
+const BatchingEnabled = Layer.mergeAll(
+  Layer.setRequestBatching(true),
+  Layer.setRequestCaching(true)
+)
+
 // Helper to create test mock with embedBatch support
-const createNomicMock = (callCount: { value: number }) =>
-  Layer.succeed(NomicNlpService, {
-    embed: (_text: string, _taskType?: NomicTaskType) => {
-      callCount.value++
-      return Effect.succeed(mockEmbedding)
-    },
-    embedBatch: (texts: ReadonlyArray<string>, _taskType?: NomicTaskType) => {
-      callCount.value++
-      return Effect.succeed(texts.map(() => mockEmbedding))
-    },
-    cosineSimilarity: (_a: ReadonlyArray<number>, _b: ReadonlyArray<number>) => 0.95
-  })
+const createProviderMock = (callCount: { value: number }) =>
+  Layer.succeed(
+    EmbeddingProvider,
+    {
+      metadata: { providerId: "nomic", modelId: "test-model", dimension: 5 },
+      embedBatch: (requests) => {
+        callCount.value++
+        return Effect.succeed(requests.map(() => mockEmbedding))
+      },
+      cosineSimilarity: (_a, _b) => 0.95
+    } as EmbeddingProviderMethods
+  )
 
 describe("EmbeddingService with cache", () => {
   it("caches embedding on first call", async () => {
     const callCount = { value: 0 }
 
-    const NomicNlpServiceTest = createNomicMock(callCount)
+    const MockEmbeddingProvider = createProviderMock(callCount)
 
     const TestLayer = EmbeddingServiceLive.pipe(
-      Layer.provideMerge(NomicNlpServiceTest),
+      Layer.provideMerge(MockEmbeddingProvider),
       Layer.provideMerge(EmbeddingCache.Default),
-      Layer.provideMerge(MetricsService.Default)
+      Layer.provideMerge(MetricsService.Default),
+      Layer.provideMerge(BatchingEnabled)
     )
 
     const result = await Effect.gen(function*() {
@@ -53,12 +59,13 @@ describe("EmbeddingService with cache", () => {
   it("returns cached embedding on second call (cache hit)", async () => {
     const callCount = { value: 0 }
 
-    const NomicNlpServiceTest = createNomicMock(callCount)
+    const MockEmbeddingProvider = createProviderMock(callCount)
 
     const TestLayer = EmbeddingServiceLive.pipe(
-      Layer.provideMerge(NomicNlpServiceTest),
+      Layer.provideMerge(MockEmbeddingProvider),
       Layer.provideMerge(EmbeddingCache.Default),
-      Layer.provideMerge(MetricsService.Default)
+      Layer.provideMerge(MetricsService.Default),
+      Layer.provideMerge(BatchingEnabled)
     )
 
     const result = await Effect.gen(function*() {
@@ -82,12 +89,13 @@ describe("EmbeddingService with cache", () => {
   it("does not call model on cache hit", async () => {
     const callCount = { value: 0 }
 
-    const NomicNlpServiceTest = createNomicMock(callCount)
+    const MockEmbeddingProvider = createProviderMock(callCount)
 
     const TestLayer = EmbeddingServiceLive.pipe(
-      Layer.provideMerge(NomicNlpServiceTest),
+      Layer.provideMerge(MockEmbeddingProvider),
       Layer.provideMerge(EmbeddingCache.Default),
-      Layer.provideMerge(MetricsService.Default)
+      Layer.provideMerge(MetricsService.Default),
+      Layer.provideMerge(BatchingEnabled)
     )
 
     await Effect.gen(function*() {
@@ -106,12 +114,13 @@ describe("EmbeddingService with cache", () => {
   it("calls model for different texts (cache miss)", async () => {
     const callCount = { value: 0 }
 
-    const NomicNlpServiceTest = createNomicMock(callCount)
+    const MockEmbeddingProvider = createProviderMock(callCount)
 
     const TestLayer = EmbeddingServiceLive.pipe(
-      Layer.provideMerge(NomicNlpServiceTest),
+      Layer.provideMerge(MockEmbeddingProvider),
       Layer.provideMerge(EmbeddingCache.Default),
-      Layer.provideMerge(MetricsService.Default)
+      Layer.provideMerge(MetricsService.Default),
+      Layer.provideMerge(BatchingEnabled)
     )
 
     await Effect.gen(function*() {
@@ -129,12 +138,13 @@ describe("EmbeddingService with cache", () => {
   it("different task types are cached separately", async () => {
     const callCount = { value: 0 }
 
-    const NomicNlpServiceTest = createNomicMock(callCount)
+    const MockEmbeddingProvider = createProviderMock(callCount)
 
     const TestLayer = EmbeddingServiceLive.pipe(
-      Layer.provideMerge(NomicNlpServiceTest),
+      Layer.provideMerge(MockEmbeddingProvider),
       Layer.provideMerge(EmbeddingCache.Default),
-      Layer.provideMerge(MetricsService.Default)
+      Layer.provideMerge(MetricsService.Default),
+      Layer.provideMerge(BatchingEnabled)
     )
 
     await Effect.gen(function*() {
@@ -155,28 +165,30 @@ describe("EmbeddingService with cache", () => {
     expect(callCount.value).toBe(3)
   })
 
-  it("cosineSimilarity delegates to underlying service", async () => {
-    const NomicNlpServiceTest = Layer.succeed(NomicNlpService, {
-      embed: (_text: string, _taskType?: NomicTaskType) => Effect.succeed(mockEmbedding),
-      embedBatch: (texts: ReadonlyArray<string>, _taskType?: NomicTaskType) =>
-        Effect.succeed(texts.map(() => mockEmbedding)),
-      cosineSimilarity: (a: ReadonlyArray<number>, b: ReadonlyArray<number>) => {
-        // Return sum of first elements as a simple mock
-        return (a[0] ?? 0) + (b[0] ?? 0)
-      }
-    })
+  it("cosineSimilarity computes correctly", async () => {
+    const MockEmbeddingProvider = Layer.succeed(
+      EmbeddingProvider,
+      {
+        metadata: { providerId: "nomic", modelId: "test-model", dimension: 5 },
+        embedBatch: (requests) =>
+          Effect.succeed(requests.map(() => mockEmbedding)),
+        cosineSimilarity: (_a, _b) => 0.95
+      } as EmbeddingProviderMethods
+    )
 
     const TestLayer = EmbeddingServiceLive.pipe(
-      Layer.provideMerge(NomicNlpServiceTest),
+      Layer.provideMerge(MockEmbeddingProvider),
       Layer.provideMerge(EmbeddingCache.Default),
-      Layer.provideMerge(MetricsService.Default)
+      Layer.provideMerge(MetricsService.Default),
+      Layer.provideMerge(BatchingEnabled)
     )
 
     const result = await Effect.gen(function*() {
       const svc = yield* EmbeddingService
-      return svc.cosineSimilarity([0.5, 0.3], [0.2, 0.1])
+      // Test with identical vectors - should be 1.0
+      return svc.cosineSimilarity([1, 0, 0], [1, 0, 0])
     }).pipe(Effect.provide(TestLayer), Effect.runPromise)
 
-    expect(result).toBe(0.7) // 0.5 + 0.2
+    expect(result).toBe(1) // Identical vectors have similarity 1
   })
 })

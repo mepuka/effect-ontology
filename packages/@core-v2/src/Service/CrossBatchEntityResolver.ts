@@ -13,8 +13,8 @@ import type { SqlError } from "@effect/sql"
 import { Effect, HashMap, Option, Schema } from "effect"
 import type { Entity } from "../Domain/Model/Entity.js"
 import { type BlockingCandidate, EntityRegistryRepository } from "../Repository/EntityRegistry.js"
+import type { AnyEmbeddingError } from "../Domain/Error/Embedding.js"
 import { EmbeddingService } from "./Embedding.js"
-import type { NomicNlpError } from "./NomicNlp.js"
 
 // =============================================================================
 // Error Types
@@ -23,7 +23,7 @@ import type { NomicNlpError } from "./NomicNlp.js"
 /**
  * Combined error type for cross-batch resolution operations
  */
-export type CrossBatchResolutionError = NomicNlpError | SqlError.SqlError
+export type CrossBatchResolutionError = AnyEmbeddingError | SqlError.SqlError
 
 // =============================================================================
 // Types
