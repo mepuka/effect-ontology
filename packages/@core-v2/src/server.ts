@@ -37,6 +37,9 @@ import { ClaimPersistenceService } from "./Service/ClaimPersistence.js"
 import { ContentEnrichmentAgent } from "./Service/ContentEnrichmentAgent.js"
 import { PersistentEmbeddingCache } from "./Service/EmbeddingCache.js"
 import { PersistentEntityIndex } from "./Service/EntityIndex.js"
+import { ImageExtractor } from "./Service/ImageExtractor.js"
+import { ImageFetcher } from "./Service/ImageFetcher.js"
+import { ImageStore } from "./Service/ImageStore.js"
 import { JinaReaderClient } from "./Service/JinaReaderClient.js"
 import { LinkIngestionService } from "./Service/LinkIngestionService.js"
 
@@ -196,12 +199,15 @@ const ClaimPersistenceLayer = usePostgres
   )
   : Layer.empty // No persistence without PostgreSQL
 
-// LinkIngestionService layer (depends on Drizzle, Storage, LLM, Jina)
+// LinkIngestionService layer (depends on Drizzle, Storage, LLM, Jina, Image services)
 // Only available with PostgreSQL
 const LinkIngestionLayer = usePostgres
   ? LinkIngestionService.Default.pipe(
     Layer.provideMerge(ContentEnrichmentAgent.Default),
     Layer.provideMerge(JinaReaderClient.Default),
+    Layer.provideMerge(ImageExtractor.Default),
+    Layer.provideMerge(ImageFetcher.Default),
+    Layer.provideMerge(ImageStore.Default),
     Layer.provideMerge(PgDrizzleLive)
   )
   : Layer.empty

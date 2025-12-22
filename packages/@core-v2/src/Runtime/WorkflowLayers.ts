@@ -87,12 +87,30 @@ const LlmExtractionBundle = Layer.mergeAll(
 )
 
 /**
- * NLP services with ConfigService dependency satisfied
+ * Embedding infrastructure with ConfigService pre-provided
  *
- * NlpService.Default requires ConfigService, so we provide it first.
+ * EmbeddingInfrastructure requires ConfigService, so we satisfy that first.
+ * This layer provides: EmbeddingProvider | EmbeddingRateLimiter | EmbeddingCache
+ */
+const EmbeddingInfraWithConfig = EmbeddingInfrastructure.pipe(
+  Layer.provide(CoreDependenciesLayer)
+)
+
+/**
+ * NLP services with all dependencies satisfied
+ *
+ * NlpService.Default includes EmbeddingServiceDefault in its dependencies.
+ * EmbeddingServiceDefault requires: EmbeddingProvider | EmbeddingCache | MetricsService
+ *
+ * We provide these by:
+ * 1. EmbeddingInfraWithConfig -> EmbeddingProvider | EmbeddingCache (with ConfigService satisfied)
+ * 2. MetricsService.Default -> MetricsService
+ * 3. CoreDependenciesLayer -> ConfigService (for NlpService itself)
  */
 const NlpBundle = NlpService.Default.pipe(
-  Layer.provideMerge(CoreDependenciesLayer)
+  Layer.provide(EmbeddingInfraWithConfig),
+  Layer.provide(MetricsService.Default),
+  Layer.provide(CoreDependenciesLayer)
 )
 
 /**
@@ -208,28 +226,31 @@ const EmbeddingBundle = EmbeddingServiceLive.pipe(
  * Dependencies:
  * - EmbeddingService (with cache-through behavior)
  * - EmbeddingCache (in-memory with TTL/LRU eviction)
- * - NomicNlpService (local embedding model)
  * - MetricsService (cache hit/miss tracking)
  *
- * CRITICAL: This bundle provides EmbeddingCache.Default which gives actual
- * caching behavior. Without this, embeddings are recomputed for every entity.
+ * CRITICAL: EntityResolutionService.Default has EmbeddingServiceDefault in its
+ * dependencies, which requires EmbeddingProvider | EmbeddingCache | MetricsService.
+ * We provide EmbeddingBundle to satisfy these requirements.
  */
-const EntityResolutionBundle = EntityResolutionService.Live
+const EntityResolutionBundle = EntityResolutionService.Live.pipe(
+  Layer.provideMerge(EmbeddingBundle)
+)
 
 /**
  * GraphRAG services for intelligent query retrieval
  *
  * Dependencies:
- * - EntityIndex (entity embedding index)
+ * - EntityIndex (entity embedding index) - needs EmbeddingService
  * - SubgraphExtractor (N-hop subgraph extraction)
- * - EmbeddingService (for embedding queries)
  *
- * Provides retrieval-augmented generation capabilities:
- * - Multi-hop subgraph extraction around query-relevant entities
- * - RRF score fusion for ranking
- * - Formatted context generation for LLM prompts
+ * CRITICAL: GraphRAG.Default includes EntityIndex.Default which has
+ * EmbeddingServiceDefault in its dependencies. EmbeddingServiceDefault
+ * requires EmbeddingProvider | EmbeddingCache | MetricsService.
+ * We provide EmbeddingBundle to satisfy these requirements.
  */
-const GraphRAGBundle = GraphRAG.Default
+const GraphRAGBundle = GraphRAG.Default.pipe(
+  Layer.provideMerge(EmbeddingBundle)
+)
 
 /**
  * Cross-Batch Entity Resolution bundle (OPTIONAL)

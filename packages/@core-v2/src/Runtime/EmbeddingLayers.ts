@@ -50,15 +50,32 @@ export const EmbeddingProviderFromConfig: Layer.Layer<
 > = Layer.unwrapEffect(
   Effect.gen(function* () {
     const config = yield* ConfigService
+    const configLayer = Layer.succeed(ConfigService, config)
 
-    // Both layer types are coerced to the union type
-    return (config.embedding.provider === "voyage"
-      ? VoyageEmbeddingProviderLive
-      : NomicEmbeddingProviderLive) as Layer.Layer<
-      EmbeddingProvider,
-      never,
-      ConfigService | NomicNlpService | EmbeddingRateLimiter | HttpClient.HttpClient
-    >
+    // Select the provider based on config, then provide ConfigService to it
+    // CRITICAL: The returned layer needs ConfigService, so we provide it here
+    //
+    // Requirements after providing ConfigService:
+    // - Nomic: NomicNlpService
+    // - Voyage: EmbeddingRateLimiter | HttpClient.HttpClient
+    // Union: NomicNlpService | EmbeddingRateLimiter | HttpClient.HttpClient
+    if (config.embedding.provider === "voyage") {
+      return VoyageEmbeddingProviderLive.pipe(
+        Layer.provide(configLayer)
+      ) as Layer.Layer<
+        EmbeddingProvider,
+        never,
+        NomicNlpService | EmbeddingRateLimiter | HttpClient.HttpClient
+      >
+    } else {
+      return NomicEmbeddingProviderLive.pipe(
+        Layer.provide(configLayer)
+      ) as Layer.Layer<
+        EmbeddingProvider,
+        never,
+        NomicNlpService | EmbeddingRateLimiter | HttpClient.HttpClient
+      >
+    }
   })
 )
 
@@ -145,15 +162,12 @@ export const EmbeddingInfrastructure: Layer.Layer<
   EmbeddingProvider | EmbeddingRateLimiter | EmbeddingCache,
   never,
   ConfigService
-> = Layer.mergeAll(
-  EmbeddingProviderFromConfig.pipe(
-    Layer.provide(FetchHttpClient.layer),
-    Layer.provide(NomicNlpServiceLive),
-    Layer.provide(EmbeddingRateLimiterFromConfig)
-  ),
-  EmbeddingRateLimiterFromConfig,
-  EmbeddingCache.Default
-)
+> = EmbeddingProviderFromConfig.pipe(
+  Layer.provideMerge(EmbeddingRateLimiterFromConfig),
+  Layer.provideMerge(EmbeddingCache.Default),
+  Layer.provideMerge(FetchHttpClient.layer),
+  Layer.provideMerge(NomicNlpServiceLive)
+) as Layer.Layer<EmbeddingProvider | EmbeddingRateLimiter | EmbeddingCache, never, ConfigService>
 
 /**
  * Complete embedding infrastructure with all dependencies
