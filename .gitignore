@@ -34,3 +34,4 @@ packages/@core-v2/output/runs/*
 packages/@core-v2/output/
 
 output/
+.env.postgres
