@@ -36,8 +36,9 @@ const cleanStderr = (stderr: string | undefined): string | undefined => {
   if (!stderr) return undefined
   // Remove ANSI escape codes and excessive whitespace
 
+  // eslint-disable-next-line no-control-regex
   return stderr
-    .replace(/\u001b\[[0-9;]*m/g, "")
+    .replace(/\x1b\[[0-9;]*m/g, "")
     .replace(/\n+/g, "\n")
     .trim()
 }

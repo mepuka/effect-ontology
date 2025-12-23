@@ -1,14 +1,15 @@
 /**
  * Runtime: HTTP Middleware
  *
- * Middleware for the HTTP server, including shutdown tracking and authentication.
+ * Middleware for the HTTP server, including shutdown tracking, authentication,
+ * and request logging.
  *
  * @since 2.0.0
  * @module Runtime/HttpMiddleware
  */
 
 import { HttpMiddleware, HttpServerRequest, HttpServerResponse } from "@effect/platform"
-import { Effect, Option, Redacted } from "effect"
+import { Clock, Effect, Option, Redacted } from "effect"
 import { ConfigService } from "../Service/Config.js"
 import { ShutdownService } from "./Shutdown.js"
 
@@ -112,3 +113,69 @@ export const makeShutdownMiddleware = Effect.gen(function*() {
     })
   )
 })
+
+/**
+ * Middleware to log HTTP requests with timing
+ *
+ * Logs:
+ * - Request method, path, and timing
+ * - Response status code
+ * - Configurable log level (debug for health checks, info for API)
+ *
+ * @since 2.0.0
+ * @category Middleware
+ */
+export const makeLoggingMiddleware = Effect.sync(() =>
+  HttpMiddleware.make((app) =>
+    Effect.gen(function*() {
+      const request = yield* HttpServerRequest.HttpServerRequest
+      const start = yield* Clock.currentTimeMillis
+      const requestId = crypto.randomUUID().slice(0, 8)
+
+      const path = request.url
+      const method = request.method
+
+      // Use debug level for health checks to reduce noise
+      const isHealthCheck = path.startsWith("/health")
+      const logLevel = isHealthCheck ? Effect.logDebug : Effect.logInfo
+
+      yield* logLevel("HTTP request started", {
+        requestId,
+        method,
+        path
+      })
+
+      // Execute the handler and capture the response
+      const response = yield* app.pipe(
+        Effect.tapBoth({
+          onSuccess: (res) =>
+            Effect.gen(function*() {
+              const elapsed = (yield* Clock.currentTimeMillis) - start
+
+              yield* logLevel("HTTP request completed", {
+                requestId,
+                method,
+                path,
+                status: res.status,
+                durationMs: elapsed
+              })
+            }),
+          onFailure: (error) =>
+            Effect.gen(function*() {
+              const elapsed = (yield* Clock.currentTimeMillis) - start
+
+              yield* Effect.logWarning("HTTP request failed", {
+                requestId,
+                method,
+                path,
+                error: String(error),
+                durationMs: elapsed
+              })
+            })
+        })
+      )
+
+      return response
+    })
+  )
+)

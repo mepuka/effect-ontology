@@ -102,10 +102,31 @@ const makeGcsStore = (config: StorageConfig) =>
 
     const handleError = (method: string, key: string, cause: unknown) => {
       let reason: SystemError["reason"] = "Unknown"
-      let message = String(cause)
+      let message: string
 
+      // Handle different error types
       if (cause instanceof Error) {
         message = cause.message
+      } else if (typeof cause === "object" && cause !== null) {
+        // GCS errors may be plain objects with message/errors properties
+        const obj = cause as Record<string, unknown>
+        if (typeof obj.message === "string") {
+          message = obj.message
+        } else if (Array.isArray(obj.errors)) {
+          // GCS batch errors have an errors array
+          message = obj.errors.map((e: unknown) =>
+            typeof e === "object" && e !== null && "message" in e
+              ? String((e as { message: unknown }).message)
+              : String(e)
+          ).join("; ")
+        } else {
+          message = JSON.stringify(cause)
+        }
+      } else {
+        message = String(cause)
+      }
+
+      if (cause instanceof Error) {
         // Use type guard to safely access .code property (GCS errors have numeric HTTP status codes)
         const code = "code" in cause && typeof (cause as { code?: unknown }).code === "number"
           ? (cause as { code: number }).code
@@ -367,7 +388,7 @@ const makeLocalStore = (config: StorageConfig) =>
 
           if (stat.type === "Directory") {
             const subResults = yield* walkDirRecursive(fullPath, entryRelativePath)
-            results.push(...subResults)
+            for (const r of subResults) results.push(r)
           } else {
             results.push(entryRelativePath)
           }

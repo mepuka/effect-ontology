@@ -42,12 +42,12 @@ function LinkRow({
 }: {
   link: {
     id: string
-    headline?: string
-    sourceUri?: string
-    organization?: string
+    headline?: string | null
+    sourceUri?: string | null
+    organization?: string | null
     status: string
-    sourceType: string
-    wordCount?: number
+    sourceType: string | null
+    wordCount?: number | null
   }
   ontologyId: string
 }) {
@@ -72,7 +72,7 @@ function LinkRow({
       </Badge>
 
       <span className="text-2xs text-muted-foreground w-16 text-right flex-shrink-0">
-        {link.sourceType}
+        {link.sourceType ?? "—"}
       </span>
 
       <span className="text-2xs text-muted-foreground tabular-nums w-16 text-right flex-shrink-0">
