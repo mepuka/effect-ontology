@@ -12,6 +12,7 @@ import { HttpRouter, HttpServerRequest, HttpServerResponse } from "@effect/platf
 import { Effect, Option } from "effect"
 import { ImageBlobStore } from "../Service/ImageBlobStore.js"
 import { ImageStore } from "../Service/ImageStore.js"
+import { LinkIngestionService } from "../Service/LinkIngestionService.js"
 
 // =============================================================================
 // Helpers
@@ -170,13 +171,29 @@ export const ImageRouter = HttpRouter.empty.pipe(
       }
 
       const imageStore = yield* ImageStore
+      const linkService = yield* LinkIngestionService
 
-      // Note: We use contentHash as ownerId for links
-      // The linkId in the URL is the DB ID, but we need the contentHash
-      // For now, we'll use linkId directly (callers should use contentHash)
-      // TODO: Look up link by ID to get contentHash
+      // Look up link by ID to get contentHash (images are stored by contentHash)
+      const link = yield* linkService.getById(linkId).pipe(
+        Effect.map((optLink) => Option.getOrNull(optLink))
+      )
 
-      const images = yield* imageStore.listByOwner("link", linkId)
+      if (link === null) {
+        return yield* HttpServerResponse.json({
+          error: "NOT_FOUND",
+          message: `Link ${linkId} not found`
+        }, { status: 404 })
+      }
+
+      // Verify ontology matches
+      if (link.ontologyId !== ontologyId) {
+        return yield* HttpServerResponse.json({
+          error: "NOT_FOUND",
+          message: `Link ${linkId} not found in ontology ${ontologyId}`
+        }, { status: 404 })
+      }
+
+      const images = yield* imageStore.listByOwner("link", link.contentHash)
 
       return yield* HttpServerResponse.json({
         images,

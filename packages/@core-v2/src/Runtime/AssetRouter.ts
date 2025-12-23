@@ -9,8 +9,8 @@
  */
 
 import { HttpRouter, HttpServerResponse } from "@effect/platform"
-import { Effect, Option } from "effect"
-import type { DocumentId } from "../Domain/Identity.js"
+import { Effect, Option, Schema } from "effect"
+import { BatchId, type DocumentId } from "../Domain/Identity.js"
 import { PathLayout } from "../Domain/PathLayout.js"
 import { LinkIngestionService } from "../Service/LinkIngestionService.js"
 import { StorageService } from "../Service/Storage.js"
@@ -40,7 +40,16 @@ export const AssetRouter = HttpRouter.empty.pipe(
 
       const content = yield* storage.get(path).pipe(
         Effect.map((optContent) => Option.getOrNull(optContent)),
-        Effect.catchAll(() => Effect.succeed(null))
+        Effect.catchAll((error) =>
+          Effect.gen(function*() {
+            yield* Effect.logWarning("Storage error fetching document content", {
+              path,
+              docId,
+              error: String(error)
+            })
+            return null
+          })
+        )
       )
 
       if (content === null) {
@@ -78,7 +87,16 @@ export const AssetRouter = HttpRouter.empty.pipe(
 
       const content = yield* storage.get(path).pipe(
         Effect.map((optContent) => Option.getOrNull(optContent)),
-        Effect.catchAll(() => Effect.succeed(null))
+        Effect.catchAll((error) =>
+          Effect.gen(function*() {
+            yield* Effect.logWarning("Storage error fetching document graph", {
+              path,
+              docId,
+              error: String(error)
+            })
+            return null
+          })
+        )
       )
 
       if (content === null) {
@@ -137,7 +155,16 @@ export const AssetRouter = HttpRouter.empty.pipe(
       // Get the content from storage
       const content = yield* storage.get(link.storageUri).pipe(
         Effect.map((optContent) => Option.getOrNull(optContent)),
-        Effect.catchAll(() => Effect.succeed(null))
+        Effect.catchAll((error) =>
+          Effect.gen(function*() {
+            yield* Effect.logWarning("Storage error fetching link content", {
+              storageUri: link.storageUri,
+              linkId,
+              error: String(error)
+            })
+            return null
+          })
+        )
       )
 
       if (content === null) {
@@ -162,45 +189,79 @@ export const AssetRouter = HttpRouter.empty.pipe(
     "/v1/batches/:batchId/validation/report",
     Effect.gen(function*() {
       const params = yield* HttpRouter.params
-      const { batchId } = params
+      const { batchId: rawBatchId } = params
 
-      if (!batchId) {
+      if (!rawBatchId) {
         return yield* HttpServerResponse.json({
           error: "VALIDATION_ERROR",
           message: "batchId is required"
         }, { status: 400 })
       }
 
+      // Validate batchId format
+      const validatedBatchId = yield* Schema.decode(BatchId)(rawBatchId).pipe(
+        Effect.catchAll(() =>
+          Effect.fail({
+            isValidationError: true as const,
+            error: "VALIDATION_ERROR",
+            message: `Invalid batch ID format: ${rawBatchId}`
+          })
+        )
+      )
+
       const storage = yield* StorageService
-      const path = PathLayout.batch.validationReport(batchId as any)
+      const path = PathLayout.batch.validationReport(validatedBatchId)
 
       const content = yield* storage.get(path).pipe(
         Effect.map((optContent) => Option.getOrNull(optContent)),
-        Effect.catchAll(() => Effect.succeed(null))
+        Effect.catchAll((error) =>
+          Effect.gen(function*() {
+            yield* Effect.logWarning("Storage error fetching validation report", {
+              path,
+              batchId: rawBatchId,
+              error: String(error)
+            })
+            return null
+          })
+        )
       )
 
       if (content === null) {
         return yield* HttpServerResponse.json({
           error: "NOT_FOUND",
-          message: `Validation report for batch ${batchId} not found`
+          message: `Validation report for batch ${rawBatchId} not found`
         }, { status: 404 })
       }
 
-      // Parse and return as JSON
-      try {
-        const report = JSON.parse(content)
-        return yield* HttpServerResponse.json(report, {
-          headers: {
-            "Cache-Control": "public, max-age=86400" // 24 hours
-          }
-        })
-      } catch {
+      // Parse and return as JSON using Effect
+      const report = yield* Effect.try({
+        try: () => JSON.parse(content),
+        catch: () => null
+      })
+
+      if (report === null) {
         return yield* HttpServerResponse.json({
           error: "PARSE_ERROR",
-          message: `Failed to parse validation report for batch ${batchId}`
+          message: `Failed to parse validation report for batch ${rawBatchId}`
         }, { status: 500 })
       }
-    })
+
+      return yield* HttpServerResponse.json(report, {
+        headers: {
+          "Cache-Control": "public, max-age=86400" // 24 hours
+        }
+      })
+    }).pipe(
+      Effect.catchAll((error) => {
+        if (typeof error === "object" && error !== null && "isValidationError" in error) {
+          return HttpServerResponse.json({
+            error: (error as { error: string }).error,
+            message: (error as { message: string }).message
+          }, { status: 400 })
+        }
+        return Effect.fail(error)
+      })
+    )
   ),
   // GET /v1/batches/:batchId/graph.ttl
   // Download final canonical graph for a batch
@@ -208,27 +269,47 @@ export const AssetRouter = HttpRouter.empty.pipe(
     "/v1/batches/:batchId/graph.ttl",
     Effect.gen(function*() {
       const params = yield* HttpRouter.params
-      const { batchId } = params
+      const { batchId: rawBatchId } = params
 
-      if (!batchId) {
+      if (!rawBatchId) {
         return yield* HttpServerResponse.json({
           error: "VALIDATION_ERROR",
           message: "batchId is required"
         }, { status: 400 })
       }
 
+      // Validate batchId format
+      const validatedBatchId = yield* Schema.decode(BatchId)(rawBatchId).pipe(
+        Effect.catchAll(() =>
+          Effect.fail({
+            isValidationError: true as const,
+            error: "VALIDATION_ERROR",
+            message: `Invalid batch ID format: ${rawBatchId}`
+          })
+        )
+      )
+
       const storage = yield* StorageService
-      const path = PathLayout.batch.canonical(batchId as any)
+      const path = PathLayout.batch.canonical(validatedBatchId)
 
       const content = yield* storage.get(path).pipe(
         Effect.map((optContent) => Option.getOrNull(optContent)),
-        Effect.catchAll(() => Effect.succeed(null))
+        Effect.catchAll((error) =>
+          Effect.gen(function*() {
+            yield* Effect.logWarning("Storage error fetching canonical graph", {
+              path,
+              batchId: rawBatchId,
+              error: String(error)
+            })
+            return null
+          })
+        )
       )
 
       if (content === null) {
         return yield* HttpServerResponse.json({
           error: "NOT_FOUND",
-          message: `Canonical graph for batch ${batchId} not found`
+          message: `Canonical graph for batch ${rawBatchId} not found`
         }, { status: 404 })
       }
 
@@ -238,6 +319,16 @@ export const AssetRouter = HttpRouter.empty.pipe(
           "Cache-Control": "public, max-age=31536000, immutable"
         }
       })
-    })
+    }).pipe(
+      Effect.catchAll((error) => {
+        if (typeof error === "object" && error !== null && "isValidationError" in error) {
+          return HttpServerResponse.json({
+            error: (error as { error: string }).error,
+            message: (error as { message: string }).message
+          }, { status: 400 })
+        }
+        return Effect.fail(error)
+      })
+    )
   )
 )

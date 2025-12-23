@@ -13,7 +13,7 @@ import { TreeFormatter } from "effect/ParseResult"
 import type { ParseError } from "effect/ParseResult"
 import {
   type BatchId,
-  type DocumentId,
+  documentIdFromHash,
   type Namespace,
   type OntologyVersion,
   resolveToGcsUri,
@@ -541,8 +541,9 @@ export const LinkIngestionRouter = HttpRouter.empty.pipe(
               const ontologyUri = resolveToGcsUri(ontologyEntry.storagePath, bucket)
 
               // Build documents from links
+              // Use contentHash to generate DocumentId (not link.id which is UUID)
               const documents = links.map((link) => ({
-                documentId: link.id as DocumentId,
+                documentId: documentIdFromHash(link.contentHash),
                 sourceUri: resolveToGcsUri(link.storageUri, bucket),
                 contentType: "text/markdown" as const,
                 sizeBytes: link.wordCount ? link.wordCount * 5 : 0 // Rough estimate
@@ -628,5 +629,85 @@ export const LinkIngestionRouter = HttpRouter.empty.pipe(
         })
       )
     })
+  ),
+  // POST /v1/ontologies/:ontologyId/links/:linkId/re-enrich - Re-run enrichment on a pending/failed link
+  HttpRouter.post(
+    "/v1/ontologies/:ontologyId/links/:linkId/re-enrich",
+    Effect.gen(function*() {
+      const params = yield* HttpRouter.params
+      const { linkId, ontologyId } = params
+
+      if (!ontologyId || !linkId) {
+        return yield* HttpServerResponse.json({
+          error: "VALIDATION_ERROR",
+          message: "ontologyId and linkId are required"
+        }, { status: 400 })
+      }
+
+      const ingestion = yield* LinkIngestionService
+
+      // First verify the link exists and belongs to this ontology
+      const existingLink = yield* ingestion.getById(linkId).pipe(
+        Effect.map((opt) => Option.getOrNull(opt))
+      )
+
+      if (existingLink === null) {
+        return yield* HttpServerResponse.json({
+          error: "NOT_FOUND",
+          message: `Link "${linkId}" not found`
+        }, { status: 404 })
+      }
+
+      if (existingLink.ontologyId !== ontologyId) {
+        return yield* HttpServerResponse.json({
+          error: "NOT_FOUND",
+          message: `Link "${linkId}" not found in ontology "${ontologyId}"`
+        }, { status: 404 })
+      }
+
+      // Run re-enrichment
+      const result = yield* ingestion.reEnrich(linkId).pipe(
+        Effect.mapError((error) => ({
+          error: "RE_ENRICH_ERROR" as const,
+          message: error.message,
+          phase: error.phase
+        }))
+      )
+
+      if (Option.isNone(result)) {
+        return yield* HttpServerResponse.json({
+          error: "RE_ENRICH_ERROR",
+          message: "Failed to re-enrich link"
+        }, { status: 500 })
+      }
+
+      const link = result.value
+
+      yield* Effect.logInfo("Link re-enriched successfully", {
+        linkId,
+        ontologyId,
+        status: link.status,
+        headline: link.headline
+      })
+
+      return yield* HttpServerResponse.json({
+        id: link.id,
+        status: link.status,
+        headline: link.headline,
+        topics: link.topics,
+        keyEntities: link.keyEntities,
+        enrichedAt: link.enrichedAt
+      })
+    }).pipe(
+      Effect.catchAll((error) => {
+        if (typeof error === "object" && error !== null && "error" in error) {
+          return HttpServerResponse.json(error, { status: 500 })
+        }
+        return HttpServerResponse.json({
+          error: "RE_ENRICH_ERROR",
+          message: String(error)
+        }, { status: 500 })
+      })
+    )
   )
 )

@@ -1,13 +1,13 @@
-import { describe, it, expect, vi } from "vitest"
+import * as Pg from "@effect/sql-drizzle/Pg"
 import { Effect, Layer, Option } from "effect"
-import { LinkIngestionService } from "../../src/Service/LinkIngestionService.js"
-import { JinaReaderClient } from "../../src/Service/JinaReaderClient.js"
-import { StorageService } from "../../src/Service/Storage.js"
+import { describe, expect, it, vi } from "vitest"
 import { ContentEnrichmentAgent } from "../../src/Service/ContentEnrichmentAgent.js"
 import { ImageExtractor } from "../../src/Service/ImageExtractor.js"
 import { ImageFetcher } from "../../src/Service/ImageFetcher.js"
 import { ImageStore } from "../../src/Service/ImageStore.js"
-import * as Pg from "@effect/sql-drizzle/Pg"
+import { JinaReaderClient } from "../../src/Service/JinaReaderClient.js"
+import { LinkIngestionService } from "../../src/Service/LinkIngestionService.js"
+import { StorageService } from "../../src/Service/Storage.js"
 
 // Mock dependencies
 const mockJina = {

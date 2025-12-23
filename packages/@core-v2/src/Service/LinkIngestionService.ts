@@ -534,6 +534,153 @@ export class LinkIngestionService extends Effect.Service<LinkIngestionService>()
         // StorageService.get returns Option<string> (already decoded)
         storage.get(link.storageUri)
 
+      /**
+       * Re-enrich a pending/failed link
+       *
+       * Retrieves content from storage and runs enrichment again,
+       * updating the database with new metadata.
+       */
+      const reEnrich = (id: string): Effect.Effect<Option.Option<IngestedLinkRow>, LinkIngestionError> =>
+        Effect.gen(function*() {
+          // 1. Get link by ID
+          const linkOpt = yield* getById(id)
+          if (Option.isNone(linkOpt)) {
+            return Option.none()
+          }
+          const link = linkOpt.value
+
+          // 2. Get content from storage
+          const sourceUrl = link.sourceUri ?? undefined
+          const contentOpt = yield* getContent(link).pipe(
+            Effect.mapError((error) =>
+              new LinkIngestionError({
+                message: `Failed to retrieve content: ${error}`,
+                url: sourceUrl,
+                phase: "fetch",
+                cause: error
+              })
+            )
+          )
+
+          if (Option.isNone(contentOpt)) {
+            return yield* Effect.fail(
+              new LinkIngestionError({
+                message: `Content not found in storage at ${link.storageUri}`,
+                url: sourceUrl,
+                phase: "fetch"
+              })
+            )
+          }
+
+          const content = contentOpt.value
+
+          // 3. Run enrichment
+          const enrichedContent = yield* enricher.enrich(content, sourceUrl).pipe(
+            Effect.mapError((error) =>
+              new LinkIngestionError({
+                message: `Enrichment failed: ${error.message}`,
+                url: sourceUrl,
+                phase: "enrich",
+                cause: error
+              })
+            )
+          )
+
+          // 4. Update database
+          const [updated] = yield* Effect.promise(() =>
+            drizzle
+              .update(ingestedLinks)
+              .set({
+                headline: enrichedContent.headline ?? link.headline,
+                description: enrichedContent.description ?? link.description,
+                publishedAt: enrichedContent.publishedAt ?? link.publishedAt,
+                author: enrichedContent.author ?? link.author,
+                organization: enrichedContent.organization ?? link.organization,
+                language: enrichedContent.language ?? link.language,
+                topics: enrichedContent.topics.length > 0 ? [...enrichedContent.topics] : link.topics,
+                keyEntities: enrichedContent.keyEntities.length > 0
+                  ? [...enrichedContent.keyEntities]
+                  : link.keyEntities,
+                sourceType: enrichedContent.sourceType ?? link.sourceType,
+                status: "enriched",
+                enrichedAt: new Date(),
+                errorMessage: null,
+                updatedAt: new Date()
+              })
+              .where(eq(ingestedLinks.id, id))
+              .returning()
+          ).pipe(
+            Effect.mapError((error) =>
+              new LinkIngestionError({
+                message: `Failed to update link: ${error}`,
+                url: sourceUrl,
+                phase: "persist",
+                cause: error
+              })
+            )
+          )
+
+          return Option.fromNullable(updated)
+        })
+
+      /**
+       * Clean up stale links that have been pending/processing for too long
+       *
+       * Marks them as "failed" so they can be retried via re-enrich.
+       *
+       * @param olderThanMinutes - Links pending/processing longer than this will be marked failed
+       * @param ontologyId - Optional ontology scope
+       * @returns Count of cleaned up links
+       */
+      const cleanupStaleLinks = (
+        olderThanMinutes: number,
+        ontologyId?: string
+      ): Effect.Effect<{ cleaned: number }, LinkIngestionError> =>
+        Effect.gen(function*() {
+          const cutoffDate = new Date(Date.now() - olderThanMinutes * 60 * 1000)
+
+          // Build condition: status in (pending, processing) AND updatedAt < cutoff
+          const baseCondition = and(
+            sql`${ingestedLinks.status} IN ('pending', 'processing')`,
+            sql`${ingestedLinks.updatedAt} < ${cutoffDate}`
+          )
+
+          // Add ontology filter if provided
+          const condition = ontologyId
+            ? and(baseCondition, eq(ingestedLinks.ontologyId, ontologyId))
+            : baseCondition
+
+          const results = yield* Effect.promise(() =>
+            drizzle
+              .update(ingestedLinks)
+              .set({
+                status: "failed",
+                errorMessage: `Stale: not processed within ${olderThanMinutes} minutes`,
+                updatedAt: new Date()
+              })
+              .where(condition!)
+              .returning({ id: ingestedLinks.id })
+          ).pipe(
+            Effect.mapError((error) =>
+              new LinkIngestionError({
+                message: `Failed to cleanup stale links: ${error}`,
+                phase: "persist",
+                cause: error
+              })
+            )
+          )
+
+          if (results.length > 0) {
+            yield* Effect.logInfo("Cleaned up stale links", {
+              count: results.length,
+              olderThanMinutes,
+              ontologyId
+            })
+          }
+
+          return { cleaned: results.length }
+        })
+
       return {
         ingestUrl,
         ingestUrls,
@@ -546,7 +693,9 @@ export class LinkIngestionService extends Effect.Service<LinkIngestionService>()
         markProcessed,
         markProcessing,
         markFailed,
-        getContent
+        getContent,
+        reEnrich,
+        cleanupStaleLinks
       }
     }),
     accessors: true
@@ -559,14 +708,20 @@ export class LinkIngestionService extends Effect.Service<LinkIngestionService>()
   static readonly Disabled: Layer.Layer<LinkIngestionService> = Layer.succeed(
     LinkIngestionService,
     {
-      ingestUrl: () => Effect.fail(new LinkIngestionError({
-        message: "LinkIngestionService requires PostgreSQL. Configure POSTGRES_HOST.",
-        phase: "fetch"
-      })),
-      ingestUrls: () => Effect.fail(new LinkIngestionError({
-        message: "LinkIngestionService requires PostgreSQL. Configure POSTGRES_HOST.",
-        phase: "fetch"
-      })),
+      ingestUrl: () =>
+        Effect.fail(
+          new LinkIngestionError({
+            message: "LinkIngestionService requires PostgreSQL. Configure POSTGRES_HOST.",
+            phase: "fetch"
+          })
+        ),
+      ingestUrls: () =>
+        Effect.fail(
+          new LinkIngestionError({
+            message: "LinkIngestionService requires PostgreSQL. Configure POSTGRES_HOST.",
+            phase: "fetch"
+          })
+        ),
       getByContentHash: () => Effect.succeed(Option.none()),
       getById: () => Effect.succeed(Option.none()),
       getByIds: () => Effect.succeed([]),
@@ -576,7 +731,21 @@ export class LinkIngestionService extends Effect.Service<LinkIngestionService>()
       markProcessed: () => Effect.succeed(Option.none()),
       markProcessing: () => Effect.succeed(Option.none()),
       markFailed: () => Effect.succeed(Option.none()),
-      getContent: () => Effect.succeed(Option.none())
+      getContent: () => Effect.succeed(Option.none()),
+      reEnrich: () =>
+        Effect.fail(
+          new LinkIngestionError({
+            message: "LinkIngestionService requires PostgreSQL. Configure POSTGRES_HOST.",
+            phase: "enrich"
+          })
+        ),
+      cleanupStaleLinks: () =>
+        Effect.fail(
+          new LinkIngestionError({
+            message: "LinkIngestionService requires PostgreSQL. Configure POSTGRES_HOST.",
+            phase: "persist"
+          })
+        )
     } as unknown as LinkIngestionService
   )
 }
