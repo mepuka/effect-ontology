@@ -43,7 +43,7 @@ export const makeEmbeddingResolver = (
   maxBatchSize: number = DEFAULT_MAX_BATCH_SIZE
 ): RequestResolver.RequestResolver<EmbedTextRequest, never> =>
   RequestResolver.makeBatched((requests: ReadonlyArray<EmbedTextRequest>) =>
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       if (requests.length === 0) return
 
       // Group by taskType for optimal batching (Voyage requires same input_type per batch)

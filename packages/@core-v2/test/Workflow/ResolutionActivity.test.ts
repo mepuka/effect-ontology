@@ -10,7 +10,7 @@ import { BunContext } from "@effect/platform-bun"
 import { describe, expect, it } from "@effect/vitest"
 import { ConfigProvider, Effect, Layer, Option } from "effect"
 import { Entity, KnowledgeGraph, Relation } from "../../src/Domain/Model/Entity.js"
-import { EntityResolutionConfig, defaultEntityResolutionConfig } from "../../src/Domain/Model/EntityResolution.js"
+import { defaultEntityResolutionConfig, EntityResolutionConfig } from "../../src/Domain/Model/EntityResolution.js"
 import { type EntityResolutionGraph } from "../../src/Domain/Model/EntityResolutionGraph.js"
 import { EntityId } from "../../src/Domain/Model/shared.js"
 import { EmbeddingService, EmbeddingServiceLive } from "../../src/Service/Embedding.js"
@@ -219,9 +219,12 @@ describe("EntityResolutionService Integration", () => {
         relations: []
       })
 
-        const result = yield* entityResolution.resolve([graph], new EntityResolutionConfig({
+      const result = yield* entityResolution.resolve(
+        [graph],
+        new EntityResolutionConfig({
           similarityThreshold: 0.3 // Lower threshold to ensure clustering
-        }))
+        })
+      )
 
       // All should map to same canonical (longest mention)
       const canonicalIds = new Set(Object.values(result.canonicalMap))

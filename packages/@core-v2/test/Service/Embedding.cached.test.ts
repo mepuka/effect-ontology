@@ -170,8 +170,7 @@ describe("EmbeddingService with cache", () => {
       EmbeddingProvider,
       {
         metadata: { providerId: "nomic", modelId: "test-model", dimension: 5 },
-        embedBatch: (requests) =>
-          Effect.succeed(requests.map(() => mockEmbedding)),
+        embedBatch: (requests) => Effect.succeed(requests.map(() => mockEmbedding)),
         cosineSimilarity: (_a, _b) => 0.95
       } as EmbeddingProviderMethods
     )

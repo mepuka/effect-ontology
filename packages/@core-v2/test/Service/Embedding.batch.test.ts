@@ -101,8 +101,7 @@ describe("EmbeddingService embedBatch", () => {
       EmbeddingProvider,
       {
         metadata: { providerId: "nomic", modelId: "test-model", dimension: 3 },
-        embedBatch: (requests) =>
-          Effect.succeed(requests.map((r) => textEmbeddings[r.text] ?? mockEmbedding)),
+        embedBatch: (requests) => Effect.succeed(requests.map((r) => textEmbeddings[r.text] ?? mockEmbedding)),
         cosineSimilarity: (_a, _b) => 0.95
       } as EmbeddingProviderMethods
     )

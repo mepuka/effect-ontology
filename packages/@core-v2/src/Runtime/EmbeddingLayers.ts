@@ -8,23 +8,22 @@
  * @module Runtime/EmbeddingLayers
  */
 
-import { FetchHttpClient, HttpClient } from "@effect/platform"
+import type { HttpClient } from "@effect/platform"
+import { FetchHttpClient } from "@effect/platform"
 import { Effect, Layer } from "effect"
+import { ConfigService, ConfigServiceDefault } from "../Service/Config.js"
 import { EmbeddingCache } from "../Service/EmbeddingCache.js"
-import { EmbeddingProvider } from "../Service/EmbeddingProvider.js"
+import type { EmbeddingProvider } from "../Service/EmbeddingProvider.js"
+import type { EmbeddingRateLimiter } from "../Service/EmbeddingRateLimiter.js"
 import {
-  EmbeddingRateLimiter,
   EmbeddingRateLimiterLocal,
   EmbeddingRateLimiterVoyage,
   makeEmbeddingRateLimiter
 } from "../Service/EmbeddingRateLimiter.js"
 import { NomicEmbeddingProviderDefault, NomicEmbeddingProviderLive } from "../Service/NomicEmbeddingProvider.js"
-import {
-  VoyageEmbeddingProviderDefault,
-  VoyageEmbeddingProviderLive
-} from "../Service/VoyageEmbeddingProvider.js"
-import { ConfigService, ConfigServiceDefault } from "../Service/Config.js"
-import { NomicNlpService, NomicNlpServiceLive } from "../Service/NomicNlp.js"
+import type { NomicNlpService } from "../Service/NomicNlp.js"
+import { NomicNlpServiceLive } from "../Service/NomicNlp.js"
+import { VoyageEmbeddingProviderDefault, VoyageEmbeddingProviderLive } from "../Service/VoyageEmbeddingProvider.js"
 import { MetricsService } from "../Telemetry/Metrics.js"
 
 // =============================================================================
@@ -48,7 +47,7 @@ export const EmbeddingProviderFromConfig: Layer.Layer<
   never,
   ConfigService | NomicNlpService | EmbeddingRateLimiter | HttpClient.HttpClient
 > = Layer.unwrapEffect(
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     const config = yield* ConfigService
     const configLayer = Layer.succeed(ConfigService, config)
 
@@ -88,11 +87,11 @@ export const EmbeddingProviderFromConfig: Layer.Layer<
  * @since 2.0.0
  * @category Layers
  */
-export const EmbeddingRateLimiterFromConfig: Layer.Layer<EmbeddingRateLimiter, never, ConfigService> =
-  Layer.unwrapEffect(
-    Effect.gen(function* () {
+export const EmbeddingRateLimiterFromConfig: Layer.Layer<EmbeddingRateLimiter, never, ConfigService> = Layer
+  .unwrapEffect(
+    Effect.gen(function*() {
       const config = yield* ConfigService
-      const { provider, rateLimitRpm, maxConcurrent } = config.embedding
+      const { maxConcurrent, provider, rateLimitRpm } = config.embedding
 
       // Use config values to create rate limiter
       return makeEmbeddingRateLimiter({

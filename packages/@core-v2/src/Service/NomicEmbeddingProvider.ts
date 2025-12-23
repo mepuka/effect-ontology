@@ -54,7 +54,7 @@ export const NomicEmbeddingProviderLive: Layer.Layer<
   NomicNlpService | ConfigService
 > = Layer.effect(
   EmbeddingProvider,
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     const nomic = yield* NomicNlpService
     const config = yield* ConfigService
 
@@ -68,7 +68,7 @@ export const NomicEmbeddingProviderLive: Layer.Layer<
       metadata,
 
       embedBatch: (requests: ReadonlyArray<EmbeddingRequest>) =>
-        Effect.gen(function* () {
+        Effect.gen(function*() {
           if (requests.length === 0) {
             return []
           }

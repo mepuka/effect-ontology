@@ -116,7 +116,7 @@ export const makeEmbeddingRateLimiter = (
 ): Layer.Layer<EmbeddingRateLimiter> =>
   Layer.effect(
     EmbeddingRateLimiter,
-    Effect.gen(function* () {
+    Effect.gen(function*() {
       const semaphore = yield* Effect.makeSemaphore(config.maxConcurrent)
       const now = yield* Clock.currentTimeMillis
       const stateRef = yield* Ref.make<RateLimiterState>({
@@ -124,16 +124,15 @@ export const makeEmbeddingRateLimiter = (
         resetAt: now + 60_000
       })
 
-      const maybeResetWindow = Effect.gen(function* () {
+      const maybeResetWindow = Effect.gen(function*() {
         const currentTime = yield* Clock.currentTimeMillis
         yield* Ref.update(stateRef, (state) =>
-          currentTime >= state.resetAt ? { count: 0, resetAt: currentTime + 60_000 } : state
-        )
+          currentTime >= state.resetAt ? { count: 0, resetAt: currentTime + 60_000 } : state)
       })
 
       return {
         acquire: () =>
-          Effect.gen(function* () {
+          Effect.gen(function*() {
             yield* maybeResetWindow
 
             const state = yield* Ref.get(stateRef)
@@ -147,7 +146,8 @@ export const makeEmbeddingRateLimiter = (
                   retryAfterMs: state.resetAt - currentTime
                 })
               ),
-              () => state.count >= config.requestsPerMinute
+              () =>
+                state.count >= config.requestsPerMinute
             )
 
             yield* semaphore.take(1)
@@ -157,7 +157,7 @@ export const makeEmbeddingRateLimiter = (
         release: () => semaphore.release(1),
 
         getMetrics: () =>
-          Effect.gen(function* () {
+          Effect.gen(function*() {
             const currentTime = yield* Clock.currentTimeMillis
             const state = yield* Ref.get(stateRef)
             return {

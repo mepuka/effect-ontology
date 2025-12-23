@@ -22,8 +22,7 @@ import * as N3 from "n3"
 import { ActivityError, notFoundError, toActivityError } from "../Domain/Error/Activity.js"
 import { type BatchId, GcsUri, toGcsUri } from "../Domain/Identity.js"
 import { Entity, KnowledgeGraph, Relation } from "../Domain/Model/Entity.js"
-import { EntityResolutionConfig, defaultEntityResolutionConfig } from "../Domain/Model/EntityResolution.js"
-import { buildEntityResolutionGraph } from "../Workflow/EntityResolutionGraph.js"
+import { defaultEntityResolutionConfig, EntityResolutionConfig } from "../Domain/Model/EntityResolution.js"
 import type { ElementEmbedding, OntologyEmbeddings } from "../Domain/Model/OntologyEmbeddings.js"
 import {
   buildEmbeddingText,
@@ -67,6 +66,7 @@ import { LlmAttributes } from "../Telemetry/LlmAttributes.js"
 import { knowledgeGraphToClaims } from "../Utils/ClaimFactory.js"
 import { extractLocalNameFromIri } from "../Utils/Iri.js"
 import { computeQuadDelta } from "../Utils/QuadDelta.js"
+import { buildEntityResolutionGraph } from "../Workflow/EntityResolutionGraph.js"
 
 // -----------------------------------------------------------------------------
 // Output Schemas (must be serializable for journaling)

@@ -15,8 +15,8 @@ import { hashVersionedEmbeddingKey } from "../Utils/Hash.js"
 import { EmbeddingCache } from "./EmbeddingCache.js"
 import {
   cosineSimilarity as cosineSim,
-  EmbeddingProvider,
   type Embedding,
+  EmbeddingProvider,
   type EmbeddingTaskType,
   type ProviderMetadata
 } from "./EmbeddingProvider.js"
@@ -105,7 +105,7 @@ export const EmbeddingServiceLive: Layer.Layer<
   EmbeddingProvider | EmbeddingCache | MetricsService
 > = Layer.effect(
   EmbeddingService,
-  Effect.gen(function* () {
+  Effect.gen(function*() {
     const provider = yield* EmbeddingProvider
     const cache = yield* EmbeddingCache
     const metrics = yield* MetricsService
@@ -120,7 +120,7 @@ export const EmbeddingServiceLive: Layer.Layer<
       text: string,
       taskType: EmbeddingTaskType
     ): Effect.Effect<Embedding, AnyEmbeddingError> =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const startTime = yield* Clock.currentTimeMillis
 
         // Generate versioned cache key (includes provider/model/dimension)
