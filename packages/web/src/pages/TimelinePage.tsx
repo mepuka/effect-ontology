@@ -2,25 +2,27 @@
  * TimelinePage
  *
  * Displays extracted claims in chronological order.
+ * Uses live stream-based updates for real-time claim display.
  *
  * @since 2.0.0
  * @module pages/TimelinePage
  */
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Link, useParams } from "react-router-dom"
-import { useQuery } from "@tanstack/react-query"
+import { useAtomValue } from "@effect-atom/atom-react"
+import { Result } from "@effect-atom/atom"
 import { entityLink } from "@/lib/routing"
 import { toLabel } from "@/lib/namespace"
 import {
   PageContainer,
   PageHeader,
-  PageSection,
   EmptyState,
   ErrorState,
   LoadingState
 } from "@/components/PageLayout"
 import { Clock } from "lucide-react"
+import { liveTimelineAtom } from "@/atoms/api"
 
 interface ClaimWithRank {
   id: string
@@ -45,7 +47,7 @@ interface ClaimWithRank {
 }
 
 interface TimelineClaimsResponse {
-  claims: ClaimWithRank[]
+  claims: ReadonlyArray<ClaimWithRank>
   total: number
   limit: number
   offset: number
@@ -225,20 +227,21 @@ export function TimelinePage() {
   const { ontologyId = "seattle" } = useParams<{ ontologyId: string }>()
   const [filter, setFilter] = useState("all")
 
-  const { data, isLoading, error } = useQuery<TimelineClaimsResponse>({
-    queryKey: ["timeline", ontologyId, filter],
-    queryFn: async () => {
-      const params = new URLSearchParams({ limit: "100" })
-      if (filter !== "all") {
-        params.set("rank", filter)
-      }
-      const res = await fetch(`/api/v1/ontologies/${ontologyId}/claims?${params}`)
-      if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`)
-      return res.json()
-    }
-  })
+  // Use live stream-based atom for real-time updates
+  const result = useAtomValue(liveTimelineAtom(ontologyId))
 
-  const claims = data?.claims || []
+  // Extract data from result with proper type handling
+  const isLoading = Result.isWaiting(result)
+  const error = Result.isFailure(result) ? result.cause : null
+  const data = Result.isSuccess(result) ? result.value as TimelineClaimsResponse : null
+
+  // Filter claims based on selected rank filter
+  const claims = useMemo(() => {
+    if (!data?.claims) return []
+    if (filter === "all") return data.claims as ClaimWithRank[]
+    return (data.claims as ClaimWithRank[]).filter((c) => c.rank === filter)
+  }, [data?.claims, filter])
+
   const groupedClaims = groupByDate(claims)
   const sortedDates = Array.from(groupedClaims.keys()).sort().reverse()
 
@@ -264,7 +267,7 @@ export function TimelinePage() {
       {error && (
         <ErrorState
           title="Failed to load timeline"
-          message={(error as Error).message}
+          message={error instanceof Error ? error.message : String(error)}
         />
       )}
 

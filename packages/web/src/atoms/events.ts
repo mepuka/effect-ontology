@@ -11,6 +11,9 @@
 import { Atom } from "@effect-atom/atom"
 import type { ClientEventEntry, ConnectionStatus } from "../services/EventBusClient"
 
+// Re-export for use in other atoms
+export type { ClientEventEntry, ConnectionStatus }
+
 // =============================================================================
 // Connection Status State
 // =============================================================================

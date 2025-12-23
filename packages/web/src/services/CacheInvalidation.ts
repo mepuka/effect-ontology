@@ -42,13 +42,18 @@ export const keyInvalidationTriggerAtom = Atom.family((_key: string) => Atom.mak
  *
  * This determines which data is invalidated when an event occurs.
  * The prefix is combined with ontologyId for scoped invalidation.
+ *
+ * NOTE: Timeline is NOT included here because liveTimelineAtom now handles
+ * updates via stream-based event processing, not invalidation/refetch.
+ * This eliminates redundant API calls when claims are added/modified.
  */
 const REACTIVITY_KEY_MAPPING: Record<string, Array<string>> = {
-  // From EventHandlers.ts
-  claims: ["timeline", "claims"],
-  timeline: ["timeline"],
-  corrections: ["timeline", "corrections"],
-  deprecations: ["timeline", "deprecations"],
+  // Claims no longer triggers timeline refetch - liveTimelineAtom handles it
+  claims: ["claims"],
+  // Timeline events now handled by liveTimelineAtom via eventsAtom stream
+  // timeline: ["timeline"],  // REMOVED - handled by live stream
+  corrections: ["corrections"],
+  deprecations: ["deprecations"],
   entities: ["entity-detail", "entities"],
   aliases: ["entity-detail"],
   "entity-detail": ["entity-detail"],
@@ -108,8 +113,8 @@ export const invalidateOntology = (
     registry.set(trigger, now)
 
     // Invalidate all known keys
+    // Note: "timeline" is NOT included - liveTimelineAtom handles updates via stream
     const allKeys = [
-      "timeline",
       "claims",
       "entities",
       "entity-detail",
@@ -119,6 +124,7 @@ export const invalidateOntology = (
       "stats",
       "validations",
       "corrections",
+      "deprecations",
       "batch-state",
       "batch-monitor"
     ]

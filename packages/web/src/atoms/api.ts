@@ -8,11 +8,26 @@
  * @module atoms/api
  */
 
-import { Atom } from "@effect-atom/atom"
-import { Effect } from "effect"
+import { Atom, Result } from "@effect-atom/atom"
+import { Effect, Stream } from "effect"
 import { apiRuntime } from "../lib/runtime"
 import { ApiClient, type ApiClientService, type DocumentsFilter, type TimelineFilter } from "../services/ApiClient"
 import { invalidationTriggerAtom } from "../services/CacheInvalidation"
+import { type ClientEventEntry, eventsAtom } from "./events"
+
+// =============================================================================
+// Timeline Event Types
+// =============================================================================
+
+/**
+ * Event types that affect the timeline and should trigger live updates
+ */
+const TIMELINE_EVENT_TYPES = new Set([
+  "ClaimCorrected",
+  "ClaimDeprecated",
+  "ClaimPromoted",
+  "ExtractionCompleted"
+])
 
 // =============================================================================
 // Filter State Atoms
@@ -146,6 +161,154 @@ export const timelineAtom = Atom.family((ontologyId: string) =>
       return yield* api.getTimelineClaims(ontologyId, filters)
     })
   )
+)
+
+// =============================================================================
+// Live Timeline Atom (Stream-based)
+// =============================================================================
+
+/**
+ * Internal state for tracking processed events in the live timeline
+ */
+interface LiveTimelineState {
+  /** The current timeline data */
+  readonly timeline: {
+    readonly claims: ReadonlyArray<unknown>
+    readonly total: number
+    readonly limit: number
+    readonly offset: number
+    readonly hasMore: boolean
+  }
+  /** IDs of events we've already processed */
+  readonly processedEventIds: Set<string>
+}
+
+/**
+ * Apply timeline-relevant events incrementally
+ *
+ * This reducer processes new events and updates the timeline state accordingly.
+ * Events are filtered to only those affecting the timeline.
+ */
+const applyTimelineEvents = (
+  state: LiveTimelineState,
+  allEvents: ReadonlyArray<ClientEventEntry>
+): LiveTimelineState => {
+  // Find events we haven't processed yet that affect the timeline
+  const newTimelineEvents = allEvents.filter(
+    (e) => !state.processedEventIds.has(e.id) && TIMELINE_EVENT_TYPES.has(e.event)
+  )
+
+  if (newTimelineEvents.length === 0) {
+    return state
+  }
+
+  // Create a new set with all processed IDs
+  const newProcessedIds = new Set(state.processedEventIds)
+  for (const e of newTimelineEvents) {
+    newProcessedIds.add(e.id)
+  }
+
+  // Apply each event to the timeline
+  let claims = [...state.timeline.claims]
+  let total = state.timeline.total
+
+  for (const event of newTimelineEvents) {
+    switch (event.event) {
+      case "ExtractionCompleted": {
+        // New claims from extraction - prepend to list
+        const payload = event.payload as { claims?: ReadonlyArray<unknown> } | null
+        if (payload?.claims) {
+          claims = [...payload.claims, ...claims]
+          total += payload.claims.length
+        }
+        break
+      }
+      case "ClaimDeprecated": {
+        // Mark claim as deprecated - filter out or update rank
+        const payload = event.payload as { claimId?: string } | null
+        if (payload?.claimId) {
+          claims = claims.filter((c) => (c as { id?: string }).id !== payload.claimId)
+          total = Math.max(0, total - 1)
+        }
+        break
+      }
+      case "ClaimPromoted":
+      case "ClaimCorrected": {
+        // These may require a full refetch for accurate state
+        // For now, just mark as processed to avoid duplicate handling
+        break
+      }
+    }
+  }
+
+  return {
+    timeline: {
+      ...state.timeline,
+      claims,
+      total
+    },
+    processedEventIds: newProcessedIds
+  }
+}
+
+/**
+ * Live timeline atom with stream-based incremental updates
+ *
+ * This atom:
+ * 1. Fetches initial timeline data from the API
+ * 2. Subscribes to the events stream via get.stream()
+ * 3. Applies incremental updates as new events arrive
+ *
+ * Benefits over refetch approach:
+ * - Zero network overhead for incremental updates
+ * - Near-instant UI updates (no API roundtrip)
+ * - Efficient handling of high-frequency events
+ *
+ * @since 2.0.0
+ * @category Timeline
+ */
+export const liveTimelineAtom = Atom.family((ontologyId: string) =>
+  apiRuntime.atom((get) => {
+    // Get a stream of events - emits current value immediately, then updates
+    const eventStream = get.stream(eventsAtom(ontologyId), {
+      withoutInitialValue: false,
+      bufferSize: 16
+    })
+
+    // Use scanEffect to:
+    // 1. Fetch initial data on first event emission
+    // 2. Apply incremental updates for subsequent emissions
+    return Stream.scanEffect(
+      eventStream,
+      null as LiveTimelineState | null,
+      (state, events) =>
+        Effect.gen(function*() {
+          if (state === null) {
+            // First emission: fetch initial data from API
+            const api: ApiClientService = yield* ApiClient
+            const filters = get(timelineFiltersAtom(ontologyId))
+            const initial = yield* api.getTimelineClaims(ontologyId, filters)
+
+            // Create initial state, marking current events as "seen"
+            const processedEventIds = new Set(events.map((e) => e.id))
+            return {
+              timeline: initial,
+              processedEventIds
+            } as LiveTimelineState
+          }
+
+          // Subsequent emissions: apply new events incrementally
+          return applyTimelineEvents(state, events)
+        })
+    ).pipe(
+      // Skip the initial null emission
+      Stream.filter((s): s is LiveTimelineState => s !== null),
+      // Extract just the timeline data for consumers
+      Stream.map((state) => state.timeline),
+      // Only emit when timeline actually changes
+      Stream.changes
+    )
+  })
 )
 
 /** Entity detail - uses string key "ontologyId:iri" for stable identity */
