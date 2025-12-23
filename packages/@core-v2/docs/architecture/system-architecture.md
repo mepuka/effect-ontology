@@ -1,8 +1,8 @@
 # Effect-Ontology @core-v2 System Architecture
 
-> **Version:** 2.5.0
+> **Version:** 2.6.0
 > **Last Updated:** December 2025
-> **Status:** Unified Extraction Pipeline - Streaming First
+> **Status:** Unified Extraction Pipeline - Streaming First + WebSocket Events
 
 ## Table of Contents
 
@@ -1243,6 +1243,64 @@ Cache-Control: no-cache, no-store, must-revalidate
 Connection: keep-alive
 X-Accel-Buffering: no
 ```
+
+### WebSocket Event Streaming
+
+Real-time event synchronization between frontend and backend via `@effect/experimental/EventLog`.
+
+#### Authentication
+
+WebSocket connections support dual-mode authentication:
+
+| Mode | Query Param | Use Case |
+|------|-------------|----------|
+| Dev | `?dev=true` | Local development, bypasses auth when `API_REQUIRE_AUTH=false` |
+| Prod | `?ticket=xxx` | Production, requires single-use ticket from `/v1/auth/ticket` |
+
+#### Ticket Lifecycle
+
+```
+Frontend                              Backend
+─────────                             ───────
+1. POST /v1/auth/ticket        →      TicketService.createTicket()
+   X-API-Key: your-key                - Generates 32-byte secure token
+   {"ontologyId": "seattle"}          - Stores in HashMap with 5-min TTL
+                               ←      {"ticket": "xxx", "expiresAt": ..., "ttlSeconds": 300}
+
+2. Connect WebSocket           →      EventStreamRouter
+   ws://.../events/ws?ticket=xxx      - validateWebSocketAuth()
+                                      - TicketService.validateTicket() (consumes ticket)
+                               ←      WebSocket upgrade (if valid)
+```
+
+#### Key Implementation Details
+
+**Backend (EventStreamRouter)**:
+- Uses `@effect/experimental/EventLogServer` for WebSocket protocol
+- Validates ticket on upgrade, returns 401/403 on auth failure
+- Single-use tickets prevent replay attacks
+
+**Frontend (EventBusClient)**:
+- Uses `@effect/experimental/EventLogRemote` for client sync
+- Layer composition order is critical (leaf → root):
+  ```typescript
+  // CORRECT order:
+  Layer.provide(EventLogRemote.layerWebSocketBrowser(wsUrl)),  // Root
+  Layer.provide(EventLog.layerEventLog),                        // Intermediate
+  Layer.provide(TicketClientDefault),                           // Leaf
+  Layer.provide(IdentityLayer),                                 // Leaf
+  Layer.provide(OntologyEventJournalLayer(ontologyId))          // Leaf
+  ```
+- `layerWebSocketBrowser` automatically provides `EventLogEncryption` and socket
+
+**Services**:
+| Service | Location | Purpose |
+|---------|----------|---------|
+| `TicketService` | `src/Service/Ticket.ts` | In-memory ticket management |
+| `AuthRouter` | `src/Runtime/AuthRouter.ts` | `POST /v1/auth/ticket` endpoint |
+| `EventStreamRouter` | `src/Runtime/EventStreamRouter.ts` | WebSocket with auth |
+| `TicketClient` | `web/src/services/TicketClient.ts` | Frontend ticket fetching |
+| `EventBusClient` | `web/src/services/EventBusClient.ts` | Frontend event sync |
 
 ### BatchStatusResponse Union
 
