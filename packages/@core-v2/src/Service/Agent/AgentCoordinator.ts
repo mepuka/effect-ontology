@@ -39,22 +39,7 @@
  * @module Service/Agent/AgentCoordinator
  */
 
-import {
-
-  Clock,
-
-  Deferred,
-
-  Effect,
-
-  HashMap,
-
-  Option,
-
-  Ref
-
-} from "effect"
-
+import { Clock, Deferred, Effect, HashMap, Option, Ref } from "effect"
 
 import {
   type Agent,

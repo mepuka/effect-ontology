@@ -9,7 +9,7 @@
 
 import { Effect, Option } from "effect"
 import { KnowledgeGraph } from "../Domain/Model/Entity.js"
-import { EntityResolutionConfig } from "../Domain/Model/EntityResolution.js"
+import type { EntityResolutionConfig } from "../Domain/Model/EntityResolution.js"
 import { buildEntityResolutionGraph } from "../Workflow/EntityResolutionGraph.js"
 import { EmbeddingService, EmbeddingServiceDefault } from "./Embedding.js"
 

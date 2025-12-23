@@ -12,6 +12,7 @@
 import type { SqlError } from "@effect/sql"
 import type { Option } from "effect"
 import { Effect } from "effect"
+import type { AnyEmbeddingError } from "../Domain/Error/Embedding.js"
 import {
   type CreateExampleInput,
   type ExampleRetrievalOptions,
@@ -20,7 +21,6 @@ import {
   type ScoredExample
 } from "../Repository/Examples.js"
 import type { LlmExampleRow } from "../Repository/schema.js"
-import type { AnyEmbeddingError } from "../Domain/Error/Embedding.js"
 import { EmbeddingService } from "./Embedding.js"
 
 // =============================================================================

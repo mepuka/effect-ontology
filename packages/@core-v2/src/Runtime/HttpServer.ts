@@ -58,10 +58,11 @@ import { pollToBatchState, WorkflowOrchestrator } from "../Service/WorkflowOrche
 import { knowledgeGraphToClaims } from "../Utils/ClaimFactory.js"
 import { extractLocalNameFromIri } from "../Utils/Iri.js"
 import { AssetRouter } from "./AssetRouter.js"
+import { AuthRouter } from "./AuthRouter.js"
 import { EventBroadcastRouter } from "./EventBroadcastRouter.js"
 import { EventStreamRouter } from "./EventStreamRouter.js"
 import { HealthCheckService } from "./HealthCheck.js"
-import { makeAuthMiddleware, makeShutdownMiddleware } from "./HttpMiddleware.js"
+import { makeAuthMiddleware, makeLoggingMiddleware, makeShutdownMiddleware } from "./HttpMiddleware.js"
 import { ImageRouter } from "./ImageRouter.js"
 import { InferenceRouter } from "./InferenceRouter.js"
 import { JobPushRouter } from "./JobPushHandler.js"
@@ -1771,13 +1772,16 @@ export const ApiRouter = HttpRouter.empty.pipe(
   HttpRouter.concat(EventStreamRouter),
   HttpRouter.concat(EventBroadcastRouter),
   HttpRouter.concat(AssetRouter),
-  HttpRouter.concat(ImageRouter)
+  HttpRouter.concat(ImageRouter),
+  HttpRouter.concat(AuthRouter)
 )
 
 export const HttpServerLive = Layer.unwrapEffect(
   Effect.gen(function*() {
     const authMiddleware = yield* makeAuthMiddleware
     const shutdownMiddleware = yield* makeShutdownMiddleware
+    const loggingMiddleware = yield* makeLoggingMiddleware
+
     return ApiRouter.pipe(
       HttpRouter.catchAllCause((cause) =>
         Effect.gen(function*() {
@@ -1811,6 +1815,9 @@ export const HttpServerLive = Layer.unwrapEffect(
           }, { status: 500 })
         })
       ),
+      // Middleware order: logging → auth → shutdown → serve
+      // Logging wraps auth so we see both auth failures and successes
+      loggingMiddleware,
       authMiddleware,
       shutdownMiddleware,
       HttpServer.serve(),

@@ -32,6 +32,7 @@ import { ingestCommand } from "./Commands/Ingest.js"
 import { linkCommand } from "./Commands/Link.js"
 import { reconcileCommand } from "./Commands/Reconcile.js"
 import { storageCommand } from "./Commands/Storage.js"
+import { workflowCommand } from "./Commands/Workflow.js"
 
 // =============================================================================
 // Root Command
@@ -47,7 +48,8 @@ const rootCommand = Command.make("effect-onto").pipe(
     fetchCommand,
     ingestLinkCommand,
     ingestBatchCommand,
-    documentsCommand
+    documentsCommand,
+    workflowCommand
   ]),
   Command.withDescription("Effect Ontology CLI - Knowledge extraction and reasoning tools")
 )

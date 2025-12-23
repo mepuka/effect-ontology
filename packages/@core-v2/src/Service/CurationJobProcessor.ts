@@ -12,10 +12,10 @@
 import type { SqlError } from "@effect/sql"
 import type { Fiber } from "effect"
 import { Duration, Effect, Match, Option, Schedule } from "effect"
+import type { AnyEmbeddingError } from "../Domain/Error/Embedding.js"
 import type { EventBusError } from "../Domain/Error/EventBus.js"
 import type { BackgroundJob } from "../Domain/Schema/JobSchema.js"
 import { EntityRegistryRepository } from "../Repository/EntityRegistry.js"
-import type { AnyEmbeddingError } from "../Domain/Error/Embedding.js"
 import { EmbeddingService } from "./Embedding.js"
 import { EventBusService } from "./EventBus.js"
 

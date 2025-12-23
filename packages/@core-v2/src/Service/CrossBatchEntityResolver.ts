@@ -11,9 +11,9 @@
 
 import type { SqlError } from "@effect/sql"
 import { Effect, HashMap, Option, Schema } from "effect"
+import type { AnyEmbeddingError } from "../Domain/Error/Embedding.js"
 import type { Entity } from "../Domain/Model/Entity.js"
 import { type BlockingCandidate, EntityRegistryRepository } from "../Repository/EntityRegistry.js"
-import type { AnyEmbeddingError } from "../Domain/Error/Embedding.js"
 import { EmbeddingService } from "./Embedding.js"
 
 // =============================================================================

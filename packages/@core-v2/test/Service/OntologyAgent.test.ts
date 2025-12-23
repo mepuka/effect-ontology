@@ -470,7 +470,7 @@ schema:name a owl:DatatypeProperty ;
     MockReasoner,
     MockStorageService,
     MockClaimService,
-    EmbeddingInfraLayer,  // Required by OntologyAgent.Default -> OntologyService -> NlpService
+    EmbeddingInfraLayer, // Required by OntologyAgent.Default -> OntologyService -> NlpService
     ShaclService.Test(),
     RdfBuilder.Default,
     SparqlService.Default

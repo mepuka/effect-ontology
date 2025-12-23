@@ -12,6 +12,7 @@
 import type { SqlError } from "@effect/sql"
 import type { Stream } from "effect"
 import { DateTime, Effect, Option } from "effect"
+import type { AnyEmbeddingError } from "../Domain/Error/Embedding.js"
 import type { EventBusError } from "../Domain/Error/EventBus.js"
 import type {
   AddAliasAction,
@@ -25,7 +26,6 @@ import { EmbeddingJob, PromptCacheJob } from "../Domain/Schema/JobSchema.js"
 import { ClaimRepository } from "../Repository/Claim.js"
 import { EntityRegistryRepository } from "../Repository/EntityRegistry.js"
 import { ExamplesRepository } from "../Repository/Examples.js"
-import type { AnyEmbeddingError } from "../Domain/Error/Embedding.js"
 import { EmbeddingService } from "./Embedding.js"
 import { EventBusService, type EventEntry } from "./EventBus.js"
 

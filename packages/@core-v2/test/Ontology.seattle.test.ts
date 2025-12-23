@@ -25,7 +25,7 @@ const MockEmbeddingProvider = Layer.succeed(
   EmbeddingProvider,
   {
     metadata: {
-      providerId: "nomic" as const,  // Use valid providerId
+      providerId: "nomic" as const, // Use valid providerId
       modelId: "mock-embed",
       dimension: 768
     },

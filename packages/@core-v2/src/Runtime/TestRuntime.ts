@@ -24,7 +24,6 @@ import * as N3 from "n3"
 import { ConfigServiceDefault } from "../Service/Config.js"
 import { EmbeddingCache } from "../Service/EmbeddingCache.js"
 import { EmbeddingProvider, type EmbeddingProviderMethods } from "../Service/EmbeddingProvider.js"
-import { MetricsService } from "../Telemetry/Metrics.js"
 import { EntityExtractor, RelationExtractor } from "../Service/Extraction.js"
 import { Grounder } from "../Service/Grounder.js"
 import {
@@ -37,6 +36,7 @@ import { OntologyService } from "../Service/Ontology.js"
 import { RdfBuilder } from "../Service/Rdf.js"
 import { ShaclService } from "../Service/Shacl.js"
 import { StorageServiceTest } from "../Service/Storage.js"
+import { MetricsService } from "../Telemetry/Metrics.js"
 
 /**
  * Mock LanguageModel for testing
@@ -225,7 +225,7 @@ export const TestLayers = Layer.mergeAll(
   ontologyLayer,
   MockShaclService(),
   MockLanguageModel,
-  EmbeddingInfraLayer,  // Export for other services that may need it
+  EmbeddingInfraLayer, // Export for other services that may need it
   EntityExtractor.Test,
   RelationExtractor.Test,
   Grounder.Test,

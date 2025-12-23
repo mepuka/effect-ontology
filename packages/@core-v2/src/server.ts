@@ -42,6 +42,7 @@ import { ImageFetcher } from "./Service/ImageFetcher.js"
 import { ImageStore } from "./Service/ImageStore.js"
 import { JinaReaderClient } from "./Service/JinaReaderClient.js"
 import { LinkIngestionService } from "./Service/LinkIngestionService.js"
+import { TicketService } from "./Service/Ticket.js"
 
 // Load port from environment
 const port = Effect.runSync(Config.number("PORT").pipe(Config.withDefault(8080)))
@@ -243,6 +244,7 @@ const ServerLive = HttpServerLive.pipe(
   Layer.provideMerge(EventLogStorageLive), // EventLogServer.Storage for WebSocket streaming
   Layer.provideMerge(EventBridgeAutoStart), // Bridges EventBusService → EventBroadcastHub (needs both below)
   Layer.provideMerge(EventBroadcastHubLive), // EventBroadcastHub for real-time WebSocket events
+  Layer.provideMerge(TicketService.Default), // TicketService for WebSocket authentication
   Layer.provideMerge(ActivityDependenciesLayer), // EventBusService + other activity deps
   Layer.provideMerge(PlatformLayer)
 )
