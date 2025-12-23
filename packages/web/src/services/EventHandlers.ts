@@ -28,7 +28,7 @@ export type CurationEventType = (typeof CurationEventTypes)[number]
 /**
  * Extraction event types
  */
-export const ExtractionEventTypes = ["ExtractionCompleted", "ValidationFailed"] as const
+export const ExtractionEventTypes = ["ExtractionCompleted", "ValidationFailed", "BatchStateChanged"] as const
 
 export type ExtractionEventType = (typeof ExtractionEventTypes)[number]
 
@@ -61,7 +61,8 @@ export const CurationReactivityKeys: Record<CurationEventType, ReadonlyArray<str
  */
 export const ExtractionReactivityKeys: Record<ExtractionEventType, ReadonlyArray<string>> = {
   ExtractionCompleted: ["documents", "claims", "timeline", "stats"],
-  ValidationFailed: ["validations", "documents"]
+  ValidationFailed: ["validations", "documents"],
+  BatchStateChanged: ["batch-state", "documents", "stats"]
 }
 
 /**
@@ -104,7 +105,8 @@ export const getEventDisplayName = (eventType: string): string => {
     ClaimPromoted: "Claim Promoted",
     EntityLinked: "Entity Linked",
     ExtractionCompleted: "Extraction Completed",
-    ValidationFailed: "Validation Failed"
+    ValidationFailed: "Validation Failed",
+    BatchStateChanged: "Batch State Changed"
   }
   return names[eventType] || eventType
 }
@@ -120,7 +122,8 @@ export const getEventIcon = (eventType: string): string => {
     ClaimPromoted: "arrow-up",
     EntityLinked: "link",
     ExtractionCompleted: "file-check",
-    ValidationFailed: "alert-triangle"
+    ValidationFailed: "alert-triangle",
+    BatchStateChanged: "loader"
   }
   return icons[eventType] || "activity"
 }

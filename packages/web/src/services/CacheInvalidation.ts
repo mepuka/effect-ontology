@@ -55,7 +55,8 @@ const REACTIVITY_KEY_MAPPING: Record<string, Array<string>> = {
   "wikidata-links": ["entity-detail"],
   documents: ["documents", "document-detail"],
   stats: ["stats"],
-  validations: ["validations", "documents"]
+  validations: ["validations", "documents"],
+  "batch-state": ["batch-monitor", "batch-state"]
 }
 
 // =============================================================================
@@ -117,7 +118,9 @@ export const invalidateOntology = (
       "links",
       "stats",
       "validations",
-      "corrections"
+      "corrections",
+      "batch-state",
+      "batch-monitor"
     ]
 
     for (const key of allKeys) {

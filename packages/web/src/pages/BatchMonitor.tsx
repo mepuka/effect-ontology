@@ -1,101 +1,7 @@
 import { useState } from "react"
-
-// Batch state types matching the backend API
-type BatchStage =
-  | "Pending"
-  | "Preprocessing"
-  | "Extracting"
-  | "Resolving"
-  | "Validating"
-  | "Ingesting"
-  | "Complete"
-  | "Failed"
-
-interface BatchStateBase {
-  _tag: BatchStage
-  batchId: string
-  manifestUri: string
-  ontologyVersion: string
-  createdAt: string
-  updatedAt: string
-}
-
-interface PendingState extends BatchStateBase {
-  _tag: "Pending"
-  documentCount: number
-}
-
-interface PreprocessingState extends BatchStateBase {
-  _tag: "Preprocessing"
-  documentsTotal: number
-  documentsClassified: number
-  documentsFailed: number
-  enrichedManifestUri?: string
-}
-
-interface ExtractingState extends BatchStateBase {
-  _tag: "Extracting"
-  documentsTotal: number
-  documentsCompleted: number
-  documentsFailed: number
-  currentDocumentId?: string
-}
-
-interface ResolvingState extends BatchStateBase {
-  _tag: "Resolving"
-  extractionOutputUri: string
-  entitiesTotal: number
-  clustersFormed: number
-}
-
-interface ValidatingState extends BatchStateBase {
-  _tag: "Validating"
-  resolvedGraphUri: string
-  validationStartedAt: string
-}
-
-interface IngestingState extends BatchStateBase {
-  _tag: "Ingesting"
-  validatedGraphUri: string
-  triplesTotal: number
-  triplesIngested: number
-}
-
-interface CompleteState extends BatchStateBase {
-  _tag: "Complete"
-  canonicalGraphUri: string
-  stats: {
-    documentsProcessed: number
-    entitiesExtracted: number
-    relationsExtracted: number
-    clustersResolved: number
-    triplesIngested: number
-    totalDurationMs: number
-  }
-  completedAt: string
-}
-
-interface FailedState extends BatchStateBase {
-  _tag: "Failed"
-  failedAt: string
-  failedInStage: string
-  error: {
-    code: string
-    message: string
-    cause?: unknown
-  }
-  lastSuccessfulStage?: string
-}
-
-type BatchState =
-  | PendingState
-  | PreprocessingState
-  | ExtractingState
-  | ResolvingState
-  | ValidatingState
-  | IngestingState
-  | CompleteState
-  | FailedState
+import { useParams } from "react-router-dom"
+import { useAtomValue } from "@effect-atom/atom-react"
+import { allBatchesAtom, activeBatchesAtom, type BatchState, type BatchStage } from "@/atoms/batch"
 
 // Form state for creating new batches
 interface BatchFormData {
@@ -117,24 +23,21 @@ function getProgress(state: BatchState): number {
   switch (state._tag) {
     case "Pending": return 0
     case "Preprocessing": {
-      const s = state as PreprocessingState
-      return s.documentsTotal > 0
-        ? Math.round((s.documentsClassified / s.documentsTotal) * 20)
-        : 5
+      const total = state.documentsTotal ?? 0
+      const classified = state.documentsClassified ?? 0
+      return total > 0 ? Math.round((classified / total) * 20) : 5
     }
     case "Extracting": {
-      const s = state as ExtractingState
-      return s.documentsTotal > 0
-        ? 20 + Math.round((s.documentsCompleted / s.documentsTotal) * 50)
-        : 25
+      const total = state.documentsTotal ?? 0
+      const completed = state.documentsCompleted ?? 0
+      return total > 0 ? 20 + Math.round((completed / total) * 50) : 25
     }
     case "Resolving": return 75
     case "Validating": return 85
     case "Ingesting": {
-      const s = state as IngestingState
-      return s.triplesTotal > 0
-        ? 85 + Math.round((s.triplesIngested / s.triplesTotal) * 15)
-        : 90
+      const total = state.triplesTotal ?? 0
+      const ingested = state.triplesIngested ?? 0
+      return total > 0 ? 85 + Math.round((ingested / total) * 15) : 90
     }
     case "Complete": return 100
     case "Failed": return 0
@@ -200,6 +103,13 @@ function ProgressBar({ progress, stage }: { progress: number; stage: BatchStage 
   )
 }
 
+// Helper to format date (handles both Date and string)
+function formatDate(date: unknown): string {
+  if (date instanceof Date) return date.toLocaleString()
+  if (typeof date === "string") return new Date(date).toLocaleString()
+  return String(date)
+}
+
 // Single batch card
 function BatchCard({ state, onResume }: { state: BatchState; onResume?: () => void }) {
   const progress = getProgress(state)
@@ -215,7 +125,7 @@ function BatchCard({ state, onResume }: { state: BatchState; onResume?: () => vo
 
           <div className="flex items-center gap-4 text-xs text-gray-500 mb-3">
             <span className="font-mono text-cyan-500/60">{state.ontologyVersion}</span>
-            <span>Started {new Date(state.createdAt).toLocaleString()}</span>
+            <span>Started {formatDate(state.createdAt)}</span>
           </div>
 
           <ProgressBar progress={progress} stage={state._tag} />
@@ -223,30 +133,30 @@ function BatchCard({ state, onResume }: { state: BatchState; onResume?: () => vo
           {/* Stage-specific details */}
           <div className="mt-3 text-xs text-gray-400">
             {state._tag === "Preprocessing" && (
-              <span>Classifying documents: {(state as PreprocessingState).documentsClassified}/{(state as PreprocessingState).documentsTotal}</span>
+              <span>Classifying documents: {state.documentsClassified ?? 0}/{state.documentsTotal ?? 0}</span>
             )}
             {state._tag === "Extracting" && (
-              <span>Extracting: {(state as ExtractingState).documentsCompleted}/{(state as ExtractingState).documentsTotal} documents</span>
+              <span>Extracting: {state.documentsCompleted ?? 0}/{state.documentsTotal ?? 0} documents</span>
             )}
             {state._tag === "Resolving" && (
-              <span>Forming clusters: {(state as ResolvingState).clustersFormed} from {(state as ResolvingState).entitiesTotal} entities</span>
+              <span>Forming clusters: {state.clustersFormed ?? 0} from {state.entitiesTotal ?? 0} entities</span>
             )}
             {state._tag === "Validating" && (
               <span>Running SHACL validation...</span>
             )}
             {state._tag === "Ingesting" && (
-              <span>Ingesting: {(state as IngestingState).triplesIngested}/{(state as IngestingState).triplesTotal} triples</span>
+              <span>Ingesting: {state.triplesIngested ?? 0}/{state.triplesTotal ?? 0} triples</span>
             )}
-            {state._tag === "Complete" && (
+            {state._tag === "Complete" && state.stats && (
               <span className="text-emerald-400">
-                Completed in {Math.round((state as CompleteState).stats.totalDurationMs / 1000)}s -
-                {" "}{(state as CompleteState).stats.entitiesExtracted} entities,
-                {" "}{(state as CompleteState).stats.relationsExtracted} relations
+                Completed in {Math.round(state.stats.totalDurationMs / 1000)}s -
+                {" "}{state.stats.entitiesExtracted} entities,
+                {" "}{state.stats.relationsExtracted} relations
               </span>
             )}
-            {state._tag === "Failed" && (
+            {state._tag === "Failed" && state.error && (
               <span className="text-red-400">
-                Failed in {(state as FailedState).failedInStage}: {(state as FailedState).error.message}
+                Failed in {state.failedInStage ?? "unknown"}: {state.error.message}
               </span>
             )}
           </div>
@@ -267,10 +177,14 @@ function BatchCard({ state, onResume }: { state: BatchState; onResume?: () => vo
 
 // Main component
 export function BatchMonitor() {
-  const [batches, setBatches] = useState<Map<string, BatchState>>(new Map())
+  const { ontologyId } = useParams<{ ontologyId: string }>()
   const [formData, setFormData] = useState<BatchFormData>(initialFormData)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Get batch state from atoms (updated via EventBus in AppShell)
+  const batchList = useAtomValue(allBatchesAtom(ontologyId ?? ""))
+  const activeBatches = useAtomValue(activeBatchesAtom(ontologyId ?? ""))
 
   // Submit new batch
   const handleSubmit = async (e: React.FormEvent) => {
@@ -308,43 +222,8 @@ export function BatchMonitor() {
         throw new Error(err.message || "Failed to start batch")
       }
 
-      // The response is an SSE stream
-      const reader = response.body?.getReader()
-      if (!reader) throw new Error("No response body")
-
-      // Create EventSource from fetch response
-      // Note: fetch doesn't support native EventSource, so we parse manually
-      const decoder = new TextDecoder()
-      let buffer = ""
-
-      const processStream = async () => {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split("\n")
-          buffer = lines.pop() || ""
-
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              try {
-                const state = JSON.parse(line.slice(6)) as BatchState
-                setBatches(prev => new Map(prev).set(state.batchId, state))
-
-                if (state._tag === "Complete" || state._tag === "Failed") {
-                  reader.cancel()
-                  return
-                }
-              } catch {
-                // Ignore parse errors for keep-alive or malformed events
-              }
-            }
-          }
-        }
-      }
-
-      processStream()
+      // Batch started - state updates will come via EventBus/WebSocket
+      // which updates the batch atoms automatically
       setFormData(initialFormData)
 
     } catch (e) {
@@ -366,26 +245,11 @@ export function BatchMonitor() {
         throw new Error(err.message || "Failed to resume batch")
       }
 
-      // Poll for status after resume
-      const statusResponse = await fetch(`/api/v1/batch/${batchId}`)
-      if (statusResponse.ok) {
-        const data = await statusResponse.json()
-        if (data._tag === "Active") {
-          setBatches(prev => new Map(prev).set(batchId, data.state))
-        }
-      }
+      // State updates will come via EventBus automatically
     } catch (e) {
       console.error("Resume failed:", e)
     }
   }
-
-  const batchList = Array.from(batches.values()).sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  )
-
-  const activeBatches = batchList.filter(
-    b => b._tag !== "Complete" && b._tag !== "Failed"
-  )
 
   return (
     <div className="space-y-6 max-w-4xl">

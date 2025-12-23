@@ -80,3 +80,10 @@ export function timelineLink(ontologyId: string): string {
 export function classesLink(ontologyId: string): string {
   return `/o/${ontologyId}/classes`
 }
+
+/**
+ * Generate batches link
+ */
+export function batchesLink(ontologyId: string): string {
+  return `/o/${ontologyId}/batches`
+}

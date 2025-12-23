@@ -11,6 +11,7 @@ import { DocumentDetailPage } from "./pages/DocumentDetailPage"
 import { LinksPage } from "./pages/LinksPage"
 import { LinkDetailPage } from "./pages/LinkDetailPage"
 import { IngestPage } from "./pages/IngestPage"
+import { BatchMonitor } from "./pages/BatchMonitor"
 
 export function App() {
   return (
@@ -35,6 +36,7 @@ export function App() {
           <Route path="/o/:ontologyId/timeline" element={<TimelinePage />} />
           <Route path="/o/:ontologyId/classes" element={<OntologySchemaPage />} />
           <Route path="/o/:ontologyId/classes/:iri" element={<OntologySchemaPage />} />
+          <Route path="/o/:ontologyId/batches" element={<BatchMonitor />} />
 
           {/* Legacy route redirects (keep for backwards compatibility) */}
           <Route path="/links" element={<Navigate to="/o/seattle/links" replace />} />
@@ -46,6 +48,9 @@ export function App() {
           <Route path="/entities/:entityId" element={<Navigate to="/o/seattle/entities/:entityId" replace />} />
           <Route path="/timeline" element={<Navigate to="/o/seattle/timeline" replace />} />
           <Route path="/ontologies/:id" element={<Navigate to="/o/:id/classes" replace />} />
+
+          {/* 404 catch-all */}
+          <Route path="*" element={<Navigate to="/ontologies" replace />} />
         </Routes>
       </AppShell>
       <Toaster position="bottom-right" theme="dark" />

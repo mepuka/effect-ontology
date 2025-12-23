@@ -16,16 +16,24 @@ import { useContext, useEffect, useState } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { useAtomValue, RegistryContext } from "@effect-atom/atom-react"
 import { Result } from "@effect-atom/atom"
-import { Effect, Fiber, Stream } from "effect"
+import { Effect, Fiber, Layer, Stream } from "effect"
 import { healthAtom, ontologiesAtom } from "@/atoms/api"
+import { updateBatchState, type BatchState } from "@/atoms/batch"
+import { BrowserLoggerLayer } from "@/services/BrowserLogger"
 import { invalidateForEvent, requiresInvalidation } from "@/services/CacheInvalidation"
-import { EventBusClient, EventBusClientMemoryLayer } from "@/services/EventBusClient"
+import {
+  EventBusClient,
+  EventBusClientLayer,
+  EventBusClientMemoryLayer,
+  type AuthMode
+} from "@/services/EventBusClient"
 import {
   linksLink,
   documentsLink,
   timelineLink,
   classesLink,
-  entitiesLink
+  entitiesLink,
+  batchesLink
 } from "../lib/routing"
 import {
   FileText,
@@ -33,6 +41,7 @@ import {
   Clock,
   Layers,
   Database,
+  Activity,
   ChevronDown,
   ChevronRight,
   PanelLeftClose,
@@ -56,6 +65,30 @@ function useOntologyId(): string | null {
 }
 
 /**
+ * Detect WebSocket auth mode from environment
+ *
+ * In development (VITE dev server), uses "dev" mode which bypasses ticket auth.
+ * In production, uses "prod" mode which requires ticket authentication.
+ */
+function getAuthMode(): AuthMode {
+  // Check for explicit mode override
+  const explicitMode = import.meta.env.VITE_WS_MODE
+  if (explicitMode === "dev" || explicitMode === "prod") {
+    return explicitMode
+  }
+
+  // Default: dev mode in development, prod in production
+  return import.meta.env.DEV ? "dev" : "prod"
+}
+
+/**
+ * Get API key from environment (for prod mode ticket fetching)
+ */
+function getApiKey(): string | undefined {
+  return import.meta.env.VITE_API_KEY
+}
+
+/**
  * Hook to subscribe to events and trigger cache invalidation
  */
 function useEventSubscription(ontologyId: string | null) {
@@ -67,17 +100,47 @@ function useEventSubscription(ontologyId: string | null) {
     // Create a fiber handle for cleanup
     let subscriptionFiber: Fiber.RuntimeFiber<void, unknown> | null = null
 
+    // Determine auth mode and API key
+    const authMode = getAuthMode()
+    const apiKey = getApiKey()
+
     // Subscribe to events and invalidate caches
     const subscription = Effect.gen(function* () {
+      yield* Effect.logInfo("EventBus subscription starting", {
+        ontologyId,
+        authMode,
+        hasApiKey: !!apiKey
+      })
+
       const eventBus = yield* EventBusClient
       const eventStream = yield* eventBus.subscribeEvents()
 
+      yield* Effect.logInfo("EventBus connected, listening for events")
+
       yield* Stream.runForEach(eventStream, (event) =>
         Effect.gen(function* () {
+          yield* Effect.logDebug("Event received", {
+            eventType: event.event,
+            eventId: event.id
+          })
+
+          // Handle BatchStateChanged events - update batch atoms directly
+          if (event.event === "BatchStateChanged" && event.payload) {
+            const payload = event.payload as { batchId: string; state: BatchState }
+            if (payload.batchId && payload.state) {
+              // Update batch state atom
+              updateBatchState(ontologyId, payload.batchId, payload.state)
+              yield* Effect.logDebug("Batch state updated", {
+                batchId: payload.batchId,
+                stage: payload.state._tag
+              })
+            }
+          }
+
           // Only invalidate if this event type requires it
           if (requiresInvalidation(event.event)) {
             yield* invalidateForEvent(event, ontologyId, registry)
-            yield* Effect.logDebug("Cache invalidated for event", {
+            yield* Effect.logInfo("Cache invalidated for event", {
               eventType: event.event,
               ontologyId
             })
@@ -85,9 +148,19 @@ function useEventSubscription(ontologyId: string | null) {
         })
       )
     }).pipe(
-      Effect.provide(EventBusClientMemoryLayer(ontologyId)),
+      // Use real WebSocket with dual-mode auth
+      Effect.provide(
+        EventBusClientLayer(ontologyId, window.location.origin, {
+          mode: authMode,
+          apiKey
+        })
+      ),
+      // Add browser console logging
+      Effect.provide(BrowserLoggerLayer),
       Effect.catchAll((error) =>
-        Effect.logWarning("Event subscription error", { error })
+        Effect.logWarning("Event subscription error", { error }).pipe(
+          Effect.provide(BrowserLoggerLayer)
+        )
       )
     )
 
@@ -138,14 +211,16 @@ export function AppShell({ children }: AppShellProps) {
         documents: documentsLink(ontologyId),
         timeline: timelineLink(ontologyId),
         classes: classesLink(ontologyId),
-        entities: entitiesLink(ontologyId)
+        entities: entitiesLink(ontologyId),
+        batches: batchesLink(ontologyId)
       }
     : {
         links: "/o/seattle/links",
         documents: "/o/seattle/documents",
         timeline: "/o/seattle/timeline",
         classes: "/o/seattle/classes",
-        entities: "/o/seattle/entities"
+        entities: "/o/seattle/entities",
+        batches: "/o/seattle/batches"
       }
 
   const navItems = [
@@ -178,6 +253,12 @@ export function AppShell({ children }: AppShellProps) {
       icon: Link2,
       label: "Links",
       description: "Ingestion queue"
+    },
+    {
+      to: scopedLinks.batches,
+      icon: Activity,
+      label: "Batches",
+      description: "Extraction jobs"
     }
   ]
 
