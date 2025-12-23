@@ -14,3 +14,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## [~] Track: Core Capabilities Evaluation (Seattle Ontology Case Study)
 *Link: [./conductor/tracks/seattle_eval_20251222/](./conductor/tracks/seattle_eval_20251222/)*
+
+---
+
+## [ ] Track: Frontend Websocket Enablement Research
+*Link: [./conductor/tracks/frontend_websocket_research/](./conductor/tracks/frontend_websocket_research/)*

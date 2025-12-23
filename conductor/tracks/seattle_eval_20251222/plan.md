@@ -1,6 +1,6 @@
 # Plan: Core Capabilities Evaluation (Seattle Ontology Case Study)
 
-## Phase 1: Ingestion & Infrastructure Review [checkpoint: pending]
+## Phase 1: Ingestion & Infrastructure Review [checkpoint: a5e8e9f]
 - [x] Task: Review Infrastructure configuration (`terraform`, `cloudbuild.yaml`, `docker-compose.yml`) for extraction readiness. 53885b2
 - [x] Task: Verify Environment Variable configuration for Cloud Run/GCS/Postgres integration. 54007a2
 - [x] Task: Manual Verification: Ingest a new Seattle-related link via the Frontend and verify its entry in the `ingested_links` table. 54909a2
@@ -8,7 +8,7 @@
 - [x] Task: Conductor - User Manual Verification 'Ingestion & Infrastructure Review' (Protocol in workflow.md) 55842b2
 
 ## Phase 2: Extraction & Provenance Audit [checkpoint: pending]
-- [ ] Task: Execute Extraction Workflow for the Seattle batch.
+- [~] Task: Execute Extraction Workflow for the Seattle batch.
 - [ ] Task: Verify that extracted Triples/Claims use the Seattle ontology IRIs and types.
 - [ ] Task: Trace a sample extraction from a Claim (Postgres) back to its source document (GCS) and Extraction Run.
 - [ ] Task: Verify ABox vs TBox separation: Ensure instance data (claims) is distinct from schema data (ontology) in the DB/Store.
