@@ -6,6 +6,7 @@
  */
 
 export * from "./Activity.js"
+export * from "./Auth.js"
 export * from "./Base.js"
 export * from "./Circuit.js"
 export * from "./Embedding.js"
