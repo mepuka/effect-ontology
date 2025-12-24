@@ -26,6 +26,7 @@ import { RdfBuilder } from "../Service/Rdf.js"
 import { Reasoner } from "../Service/Reasoner.js"
 import { StorageServiceLive } from "../Service/Storage.js"
 import { WikidataClient } from "../Service/WikidataClient.js"
+import { extractCommand } from "./Commands/Extract.js"
 import { documentsCommand, fetchCommand, ingestBatchCommand, ingestLinkCommand } from "./Commands/Fetch.js"
 import { inferenceCommand } from "./Commands/Inference.js"
 import { ingestCommand } from "./Commands/Ingest.js"
@@ -40,6 +41,7 @@ import { workflowCommand } from "./Commands/Workflow.js"
 
 const rootCommand = Command.make("effect-onto").pipe(
   Command.withSubcommands([
+    extractCommand,
     inferenceCommand,
     ingestCommand,
     reconcileCommand,
