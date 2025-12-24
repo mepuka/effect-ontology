@@ -117,6 +117,11 @@ describe("OntologyService - Seattle Ontology", () => {
         profile: "rdfs" as const,
         persistDerived: true
       },
+      validation: {
+        logOnly: false,
+        failOnViolation: true,
+        failOnWarning: false
+      },
       api: {
         keys: Option.none(),
         requireAuth: false
