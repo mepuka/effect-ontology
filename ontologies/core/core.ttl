@@ -1,0 +1,50 @@
+@prefix : <http://effect-ontology.dev/core#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix dul: <http://www.ontologydesignpatterns.org/ont/dul/DUL.owl#> .
+@base <http://effect-ontology.dev/core#> .
+
+# =============================================================================
+# Effect Core Ontology
+# =============================================================================
+#
+# A minimal DUL-based ontology for knowledge extraction. Extends DOLCE+DnS
+# Ultralite with Entity/Mention modeling patterns.
+#
+# Design Principles:
+# - Build on DUL, only add what is strictly needed
+# - Follow DOLCE access patterns (Entity, Object, Event hierarchy)
+# - Minimal vocabulary, domain ontologies extend as needed
+#
+# =============================================================================
+
+<http://effect-ontology.dev/core> a owl:Ontology ;
+    rdfs:label "Effect Core Ontology"@en ;
+    rdfs:comment "Extends DUL with Entity/Mention modeling for ontology-guided knowledge extraction."@en ;
+    owl:versionInfo "0.1.0" ;
+    dcterms:created "2024-12-24"^^xsd:date ;
+    dcterms:creator <https://github.com/pooks> ;
+    owl:imports <http://www.ontologydesignpatterns.org/ont/dul/DUL.owl> .
+
+# =============================================================================
+# Entity Extensions (minimal additions to DUL)
+# =============================================================================
+#
+# DUL already provides:
+# - dul:Entity (top-level)
+# - dul:Object (physical/abstract objects)
+# - dul:Event (occurrences in time)
+# - dul:Agent (entities with agency)
+# - dul:SocialAgent, dul:PhysicalAgent
+# - dul:Quality, dul:Region (attributes and values)
+# - dul:Situation (states of affairs)
+# - dul:Description, dul:Concept (intensional entities)
+#
+# Only add what DUL doesn't provide for extraction use case.
+#
+# =============================================================================
+
+# (Classes to be added as extraction requirements become clear)
