@@ -15,7 +15,7 @@
  */
 
 import { BunContext } from "@effect/platform-bun"
-import { Layer } from "effect"
+import { ConfigProvider, Effect, Layer } from "effect"
 import { EntityRegistryRepository } from "../Repository/EntityRegistry.js"
 import { ConfigService, ConfigServiceDefault } from "../Service/Config.js"
 import { CrossBatchEntityResolver } from "../Service/CrossBatchEntityResolver.js"
@@ -381,6 +381,205 @@ export const BatchExtractionWorkflowWithDepsLayer = BatchExtractionWorkflowLayer
 export const WorkflowOrchestratorFullLayer = Layer.mergeAll(
   WorkflowOrchestratorLive,
   BatchExtractionWorkflowWithDepsLayer
+)
+
+// =============================================================================
+// CLI Extraction Layer
+// =============================================================================
+
+/**
+ * Complete extraction layer for CLI usage
+ *
+ * Provides all services needed for ad-hoc extraction:
+ * - ExtractionWorkflow (main extraction interface)
+ * - RdfBuilder (for Turtle serialization)
+ *
+ * This layer is fully self-contained with no input requirements.
+ * It explicitly provides embedding infrastructure to satisfy requirements
+ * from NlpService and other services that depend on EmbeddingService.
+ *
+ * Use with BunContext.layer for platform services (FileSystem, Path).
+ *
+ * @since 2.0.0
+ */
+export const CliExtractionLayer = Layer.mergeAll(
+  ExtractionWorkflowBundle,
+  RdfBuilderBundle
+).pipe(
+  // Provide embedding infrastructure to satisfy EmbeddingServiceDefault requirements
+  // that bubble up through NlpService.Default and other services
+  Layer.provideMerge(EmbeddingBundle)
+)
+
+/**
+ * Create a CLI extraction layer with a custom ConfigProvider.
+ *
+ * Use this when you need to override config values via CLI flags.
+ * The custom provider is set BEFORE any layers are built, ensuring
+ * all services read from the custom provider.
+ *
+ * @example
+ * ```typescript
+ * const configMap = new Map([
+ *   ["ONTOLOGY_PATH", "/path/to/ontology.ttl"],
+ *   ["ONTOLOGY_EXTERNAL_VOCABS_PATH", ""]  // Empty = skip loading
+ * ])
+ * const customProvider = ConfigProvider.fromMap(configMap).pipe(
+ *   ConfigProvider.orElse(() => ConfigProvider.fromEnv())
+ * )
+ * const layer = makeCliExtractionLayer(customProvider)
+ * ```
+ *
+ * @since 2.0.0
+ */
+export const makeCliExtractionLayer = (
+  configProvider: ConfigProvider.ConfigProvider
+) => {
+  // Use Layer.unwrapEffect to build layers AFTER config provider is set
+  // This ensures all Effect.config calls see the custom provider
+  return Layer.unwrapEffect(
+    Effect.gen(function*() {
+      // All layers built within this Effect.gen will use the custom config provider
+      // because we'll wrap the final layer with Layer.setConfigProvider
+
+      // Build all bundles - they read config at layer construction time
+      const LlmControlBundle = Layer.mergeAll(
+        TokenBudgetServiceLive,
+        StageTimeoutServiceLive
+      )
+
+      const LlmExtractionBundle = Layer.mergeAll(
+        EntityExtractor.Default,
+        RelationExtractor.Default
+      ).pipe(
+        Layer.provideMerge(LlmControlBundle),
+        Layer.provideMerge(makeLanguageModelLayer),
+        Layer.provideMerge(CoreDependenciesLayer)
+      )
+
+      const EmbeddingInfraWithConfig = EmbeddingInfrastructure.pipe(
+        Layer.provide(CoreDependenciesLayer)
+      )
+
+      const NlpBundle = NlpService.Default.pipe(
+        Layer.provide(EmbeddingInfraWithConfig),
+        Layer.provide(MetricsService.Default),
+        Layer.provide(CoreDependenciesLayer)
+      )
+
+      const RdfBuilderBundle = RdfBuilder.Default.pipe(
+        Layer.provideMerge(CoreDependenciesLayer)
+      )
+
+      const StorageBundle = StorageServiceLive.pipe(
+        Layer.provideMerge(CoreDependenciesLayer),
+        Layer.provideMerge(BunContext.layer)
+      )
+
+      const OntologyRegistryBundle = OntologyRegistryService.Default.pipe(
+        Layer.provideMerge(StorageBundle),
+        Layer.provideMerge(CoreDependenciesLayer)
+      )
+
+      const OntologyServiceWithRegistry = OntologyService.Default.pipe(
+        Layer.provideMerge(OntologyRegistryBundle)
+      )
+
+      const OntologyBundle = Layer.mergeAll(
+        OntologyServiceWithRegistry,
+        RdfBuilderBundle
+      ).pipe(
+        Layer.provideMerge(StorageBundle),
+        Layer.provideMerge(NlpBundle),
+        Layer.provideMerge(CoreDependenciesLayer)
+      )
+
+      const EmbeddingBundle = EmbeddingServiceLive.pipe(
+        Layer.provideMerge(EmbeddingInfrastructure),
+        Layer.provideMerge(EmbeddingCacheWithPersistence),
+        Layer.provideMerge(MetricsService.Default),
+        Layer.provideMerge(StorageBundle),
+        Layer.provideMerge(CoreDependenciesLayer)
+      )
+
+      const ExtractionWorkflowBundle = ExtractionWorkflowLive.pipe(
+        Layer.provideMerge(OntologyBundle),
+        Layer.provideMerge(LlmExtractionBundle),
+        Layer.provideMerge(NlpBundle),
+        Layer.provideMerge(StorageBundle),
+        Layer.provideMerge(CoreDependenciesLayer)
+      )
+
+      return Layer.mergeAll(
+        ExtractionWorkflowBundle,
+        RdfBuilderBundle
+      ).pipe(
+        Layer.provideMerge(EmbeddingBundle)
+      )
+    })
+  ).pipe(
+    // Set the custom config provider for the entire layer tree
+    Layer.provide(Layer.setConfigProvider(configProvider))
+  )
+}
+
+// =============================================================================
+// Open Bundles (ConfigService as requirement - for testing)
+// =============================================================================
+
+/**
+ * Open bundle versions for testing
+ *
+ * These bundles do NOT have ConfigService pre-provided, allowing tests
+ * to inject their own ConfigProvider. Use with TestConfigProviderLayer.
+ *
+ * Pattern:
+ * ```typescript
+ * const TestLayer = NlpBundleOpen.pipe(
+ *   Layer.provide(TestConfigProviderLayer)
+ * )
+ * ```
+ *
+ * @since 2.0.0
+ */
+
+/**
+ * NLP services without config baked in
+ *
+ * Requires: ConfigService | EmbeddingProvider | EmbeddingCache
+ */
+export const NlpBundleOpen = NlpService.Default.pipe(
+  Layer.provide(EmbeddingInfrastructure),
+  Layer.provide(MetricsService.Default)
+)
+
+/**
+ * Embedding services without config baked in
+ *
+ * Requires: ConfigService
+ */
+export const EmbeddingBundleOpen = EmbeddingServiceLive.pipe(
+  Layer.provideMerge(EmbeddingInfrastructure),
+  Layer.provideMerge(EmbeddingCacheWithPersistence),
+  Layer.provideMerge(MetricsService.Default),
+  Layer.provideMerge(StorageServiceLive),
+  Layer.provideMerge(BunContext.layer)
+)
+
+/**
+ * RDF builder without config baked in
+ *
+ * Requires: ConfigService
+ */
+export const RdfBuilderBundleOpen = RdfBuilder.Default
+
+/**
+ * Storage service without config baked in
+ *
+ * Requires: ConfigService
+ */
+export const StorageBundleOpen = StorageServiceLive.pipe(
+  Layer.provideMerge(BunContext.layer)
 )
 
 // =============================================================================

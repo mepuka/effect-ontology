@@ -77,7 +77,8 @@ const VoyageUsage = Schema.Struct({
 })
 
 const VoyageResponseSchema = Schema.Struct({
-  object: Schema.Literal("list"),
+  // Note: `object` field is optional - Voyage API may omit it
+  object: Schema.optional(Schema.String),
   data: Schema.Array(VoyageEmbeddingData),
   model: Schema.String,
   usage: VoyageUsage
