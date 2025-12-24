@@ -30,7 +30,8 @@
         "db:stop": "docker compose -f ../../docker-compose.yml down postgres",
         "db:logs": "docker compose -f ../../docker-compose.yml logs -f postgres",
         "db:psql": "docker exec -it workflow-postgres psql -U workflow -d workflow",
-        "db:tables": "docker exec -it workflow-postgres psql -U workflow -d workflow -c '\\dt workflow_*'"
+        "db:tables": "docker exec -it workflow-postgres psql -U workflow -d workflow -c '\\dt workflow_*'",
+        "extract": "bun run src/cli.ts extract"
     },
     "dependencies": {
         "@effect/ai": "^0.32.1",

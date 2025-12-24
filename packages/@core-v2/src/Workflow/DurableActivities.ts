@@ -32,7 +32,7 @@ import {
 } from "../Domain/Model/OntologyEmbeddings.js"
 import { EntityId } from "../Domain/Model/shared.js"
 import { PathLayout } from "../Domain/PathLayout.js"
-import { PROV, RDF, RDFS } from "../Domain/Rdf/Constants.js"
+import { CLAIMS, PROV, RDF, RDFS } from "../Domain/Rdf/Constants.js"
 import type {
   IngestionActivityInput,
   ResolutionActivityInput,
@@ -211,6 +211,10 @@ const storeToKnowledgeGraph = (store: RdfStore) =>
 
       // Skip OWL/RDFS meta-types
       if (typeIri.includes("owl#") || typeIri.includes("rdf-schema#")) continue
+
+      // Skip claims (they are not entities - they're reified statements)
+      if (subjectIri.startsWith(CLAIMS.namespace)) continue
+      if (typeIri.startsWith(CLAIMS.namespace)) continue
 
       entityIris.add(subjectIri)
       const types = entityTypes.get(subjectIri) ?? []
@@ -591,8 +595,14 @@ export const makeValidationActivity = (input: typeof ValidationActivityInput.Typ
           )
         ))
 
-      // Apply validation policy (default: failOnViolation=true, failOnWarning=false)
-      const policy = input.validationPolicy ?? { failOnViolation: true, failOnWarning: false }
+      // Apply validation policy from input or config
+      // Config defaults: logOnly=false, failOnViolation=true, failOnWarning=false
+      // For development, set VALIDATION_LOG_ONLY=true to allow workflows to complete
+      const policy = input.validationPolicy ?? {
+        logOnly: config.validation.logOnly,
+        failOnViolation: config.validation.failOnViolation,
+        failOnWarning: config.validation.failOnWarning
+      }
 
       // Run validation with policy - this will fail if policy is violated
       const report = yield* shacl.validateWithPolicy(dataStore._store, shapesStore, policy).pipe(

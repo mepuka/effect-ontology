@@ -9,6 +9,7 @@
  * @module Service/Ontology
  */
 
+import { createHash } from "crypto"
 import { Chunk, Duration, Effect, HashMap, Option, Ref } from "effect"
 import { OntologyFileNotFound, OntologyParsingFailed } from "../Domain/Error/Ontology.js"
 import type { RdfError } from "../Domain/Error/Rdf.js"
@@ -41,6 +42,7 @@ import {
   SKOS_SCOPENOTE
 } from "../Domain/Rdf/Constants.js"
 import { type IRI, Literal, type Quad } from "../Domain/Rdf/Types.js"
+import type { OntologyVersion } from "../Domain/Identity.js"
 import type { OntologyEntry } from "../Domain/Schema/OntologyRegistry.js"
 import { rrfFusion } from "../Utils/Retrieval.js"
 import { ConfigService } from "./Config.js"
@@ -812,6 +814,30 @@ export class OntologyService extends Effect.Service<OntologyService>()(
          * @returns true if OntologyRegistryService is configured and available
          */
         hasRegistry: Effect.succeed(Option.isSome(registryOpt)),
+
+        /**
+         * Generate a deterministic OntologyVersion from ontology ID and IRI
+         *
+         * For registry-based ontologies without content-addressed storage,
+         * derives the version hash from the ontology IRI for reproducibility.
+         *
+         * @param ontologyId - Ontology identifier (e.g., "seattle")
+         * @param ontologyIri - Full IRI of the ontology
+         * @returns OntologyVersion in format "namespace/name@hash"
+         *
+         * @example
+         * ```typescript
+         * const version = OntologyService.generateVersion(
+         *   "seattle",
+         *   "http://effect-ontology.dev/seattle"
+         * )
+         * // Returns: "seattle/seattle@a1b2c3d4e5f67890"
+         * ```
+         */
+        generateVersion: (ontologyId: string, ontologyIri: string): OntologyVersion => {
+          const hash = createHash("sha256").update(ontologyIri).digest("hex").slice(0, 16)
+          return `${ontologyId}/${ontologyId}@${hash}` as OntologyVersion
+        },
 
         /**
          * Search for classes in a specific ontology using hybrid approach

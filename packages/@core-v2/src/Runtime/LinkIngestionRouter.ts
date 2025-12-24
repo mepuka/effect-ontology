@@ -11,14 +11,7 @@ import { HttpRouter, HttpServerRequest, HttpServerResponse } from "@effect/platf
 import { DateTime, Effect, Option, Schema } from "effect"
 import { TreeFormatter } from "effect/ParseResult"
 import type { ParseError } from "effect/ParseResult"
-import {
-  type BatchId,
-  documentIdFromHash,
-  type Namespace,
-  type OntologyVersion,
-  resolveToGcsUri,
-  toGcsUri
-} from "../Domain/Identity.js"
+import { type BatchId, documentIdFromHash, type Namespace, resolveToGcsUri, toGcsUri } from "../Domain/Identity.js"
 import { PathLayout } from "../Domain/PathLayout.js"
 import { BatchManifest, type BatchWorkflowPayload } from "../Domain/Schema/Batch.js"
 import {
@@ -504,6 +497,7 @@ export const LinkIngestionRouter = HttpRouter.empty.pipe(
               const storage = yield* StorageService
               const ingestion = yield* LinkIngestionService
               const orchestrator = yield* WorkflowOrchestrator
+              const ontologyService = yield* OntologyService
               const now = yield* DateTime.now
 
               // Fetch all requested links
@@ -533,9 +527,9 @@ export const LinkIngestionRouter = HttpRouter.empty.pipe(
               // Generate batch ID
               const batchId = `batch-${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}` as BatchId
 
-              // Determine target namespace
-              const targetNamespace =
-                (request.targetNamespace ?? ontologyEntry.targetNamespace ?? ontologyId) as Namespace
+              // Determine target namespace (use simple ontologyId, not full IRI)
+              // The registry targetNamespace is a full IRI but the schema expects a simple namespace
+              const targetNamespace = (request.targetNamespace ?? ontologyId) as Namespace
 
               // Resolve ontology URI - storage path needs bucket prefix
               const ontologyUri = resolveToGcsUri(ontologyEntry.storagePath, bucket)
@@ -554,12 +548,15 @@ export const LinkIngestionRouter = HttpRouter.empty.pipe(
                 ? resolveToGcsUri(ontologyEntry.shapesPath, bucket)
                 : undefined
 
+              // Generate proper OntologyVersion from registry entry
+              const ontologyVersion = ontologyService.generateVersion(ontologyId, ontologyEntry.iri)
+
               // Create batch manifest
               const manifest: typeof BatchManifest.Type = {
                 batchId,
                 ontologyId,
                 ontologyUri,
-                ontologyVersion: (ontologyEntry.version ?? "v1") as OntologyVersion,
+                ontologyVersion,
                 shaclUri,
                 targetNamespace,
                 documents,
@@ -585,7 +582,7 @@ export const LinkIngestionRouter = HttpRouter.empty.pipe(
                 batchId,
                 ontologyId,
                 manifestUri,
-                ontologyVersion: (ontologyEntry.version ?? "v1") as OntologyVersion,
+                ontologyVersion, // Use the already-computed version from line 575
                 ontologyUri,
                 targetNamespace,
                 shaclUri,

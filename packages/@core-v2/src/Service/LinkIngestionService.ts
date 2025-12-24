@@ -28,7 +28,7 @@
 import type { PlatformError } from "@effect/platform/Error"
 import * as Pg from "@effect/sql-drizzle/Pg"
 import { createHash } from "crypto"
-import { and, eq, sql } from "drizzle-orm"
+import { and, eq, inArray, sql } from "drizzle-orm"
 import { Cache, Data, Duration, Effect, Layer, Option } from "effect"
 import type { EnrichedContent } from "../Domain/Model/EnrichedContent.js"
 import { type IngestedLinkInsertRow, type IngestedLinkRow, ingestedLinks } from "../Repository/schema.js"
@@ -521,7 +521,7 @@ export class LinkIngestionService extends Effect.Service<LinkIngestionService>()
           if (ids.length === 0) return []
           const results = yield* Effect.promise(() =>
             drizzle.select().from(ingestedLinks).where(
-              sql`${ingestedLinks.id} = ANY(${ids})`
+              inArray(ingestedLinks.id, ids as string[])
             )
           )
           return results

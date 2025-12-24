@@ -529,5 +529,19 @@ ALTER TABLE ingested_links ADD CONSTRAINT ingested_links_ontology_content_unique
 -- Index for looking up by content hash within an ontology
 CREATE INDEX IF NOT EXISTS idx_ingested_links_ontology_content_hash
     ON ingested_links(ontology_id, content_hash);`
+  },
+  {
+    version: 9,
+    name: "009_processing_status",
+    sql: `-- Add 'processing' status to ingested_links check constraint
+-- The ingested_links table was missing 'processing' status which is needed
+-- when links are actively being processed by a batch workflow.
+
+-- Drop the old constraint (auto-named by PostgreSQL)
+ALTER TABLE ingested_links DROP CONSTRAINT IF EXISTS ingested_links_status_check;
+
+-- Add the updated constraint with 'processing' status
+ALTER TABLE ingested_links ADD CONSTRAINT ingested_links_status_check
+  CHECK (status IN ('pending', 'enriched', 'processing', 'processed', 'failed', 'skipped'));`
   }
 ]

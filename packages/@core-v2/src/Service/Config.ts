@@ -193,6 +193,25 @@ const JinaConfig = Config.nested("JINA")(Config.all({
   baseUrl: Config.string("BASE_URL").pipe(Config.withDefault("https://r.jina.ai"))
 }))
 
+const ValidationConfig = Config.nested("VALIDATION")(Config.all({
+  /**
+   * Log violations but don't fail workflows.
+   * Useful for development where quality is improving.
+   * Defaults to false for production safety.
+   */
+  logOnly: Config.boolean("LOG_ONLY").pipe(Config.withDefault(false)),
+  /**
+   * Fail if any SHACL Violation-level results are present.
+   * Defaults to true for data integrity.
+   */
+  failOnViolation: Config.boolean("FAIL_ON_VIOLATION").pipe(Config.withDefault(true)),
+  /**
+   * Fail if any SHACL Warning-level results are present.
+   * Defaults to false as warnings are often acceptable.
+   */
+  failOnWarning: Config.boolean("FAIL_ON_WARNING").pipe(Config.withDefault(false))
+}))
+
 const RdfConfig = Config.nested("RDF")(Config.all({
   baseNamespace: Config.string("BASE_NAMESPACE").pipe(Config.withDefault("http://example.org/kg/")),
   outputFormat: Config.literal("Turtle", "N-Triples", "JSON-LD")("OUTPUT_FORMAT").pipe(
@@ -221,6 +240,7 @@ export interface AppConfig {
   readonly extraction: Config.Config.Success<typeof ExtractionConfig>
   readonly entityRegistry: Config.Config.Success<typeof EntityRegistryConfig>
   readonly inference: Config.Config.Success<typeof InferenceConfig>
+  readonly validation: Config.Config.Success<typeof ValidationConfig>
   readonly rdf: Config.Config.Success<typeof RdfConfig>
   readonly api: Config.Config.Success<typeof ApiConfig>
   readonly jina: Config.Config.Success<typeof JinaConfig>
@@ -294,6 +314,11 @@ export const DEFAULT_CONFIG: AppConfig = {
     profile: "rdfs",
     persistDerived: true
   },
+  validation: {
+    logOnly: false,
+    failOnViolation: true,
+    failOnWarning: false
+  },
   rdf: {
     baseNamespace: "http://example.org/kg/",
     outputFormat: "Turtle",
@@ -323,7 +348,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 // =============================================================================
 
 const makeConfigService = Effect.gen(function*() {
-  const [llm, storage, ontology, runtime, grounder, embedding, extraction, entityRegistry, inference, rdf, api, jina] =
+  const [llm, storage, ontology, runtime, grounder, embedding, extraction, entityRegistry, inference, validation, rdf, api, jina] =
     yield* Effect.all([
       LlmConfig,
       StorageConfig,
@@ -334,6 +359,7 @@ const makeConfigService = Effect.gen(function*() {
       ExtractionConfig,
       EntityRegistryConfig,
       InferenceConfig,
+      ValidationConfig,
       RdfConfig,
       ApiConfig,
       JinaConfig
@@ -351,7 +377,8 @@ const makeConfigService = Effect.gen(function*() {
     ontology,
     rdf,
     runtime,
-    storage
+    storage,
+    validation
   } satisfies AppConfig
 })
 
@@ -362,3 +389,25 @@ export const ConfigService = Context.GenericTag<ConfigService>("@core-v2/Service
  * Default ConfigService layer reading from environment variables with defaults.
  */
 export const ConfigServiceDefault = Layer.effect(ConfigService, makeConfigService)
+
+/**
+ * Create a ConfigService layer with a custom ConfigProvider.
+ *
+ * Use this when you need to override config values (e.g., CLI flags).
+ * The custom provider takes precedence over environment variables.
+ *
+ * @example
+ * ```typescript
+ * const configMap = new Map([["ONTOLOGY_EXTERNAL_VOCABS_PATH", ""]])
+ * const customProvider = ConfigProvider.fromMap(configMap).pipe(
+ *   ConfigProvider.orElse(() => ConfigProvider.fromEnv())
+ * )
+ * const CustomConfigLayer = makeConfigServiceLayer(customProvider)
+ * ```
+ */
+export const makeConfigServiceLayer = (
+  configProvider: import("effect").ConfigProvider.ConfigProvider
+): Layer.Layer<ConfigService, import("effect").ConfigError.ConfigError> =>
+  Layer.setConfigProvider(configProvider).pipe(
+    Layer.provideMerge(Layer.effect(ConfigService, makeConfigService))
+  )

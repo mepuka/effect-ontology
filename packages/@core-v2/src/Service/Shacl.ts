@@ -673,6 +673,26 @@ export class ShaclService extends Context.Tag("@core-v2/ShaclService")<
             // Apply policy (default: failOnViolation=true, failOnWarning=false)
             const failOnViolation = policy.failOnViolation ?? true
             const failOnWarning = policy.failOnWarning ?? false
+            const logOnly = policy.logOnly ?? false
+
+            // If logOnly is true, log issues but don't fail
+            if (logOnly) {
+              if (violationCount > 0 || warningCount > 0) {
+                yield* Effect.logWarning(
+                  `SHACL validation: ${violationCount} violation(s), ${warningCount} warning(s) - continuing per logOnly policy`,
+                  {
+                    conforms: report.conforms,
+                    violations: violations.slice(0, 5).map((v: ShaclViolation) => ({
+                      focusNode: v.focusNode,
+                      path: v.path,
+                      message: v.message,
+                      severity: v.severity
+                    }))
+                  }
+                )
+              }
+              return validationReport
+            }
 
             if (failOnViolation && violationCount > 0) {
               return yield* Effect.fail(

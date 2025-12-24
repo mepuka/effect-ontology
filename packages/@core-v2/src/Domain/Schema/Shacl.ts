@@ -50,5 +50,11 @@ export class ValidationPolicy extends Schema.Class<ValidationPolicy>("Validation
   /** Fail if any Violation-level results are present (default: true) */
   failOnViolation: Schema.optional(Schema.Boolean),
   /** Fail if any Warning-level results are present (default: false) */
-  failOnWarning: Schema.optional(Schema.Boolean)
+  failOnWarning: Schema.optional(Schema.Boolean),
+  /**
+   * Log violations but don't fail - allows workflow to continue despite validation issues.
+   * Useful for development and initial extraction where quality is improving.
+   * Takes precedence over failOnViolation and failOnWarning when true.
+   */
+  logOnly: Schema.optional(Schema.Boolean)
 }) {}
