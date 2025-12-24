@@ -35,3 +35,4 @@ packages/@core-v2/output/
 
 output/
 .env.postgres
+.env.core-test
