@@ -165,7 +165,7 @@ describe("OntologyService - Core Ontology V2", () => {
 
   describe("Ontology Loading", () => {
     it("should load core ontology successfully", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const ontology = yield* OntologyService
         const context = yield* ontology.ontology
 
@@ -174,7 +174,7 @@ describe("OntologyService - Core Ontology V2", () => {
       }).pipe(Effect.provide(TestLayer), Effect.runPromise))
 
     it("should find TrackedEntity class", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const ontology = yield* OntologyService
         const context = yield* ontology.ontology
 
@@ -191,7 +191,7 @@ describe("OntologyService - Core Ontology V2", () => {
       }).pipe(Effect.provide(TestLayer), Effect.runPromise))
 
     it("should find TrackedEvent class", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const ontology = yield* OntologyService
         const context = yield* ontology.ontology
 
@@ -206,7 +206,7 @@ describe("OntologyService - Core Ontology V2", () => {
       }).pipe(Effect.provide(TestLayer), Effect.runPromise))
 
     it("should find Mention class", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const ontology = yield* OntologyService
         const context = yield* ontology.ontology
 
@@ -223,7 +223,7 @@ describe("OntologyService - Core Ontology V2", () => {
 
   describe("Core Properties", () => {
     it("should find hasEvidentialMention property", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const ontology = yield* OntologyService
         const context = yield* ontology.ontology
 
@@ -237,7 +237,7 @@ describe("OntologyService - Core Ontology V2", () => {
       }).pipe(Effect.provide(TestLayer), Effect.runPromise))
 
     it("should find hasParticipant property", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const ontology = yield* OntologyService
         const context = yield* ontology.ontology
 
@@ -250,7 +250,7 @@ describe("OntologyService - Core Ontology V2", () => {
       }).pipe(Effect.provide(TestLayer), Effect.runPromise))
 
     it("should find name datatype property", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const ontology = yield* OntologyService
         const context = yield* ontology.ontology
 
@@ -264,7 +264,7 @@ describe("OntologyService - Core Ontology V2", () => {
       }).pipe(Effect.provide(TestLayer), Effect.runPromise))
 
     it("should find groundingConfidence property", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const ontology = yield* OntologyService
         const context = yield* ontology.ontology
 
@@ -280,7 +280,7 @@ describe("OntologyService - Core Ontology V2", () => {
 
   describe("Class Hierarchy", () => {
     it("should have TrackedEntity as subclass of dul:Object", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const ontology = yield* OntologyService
         const context = yield* ontology.ontology
 
@@ -295,7 +295,7 @@ describe("OntologyService - Core Ontology V2", () => {
       }).pipe(Effect.provide(TestLayer), Effect.runPromise))
 
     it("should have TrackedEvent as subclass of dul:Event", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const ontology = yield* OntologyService
         const context = yield* ontology.ontology
 
@@ -310,7 +310,7 @@ describe("OntologyService - Core Ontology V2", () => {
       }).pipe(Effect.provide(TestLayer), Effect.runPromise))
 
     it("should have Mention as subclass of claims:Evidence", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const ontology = yield* OntologyService
         const context = yield* ontology.ontology
 
@@ -327,7 +327,7 @@ describe("OntologyService - Core Ontology V2", () => {
 
   describe("BM25 Search", () => {
     it("should find TrackedEntity when searching for 'entity'", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const ontology = yield* OntologyService
         const results = yield* ontology.searchClasses("entity", 5)
 
@@ -338,7 +338,7 @@ describe("OntologyService - Core Ontology V2", () => {
       }).pipe(Effect.provide(TestLayer), Effect.runPromise))
 
     it("should find TrackedEvent when searching for 'event occurrence'", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const ontology = yield* OntologyService
         const results = yield* ontology.searchClasses("event occurrence", 5)
 
@@ -349,7 +349,7 @@ describe("OntologyService - Core Ontology V2", () => {
       }).pipe(Effect.provide(TestLayer), Effect.runPromise))
 
     it("should find Mention when searching for 'text span evidence'", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const ontology = yield* OntologyService
         const results = yield* ontology.searchClasses("text span evidence", 5)
 
@@ -362,7 +362,7 @@ describe("OntologyService - Core Ontology V2", () => {
 
   describe("SKOS Metadata in Prompts", () => {
     it("should expose altLabels as aliases", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const ontology = yield* OntologyService
         const context = yield* ontology.ontology
 
@@ -378,7 +378,7 @@ describe("OntologyService - Core Ontology V2", () => {
       }).pipe(Effect.provide(TestLayer), Effect.runPromise))
 
     it("should have skos:definition for core classes", () =>
-      Effect.gen(function* () {
+      Effect.gen(function*() {
         const ontology = yield* OntologyService
         const context = yield* ontology.ontology
 
@@ -391,6 +391,46 @@ describe("OntologyService - Core Ontology V2", () => {
           expect(cls.definition).toBeDefined()
           expect(cls.definition!.length).toBeGreaterThan(0)
         }
+      }).pipe(Effect.provide(TestLayer), Effect.runPromise))
+
+    it("should have skos:scopeNote for inverse property pairs", () =>
+      Effect.gen(function*() {
+        const ontology = yield* OntologyService
+        const context = yield* ontology.ontology
+
+        // Check hasLocation and isLocationOf have scopeNotes
+        const hasLocation = context.properties.find(
+          (p) => p.id === `${CORE_NS}hasLocation`
+        )
+        const isLocationOf = context.properties.find(
+          (p) => p.id === `${CORE_NS}isLocationOf`
+        )
+
+        expect(hasLocation).toBeDefined()
+        expect(hasLocation!.scopeNote).toBeDefined()
+        expect(hasLocation!.scopeNote).toContain("ALWAYS prefer this")
+
+        expect(isLocationOf).toBeDefined()
+        expect(isLocationOf!.scopeNote).toBeDefined()
+        expect(isLocationOf!.scopeNote).toContain("DO NOT use directly")
+      }).pipe(Effect.provide(TestLayer), Effect.runPromise))
+
+    it("should resolve owl:unionOf blank node domains to actual classes", () =>
+      Effect.gen(function*() {
+        const ontology = yield* OntologyService
+        const context = yield* ontology.ontology
+
+        // hasLocation has domain owl:unionOf(TrackedEntity, TrackedEvent)
+        const hasLocation = context.properties.find(
+          (p) => p.id === `${CORE_NS}hasLocation`
+        )
+
+        expect(hasLocation).toBeDefined()
+        // Domain should resolve to the actual classes, not blank nodes
+        expect(hasLocation!.domain.length).toBeGreaterThan(0)
+        expect(hasLocation!.domain).not.toContain("_:") // No blank nodes
+        expect(hasLocation!.domain.some((d) => d.includes("TrackedEntity"))).toBe(true)
+        expect(hasLocation!.domain.some((d) => d.includes("TrackedEvent"))).toBe(true)
       }).pipe(Effect.provide(TestLayer), Effect.runPromise))
   })
 })

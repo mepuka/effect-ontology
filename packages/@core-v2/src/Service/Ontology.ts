@@ -17,12 +17,14 @@ import type { OntologyVersion } from "../Domain/Identity.js"
 import { ClassDefinition, OntologyContext, PropertyDefinition } from "../Domain/Model/Ontology.js"
 import type { OntologyEmbeddings } from "../Domain/Model/OntologyEmbeddings.js"
 import {
+  OWL,
   OWL_CLASS,
   OWL_DATATYPE_PROPERTY,
   OWL_EQUIVALENT_CLASS,
   OWL_FUNCTIONAL_PROPERTY,
   OWL_INVERSEOF,
   OWL_OBJECT_PROPERTY,
+  RDF,
   RDF_TYPE,
   RDFS_COMMENT,
   RDFS_DOMAIN,
@@ -177,6 +179,102 @@ export const parseOntologyFromStore = (
         )
       )
 
+    // Helper to resolve RDF list (used for owl:unionOf)
+    const resolveRdfList = (listNode: string): Effect.Effect<Array<string>, RdfError> =>
+      Effect.gen(function*() {
+        const items: Array<string> = []
+        let current = listNode
+
+        // Traverse the RDF list (max 100 iterations to prevent infinite loops)
+        for (let i = 0; i < 100 && current && current !== RDF.nil; i++) {
+          // Get rdf:first (the item at this position)
+          const firstQuads = yield* rdf.queryStore(store, {
+            subject: current as IRI,
+            predicate: RDF.first
+          })
+          for (const q of Chunk.toReadonlyArray(firstQuads)) {
+            const value = q.object instanceof Literal ? q.object.value : (q.object as string)
+            // Only include named nodes (not blank nodes)
+            if (typeof value === "string" && !value.startsWith("_:")) {
+              items.push(value)
+            }
+          }
+
+          // Get rdf:rest (pointer to next list node)
+          const restQuads = yield* rdf.queryStore(store, {
+            subject: current as IRI,
+            predicate: RDF.rest
+          })
+          const restQuad = Chunk.toReadonlyArray(restQuads)[0]
+          current = restQuad
+            ? (restQuad.object instanceof Literal ? restQuad.object.value : (restQuad.object as string))
+            : ""
+        }
+
+        return items
+      })
+
+    // Helper to resolve blank node union classes (owl:unionOf)
+    const resolveBlankNodeUnion = (blankNode: string): Effect.Effect<Array<string>, RdfError> =>
+      Effect.gen(function*() {
+        // Query for owl:unionOf on this blank node
+        const unionQuads = yield* rdf.queryStore(store, {
+          subject: blankNode as IRI,
+          predicate: OWL.unionOf
+        })
+
+        const members: Array<string> = []
+        for (const q of Chunk.toReadonlyArray(unionQuads)) {
+          const listNode = q.object instanceof Literal ? q.object.value : (q.object as string)
+          const listItems = yield* resolveRdfList(listNode)
+          members.push(...listItems)
+        }
+
+        return members
+      })
+
+    // Fetch domain/range with blank node union resolution
+    const fetchDomainRangeMap = (predicate: IRI) =>
+      Effect.gen(function*() {
+        const quads = yield* rdf.queryStore(store, { predicate })
+        const map = new Map<string, Array<string>>()
+
+        for (const quad of Chunk.toReadonlyArray(quads)) {
+          if (typeof quad.subject === "string" && !quad.subject.startsWith("_:")) {
+            const subject = quad.subject
+            const value = quad.object instanceof Literal ? quad.object.value : (quad.object as string)
+
+            if (!map.has(subject)) {
+              map.set(subject, [])
+            }
+
+            // If the object is a blank node, resolve it as a union
+            if (typeof value === "string" && value.startsWith("_:")) {
+              const unionMembers = yield* resolveBlankNodeUnion(value).pipe(
+                Effect.catchAll(() => Effect.succeed([] as Array<string>))
+              )
+              map.get(subject)!.push(...unionMembers)
+            } else {
+              map.get(subject)!.push(value)
+            }
+          }
+        }
+        return map
+      })
+
+    const fetchDomainRangeMapSafe = (predicate: IRI) =>
+      fetchDomainRangeMap(predicate).pipe(
+        Effect.catchAll((error) =>
+          Effect.gen(function*() {
+            yield* Effect.logWarning("Failed to fetch domain/range metadata, using empty map", {
+              predicate,
+              error: String(error)
+            })
+            return new Map<string, Array<string>>()
+          })
+        )
+      )
+
     // Fetch all metadata in parallel batches with failure isolation
     const [
       labels,
@@ -201,8 +299,8 @@ export const parseOntologyFromStore = (
     ] = yield* Effect.all([
       fetchPredicateMapSafe(RDFS_LABEL),
       fetchPredicateMapSafe(RDFS_COMMENT),
-      fetchPredicateMapSafe(RDFS_DOMAIN),
-      fetchPredicateMapSafe(RDFS_RANGE),
+      fetchDomainRangeMapSafe(RDFS_DOMAIN), // Uses blank node union resolution
+      fetchDomainRangeMapSafe(RDFS_RANGE), // Uses blank node union resolution
       fetchPredicateMapSafe(RDFS_SUBCLASSOF),
       fetchPredicateMapSafe(RDFS_SUBPROPERTYOF),
       fetchPredicateMapSafe(SKOS_PREFLABEL),

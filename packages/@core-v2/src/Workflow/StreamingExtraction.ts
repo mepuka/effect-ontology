@@ -61,13 +61,17 @@ const isSystemicError = (error: unknown): boolean => {
 const getChunkId = (runId: string, index: number) => `${runId}_chunk_${index}`
 
 export const makeExtractionWorkflow = Effect.gen(function*() {
-  const nlp = yield* NlpService
-  const ontology = yield* OntologyService
-  const mentionExtractor = yield* MentionExtractor
-  const entityExtractor = yield* EntityExtractor
-  const relationExtractor = yield* RelationExtractor
-  const grounder = yield* Grounder
-  const runService = yield* ExtractionRunService
+  const [nlp, ontology, mentionExtractor, entityExtractor, relationExtractor, grounder, runService] = yield* Effect.all(
+    [
+      NlpService,
+      OntologyService,
+      MentionExtractor,
+      EntityExtractor,
+      RelationExtractor,
+      Grounder,
+      ExtractionRunService
+    ]
+  )
 
   return {
     /**
@@ -104,6 +108,9 @@ export const makeExtractionWorkflow = Effect.gen(function*() {
           concurrency: effectiveConcurrency,
           runId: run.id
         })
+
+        // Get class hierarchy checker for OWL subclass reasoning in domain/range validation
+        const isSubClassOf = yield* ontology.getClassHierarchyChecker()
 
         // Phase 1: Chunk text
         const chunks = yield* nlp.chunkText(text, {
@@ -396,7 +403,7 @@ export const makeExtractionWorkflow = Effect.gen(function*() {
                     })
                   }
 
-                  const relations = yield* relationExtractor.extract(chunk.text, entitiesChunk, propertyArray).pipe(
+                  const relations = yield* relationExtractor.extract(chunk.text, entitiesChunk, propertyArray, isSubClassOf).pipe(
                     Effect.annotateLogs({ chunkIndex: chunk.index }),
                     Effect.withLogSpan(`chunk-${chunk.index}-relation-extraction`),
                     Effect.mapError(
