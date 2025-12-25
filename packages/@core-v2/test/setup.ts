@@ -22,3 +22,12 @@ export {
   MockEmbeddingProvider768,
   type MockEmbeddingProviderOptions
 } from "./fixtures/MockEmbeddingProvider.js"
+
+// Re-export PostgreSQL test layers
+export {
+  DrizzleAndSqlTestLayer,
+  DrizzleTestLayer,
+  makePostgresTestLayer,
+  PgClientTestLayer,
+  PostgresTestConfig
+} from "./fixtures/PostgresTestLayer.js"

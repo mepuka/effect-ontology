@@ -583,3 +583,71 @@ export const llmExamples = pgTable("llm_examples", {
 
 export type LlmExampleRow = typeof llmExamples.$inferSelect
 export type LlmExampleInsertRow = typeof llmExamples.$inferInsert
+
+// =============================================================================
+// Embeddings Table (Persistent Vector Storage)
+// =============================================================================
+
+/**
+ * Entity type enum for embeddings
+ *
+ * @since 2.0.0
+ */
+export const embeddingEntityTypeEnum = pgEnum("embedding_entity_type", [
+  "class",
+  "entity",
+  "claim",
+  "example"
+])
+
+/**
+ * Embeddings Table
+ *
+ * Persistent storage for embedding vectors supporting hybrid search.
+ * Stores embeddings for ontology classes, extracted entities, claims,
+ * and few-shot examples.
+ *
+ * Features:
+ * - IVFFlat index for fast ANN search
+ * - tsvector for BM25-like full-text search
+ * - RRF fusion via hybrid_search() function
+ *
+ * @since 2.0.0
+ */
+export const embeddings = pgTable("embeddings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+
+  // What this embedding represents
+  entityType: text("entity_type").notNull(), // class | entity | claim | example
+  entityId: text("entity_id").notNull(),
+
+  // Ontology scoping
+  ontologyId: text("ontology_id").notNull().default("default"),
+
+  // The embedding vector (768-dim for Nomic)
+  embedding: vector768("embedding").notNull(),
+
+  // Text content for hybrid search
+  contentText: text("content_text"),
+  // Note: content_tsv is GENERATED ALWAYS in SQL, not exposed to Drizzle
+
+  // Model provenance
+  model: text("model").notNull().default("nomic-embed-text-v1.5"),
+
+  // Temporal tracking
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow()
+}, (table) => [
+  // Unique per (ontology, type, id) - enables upsert
+  uniqueIndex("idx_embeddings_ontology_entity_unique").on(
+    table.ontologyId,
+    table.entityType,
+    table.entityId
+  ),
+  index("idx_embeddings_entity_type_idx").on(table.entityType),
+  index("idx_embeddings_ontology_type_idx").on(table.ontologyId, table.entityType)
+  // Note: IVFFlat and GIN indexes are created in migration SQL
+])
+
+export type EmbeddingRow = typeof embeddings.$inferSelect
+export type EmbeddingInsertRow = typeof embeddings.$inferInsert

@@ -13,10 +13,19 @@ import { PgClient } from "@effect/sql-pg"
 import { Config, Layer, Redacted } from "effect"
 import { ArticleRepository } from "./Article.js"
 import { ClaimRepository } from "./Claim.js"
+import { EmbeddingRepository } from "./Embedding.js"
 import { EntityRegistryRepository } from "./EntityRegistry.js"
 
 export { type ArticleFilter, ArticleRepository } from "./Article.js"
 export { type ClaimFilter, ClaimRepository, type ConflictCandidate } from "./Claim.js"
+export {
+  type EmbeddingEntityType,
+  EmbeddingRepository,
+  type HybridSearchOptions,
+  type HybridSearchResult,
+  type SimilarityResult,
+  type SimilaritySearchOptions
+} from "./Embedding.js"
 export { type BlockingCandidate, EntityRegistryRepository } from "./EntityRegistry.js"
 export * from "./schema.js"
 export * from "./types.js"
@@ -83,12 +92,23 @@ export const EntityRegistryRepositoryLive = EntityRegistryRepository.Default.pip
 )
 
 /**
+ * EmbeddingRepository with Drizzle
+ *
+ * Provides persistent vector storage with hybrid search.
+ * Requires pgvector extension to be enabled in PostgreSQL.
+ */
+export const EmbeddingRepositoryLive = EmbeddingRepository.Default.pipe(
+  Layer.provide(DrizzleLive)
+)
+
+/**
  * All repositories with Drizzle and Postgres
  */
 export const RepositoriesLive = Layer.mergeAll(
   ClaimRepositoryLive,
   ArticleRepositoryLive,
-  EntityRegistryRepositoryLive
+  EntityRegistryRepositoryLive,
+  EmbeddingRepositoryLive
 ).pipe(
   Layer.provide(PgClientLive)
 )
@@ -106,7 +126,8 @@ export const makeTestRepositoriesLayer = (config: {
   Layer.mergeAll(
     ClaimRepository.Default,
     ArticleRepository.Default,
-    EntityRegistryRepository.Default
+    EntityRegistryRepository.Default,
+    EmbeddingRepository.Default
   ).pipe(
     Layer.provide(DrizzleLive),
     Layer.provide(

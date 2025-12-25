@@ -19,14 +19,55 @@ import {
   OntologyEmbeddingsJson
 } from "../Domain/Model/OntologyEmbeddings.js"
 import { PathLayout } from "../Domain/PathLayout.js"
+import { type EmbeddingEntityType, EmbeddingRepository } from "../Repository/Embedding.js"
 import { extractLocalNameFromIri } from "../Utils/Iri.js"
 import { rrfFusion } from "../Utils/Retrieval.js"
 import { ConfigService, ConfigServiceDefault } from "./Config.js"
 import { EmbeddingService, EmbeddingServiceDefault } from "./Embedding.js"
+import type { OntologySearchResult } from "./Nlp.js"
 import { NlpService } from "./Nlp.js"
 import { parseOntologyFromStore } from "./Ontology.js"
 import { RdfBuilder } from "./Rdf.js"
 import { StorageService } from "./Storage.js"
+
+// =============================================================================
+// Helpers
+// =============================================================================
+
+/**
+ * Resolve classes from search results
+ *
+ * Maps search results (which may include classes or properties) to ClassDefinitions.
+ * For properties, resolves the domain classes.
+ *
+ * @param results - Search results from BM25 or semantic index
+ * @param classes - All classes in the ontology context
+ * @returns Map of class IDs to ClassDefinitions (deduplicated)
+ */
+const resolveClassesFromSearchResults = (
+  results: ReadonlyArray<OntologySearchResult>,
+  classes: ReadonlyArray<ClassDefinition>
+): Map<string, ClassDefinition> => {
+  const classesMap = new Map<string, ClassDefinition>()
+
+  for (const result of results) {
+    if (result.class) {
+      classesMap.set(result.class.id, result.class)
+    }
+    if (result.property) {
+      for (const domainLocalName of result.property.domain) {
+        const domainClass = classes.find(
+          (c) => extractLocalNameFromIri(c.id) === domainLocalName
+        )
+        if (domainClass) {
+          classesMap.set(domainClass.id, domainClass)
+        }
+      }
+    }
+  }
+
+  return classesMap
+}
 
 const makeOntologyLoader = Effect.gen(function*() {
   const config = yield* ConfigService
@@ -124,26 +165,7 @@ const makeOntologyLoader = Effect.gen(function*() {
         const { context } = yield* getOntology
         const index = yield* getBm25Index
         const results = yield* nlp.searchOntologyIndex(index, query, limit)
-
-        // Map to Classes, handling Property -> Domain resolution
-        const validClasses = new Map<string, ClassDefinition>()
-
-        for (const result of results) {
-          if (result.class) {
-            validClasses.set(result.class.id, result.class)
-          }
-          if (result.property) {
-            for (const domainLocalName of result.property.domain) {
-              const domainClass = context.classes.find(
-                (c) => extractLocalNameFromIri(c.id) === domainLocalName
-              )
-              if (domainClass) {
-                validClasses.set(domainClass.id, domainClass)
-              }
-            }
-          }
-        }
-
+        const validClasses = resolveClassesFromSearchResults(results, context.classes)
         return Chunk.fromIterable(validClasses.values())
       }),
 
@@ -182,27 +204,8 @@ const makeOntologyLoader = Effect.gen(function*() {
       Effect.gen(function*() {
         const { context } = yield* getOntology
         const index = yield* getSemanticIndex
-        const results = yield* nlp.searchOntologySemanticIndex(
-          index,
-          query,
-          limit
-        )
-        const validClasses = new Map<string, ClassDefinition>()
-        for (const result of results) {
-          if (result.class) {
-            validClasses.set(result.class.id, result.class)
-          }
-          if (result.property) {
-            for (const domainLocalName of result.property.domain) {
-              const domainClass = context.classes.find(
-                (c) => extractLocalNameFromIri(c.id) === domainLocalName
-              )
-              if (domainClass) {
-                validClasses.set(domainClass.id, domainClass)
-              }
-            }
-          }
-        }
+        const results = yield* nlp.searchOntologySemanticIndex(index, query, limit)
+        const validClasses = resolveClassesFromSearchResults(results, context.classes)
         return Chunk.fromIterable(validClasses.values())
       }),
 
@@ -357,54 +360,18 @@ const makeOntologyLoader = Effect.gen(function*() {
     searchClassesHybrid: (query: string, limit: number = 100) =>
       Effect.gen(function*() {
         const { context } = yield* getOntology
-
         const searchLimit = Math.ceil(limit * 0.7)
+
         const [semanticResults, bm25Results] = yield* Effect.all([
           Effect.gen(function*() {
             const semanticIndex = yield* getSemanticIndex
-            const results = yield* nlp.searchOntologySemanticIndex(
-              semanticIndex,
-              query,
-              searchLimit
-            )
-            const classesMap = new Map<string, ClassDefinition>()
-            for (const result of results) {
-              if (result.class) {
-                classesMap.set(result.class.id, result.class)
-              }
-              if (result.property) {
-                for (const domainLocalName of result.property.domain) {
-                  const domainClass = context.classes.find(
-                    (c) => extractLocalNameFromIri(c.id) === domainLocalName
-                  )
-                  if (domainClass) {
-                    classesMap.set(domainClass.id, domainClass)
-                  }
-                }
-              }
-            }
-            return Chunk.fromIterable(classesMap.values())
+            const results = yield* nlp.searchOntologySemanticIndex(semanticIndex, query, searchLimit)
+            return Chunk.fromIterable(resolveClassesFromSearchResults(results, context.classes).values())
           }).pipe(Effect.catchAll(() => Effect.succeed(Chunk.empty<ClassDefinition>()))),
           Effect.gen(function*() {
             const bm25Index = yield* getBm25Index
             const results = yield* nlp.searchOntologyIndex(bm25Index, query, searchLimit)
-            const classesMap = new Map<string, ClassDefinition>()
-            for (const result of results) {
-              if (result.class) {
-                classesMap.set(result.class.id, result.class)
-              }
-              if (result.property) {
-                for (const domainLocalName of result.property.domain) {
-                  const domainClass = context.classes.find(
-                    (c) => extractLocalNameFromIri(c.id) === domainLocalName
-                  )
-                  if (domainClass) {
-                    classesMap.set(domainClass.id, domainClass)
-                  }
-                }
-              }
-            }
-            return Chunk.fromIterable(classesMap.values())
+            return Chunk.fromIterable(resolveClassesFromSearchResults(results, context.classes).values())
           })
         ], { concurrency: 2 })
 
@@ -513,6 +480,333 @@ const makeOntologyLoader = Effect.gen(function*() {
         }
 
         return Chunk.fromIterable(results)
+      }),
+
+    // =========================================================================
+    // PostgreSQL-Backed Hybrid Search (Phase 4)
+    // =========================================================================
+
+    /**
+     * Persist ontology embeddings to PostgreSQL
+     *
+     * Computes embeddings for all classes and properties in the ontology
+     * and persists them to the PostgreSQL embeddings table for fast retrieval.
+     *
+     * @param ontologyId - Unique identifier for this ontology (e.g., "seattle")
+     * @param ontologyContext - The parsed ontology context
+     * @returns Number of embeddings persisted
+     *
+     * @example
+     * ```typescript
+     * const { context } = yield* loader.loadOntology()
+     * const count = yield* loader.persistOntologyEmbeddings("seattle", context)
+     * ```
+     *
+     * @since 2.0.0
+     */
+    persistOntologyEmbeddings: (
+      ontologyId: string,
+      ontologyContext: OntologyContext
+    ) =>
+      Effect.gen(function*() {
+        const embeddingRepo = yield* EmbeddingRepository
+
+        // Get documents from ontology (returns [IRI, document] tuples)
+        const documents = ontologyContext.toDocuments()
+        let persisted = 0
+
+        yield* Effect.logInfo("Persisting ontology embeddings to PostgreSQL", {
+          ontologyId,
+          documentCount: documents.length
+        })
+
+        // Process in batches of 20 for efficiency
+        const batchSize = 20
+        for (let i = 0; i < documents.length; i += batchSize) {
+          const batch = documents.slice(i, i + batchSize)
+
+          // Compute embeddings for batch
+          const texts = batch.map(([_, doc]) => doc)
+          const embeddings = yield* embedding.embedBatch(texts, "search_document")
+
+          // Persist each embedding
+          yield* Effect.forEach(
+            batch.map(([iri, doc], idx) => ({
+              iri,
+              doc,
+              embedding: embeddings[idx]
+            })),
+            ({ doc, embedding: emb, iri }) => {
+              // Determine entity type from IRI pattern or ontology lookup
+              const isClass = ontologyContext.classes.some((c) => c.id === iri)
+              const entityType: EmbeddingEntityType = isClass ? "class" : "entity"
+
+              return embeddingRepo.upsert(
+                ontologyId,
+                entityType,
+                iri,
+                emb,
+                doc, // Store text for hybrid search
+                "nomic-embed-text-v1.5"
+              )
+            },
+            { concurrency: 5 }
+          )
+
+          persisted += batch.length
+        }
+
+        yield* Effect.logInfo("Ontology embeddings persisted", {
+          ontologyId,
+          persisted
+        })
+
+        return persisted
+      }),
+
+    /**
+     * Persist pre-computed ontology embeddings to PostgreSQL
+     *
+     * Takes already-computed embeddings (from file) and persists them to PostgreSQL.
+     * Useful when embeddings are pre-computed offline.
+     *
+     * @param ontologyId - Unique identifier for this ontology
+     * @param ontologyContext - The parsed ontology context
+     * @param ontologyEmbeddings - Pre-computed embeddings
+     * @returns Number of embeddings persisted
+     *
+     * @since 2.0.0
+     */
+    persistPrecomputedEmbeddings: (
+      ontologyId: string,
+      ontologyContext: OntologyContext,
+      ontologyEmbeddings: OntologyEmbeddings
+    ) =>
+      Effect.gen(function*() {
+        const embeddingRepo = yield* EmbeddingRepository
+
+        yield* Effect.logInfo("Persisting pre-computed embeddings to PostgreSQL", {
+          ontologyId,
+          classCount: ontologyEmbeddings.classes.length,
+          propertyCount: ontologyEmbeddings.properties.length
+        })
+
+        // Persist class embeddings
+        const classItems = ontologyEmbeddings.classes.map((classEmb) => {
+          const classDef = ontologyContext.classes.find((c) => c.id === classEmb.iri)
+          const contentText = classDef
+            ? `${classDef.label ?? ""} ${classDef.comment ?? ""} ${classDef.id}`
+            : classEmb.iri
+
+          return {
+            ontologyId,
+            entityType: "class" as EmbeddingEntityType,
+            entityId: classEmb.iri,
+            embedding: classEmb.embedding,
+            contentText,
+            model: ontologyEmbeddings.model
+          }
+        })
+
+        // Persist property embeddings
+        const propertyItems = ontologyEmbeddings.properties.map((propEmb) => {
+          const propDef = ontologyContext.properties.find((p) => p.id === propEmb.iri)
+          const contentText = propDef
+            ? `${propDef.label ?? ""} ${propDef.comment ?? ""} ${propDef.id}`
+            : propEmb.iri
+
+          return {
+            ontologyId,
+            entityType: "entity" as EmbeddingEntityType, // Use 'entity' for properties
+            entityId: propEmb.iri,
+            embedding: propEmb.embedding,
+            contentText,
+            model: ontologyEmbeddings.model
+          }
+        })
+
+        const allItems = [...classItems, ...propertyItems]
+        const persisted = yield* embeddingRepo.upsertBatch(allItems)
+
+        yield* Effect.logInfo("Pre-computed embeddings persisted", {
+          ontologyId,
+          persisted
+        })
+
+        return persisted
+      }),
+
+    /**
+     * Search for classes using PostgreSQL hybrid search
+     *
+     * Uses PostgreSQL's pgvector for semantic similarity and tsvector for
+     * full-text search, combined with Reciprocal Rank Fusion (RRF).
+     *
+     * Falls back to in-memory search if PostgreSQL is not available.
+     *
+     * @param ontologyId - Ontology identifier in PostgreSQL
+     * @param query - Search query string
+     * @param limit - Maximum number of results (default: 100)
+     * @returns Chunk of ClassDefinition objects ranked by relevance
+     *
+     * @example
+     * ```typescript
+     * // First persist embeddings (once)
+     * yield* loader.persistOntologyEmbeddings("seattle", context)
+     *
+     * // Then search using PostgreSQL
+     * const results = yield* loader.searchClassesHybridPg("seattle", "city council", 10)
+     * ```
+     *
+     * @since 2.0.0
+     */
+    searchClassesHybridPg: (
+      ontologyId: string,
+      query: string,
+      limit: number = 100
+    ) =>
+      Effect.gen(function*() {
+        const { context } = yield* getOntology
+        const embeddingRepo = yield* EmbeddingRepository
+
+        // Check if we have embeddings in PostgreSQL
+        const hasEmbeddings = yield* embeddingRepo.hasEmbeddings(ontologyId, "class")
+
+        if (!hasEmbeddings) {
+          yield* Effect.logWarning(
+            "No PostgreSQL embeddings found, falling back to in-memory search",
+            { ontologyId }
+          )
+          // Fall back to in-memory hybrid search
+          const searchLimit = Math.ceil(limit * 0.7)
+          const [semanticResults, bm25Results] = yield* Effect.all([
+            Effect.gen(function*() {
+              const semanticIndex = yield* getSemanticIndex
+              const results = yield* nlp.searchOntologySemanticIndex(semanticIndex, query, searchLimit)
+              return Chunk.fromIterable(resolveClassesFromSearchResults(results, context.classes).values())
+            }).pipe(Effect.catchAll(() => Effect.succeed(Chunk.empty<ClassDefinition>()))),
+            Effect.gen(function*() {
+              const bm25Index = yield* getBm25Index
+              const results = yield* nlp.searchOntologyIndex(bm25Index, query, searchLimit)
+              return Chunk.fromIterable(resolveClassesFromSearchResults(results, context.classes).values())
+            })
+          ], { concurrency: 2 })
+
+          const merged = new Map<string, ClassDefinition>()
+          for (const cls of semanticResults) merged.set(cls.id, cls)
+          for (const cls of bm25Results) {
+            if (!merged.has(cls.id)) merged.set(cls.id, cls)
+          }
+
+          return Chunk.fromIterable(Array.from(merged.values()).slice(0, limit))
+        }
+
+        // Use PostgreSQL hybrid search
+        const queryEmbedding = yield* embedding.embed(query, "search_query")
+
+        const hybridResults = yield* embeddingRepo.hybridSearch(
+          ontologyId,
+          "class",
+          queryEmbedding,
+          query,
+          { limit, vectorWeight: 0.6, textWeight: 0.4 }
+        )
+
+        // Map results back to ClassDefinitions
+        const results: Array<ClassDefinition> = []
+        for (const result of hybridResults) {
+          const classDef = context.classes.find((c) => c.id === result.entityId)
+          if (classDef) {
+            results.push(classDef)
+          }
+        }
+
+        // Fallback: if we don't have enough, add remaining classes
+        if (results.length < limit && context.classes.length <= limit) {
+          const existingIds = new Set(results.map((c) => c.id))
+          for (const cls of context.classes) {
+            if (!existingIds.has(cls.id)) {
+              results.push(cls)
+              if (results.length >= limit) break
+            }
+          }
+        }
+
+        return Chunk.fromIterable(results)
+      }),
+
+    /**
+     * Load ontology and persist embeddings to PostgreSQL
+     *
+     * Combines ontology loading with embedding persistence in one operation.
+     * Useful for initialization when PostgreSQL storage is desired.
+     *
+     * @param ontologyId - Unique identifier for the ontology
+     * @returns OntologyContext and number of persisted embeddings
+     *
+     * @since 2.0.0
+     */
+    loadAndPersistEmbeddings: (ontologyId: string) =>
+      Effect.gen(function*() {
+        const { context, ref } = yield* getOntology
+        const embeddingRepo = yield* EmbeddingRepository
+
+        // Check if embeddings already exist
+        const hasExisting = yield* embeddingRepo.hasEmbeddings(ontologyId, "class")
+
+        if (hasExisting) {
+          yield* Effect.logDebug("Ontology embeddings already in PostgreSQL", { ontologyId })
+          return { context, ref, embeddingsCount: 0, alreadyPersisted: true }
+        }
+
+        // Compute and persist embeddings
+        const documents = context.toDocuments()
+        let persisted = 0
+
+        yield* Effect.logInfo("Computing and persisting ontology embeddings", {
+          ontologyId,
+          documentCount: documents.length
+        })
+
+        const batchSize = 20
+        for (let i = 0; i < documents.length; i += batchSize) {
+          const batch = documents.slice(i, i + batchSize)
+          const texts = batch.map(([_, doc]) => doc)
+          const embeddings = yield* embedding.embedBatch(texts, "search_document")
+
+          yield* Effect.forEach(
+            batch.map(([iri, doc], idx) => ({
+              iri,
+              doc,
+              embedding: embeddings[idx]
+            })),
+            ({ doc, embedding: emb, iri }) => {
+              const isClass = context.classes.some((c) => c.id === iri)
+              const entityType: EmbeddingEntityType = isClass ? "class" : "entity"
+
+              return embeddingRepo.upsert(
+                ontologyId,
+                entityType,
+                iri,
+                emb,
+                doc,
+                "nomic-embed-text-v1.5"
+              )
+            },
+            { concurrency: 5 }
+          )
+
+          persisted += batch.length
+        }
+
+        yield* Effect.logInfo("Ontology loaded and embeddings persisted", {
+          ontologyId,
+          classCount: context.classes.length,
+          propertyCount: context.properties.length,
+          embeddingsCount: persisted
+        })
+
+        return { context, ref, embeddingsCount: persisted, alreadyPersisted: false }
       })
   }
 })
