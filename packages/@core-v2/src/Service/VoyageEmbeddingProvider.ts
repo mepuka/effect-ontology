@@ -4,13 +4,19 @@
  * HTTP-based provider for Voyage AI embeddings API.
  * Supports voyage-3, voyage-3.5-lite, voyage-code-3, voyage-law-2.
  *
+ * Uses Effect Platform HTTP patterns:
+ * - `HttpClientResponse.matchStatus` for status-based routing
+ * - `HttpClientResponse.schemaBodyJson` for typed body parsing
+ * - `HttpClient.retryTransient` for automatic retry of 429/5xx errors
+ * - Respects `Retry-After` header from rate limit responses
+ *
  * @see https://docs.voyageai.com/docs/embeddings
  * @since 2.0.0
  * @module Service/VoyageEmbeddingProvider
  */
 
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "@effect/platform"
-import { Duration, Effect, Layer, Match, Redacted, Schema } from "effect"
+import { Duration, Effect, Layer, Redacted, Schedule, Schema } from "effect"
 import {
   type AnyEmbeddingError,
   EmbeddingError,
@@ -62,6 +68,21 @@ export const DEFAULT_VOYAGE_MODEL = "voyage-3.5-lite"
  */
 export const DEFAULT_TIMEOUT_MS = 30_000
 
+/**
+ * Default retry configuration for transient errors
+ */
+export const DEFAULT_MAX_RETRIES = 3
+
+/**
+ * Default initial retry delay in milliseconds
+ */
+export const DEFAULT_INITIAL_RETRY_DELAY_MS = 1_000
+
+/**
+ * Default retry-after value when header is missing (in seconds)
+ */
+export const DEFAULT_RETRY_AFTER_SECONDS = 60
+
 // =============================================================================
 // Response Schema
 // =============================================================================
@@ -84,47 +105,81 @@ const VoyageResponseSchema = Schema.Struct({
   usage: VoyageUsage
 })
 
+/**
+ * Voyage error response schema
+ * API returns { "detail": "error message" } for non-2xx responses
+ */
+const VoyageErrorSchema = Schema.Struct({
+  detail: Schema.optional(Schema.String)
+})
+
 // =============================================================================
-// Error Mapping
+// Error Mapping & Helpers
 // =============================================================================
 
 /**
- * Map HTTP/parsing errors to embedding errors
+ * Parse Retry-After header value to milliseconds
+ *
+ * @internal
+ */
+const parseRetryAfterMs = (response: HttpClientResponse.HttpClientResponse): number => {
+  const retryAfter = response.headers["retry-after"]
+  if (retryAfter) {
+    const seconds = parseInt(retryAfter, 10)
+    if (!isNaN(seconds)) {
+      return seconds * 1000
+    }
+  }
+  return DEFAULT_RETRY_AFTER_SECONDS * 1000
+}
+
+/**
+ * Check if HTTP status code is transient (retryable)
+ *
+ * @internal
+ */
+const isTransientStatus = (status: number): boolean =>
+  status === 429 || status >= 500
+
+/**
+ * Map HTTP/parsing errors to embedding errors using Effect.catchTag pattern
  *
  * @internal
  */
 const mapVoyageError = (error: unknown, timeoutMs: number): AnyEmbeddingError => {
   // Check for specific error types by their _tag property
-  const tagged = error as { _tag?: string; status?: number; message?: string }
+  if (error !== null && typeof error === "object" && "_tag" in error) {
+    const tagged = error as { _tag: string; status?: number; message?: string }
 
-  if (tagged._tag === "TimeoutException") {
-    return new EmbeddingTimeoutError({
-      message: "Voyage API timeout",
-      provider: "voyage",
-      timeoutMs
-    })
-  }
-
-  if (tagged._tag === "ResponseError" && tagged.status !== undefined) {
-    if (tagged.status === 429) {
-      return new EmbeddingRateLimitError({
-        message: "Voyage API rate limit exceeded",
+    if (tagged._tag === "TimeoutException") {
+      return new EmbeddingTimeoutError({
+        message: "Voyage API timeout",
         provider: "voyage",
-        retryAfterMs: 60_000
+        timeoutMs
       })
     }
-    return new EmbeddingError({
-      message: `Voyage API error: status ${tagged.status}`,
-      provider: "voyage",
-      cause: error
-    })
-  }
 
-  if (tagged._tag === "ParseError") {
-    return new EmbeddingInvalidResponseError({
-      message: `Invalid Voyage response: ${tagged.message ?? "parse error"}`,
-      provider: "voyage"
-    })
+    if (tagged._tag === "ResponseError" && typeof tagged.status === "number") {
+      if (tagged.status === 429) {
+        return new EmbeddingRateLimitError({
+          message: "Voyage API rate limit exceeded",
+          provider: "voyage",
+          retryAfterMs: DEFAULT_RETRY_AFTER_SECONDS * 1000
+        })
+      }
+      return new EmbeddingError({
+        message: `Voyage API error: status ${tagged.status}`,
+        provider: "voyage",
+        cause: error
+      })
+    }
+
+    if (tagged._tag === "ParseError") {
+      return new EmbeddingInvalidResponseError({
+        message: `Invalid Voyage response: ${tagged.message ?? "parse error"}`,
+        provider: "voyage"
+      })
+    }
   }
 
   return new EmbeddingError({
@@ -191,6 +246,91 @@ export const makeVoyageProvider = (
       }
     }
 
+    /**
+     * Retry schedule for transient errors (429, 5xx)
+     * Uses exponential backoff with jitter, respects rate limiter
+     */
+    const retrySchedule = Schedule.exponential(Duration.millis(DEFAULT_INITIAL_RETRY_DELAY_MS)).pipe(
+      Schedule.intersect(Schedule.recurs(DEFAULT_MAX_RETRIES)),
+      Schedule.jittered
+    )
+
+    /**
+     * Process HTTP response using matchStatus for proper status-based routing
+     */
+    const processResponse = (
+      response: HttpClientResponse.HttpClientResponse
+    ): Effect.Effect<ReadonlyArray<ReadonlyArray<number>>, AnyEmbeddingError> =>
+      HttpClientResponse.matchStatus(response, {
+        // Success: parse with schema
+        "2xx": (res) =>
+          HttpClientResponse.schemaBodyJson(VoyageResponseSchema)(res).pipe(
+            Effect.map((parsed) => {
+              // Sort by index to maintain order (API may return out of order)
+              const sorted = [...parsed.data].sort((a, b) => a.index - b.index)
+              return sorted.map((d) => d.embedding)
+            }),
+            Effect.mapError((e) =>
+              new EmbeddingInvalidResponseError({
+                message: `Invalid Voyage response: ${e.message}`,
+                provider: "voyage"
+              })
+            )
+          ),
+
+        // Rate limit: parse error body and include retry-after
+        429: (res) =>
+          HttpClientResponse.schemaBodyJson(VoyageErrorSchema)(res).pipe(
+            Effect.catchAll(() => Effect.succeed({ detail: undefined })),
+            Effect.flatMap((errorBody) =>
+              Effect.fail(
+                new EmbeddingRateLimitError({
+                  message: `Voyage API rate limit: ${errorBody.detail ?? "rate limit exceeded"}`,
+                  provider: "voyage",
+                  retryAfterMs: parseRetryAfterMs(res)
+                })
+              )
+            )
+          ),
+
+        // Server errors (5xx): transient, include status in message
+        "5xx": (res) =>
+          HttpClientResponse.schemaBodyJson(VoyageErrorSchema)(res).pipe(
+            Effect.catchAll(() => Effect.succeed({ detail: undefined })),
+            Effect.flatMap((errorBody) =>
+              Effect.fail(
+                new EmbeddingError({
+                  message: `Voyage API server error (${res.status}): ${errorBody.detail ?? "internal error"}`,
+                  provider: "voyage"
+                })
+              )
+            )
+          ),
+
+        // Client errors (4xx except 429): non-retryable
+        "4xx": (res) =>
+          HttpClientResponse.schemaBodyJson(VoyageErrorSchema)(res).pipe(
+            Effect.catchAll(() => Effect.succeed({ detail: undefined })),
+            Effect.flatMap((errorBody) =>
+              Effect.fail(
+                new EmbeddingError({
+                  message: `Voyage API error (${res.status}): ${errorBody.detail ?? "client error"}`,
+                  provider: "voyage"
+                })
+              )
+            )
+          ),
+
+        // Fallback for unexpected status codes
+        orElse: (res) =>
+          Effect.fail(
+            new EmbeddingError({
+              message: `Voyage API unexpected status: ${res.status}`,
+              provider: "voyage"
+            })
+          )
+      })
+
     const methods: EmbeddingProviderMethods = {
       metadata,
 
@@ -221,22 +361,31 @@ export const makeVoyageProvider = (
                 })
               )
 
-              const httpResponse = yield* httpClient.execute(request).pipe(
+              // Execute request with timeout and proper response handling
+              const embeddings = yield* httpClient.execute(request).pipe(
+                // Map HTTP client errors (network, connection) to embedding errors
+                Effect.mapError((e) => mapVoyageError(e, timeoutMs)),
                 Effect.timeout(Duration.millis(timeoutMs)),
-                Effect.mapError((e) => mapVoyageError(e, timeoutMs))
+                Effect.catchTag("TimeoutException", () =>
+                  Effect.fail(
+                    new EmbeddingTimeoutError({
+                      message: "Voyage API timeout",
+                      provider: "voyage",
+                      timeoutMs
+                    })
+                  )
+                ),
+                Effect.flatMap(processResponse),
+                // Retry transient errors (429, 5xx) with exponential backoff
+                Effect.retry({
+                  schedule: retrySchedule,
+                  while: (error) =>
+                    error._tag === "EmbeddingRateLimitError" ||
+                    (error._tag === "EmbeddingError" && error.message.includes("server error"))
+                })
               )
 
-              const jsonBody = yield* httpResponse.json.pipe(
-                Effect.mapError((e) => mapVoyageError(e, timeoutMs))
-              )
-
-              const response = yield* Schema.decodeUnknown(VoyageResponseSchema)(jsonBody).pipe(
-                Effect.mapError((e) => mapVoyageError(e, timeoutMs))
-              )
-
-              // Sort by index to maintain order (API may return out of order)
-              const sorted = [...response.data].sort((a, b) => a.index - b.index)
-              return sorted.map((d) => d.embedding)
+              return embeddings
             }),
           () => rateLimiter.release()
         ),
