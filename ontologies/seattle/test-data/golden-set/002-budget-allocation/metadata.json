@@ -1,0 +1,23 @@
+{
+  "id": "002-budget-allocation",
+  "name": "City Budget Allocation",
+  "description": "Tests organization/budget/policy extraction. Exercises BudgetActionEvent pattern with multiple organizations and monetary amounts.",
+  "domain": "seattle-civic",
+  "complexity": "medium",
+  "ontologyIri": "http://effect-ontology.dev/seattle/",
+  "sourceUrl": "https://example.com/news/budget-2025",
+  "sourceType": "synthetic",
+  "articleDate": "2025-12-05",
+  "eventTypes": ["seattle:BudgetActionEvent"],
+  "expectedCounts": {
+    "entities": 6,
+    "relations": 5
+  },
+  "thresholds": {
+    "minPrecision": 0.75,
+    "minRecall": 0.70,
+    "minF1": 0.72,
+    "maxLatencyMs": 90000
+  },
+  "notes": "Tests budget amounts, organizational hierarchy, and person-post relationships. Based on mvp-test-data.ttl patterns."
+}

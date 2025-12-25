@@ -1,0 +1,58 @@
+[
+  {
+    "id": "brian_surratt",
+    "mention": "Brian Surratt",
+    "primaryType": "http://xmlns.com/foaf/0.1/Person",
+    "types": ["http://xmlns.com/foaf/0.1/Person"],
+    "keyAttributes": {
+      "http://xmlns.com/foaf/0.1/name": "Brian Surratt"
+    },
+    "notes": "Primary subject - newly appointed Deputy Mayor"
+  },
+  {
+    "id": "tim_burgess",
+    "mention": "Tim Burgess",
+    "primaryType": "http://xmlns.com/foaf/0.1/Person",
+    "types": ["http://xmlns.com/foaf/0.1/Person"],
+    "keyAttributes": {
+      "http://xmlns.com/foaf/0.1/name": "Tim Burgess"
+    },
+    "notes": "Mayor making the announcement"
+  },
+  {
+    "id": "deputy_mayor_post",
+    "mention": "Deputy Mayor",
+    "primaryType": "http://www.w3.org/ns/org#Post",
+    "types": ["http://www.w3.org/ns/org#Post"],
+    "keyAttributes": {
+      "http://www.w3.org/2000/01/rdf-schema#label": "Deputy Mayor"
+    },
+    "notes": "The position being filled"
+  },
+  {
+    "id": "mayors_office",
+    "mention": "Mayor's Office",
+    "primaryType": "http://www.w3.org/ns/org#OrganizationalUnit",
+    "types": [
+      "http://www.w3.org/ns/org#OrganizationalUnit",
+      "http://effect-ontology.dev/seattle/GovernmentOffice"
+    ],
+    "keyAttributes": {
+      "http://www.w3.org/2000/01/rdf-schema#label": "Mayor's Office"
+    },
+    "notes": "Department where the post exists"
+  },
+  {
+    "id": "city_of_seattle",
+    "mention": "City of Seattle",
+    "primaryType": "http://www.w3.org/ns/org#FormalOrganization",
+    "types": [
+      "http://www.w3.org/ns/org#FormalOrganization",
+      "http://effect-ontology.dev/seattle/Municipality"
+    ],
+    "keyAttributes": {
+      "http://www.w3.org/2000/01/rdf-schema#label": "City of Seattle"
+    },
+    "notes": "Parent organization"
+  }
+]

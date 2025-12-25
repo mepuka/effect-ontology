@@ -1,0 +1,23 @@
+{
+  "id": "001-deputy-mayor-appointment",
+  "name": "Deputy Mayor Appointment",
+  "description": "Tests person/post/membership extraction with temporal bounds. Exercises StaffAnnouncementEvent pattern from Seattle ontology.",
+  "domain": "seattle-civic",
+  "complexity": "simple",
+  "ontologyIri": "http://effect-ontology.dev/seattle/",
+  "sourceUrl": "https://example.com/news/deputy-mayor",
+  "sourceType": "synthetic",
+  "articleDate": "2025-01-15",
+  "eventTypes": ["seattle:StaffAnnouncementEvent"],
+  "expectedCounts": {
+    "entities": 5,
+    "relations": 4
+  },
+  "thresholds": {
+    "minPrecision": 0.80,
+    "minRecall": 0.75,
+    "minF1": 0.77,
+    "maxLatencyMs": 60000
+  },
+  "notes": "Based on mvp-test-data.ttl reference patterns. Tests org:holds, org:postIn relations."
+}
