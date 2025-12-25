@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<catalog xmlns="urn:oasis:names:tc:entity:xmlns:xml:catalog" prefer="public">
-  <uri name="http://effect-ontology.dev/core-test" uri="core-test.ttl"/>
-  <uri name="http://effect-ontology.dev/core-test#" uri="core-test.ttl"/>
-  <uri name="http://www.ontologydesignpatterns.org/ont/dul/DUL.owl" uri="../external/dul.owl"/>
-  <uri name="http://www.ontologydesignpatterns.org/ont/dul/DUL.owl#" uri="../external/dul.owl"/>
-</catalog>

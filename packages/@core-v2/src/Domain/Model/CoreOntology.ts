@@ -14,7 +14,7 @@
  */
 
 import { Data, Schema } from "effect"
-import { AttributesSchema, ConfidenceSchema, EntityIdSchema } from "./shared.js"
+import { AttributesSchema, ConfidenceSchema } from "./shared.js"
 
 // =============================================================================
 // Core Ontology Namespace Constants
@@ -37,7 +37,12 @@ export const CORE_NAMESPACE = "http://effect-ontology.dev/core#" as const
 export const CoreClasses = {
   TrackedEntity: `${CORE_NAMESPACE}TrackedEntity`,
   TrackedEvent: `${CORE_NAMESPACE}TrackedEvent`,
-  Mention: `${CORE_NAMESPACE}Mention`
+  Mention: `${CORE_NAMESPACE}Mention`,
+  // Domain subclasses (V2)
+  Person: `${CORE_NAMESPACE}Person`,
+  Organization: `${CORE_NAMESPACE}Organization`,
+  Place: `${CORE_NAMESPACE}Place`,
+  Artifact: `${CORE_NAMESPACE}Artifact`
 } as const
 
 /**
@@ -55,18 +60,23 @@ export const CoreProperties = {
   hasParticipant: `${CORE_NAMESPACE}hasParticipant`,
   isParticipantIn: `${CORE_NAMESPACE}isParticipantIn`,
 
-  // Entity resolution
-  sameEntityAs: `${CORE_NAMESPACE}sameEntityAs`,
+  // Entity resolution (V2: canonicalEntity replaces sameEntityAs)
+  canonicalEntity: `${CORE_NAMESPACE}canonicalEntity`,
+  isCanonicalFormOf: `${CORE_NAMESPACE}isCanonicalFormOf`,
   mergedFrom: `${CORE_NAMESPACE}mergedFrom`,
+  wasMergedInto: `${CORE_NAMESPACE}wasMergedInto`,
   resolutionConfidence: `${CORE_NAMESPACE}resolutionConfidence`,
 
   // Spatial
   hasLocation: `${CORE_NAMESPACE}hasLocation`,
+  isLocationOf: `${CORE_NAMESPACE}isLocationOf`,
 
   // Datatype properties
   name: `${CORE_NAMESPACE}name`,
   description: `${CORE_NAMESPACE}description`,
   occurrenceTime: `${CORE_NAMESPACE}occurrenceTime`,
+  startTime: `${CORE_NAMESPACE}startTime`,
+  endTime: `${CORE_NAMESPACE}endTime`,
   groundingConfidence: `${CORE_NAMESPACE}groundingConfidence`
 } as const
 

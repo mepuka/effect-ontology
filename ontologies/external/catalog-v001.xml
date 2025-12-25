@@ -2,55 +2,16 @@
 <!--
   OWL Import Catalog for Effect Ontology
 
-  This catalog provides local resolution for external ontology imports.
-  Tools that support XML Catalogs (Protégé, OWL API, etc.) will use
-  these mappings to load bundled versions instead of fetching from the web.
+  This catalog provides local resolution for DUL (DOLCE+DnS Ultralite).
+  Used by Protégé and OWL API to resolve owl:imports locally.
 
-  Usage: Configure your ontology tool to use this catalog for import resolution.
-
-  Last updated: 2025-12-18
+  Last updated: 2025-12-25
 -->
 <catalog xmlns="urn:oasis:names:tc:entity:xmlns:xml:catalog"
          prefer="public">
 
-  <!-- W3C Provenance Ontology (PROV-O) -->
-  <!-- Version: W3C Recommendation 30 April 2013 -->
-  <uri name="http://www.w3.org/ns/prov#" uri="prov-o.ttl"/>
-  <uri name="http://www.w3.org/ns/prov-o#" uri="prov-o.ttl"/>
-  <uri name="http://www.w3.org/ns/prov" uri="prov-o.ttl"/>
-
-  <!-- W3C Web Annotation Ontology -->
-  <!-- Version: W3C Recommendation 23 February 2017 -->
-  <uri name="http://www.w3.org/ns/oa#" uri="web-annotation.ttl"/>
-  <uri name="http://www.w3.org/ns/oa" uri="web-annotation.ttl"/>
-
-  <!-- Dublin Core Terms -->
-  <!-- Version: DCMI Metadata Terms -->
-  <uri name="http://purl.org/dc/terms/" uri="dcterms.ttl"/>
-  <uri name="http://purl.org/dc/elements/1.1/" uri="dcterms.ttl"/>
-
-  <!-- SKOS (Simple Knowledge Organization System) -->
-  <!-- Version: W3C Recommendation 18 August 2009 -->
-  <uri name="http://www.w3.org/2004/02/skos/core#" uri="skos.rdf"/>
-  <uri name="http://www.w3.org/2004/02/skos/core" uri="skos.rdf"/>
-
-  <!-- W3C Organization Ontology -->
-  <!-- Version: 0.8 -->
-  <uri name="http://www.w3.org/ns/org#" uri="org.ttl"/>
-  <uri name="http://www.w3.org/ns/org" uri="org.ttl"/>
-
-  <!-- OWL-Time Ontology -->
-  <!-- Version: 2017-04-06 (W3C Recommendation) -->
-  <uri name="http://www.w3.org/2006/time#" uri="owl-time.ttl"/>
-  <uri name="http://www.w3.org/2006/time" uri="owl-time.ttl"/>
-
-  <!-- FOAF (Friend of a Friend) -->
-  <!-- Version: 0.99-subset (Paddington) -->
-  <uri name="http://xmlns.com/foaf/0.1/" uri="foaf.ttl"/>
-  <uri name="http://xmlns.com/foaf/0.1" uri="foaf.ttl"/>
-
   <!-- DOLCE+DnS Ultralite (DUL) -->
-  <!-- Version: 4.1 - Foundational ontology for Event-Model-F alignment -->
+  <!-- Version: 4.1 - Foundational ontology -->
   <uri name="http://www.ontologydesignpatterns.org/ont/dul/DUL.owl" uri="dul.owl"/>
   <uri name="http://www.ontologydesignpatterns.org/ont/dul/DUL.owl#" uri="dul.owl"/>
 

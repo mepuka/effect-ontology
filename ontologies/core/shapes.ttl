@@ -1,263 +1,165 @@
-@prefix : <http://effect-ontology.dev/core/shapes#> .
+@prefix : <http://effect-ontology.dev/core#> .
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
-@prefix core: <http://effect-ontology.dev/core#> .
-@prefix claims: <http://effect-ontology.dev/claims#> .
-@prefix dul: <http://www.ontologydesignpatterns.org/ont/dul/DUL.owl#> .
-@base <http://effect-ontology.dev/core/shapes> .
 
 # =============================================================================
-# Effect Core Ontology - SHACL Shapes
+# SHACL Shapes for Effect Core Ontology
 # =============================================================================
 #
-# Validation shapes for core ontology instances:
-# - MentionShape: Text evidence with required provenance
-# - TrackedEntityShape: Domain entities with required name
-# - TrackedEventShape: Events with temporal grounding
+# Validates extracted knowledge graphs against core ontology constraints.
+# Used for post-extraction validation and quality assurance.
 #
 # =============================================================================
 
-<http://effect-ontology.dev/core/shapes> a sh:Ontology ;
-    rdfs:label "Effect Core Ontology Shapes"@en ;
-    rdfs:comment "SHACL shapes for validating core ontology instances."@en .
-
-# =============================================================================
-# MentionShape - Text evidence validation
-# =============================================================================
-
-:MentionShape a sh:NodeShape ;
-    sh:targetClass core:Mention ;
-    rdfs:label "Mention Shape"@en ;
-    rdfs:comment "Validates text mentions have required evidence properties."@en ;
-
-    # Required: evidenceText (from claims:Evidence)
-    sh:property [
-        sh:path claims:evidenceText ;
-        sh:minCount 1 ;
-        sh:maxCount 1 ;
-        sh:datatype xsd:string ;
-        sh:minLength 1 ;
-        sh:name "evidence text"@en ;
-        sh:message "Mention must have exactly one non-empty evidenceText."@en ;
-    ] ;
-
-    # Required: startOffset (from claims:Evidence)
-    sh:property [
-        sh:path claims:startOffset ;
-        sh:minCount 1 ;
-        sh:maxCount 1 ;
-        sh:datatype xsd:integer ;
-        sh:minInclusive 0 ;
-        sh:name "start offset"@en ;
-        sh:message "Mention must have exactly one non-negative startOffset."@en ;
-    ] ;
-
-    # Required: endOffset (from claims:Evidence)
-    sh:property [
-        sh:path claims:endOffset ;
-        sh:minCount 1 ;
-        sh:maxCount 1 ;
-        sh:datatype xsd:integer ;
-        sh:minInclusive 0 ;
-        sh:name "end offset"@en ;
-        sh:message "Mention must have exactly one non-negative endOffset."@en ;
-    ] ;
-
-    # Required: confidence (from claims:Evidence)
-    sh:property [
-        sh:path claims:confidence ;
-        sh:minCount 1 ;
-        sh:maxCount 1 ;
-        sh:datatype xsd:decimal ;
-        sh:minInclusive 0.0 ;
-        sh:maxInclusive 1.0 ;
-        sh:name "confidence"@en ;
-        sh:message "Mention must have exactly one confidence score between 0.0 and 1.0."@en ;
-    ] ;
-
-    # Required: exactly one mentions link
-    sh:property [
-        sh:path core:mentions ;
-        sh:minCount 1 ;
-        sh:maxCount 1 ;
-        sh:or (
-            [ sh:class core:TrackedEntity ]
-            [ sh:class core:TrackedEvent ]
-        ) ;
-        sh:name "mentions"@en ;
-        sh:message "Mention must link to exactly one TrackedEntity or TrackedEvent."@en ;
-    ] .
-
-# =============================================================================
-# TrackedEntityShape - Domain entity validation
-# =============================================================================
+# -----------------------------------------------------------------------------
+# TrackedEntity Shape
+# -----------------------------------------------------------------------------
 
 :TrackedEntityShape a sh:NodeShape ;
-    sh:targetClass core:TrackedEntity ;
+    sh:targetClass :TrackedEntity ;
     rdfs:label "Tracked Entity Shape"@en ;
-    rdfs:comment "Validates domain entities have required properties."@en ;
-
-    # Required: name
+    rdfs:comment "Validates TrackedEntity instances have required properties."@en ;
     sh:property [
-        sh:path core:name ;
+        sh:path :name ;
         sh:minCount 1 ;
         sh:maxCount 1 ;
         sh:datatype xsd:string ;
-        sh:minLength 1 ;
-        sh:name "name"@en ;
-        sh:message "TrackedEntity must have exactly one non-empty name."@en ;
-    ] ;
-
-    # Optional but recommended: description
-    sh:property [
-        sh:path core:description ;
-        sh:maxCount 1 ;
-        sh:datatype xsd:string ;
-        sh:name "description"@en ;
-        sh:severity sh:Info ;
-        sh:message "TrackedEntity should have a description."@en ;
-    ] ;
-
-    # Recommended: at least one evidential mention
-    sh:property [
-        sh:path core:hasEvidentialMention ;
-        sh:minCount 1 ;
-        sh:class core:Mention ;
-        sh:name "has evidential mention"@en ;
-        sh:severity sh:Warning ;
-        sh:message "TrackedEntity should have at least one evidential mention for provenance."@en ;
-    ] ;
-
-    # Optional: grounding confidence
-    sh:property [
-        sh:path core:groundingConfidence ;
-        sh:maxCount 1 ;
-        sh:datatype xsd:decimal ;
-        sh:minInclusive 0.0 ;
-        sh:maxInclusive 1.0 ;
-        sh:name "grounding confidence"@en ;
-        sh:message "groundingConfidence must be between 0.0 and 1.0."@en ;
-    ] ;
-
-    # Optional: resolution confidence
-    sh:property [
-        sh:path core:resolutionConfidence ;
-        sh:maxCount 1 ;
-        sh:datatype xsd:decimal ;
-        sh:minInclusive 0.0 ;
-        sh:maxInclusive 1.0 ;
-        sh:name "resolution confidence"@en ;
-        sh:message "resolutionConfidence must be between 0.0 and 1.0."@en ;
-    ] ;
-
-    # sameEntityAs must link to TrackedEntity
-    sh:property [
-        sh:path core:sameEntityAs ;
-        sh:class core:TrackedEntity ;
-        sh:name "same entity as"@en ;
-        sh:message "sameEntityAs must link to another TrackedEntity."@en ;
-    ] ;
-
-    # mergedFrom must link to TrackedEntity
-    sh:property [
-        sh:path core:mergedFrom ;
-        sh:class core:TrackedEntity ;
-        sh:name "merged from"@en ;
-        sh:message "mergedFrom must link to another TrackedEntity."@en ;
+        sh:message "TrackedEntity must have exactly one name (string)."
     ] .
 
-# =============================================================================
-# TrackedEventShape - Event validation
-# =============================================================================
+# -----------------------------------------------------------------------------
+# Person Shape
+# -----------------------------------------------------------------------------
+
+:PersonShape a sh:NodeShape ;
+    sh:targetClass :Person ;
+    rdfs:label "Person Shape"@en ;
+    sh:property [
+        sh:path :name ;
+        sh:minCount 1 ;
+        sh:pattern "^[A-Z]" ;
+        sh:message "Person name should start with a capital letter."
+    ] .
+
+# -----------------------------------------------------------------------------
+# Organization Shape
+# -----------------------------------------------------------------------------
+
+:OrganizationShape a sh:NodeShape ;
+    sh:targetClass :Organization ;
+    rdfs:label "Organization Shape"@en ;
+    sh:property [
+        sh:path :name ;
+        sh:minCount 1 ;
+        sh:message "Organization must have a name."
+    ] .
+
+# -----------------------------------------------------------------------------
+# Place Shape
+# -----------------------------------------------------------------------------
+
+:PlaceShape a sh:NodeShape ;
+    sh:targetClass :Place ;
+    rdfs:label "Place Shape"@en ;
+    sh:property [
+        sh:path :name ;
+        sh:minCount 1 ;
+        sh:message "Place must have a name."
+    ] .
+
+# -----------------------------------------------------------------------------
+# TrackedEvent Shape
+# -----------------------------------------------------------------------------
 
 :TrackedEventShape a sh:NodeShape ;
-    sh:targetClass core:TrackedEvent ;
+    sh:targetClass :TrackedEvent ;
     rdfs:label "Tracked Event Shape"@en ;
-    rdfs:comment "Validates events have temporal grounding and participants."@en ;
-
-    # Required: either occurrenceTime OR dul:hasTimeInterval
-    sh:or (
-        [
-            sh:property [
-                sh:path core:occurrenceTime ;
-                sh:minCount 1 ;
-            ]
-        ]
-        [
-            sh:property [
-                sh:path dul:hasTimeInterval ;
-                sh:minCount 1 ;
-            ]
-        ]
-    ) ;
-    sh:message "TrackedEvent must have either occurrenceTime or dul:hasTimeInterval."@en ;
-
-    # occurrenceTime datatype validation
+    rdfs:comment "Validates TrackedEvent instances."@en ;
     sh:property [
-        sh:path core:occurrenceTime ;
-        sh:maxCount 1 ;
-        sh:datatype xsd:dateTime ;
-        sh:name "occurrence time"@en ;
-        sh:message "occurrenceTime must be a valid xsd:dateTime."@en ;
-    ] ;
-
-    # Recommended: at least one participant
-    sh:property [
-        sh:path core:hasParticipant ;
+        sh:path :hasParticipant ;
         sh:minCount 1 ;
-        sh:class core:TrackedEntity ;
-        sh:name "has participant"@en ;
-        sh:severity sh:Warning ;
-        sh:message "TrackedEvent should have at least one participant."@en ;
+        sh:class :TrackedEntity ;
+        sh:message "Events must have at least one participant (TrackedEntity)."
     ] ;
-
-    # Recommended: at least one evidential mention
     sh:property [
-        sh:path core:hasEvidentialMention ;
+        sh:path :description ;
         sh:minCount 1 ;
-        sh:class core:Mention ;
-        sh:name "has evidential mention"@en ;
-        sh:severity sh:Warning ;
-        sh:message "TrackedEvent should have at least one evidential mention for provenance."@en ;
-    ] ;
-
-    # Optional: grounding confidence
-    sh:property [
-        sh:path core:groundingConfidence ;
-        sh:maxCount 1 ;
-        sh:datatype xsd:decimal ;
-        sh:minInclusive 0.0 ;
-        sh:maxInclusive 1.0 ;
-        sh:name "grounding confidence"@en ;
-        sh:message "groundingConfidence must be between 0.0 and 1.0."@en ;
+        sh:datatype xsd:string ;
+        sh:message "Events should have a description."
     ] .
 
-# =============================================================================
-# Cross-Shape Constraints
-# =============================================================================
+# -----------------------------------------------------------------------------
+# Mention Shape
+# -----------------------------------------------------------------------------
 
-# Ensure endOffset >= startOffset for mentions
-:MentionOffsetConstraint a sh:NodeShape ;
-    sh:targetClass core:Mention ;
-    rdfs:label "Mention Offset Constraint"@en ;
+:MentionShape a sh:NodeShape ;
+    sh:targetClass :Mention ;
+    rdfs:label "Mention Shape"@en ;
+    rdfs:comment "Validates Mention instances have evidence text."@en ;
+    sh:property [
+        sh:path :evidenceText ;
+        sh:minCount 1 ;
+        sh:datatype xsd:string ;
+        sh:message "Mention must have evidence text."
+    ] ;
+    sh:property [
+        sh:path :startOffset ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:integer ;
+        sh:message "Start offset must be an integer."
+    ] ;
+    sh:property [
+        sh:path :endOffset ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:integer ;
+        sh:message "End offset must be an integer."
+    ] .
+
+# -----------------------------------------------------------------------------
+# Temporal Consistency
+# -----------------------------------------------------------------------------
+
+:TemporalConsistencyShape a sh:NodeShape ;
+    sh:targetClass :TrackedEvent ;
+    rdfs:label "Temporal Consistency Shape"@en ;
     sh:sparql [
-        sh:message "endOffset must be greater than or equal to startOffset."@en ;
-        sh:prefixes [
-            sh:declare [
-                sh:prefix "claims" ;
-                sh:namespace "http://effect-ontology.dev/claims#"^^xsd:anyURI ;
-            ]
-        ] ;
+        sh:message "End time must be after start time." ;
+        sh:prefixes : ;
         sh:select """
             SELECT $this
             WHERE {
-                $this claims:startOffset ?start .
-                $this claims:endOffset ?end .
+                $this :startTime ?start .
+                $this :endTime ?end .
                 FILTER (?end < ?start)
             }
-        """ ;
+        """
     ] .
+
+# -----------------------------------------------------------------------------
+# Confidence Score Constraints
+# -----------------------------------------------------------------------------
+
+:ConfidenceShape a sh:PropertyShape ;
+    sh:path :confidence ;
+    sh:datatype xsd:decimal ;
+    sh:minInclusive 0.0 ;
+    sh:maxInclusive 1.0 ;
+    sh:message "Confidence must be between 0.0 and 1.0." .
+
+:GroundingConfidenceShape a sh:PropertyShape ;
+    sh:path :groundingConfidence ;
+    sh:datatype xsd:decimal ;
+    sh:minInclusive 0.0 ;
+    sh:maxInclusive 1.0 ;
+    sh:message "Grounding confidence must be between 0.0 and 1.0." .
+
+:ResolutionConfidenceShape a sh:PropertyShape ;
+    sh:path :resolutionConfidence ;
+    sh:datatype xsd:decimal ;
+    sh:minInclusive 0.0 ;
+    sh:maxInclusive 1.0 ;
+    sh:message "Resolution confidence must be between 0.0 and 1.0." .
 
 # =============================================================================
 # End of SHACL Shapes
