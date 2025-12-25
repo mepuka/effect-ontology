@@ -178,13 +178,8 @@ const buildClassSnippet = (
 
   // Build aliases line from altLabels (SKOS alternative labels are synonyms LLM should recognize)
   // Include prefLabels if they differ from the class local name
-  const aliases: string[] = []
-  if (cls.prefLabels.length > 0) {
-    aliases.push(...cls.prefLabels.filter((l) => l.toLowerCase() !== clsLocalName.toLowerCase()))
-  }
-  if (cls.altLabels.length > 0) {
-    aliases.push(...cls.altLabels)
-  }
+  const filteredPrefLabels = cls.prefLabels.filter((l) => l.toLowerCase() !== clsLocalName.toLowerCase())
+  const aliases: Array<string> = [...filteredPrefLabels, ...cls.altLabels]
   const aliasesLine = aliases.length > 0
     ? Doc.text(`Aliases: ${aliases.join(", ")}`)
     : Doc.empty
@@ -214,6 +209,7 @@ const buildClassSnippet = (
 /**
  * Build property snippet for relation extraction
  * Uses local names instead of full IRIs for token efficiency
+ * Includes inverse property warnings and scope notes to guide LLM usage
  */
 const buildPropertySnippet = (prop: PropertyDefinition): Doc.Doc<never> => {
   const propLocalName = extractLocalNameFromIri(prop.id)
@@ -221,13 +217,26 @@ const buildPropertySnippet = (prop: PropertyDefinition): Doc.Doc<never> => {
   const domainNote = prop.domain.length > 0 ? `Domain: ${prop.domain.join(", ")}` : "Domain: any entity"
   const rangeNote = prop.range.length > 0 ? `Range: ${prop.range.join(", ")}` : `Range: ${rangeType.toLowerCase()}`
 
-  return Doc.vsep([
+  const lines: Array<Doc.Doc<never>> = [
     Doc.text(`### ${propLocalName}`),
     Doc.text(prop.comment || "No description available."),
     Doc.text(`- ${domainNote}`),
     Doc.text(`- ${rangeNote}`),
     Doc.text(`- Expects: ${rangeType}`)
-  ])
+  ]
+
+  // Add inverse property warning to help LLM choose correct direction
+  if (prop.inverseOf.length > 0) {
+    const inverseNames = prop.inverseOf.map(extractLocalNameFromIri).join(", ")
+    lines.push(Doc.text(`- ⚠️ Inverse of: ${inverseNames} (use only ONE direction, not both)`))
+  }
+
+  // Add scope note if available - provides usage guidance
+  if (prop.scopeNote) {
+    lines.push(Doc.text(`- Usage: ${prop.scopeNote}`))
+  }
+
+  return Doc.vsep(lines)
 }
 
 /**
@@ -441,7 +450,10 @@ const buildOutputFormatSection = (stage: "mention" | "entity" | "relation"): Doc
 - id: snake_case unique identifier (e.g., "arsenal_fc")
 - mention: exact text from source (human-readable name)
 - types: array of class names (e.g., ["Player", "Team"]) - use local names, not full URIs
-- attributes: optional object with property names as keys and literal values
+- attributes: object with extracted literal values for this entity. REQUIRED when text contains relevant data.
+  Extract ALL available attributes: names, titles, dates, quantities, descriptions, locations mentioned.
+  Common attributes: name, title, description, foundedDate, headquarters, role, amount.
+  Use {} only if absolutely NO attributes are extractable from the text.
 - mentions: array of evidence spans, each with:
   - text: exact quote from source
   - startChar: character offset start (0-indexed)

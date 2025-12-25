@@ -500,12 +500,14 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
        * @param text - Source text to extract from
        * @param entities - Previously extracted entities
        * @param properties - Ontology properties to use for relations
+       * @param classHierarchy - Optional callback to check OWL subclass relationships
        * @returns Chunk of extracted relations
        */
       extract: (
         text: string,
         entities: Chunk.Chunk<Entity>,
-        properties: ReadonlyArray<PropertyDefinition>
+        properties: ReadonlyArray<PropertyDefinition>,
+        classHierarchy?: (childIri: string, parentIri: string) => boolean
       ) =>
         Effect.gen(function*() {
           // Short-circuit if insufficient entities or properties
@@ -676,15 +678,21 @@ export class RelationExtractor extends Effect.Service<RelationExtractor>()("Rela
             evidence?: EvidenceData
           }
 
-          // Helper to check if entity types match constraint types (simple intersection check)
+          // Helper to check if entity types match constraint types
+          // Uses OWL subclass reasoning when classHierarchy callback is provided
           const typesMatchConstraint = (
             entityTypes: ReadonlyArray<string>,
             constraintTypes: ReadonlyArray<string>
           ): boolean => {
             // Empty constraint means no restriction
             if (constraintTypes.length === 0) return true
-            // Check if any entity type matches any constraint type
-            return entityTypes.some((type) => constraintTypes.includes(type))
+            // Check if any entity type matches any constraint type (including subclass relationships)
+            return entityTypes.some((entityType) =>
+              constraintTypes.some((constraintType) =>
+                entityType === constraintType ||
+                (classHierarchy?.(entityType, constraintType) ?? false)
+              )
+            )
           }
 
           const relations = yield* Stream.fromIterable(response.value.relations as ReadonlyArray<RelationData>)

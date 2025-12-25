@@ -13,6 +13,7 @@ import { createHash } from "crypto"
 import { Chunk, Duration, Effect, HashMap, Option, Ref } from "effect"
 import { OntologyFileNotFound, OntologyParsingFailed } from "../Domain/Error/Ontology.js"
 import type { RdfError } from "../Domain/Error/Rdf.js"
+import type { OntologyVersion } from "../Domain/Identity.js"
 import { ClassDefinition, OntologyContext, PropertyDefinition } from "../Domain/Model/Ontology.js"
 import type { OntologyEmbeddings } from "../Domain/Model/OntologyEmbeddings.js"
 import {
@@ -42,7 +43,6 @@ import {
   SKOS_SCOPENOTE
 } from "../Domain/Rdf/Constants.js"
 import { type IRI, Literal, type Quad } from "../Domain/Rdf/Types.js"
-import type { OntologyVersion } from "../Domain/Identity.js"
 import type { OntologyEntry } from "../Domain/Schema/OntologyRegistry.js"
 import { rrfFusion } from "../Utils/Retrieval.js"
 import { ConfigService } from "./Config.js"
@@ -50,6 +50,69 @@ import { NlpService } from "./Nlp.js"
 import { OntologyRegistryService } from "./OntologyRegistry.js"
 import { RdfBuilder, type RdfStore } from "./Rdf.js"
 import { StorageService } from "./Storage.js"
+
+/**
+ * Load and merge external vocabularies into an RDF store
+ *
+ * Attempts to load external vocabularies (FOAF, PROV-O, W3C ORG, etc.) and
+ * merge them into the provided store. Gracefully handles loading/parsing failures
+ * by logging warnings and continuing with the main ontology only.
+ *
+ * @param mainStore - RDF store to merge external vocabularies into
+ * @param externalPath - Storage path to external vocabularies file
+ * @param contextLabel - Label for logging context (e.g., "main", "uri", "entry")
+ * @param contextId - Optional context identifier for logging (e.g., URI or entry ID)
+ * @returns Effect that completes after merge attempt
+ *
+ * @internal
+ */
+const loadAndMergeExternalVocabularies = (
+  mainStore: RdfStore,
+  externalPath: string,
+  contextLabel: string,
+  contextId?: string,
+  storage?: StorageService,
+  rdf?: RdfBuilder
+) =>
+  Effect.gen(function*() {
+    const storageService = storage ?? (yield* StorageService)
+    const rdfBuilder = rdf ?? (yield* RdfBuilder)
+
+    const externalContentOpt = yield* storageService.get(externalPath).pipe(
+      Effect.catchAll((error) =>
+        Effect.gen(function*() {
+          const logContext = contextId ? { [contextLabel]: contextId, path: externalPath } : { path: externalPath }
+          yield* Effect.logWarning("Failed to load external vocabularies, continuing with main ontology only", {
+            ...logContext,
+            error: String(error)
+          })
+          return Option.none<string>()
+        })
+      )
+    )
+
+    if (Option.isSome(externalContentOpt)) {
+      const externalStore = yield* rdfBuilder.parseTurtle(externalContentOpt.value).pipe(
+        Effect.catchAll((error) =>
+          Effect.gen(function*() {
+            const logContext = contextId ? { [contextLabel]: contextId, path: externalPath } : { path: externalPath }
+            yield* Effect.logWarning("Failed to parse external vocabularies, continuing with main ontology only", {
+              ...logContext,
+              error: String(error)
+            })
+            return yield* rdfBuilder.createStore
+          })
+        )
+      )
+
+      const mergedCount = yield* rdfBuilder.mergeStores(mainStore, externalStore)
+      const logContext = contextId ? { [contextLabel]: contextId, externalPath } : { externalPath }
+      yield* Effect.logInfo("Merged external vocabularies into ontology", {
+        ...logContext,
+        newQuadsAdded: mergedCount
+      })
+    }
+  })
 
 /**
  * Parse ontology from RDF store using RdfService queries
@@ -364,45 +427,8 @@ export class OntologyService extends Effect.Service<OntologyService>()(
           const mainStore = yield* rdf.parseTurtle(turtleContent)
 
           // Load and merge external vocabularies (PROV-O, W3C ORG, etc.)
-          // Now always attempted since externalVocabsPath has a default
           const externalPath = config.ontology.externalVocabsPath
-          {
-            const externalContentOpt = yield* storage.get(externalPath).pipe(
-              Effect.catchAll((error) =>
-                Effect.gen(function*() {
-                  yield* Effect.logWarning("Failed to load external vocabularies, continuing with main ontology only", {
-                    path: externalPath,
-                    error: String(error)
-                  })
-                  return Option.none<string>()
-                })
-              )
-            )
-
-            if (Option.isSome(externalContentOpt)) {
-              const externalStore = yield* rdf.parseTurtle(externalContentOpt.value).pipe(
-                Effect.catchAll((error) =>
-                  Effect.gen(function*() {
-                    yield* Effect.logWarning(
-                      "Failed to parse external vocabularies, continuing with main ontology only",
-                      {
-                        path: externalPath,
-                        error: String(error)
-                      }
-                    )
-                    return yield* rdf.createStore
-                  })
-                )
-              )
-
-              // Merge external vocabularies into main store
-              const mergedCount = yield* rdf.mergeStores(mainStore, externalStore)
-              yield* Effect.logInfo("Merged external vocabularies into ontology", {
-                externalPath,
-                newQuadsAdded: mergedCount
-              })
-            }
-          }
+          yield* loadAndMergeExternalVocabularies(mainStore, externalPath, "main", undefined, storage, rdf)
 
           return yield* parseOntologyFromStore(
             rdf,
@@ -502,51 +528,8 @@ export class OntologyService extends Effect.Service<OntologyService>()(
           const mainStore = yield* rdf.parseTurtle(turtleContent)
 
           // Merge external vocabularies (PROV-O, W3C ORG, FOAF, etc.)
-          // Now always attempted since externalVocabsPath has a default
           const externalPath = config.ontology.externalVocabsPath
-          {
-            const externalContentOpt = yield* storage.get(externalPath).pipe(
-              Effect.catchAll((error) =>
-                Effect.gen(function*() {
-                  yield* Effect.logWarning(
-                    "Failed to load external vocabularies for URI-based load, continuing with main ontology only",
-                    {
-                      uri,
-                      path: externalPath,
-                      error: String(error)
-                    }
-                  )
-                  return Option.none<string>()
-                })
-              )
-            )
-
-            if (Option.isSome(externalContentOpt)) {
-              const externalStore = yield* rdf.parseTurtle(externalContentOpt.value).pipe(
-                Effect.catchAll((error) =>
-                  Effect.gen(function*() {
-                    yield* Effect.logWarning(
-                      "Failed to parse external vocabularies, continuing with main ontology only",
-                      {
-                        uri,
-                        path: externalPath,
-                        error: String(error)
-                      }
-                    )
-                    return yield* rdf.createStore
-                  })
-                )
-              )
-
-              // Merge external vocabularies into main store
-              const mergedCount = yield* rdf.mergeStores(mainStore, externalStore)
-              yield* Effect.logInfo("Merged external vocabularies into URI-loaded ontology", {
-                uri,
-                externalPath,
-                newQuadsAdded: mergedCount
-              })
-            }
-          }
+          yield* loadAndMergeExternalVocabularies(mainStore, externalPath, "uri", uri, storage, rdf)
 
           const parsed = yield* parseOntologyFromStore(rdf, mainStore, uri)
 
@@ -614,47 +597,14 @@ export class OntologyService extends Effect.Service<OntologyService>()(
 
           // Merge external vocabularies if specified in entry
           if (entry.externalVocabsPath) {
-            const externalPath = entry.externalVocabsPath
-            const externalContentOpt = yield* storage.get(externalPath).pipe(
-              Effect.catchAll((error) =>
-                Effect.gen(function*() {
-                  yield* Effect.logWarning(
-                    "Failed to load external vocabularies from entry, continuing with main ontology only",
-                    {
-                      entryId: entry.id,
-                      path: externalPath,
-                      error: String(error)
-                    }
-                  )
-                  return Option.none<string>()
-                })
-              )
+            yield* loadAndMergeExternalVocabularies(
+              mainStore,
+              entry.externalVocabsPath,
+              "entryId",
+              entry.id,
+              storage,
+              rdf
             )
-
-            if (Option.isSome(externalContentOpt)) {
-              const externalStore = yield* rdf.parseTurtle(externalContentOpt.value).pipe(
-                Effect.catchAll((error) =>
-                  Effect.gen(function*() {
-                    yield* Effect.logWarning(
-                      "Failed to parse external vocabularies, continuing with main ontology only",
-                      {
-                        entryId: entry.id,
-                        path: externalPath,
-                        error: String(error)
-                      }
-                    )
-                    return yield* rdf.createStore
-                  })
-                )
-              )
-
-              const mergedCount = yield* rdf.mergeStores(mainStore, externalStore)
-              yield* Effect.logInfo("Merged external vocabularies into ontology", {
-                entryId: entry.id,
-                externalPath,
-                newQuadsAdded: mergedCount
-              })
-            }
           }
 
           const parsed = yield* parseOntologyFromStore(rdf, mainStore, entry.storagePath)
@@ -1618,6 +1568,35 @@ export class OntologyService extends Effect.Service<OntologyService>()(
               ...remaining
             ]
             return Chunk.fromIterable(results.slice(0, limit))
+          }),
+
+        /**
+         * Get class hierarchy checker function for OWL subclass reasoning
+         *
+         * Returns a function that checks if a class is a subclass of another
+         * using the ontology's class hierarchy. Useful for domain/range validation
+         * that respects OWL subclass relationships.
+         *
+         * @returns Function (childIri, parentIri) => boolean
+         *
+         * @example
+         * ```typescript
+         * const isSubClassOf = yield* OntologyService.getClassHierarchyChecker()
+         * // Check if core#Person is a subclass of core#TrackedEntity
+         * isSubClassOf("http://effect-ontology.dev/core#Person", "http://effect-ontology.dev/core#TrackedEntity")
+         * ```
+         */
+        getClassHierarchyChecker: () =>
+          Effect.gen(function*() {
+            const { classes, hierarchy, properties, propertyHierarchy } = yield* getOntology
+            const ontology = new OntologyContext({
+              classes: Chunk.toReadonlyArray(classes),
+              hierarchy,
+              propertyHierarchy,
+              properties: Chunk.toReadonlyArray(properties)
+            })
+            return (childIri: string, parentIri: string): boolean =>
+              ontology.isSubClassOf(childIri, parentIri)
           })
       }
     }),

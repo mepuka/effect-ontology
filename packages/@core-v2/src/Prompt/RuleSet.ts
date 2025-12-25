@@ -623,16 +623,16 @@ export const makeEntityRuleSet = (
       new ExtractionRule({
         id: "entity-allowed-attributes",
         category: "property_usage",
-        severity: "warning", // Warning because we use permissive + filter
-        instruction: `Attribute keys SHOULD use property IRIs from: ${preview}${suffix}`,
+        severity: "error", // Error - attributes are important for entity value
+        instruction: `Extract entity attributes using property keys. REQUIRED when text contains relevant data. Use: ${preview}${suffix}`,
         example: new RuleExample({
-          input: "age attribute",
-          output: datatypeProperties[0]?.id ?? "http://schema.org/age",
-          explanation: "Use property IRI, not label"
+          input: "CEO John Mitchell of Acme Corporation, founded in 2018",
+          output: '{ "name": "John Mitchell", "title": "CEO", "foundedDate": "2018" }',
+          explanation: "Extract all available attributes from text - names, titles, dates, quantities"
         }),
         counterExample: null,
-        schemaDescription: "Attribute keys should preferably use ontology datatype property IRIs",
-        validationTemplate: "Attribute key '{value}' is not in allowed properties (will be filtered)"
+        schemaDescription: "Entity attributes capture literal values. Extract ALL available data.",
+        validationTemplate: "Entity should have attributes extracted from text"
       })
     )
   }

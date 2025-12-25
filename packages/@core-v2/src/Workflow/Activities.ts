@@ -38,6 +38,7 @@ import { RdfBuilder } from "../Service/Rdf.js"
 import { ShaclService } from "../Service/Shacl.js"
 import type { ShaclViolation } from "../Service/Shacl.js"
 import { StorageService } from "../Service/Storage.js"
+import { loadShaclShapesWithAutoDiscovery } from "./ShaclHelpers.js"
 
 // -----------------------------------------------------------------------------
 // Shared helpers
@@ -233,12 +234,16 @@ export const makeExtractionActivity = (input: ExtractionInput): Activity<
       )
     )
 
+    // 4.5. Get class hierarchy checker for OWL subclass reasoning in domain/range validation
+    const isSubClassOf = yield* ontologyService.getClassHierarchyChecker()
+
     // 5. Extract relations from LLM (only if we have 2+ entities and properties)
     const relations = Chunk.size(entities) >= 2 && Chunk.size(properties) > 0
       ? yield* relationExtractor.extract(
         sourceContent,
         entities,
-        Chunk.toReadonlyArray(properties)
+        Chunk.toReadonlyArray(properties),
+        isSubClassOf
       ).pipe(
         Effect.tap((relations) =>
           Effect.logInfo("Relations extracted", {
@@ -374,7 +379,10 @@ export const makeValidationActivity = (input: ValidationInput): Activity<
     yield* Effect.logInfo("Validation activity starting", {
       batchId: input.batchId,
       resolvedGraphUri: input.resolvedGraphUri,
-      hasShaclUri: Option.isSome(Option.fromNullable(input.shaclUri)),
+      hasShaclUri: Option.match(Option.fromNullable(input.shaclUri), {
+        onNone: () => false,
+        onSome: () => true
+      }),
       shaclUri: input.shaclUri ?? "none"
     })
 
@@ -384,37 +392,12 @@ export const makeValidationActivity = (input: ValidationInput): Activity<
 
     const dataStore = yield* rdf.parseTurtle(resolvedGraph)
 
-    // Load SHACL shapes with auto-discovery:
-    // 1. If shaclUri provided explicitly, use it
-    // 2. Otherwise, try convention-based discovery: shapes.ttl in same directory as ontology
-    // 3. Fall back to auto-generation from ontology if shapes.ttl not found
-    const shapesStore = yield* (input.shaclUri
-      ? shacl.loadShapesFromUri(input.shaclUri)
-      : Effect.gen(function*() {
-        // Try convention-based discovery: shapes.ttl in same directory as ontology
-        const shapesPath = input.ontologyUri.replace(/[^/]+\.ttl$/i, "shapes.ttl")
-        const shapesContent = yield* storage.get(stripGsPrefix(shapesPath))
-
-        if (Option.isSome(shapesContent)) {
-          yield* Effect.logInfo("Validation: Found shapes.ttl via auto-discovery", {
-            batchId: input.batchId,
-            shapesPath
-          })
-          const parsed = yield* rdf.parseTurtle(shapesContent.value)
-          return parsed._store
-        }
-
-        // Fall back to auto-generation from ontology (NOT from data store!)
-        yield* Effect.logInfo("Validation: Auto-generating SHACL shapes from ontology", {
-          batchId: input.batchId,
-          ontologyUri: input.ontologyUri
-        })
-        const ontologyContent = yield* storage.get(stripGsPrefix(input.ontologyUri)).pipe(
-          Effect.flatMap((opt) => requireContent(opt, input.ontologyUri))
-        )
-        const ontologyStore = yield* rdf.parseTurtle(ontologyContent)
-        return yield* shacl.generateShapesFromOntology(ontologyStore._store)
-      }))
+    // Load SHACL shapes with auto-discovery
+    const shapesStore = yield* loadShaclShapesWithAutoDiscovery(
+      input.shaclUri,
+      input.ontologyUri,
+      input.batchId
+    )
 
     const report = yield* shacl.validate(dataStore._store, shapesStore)
 

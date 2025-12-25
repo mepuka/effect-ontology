@@ -119,6 +119,7 @@ Aligned with W3C Web Annotation model (oa:Annotation) but standalone."""@en .
     rdfs:subPropertyOf dul:isReferenceOf ;
     rdfs:label "has evidential mention"@en ;
     rdfs:comment "Links a TrackedEntity or TrackedEvent to text spans that evidence its existence."@en ;
+    skos:scopeNote "Use from ENTITY/EVENT perspective: 'JohnSmith hasEvidentialMention mention_123'. Prefer this over 'mentions'."@en ;
     rdfs:domain [ a owl:Class ;
                   owl:unionOf ( :TrackedEntity :TrackedEvent ) ] ;
     rdfs:range :Mention .
@@ -127,6 +128,7 @@ Aligned with W3C Web Annotation model (oa:Annotation) but standalone."""@en .
     owl:inverseOf :hasEvidentialMention ;
     rdfs:label "mentions"@en ;
     rdfs:comment "Links a text Mention to the Entity or Event it references."@en ;
+    skos:scopeNote "Inverse of hasEvidentialMention. RARELY use directly - prefer hasEvidentialMention from entity perspective."@en ;
     rdfs:domain :Mention ;
     rdfs:range [ a owl:Class ;
                  owl:unionOf ( :TrackedEntity :TrackedEvent ) ] .
@@ -139,6 +141,7 @@ Aligned with W3C Web Annotation model (oa:Annotation) but standalone."""@en .
     rdfs:subPropertyOf dul:hasParticipant ;
     rdfs:label "has participant"@en ;
     rdfs:comment "Links a TrackedEvent to participating TrackedEntities."@en ;
+    skos:scopeNote "Use from EVENT perspective: 'AcquisitionEvent hasParticipant AcmeCorp'. Prefer this over 'isParticipantIn'."@en ;
     rdfs:domain :TrackedEvent ;
     rdfs:range :TrackedEntity .
 
@@ -146,6 +149,7 @@ Aligned with W3C Web Annotation model (oa:Annotation) but standalone."""@en .
     owl:inverseOf :hasParticipant ;
     rdfs:label "is participant in"@en ;
     rdfs:comment "Links a TrackedEntity to events it participates in."@en ;
+    skos:scopeNote "Inverse of hasParticipant. RARELY use directly - prefer hasParticipant from event perspective."@en ;
     rdfs:domain :TrackedEntity ;
     rdfs:range :TrackedEvent .
 
@@ -189,6 +193,7 @@ entities were resolved to which canonical form."""@en ;
     rdfs:subPropertyOf dul:hasLocation ;
     rdfs:label "has location"@en ;
     rdfs:comment "Links an entity or event to its spatial location."@en ;
+    skos:scopeNote "Use when SUBJECT is located AT the object: 'AcmeCorp hasLocation SanFrancisco'. ALWAYS prefer this over 'isLocationOf'."@en ;
     rdfs:domain [ a owl:Class ;
                   owl:unionOf ( :TrackedEntity :TrackedEvent ) ] ;
     rdfs:range dul:Place .
@@ -198,6 +203,7 @@ entities were resolved to which canonical form."""@en ;
     rdfs:subPropertyOf dul:isLocationOf ;
     rdfs:label "is location of"@en ;
     rdfs:comment "Inverse of hasLocation - entities or events at this place."@en ;
+    skos:scopeNote "Inverse of hasLocation. DO NOT use directly - always use hasLocation instead."@en ;
     rdfs:domain dul:Place ;
     rdfs:range [ a owl:Class ;
                  owl:unionOf ( :TrackedEntity :TrackedEvent ) ] .
