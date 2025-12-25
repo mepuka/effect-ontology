@@ -6,6 +6,7 @@
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 @prefix dcterms: <http://purl.org/dc/terms/> .
 @prefix prov: <http://www.w3.org/ns/prov#> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
 @base <http://effect-ontology.dev/corrections> .
 
 # =============================================================================
@@ -18,7 +19,7 @@
     dcterms:creator "Effect Ontology Project" ;
     dcterms:created "2024-12-18"^^xsd:date ;
     owl:versionInfo "1.0.0" ;
-    owl:imports <http://www.w3.org/ns/prov-o#> ;
+    owl:imports <http://www.w3.org/ns/prov#> ;
     owl:imports <http://effect-ontology.dev/claims> .
 
 # =============================================================================

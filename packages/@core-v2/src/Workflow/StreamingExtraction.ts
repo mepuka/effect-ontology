@@ -288,17 +288,53 @@ export const makeExtractionWorkflow = Effect.gen(function*() {
 
                   // Add chunk index and chunk ID to each entity for provenance tracking
                   const chunkId = getChunkId(run.id, chunk.index)
-                  const entities = Chunk.map(rawEntities, (entity) =>
-                    new Entity({
+                  const rawEntityArray = Chunk.toReadonlyArray(rawEntities)
+
+                  // Phase 3b: Entity grounding verification - verify entities are grounded in source text
+                  // Uses batched verification to reduce LLM API calls
+                  const entityVerificationResults = rawEntityArray.length > 0
+                    ? yield* grounder.verifyEntityBatch(chunk.text, rawEntityArray).pipe(
+                      Effect.annotateLogs({ chunkIndex: chunk.index }),
+                      Effect.withLogSpan(`chunk-${chunk.index}-entity-grounding`),
+                      Effect.mapError(
+                        (error) =>
+                          new ExtractionError({
+                            message: `Entity grounding verification failed for chunk ${chunk.index}`,
+                            cause: error,
+                            text: chunk.text
+                          })
+                      )
+                    )
+                    : []
+
+                  // Map verification results back to entities with groundingConfidence and chunk metadata
+                  const entities = entityVerificationResults.map((result) => {
+                    const entity = result.entity
+                    const groundingConfidence = result.grounded
+                      ? result.confidence
+                      : 0.0
+
+                    return new Entity({
                       id: entity.id,
                       mention: entity.mention,
                       types: [...entity.types],
                       attributes: { ...entity.attributes },
                       chunkIndex: chunk.index,
-                      chunkId
-                    }))
+                      chunkId,
+                      groundingConfidence
+                    })
+                  })
 
-                  const entityArray = Chunk.toReadonlyArray(entities)
+                  yield* Effect.logInfo("Entity grounding verification complete", {
+                    stage: "entity-grounding",
+                    chunkIndex: chunk.index,
+                    inputEntities: rawEntityArray.length,
+                    groundedEntities: entityVerificationResults.filter((r) => r.grounded).length
+                  })
+
+                  // Convert back to Chunk for downstream API compatibility
+                  const entitiesChunk = Chunk.fromIterable(entities)
+                  const entityArray = entities
 
                   // Short-circuit if no entities
                   if (entityArray.length === 0) {
@@ -355,12 +391,12 @@ export const makeExtractionWorkflow = Effect.gen(function*() {
                       propertyCount: propertyArray.length
                     })
                     return new KnowledgeGraph({
-                      entities: Array.from(entities),
+                      entities: entityArray,
                       relations: []
                     })
                   }
 
-                  const relations = yield* relationExtractor.extract(chunk.text, entities, propertyArray).pipe(
+                  const relations = yield* relationExtractor.extract(chunk.text, entitiesChunk, propertyArray).pipe(
                     Effect.annotateLogs({ chunkIndex: chunk.index }),
                     Effect.withLogSpan(`chunk-${chunk.index}-relation-extraction`),
                     Effect.mapError(
@@ -435,7 +471,7 @@ export const makeExtractionWorkflow = Effect.gen(function*() {
 
                   // Build KnowledgeGraph fragment
                   const fragment = new KnowledgeGraph({
-                    entities: Array.from(entities),
+                    entities: entityArray,
                     relations: verifiedRelationArray
                   })
 

@@ -316,6 +316,46 @@ export const CORRECTIONS = {
 } as const
 
 /**
+ * Effect Core Ontology IRIs (effect-ontology.dev/core#)
+ *
+ * Core vocabulary for knowledge extraction: TrackedEntity, TrackedEvent, Mention.
+ * Aligned with DOLCE+DnS Ultralite (DUL) foundational ontology.
+ *
+ * @since 2.0.0
+ */
+export const CORE = {
+  // Namespace
+  namespace: "http://effect-ontology.dev/core#",
+
+  // Classes (DUL-aligned)
+  TrackedEntity: iri("http://effect-ontology.dev/core#TrackedEntity"),
+  TrackedEvent: iri("http://effect-ontology.dev/core#TrackedEvent"),
+  Mention: iri("http://effect-ontology.dev/core#Mention"),
+
+  // Object Properties - Evidence Linking
+  hasEvidentialMention: iri("http://effect-ontology.dev/core#hasEvidentialMention"),
+  mentions: iri("http://effect-ontology.dev/core#mentions"),
+
+  // Object Properties - Event Participation
+  hasParticipant: iri("http://effect-ontology.dev/core#hasParticipant"),
+  isParticipantIn: iri("http://effect-ontology.dev/core#isParticipantIn"),
+
+  // Object Properties - Entity Resolution
+  sameEntityAs: iri("http://effect-ontology.dev/core#sameEntityAs"),
+  mergedFrom: iri("http://effect-ontology.dev/core#mergedFrom"),
+
+  // Object Properties - Spatial
+  hasLocation: iri("http://effect-ontology.dev/core#hasLocation"),
+
+  // Datatype Properties
+  name: iri("http://effect-ontology.dev/core#name"),
+  description: iri("http://effect-ontology.dev/core#description"),
+  occurrenceTime: iri("http://effect-ontology.dev/core#occurrenceTime"),
+  groundingConfidence: iri("http://effect-ontology.dev/core#groundingConfidence"),
+  resolutionConfidence: iri("http://effect-ontology.dev/core#resolutionConfidence")
+} as const
+
+/**
  * Schema.org Vocabulary IRIs
  * http://schema.org/
  *

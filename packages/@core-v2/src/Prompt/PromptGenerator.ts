@@ -135,7 +135,21 @@ const buildInputTextSection = (text: string): Doc.Doc<never> => {
 
 /**
  * Build class snippet for ontology documentation
- * Uses local names instead of full IRIs for token efficiency
+ *
+ * Uses local names instead of full IRIs for token efficiency.
+ * Exposes SKOS metadata (altLabels, definition, scopeNote) to help LLMs
+ * recognize alternative names and understand concept scope.
+ *
+ * Format:
+ * ```
+ * ## ClassName
+ * [skos:definition or rdfs:comment]
+ * Aliases: altLabel1, altLabel2, ...  (if available)
+ * Inherits from: ParentClass1         (if available)
+ * Scope: [scopeNote]                  (if available)
+ * Properties:
+ *   - propName: description [expects type]
+ * ```
  */
 const buildClassSnippet = (
   cls: ClassDefinition,
@@ -159,17 +173,42 @@ const buildClassSnippet = (
     })
     : [Doc.text("    (no specific properties)")]
 
-  const broaderNote = cls.broader.length > 0
-    ? Doc.text(`Broader: ${cls.broader.join(", ")}`)
+  // Use skos:definition if available, otherwise fall back to rdfs:comment
+  const description = cls.definition || cls.comment || "No description available."
+
+  // Build aliases line from altLabels (SKOS alternative labels are synonyms LLM should recognize)
+  // Include prefLabels if they differ from the class local name
+  const aliases: string[] = []
+  if (cls.prefLabels.length > 0) {
+    aliases.push(...cls.prefLabels.filter((l) => l.toLowerCase() !== clsLocalName.toLowerCase()))
+  }
+  if (cls.altLabels.length > 0) {
+    aliases.push(...cls.altLabels)
+  }
+  const aliasesLine = aliases.length > 0
+    ? Doc.text(`Aliases: ${aliases.join(", ")}`)
+    : Doc.empty
+
+  // Show inheritance from broader concepts
+  const broaderLocalNames = cls.broader.map(extractLocalNameFromIri)
+  const inheritsLine = broaderLocalNames.length > 0
+    ? Doc.text(`Inherits from: ${broaderLocalNames.join(", ")}`)
+    : Doc.empty
+
+  // Include scope note if available (helps LLM understand when to use this class)
+  const scopeLine = cls.scopeNote
+    ? Doc.text(`Scope: ${cls.scopeNote}`)
     : Doc.empty
 
   return Doc.vsep([
     Doc.text(`## ${clsLocalName}`),
-    Doc.text(cls.comment || "No description available."),
-    broaderNote,
+    Doc.text(description),
+    aliasesLine,
+    inheritsLine,
+    scopeLine,
     Doc.text("Properties:"),
     ...propLines
-  ])
+  ].filter((doc) => doc !== Doc.empty))
 }
 
 /**
@@ -248,6 +287,60 @@ const buildEntitiesSection = (ctx: OntologyPromptContext): Doc.Doc<never> => {
     Doc.text("=== EXTRACTED ENTITIES (from Stage 1) ==="),
     ...entityLines
   ])
+}
+
+/**
+ * Build DUL hierarchy section explaining Object vs Event distinction
+ *
+ * Helps LLMs understand the fundamental ontological categories:
+ * - TrackedEntity extends dul:Object (things with spatial extent)
+ * - TrackedEvent extends dul:Event (things with temporal extent)
+ *
+ * This section is added to entity extraction prompts to guide type selection.
+ */
+const buildDulHierarchySection = (ctx: OntologyPromptContext): Doc.Doc<never> => {
+  // Check if we have TrackedEntity/TrackedEvent in the class hierarchy
+  const hasTrackedEntity = ctx.classes.some((c) =>
+    c.id.includes("TrackedEntity") || c.broader.some((b) => b.includes("TrackedEntity"))
+  )
+  const hasTrackedEvent = ctx.classes.some((c) =>
+    c.id.includes("TrackedEvent") || c.broader.some((b) => b.includes("TrackedEvent"))
+  )
+
+  // Only show if we have core ontology classes
+  if (!hasTrackedEntity && !hasTrackedEvent) {
+    return Doc.empty
+  }
+
+  const lines: Array<Doc.Doc<never>> = [
+    Doc.text("=== ENTITY TYPE GUIDANCE ==="),
+    Doc.empty
+  ]
+
+  if (hasTrackedEntity) {
+    lines.push(
+      Doc.text("## OBJECTS (TrackedEntity subclasses)"),
+      Doc.text("Use for things that EXIST in space: people, organizations, places, documents."),
+      Doc.text("Examples: Person, Organization, Location, BoardOrCommission, Department"),
+      Doc.empty
+    )
+  }
+
+  if (hasTrackedEvent) {
+    lines.push(
+      Doc.text("## EVENTS (TrackedEvent subclasses)"),
+      Doc.text("Use for things that OCCUR in time: meetings, announcements, votes, appointments."),
+      Doc.text("Examples: Meeting, Announcement, Vote, Appointment, StaffChange"),
+      Doc.empty
+    )
+  }
+
+  lines.push(
+    Doc.text("CRITICAL: Choose Object types for 'who/what' entities, Event types for 'what happened'."),
+    Doc.empty
+  )
+
+  return Doc.vsep(lines)
 }
 
 /**
@@ -504,6 +597,8 @@ export const generateStructuredPrompt = (
 
   // Stage-specific sections
   if (ruleSet.stage === "entity") {
+    // Add DUL hierarchy section for Object vs Event distinction
+    systemSections.push(Doc.empty, buildDulHierarchySection(ctx))
     // Add namespace prefix section for entity extraction (explains local name usage)
     systemSections.push(Doc.empty, buildNamespacePrefixSection(ctx))
     systemSections.push(Doc.empty, buildQuickReferenceSection(ruleSet))
@@ -581,6 +676,8 @@ export const generateStructuredPromptWithExamples = (
 
   // Stage-specific sections
   if (ruleSet.stage === "entity") {
+    // Add DUL hierarchy section for Object vs Event distinction
+    systemSections.push(Doc.empty, buildDulHierarchySection(ctx))
     systemSections.push(Doc.empty, buildNamespacePrefixSection(ctx))
     systemSections.push(Doc.empty, buildQuickReferenceSection(ruleSet))
     systemSections.push(Doc.empty, buildOntologySection(ctx))

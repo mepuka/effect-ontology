@@ -22,7 +22,8 @@
     rdfs:seeAlso <https://www.wikidata.org/wiki/Help:Ranking> ;
     # OWL Imports for proper ontology loading
     owl:imports <http://www.w3.org/ns/prov#> ;
-    owl:imports <http://www.w3.org/ns/oa#> .
+    owl:imports <http://www.w3.org/ns/oa#> ;
+    owl:imports <http://xmlns.com/foaf/0.1/> .
 
 # =============================================================================
 # Claim Ranks (Wikidata Pattern)

@@ -1,5 +1,6 @@
 @prefix : <http://effect-ontology.dev/seattle/> .
 @prefix seattle: <http://effect-ontology.dev/seattle/> .
+@prefix core: <http://effect-ontology.dev/core#> .
 @prefix claims: <http://effect-ontology.dev/claims#> .
 @prefix foaf: <http://xmlns.com/foaf/0.1/> .
 @prefix org: <http://www.w3.org/ns/org#> .

@@ -253,6 +253,29 @@ export class Entity extends Schema.Class<Entity>("Entity")({
   mentions: Schema.optional(Schema.Array(EvidenceSpanSchema)).annotations({
     title: "Mentions",
     description: "Text spans where this entity was mentioned in source"
+  }),
+
+  /**
+   * System-generated grounding confidence (0-1)
+   *
+   * Set by the Grounder service after verifying the entity is actually
+   * mentioned in the source context with the claimed types. This replaces
+   * unreliable LLM self-reported confidence with system verification.
+   *
+   * High confidence (>0.8): Entity clearly mentioned with matching type
+   * Medium confidence (0.5-0.8): Entity mentioned but type inference weak
+   * Low confidence (<0.5): Entity mention or type not well supported
+   *
+   * @example 0.92 (entity "Cristiano Ronaldo" verified as Person in context)
+   */
+  groundingConfidence: Schema.optional(
+    Schema.Number.pipe(
+      Schema.greaterThanOrEqualTo(0),
+      Schema.lessThanOrEqualTo(1)
+    )
+  ).annotations({
+    title: "Grounding Confidence",
+    description: "System-verified confidence that entity is grounded in source text (0-1)"
   })
 }) {
   /**
@@ -271,7 +294,8 @@ export class Entity extends Schema.Class<Entity>("Entity")({
       sourceUri: this.sourceUri,
       extractedAt: this.extractedAt,
       eventTime: this.eventTime,
-      mentions: this.mentions
+      mentions: this.mentions,
+      groundingConfidence: this.groundingConfidence
     }
   }
 }

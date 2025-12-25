@@ -188,6 +188,18 @@ export const mergeGraphs = (a: KnowledgeGraph, b: KnowledgeGraph): KnowledgeGrap
         ? entity.mention
         : existing.value.mention
 
+      // Merge mentions (EvidenceSpan arrays) - combine both sets
+      const mergedMentions = [
+        ...(existing.value.mentions ?? []),
+        ...(entity.mentions ?? [])
+      ]
+
+      // Select higher groundingConfidence (system verification score)
+      const mergedGroundingConfidence = Math.max(
+        existing.value.groundingConfidence ?? 0,
+        entity.groundingConfidence ?? 0
+      )
+
       entityMap = HashMap.set(
         entityMap,
         entity.id,
@@ -197,7 +209,16 @@ export const mergeGraphs = (a: KnowledgeGraph, b: KnowledgeGraph): KnowledgeGrap
           types: mergedTypes,
           attributes: mergedAttributes,
           chunkIndex: existing.value.chunkIndex ?? entity.chunkIndex,
-          chunkId: existing.value.chunkId ?? entity.chunkId
+          chunkId: existing.value.chunkId ?? entity.chunkId,
+          // Preserve provenance fields - prefer first occurrence
+          documentId: existing.value.documentId ?? entity.documentId,
+          sourceUri: existing.value.sourceUri ?? entity.sourceUri,
+          extractedAt: existing.value.extractedAt ?? entity.extractedAt,
+          eventTime: existing.value.eventTime ?? entity.eventTime,
+          // Merge evidence spans
+          mentions: mergedMentions.length > 0 ? mergedMentions : undefined,
+          // Use highest confidence
+          groundingConfidence: mergedGroundingConfidence > 0 ? mergedGroundingConfidence : undefined
         })
       )
     } else {
@@ -286,6 +307,18 @@ export const mergeGraphsWithConflicts = (
         ? entity.mention
         : existing.value.mention
 
+      // Merge mentions (EvidenceSpan arrays) - combine both sets
+      const mergedMentions = [
+        ...(existing.value.mentions ?? []),
+        ...(entity.mentions ?? [])
+      ]
+
+      // Select higher groundingConfidence (system verification score)
+      const mergedGroundingConfidence = Math.max(
+        existing.value.groundingConfidence ?? 0,
+        entity.groundingConfidence ?? 0
+      )
+
       entityMap = HashMap.set(
         entityMap,
         entity.id,
@@ -295,7 +328,16 @@ export const mergeGraphsWithConflicts = (
           types: mergedTypes,
           attributes: mergedAttributes,
           chunkIndex: existing.value.chunkIndex ?? entity.chunkIndex,
-          chunkId: existing.value.chunkId ?? entity.chunkId
+          chunkId: existing.value.chunkId ?? entity.chunkId,
+          // Preserve provenance fields - prefer first occurrence
+          documentId: existing.value.documentId ?? entity.documentId,
+          sourceUri: existing.value.sourceUri ?? entity.sourceUri,
+          extractedAt: existing.value.extractedAt ?? entity.extractedAt,
+          eventTime: existing.value.eventTime ?? entity.eventTime,
+          // Merge evidence spans
+          mentions: mergedMentions.length > 0 ? mergedMentions : undefined,
+          // Use highest confidence
+          groundingConfidence: mergedGroundingConfidence > 0 ? mergedGroundingConfidence : undefined
         })
       )
     } else {

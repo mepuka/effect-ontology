@@ -12,7 +12,7 @@ import { Chunk, Duration, Effect, type Scope } from "effect"
 import * as N3 from "n3"
 import { ParsingFailed, RdfError, SerializationFailed } from "../Domain/Error/Rdf.js"
 import type { Entity, Relation } from "../Domain/Model/Entity.js"
-import { DCTERMS, EXTR, OWL, PROV, XSD } from "../Domain/Rdf/Constants.js"
+import { CLAIMS, CORE, DCTERMS, EXTR, OWL, PROV, RDF, XSD } from "../Domain/Rdf/Constants.js"
 import { type BlankNode as BlankNodeType, type IRI, Literal, Quad, type RdfTerm } from "../Domain/Rdf/Types.js"
 import { createN3Builders, entityToQuads, relationToQuad } from "../Utils/Rdf.js"
 import { ConfigService, ConfigServiceDefault } from "./Config.js"
@@ -221,6 +221,17 @@ export interface RdfBuilderShape {
     confidence: number,
     graphUri?: string
   ) => Effect.Effect<void, RdfError, never>
+  /**
+   * Generate core:Mention RDF triples from entity evidence spans
+   *
+   * @since 2.0.0
+   */
+  readonly generateMentionTriples: (
+    store: RdfStore,
+    entityUri: string,
+    mention: { text: string; startChar: number; endChar: number; confidence?: number },
+    options?: { mentionUri?: string; sourceUri?: string; graphUri?: string }
+  ) => Effect.Effect<string, RdfError, never>
   readonly toTurtle: (store: RdfStore) => Effect.Effect<string, SerializationFailed, never>
   /**
    * Serialize store to TriG format with named graphs
@@ -817,6 +828,132 @@ export class RdfBuilder extends Effect.Service<RdfBuilder>()(
             catch: (error) =>
               new RdfError({
                 message: `Failed to add triple with confidence: ${error}`,
+                cause: error
+              })
+          }),
+
+        /**
+         * Generate core:Mention RDF triples from entity evidence spans
+         *
+         * Creates proper Mention nodes linked to entities via core:hasEvidentialMention.
+         * Each Mention node includes:
+         * - rdf:type core:Mention
+         * - claims:evidenceText (the quoted text)
+         * - claims:startOffset, claims:endOffset (character positions)
+         * - claims:confidence (extraction confidence)
+         * - core:mentions (link back to entity)
+         *
+         * @param store - Target RDF store
+         * @param entityUri - URI of the entity this mention references
+         * @param mention - EvidenceSpan data (text, startChar, endChar, confidence)
+         * @param options - Optional mention URI and source document URI
+         * @returns Effect completing when triples are added
+         *
+         * @example
+         * ```typescript
+         * yield* rdf.generateMentionTriples(store, entityUri, {
+         *   text: "Mayor Bruce Harrell",
+         *   startChar: 42,
+         *   endChar: 60,
+         *   confidence: 0.95
+         * }, { sourceUri: "gs://bucket/doc.txt" })
+         * ```
+         *
+         * @since 2.0.0
+         */
+        generateMentionTriples: (
+          store: RdfStore,
+          entityUri: string,
+          mention: { text: string; startChar: number; endChar: number; confidence?: number },
+          options?: { mentionUri?: string; sourceUri?: string; graphUri?: string }
+        ) =>
+          Effect.try({
+            try: () => {
+              const n3Store = store._store
+              const graphNode = options?.graphUri
+                ? N3.DataFactory.namedNode(options.graphUri)
+                : N3.DataFactory.defaultGraph()
+
+              // Generate mention URI if not provided
+              // Format: entity_uri/mention/{startChar}-{endChar}
+              const mentionUri = options?.mentionUri ??
+                `${entityUri}/mention/${mention.startChar}-${mention.endChar}`
+              const mentionNode = N3.DataFactory.namedNode(mentionUri)
+              const entityNode = N3.DataFactory.namedNode(entityUri)
+
+              // rdf:type core:Mention
+              n3Store.addQuad(N3.DataFactory.quad(
+                mentionNode,
+                N3.DataFactory.namedNode(RDF.type),
+                N3.DataFactory.namedNode(CORE.Mention),
+                graphNode
+              ))
+
+              // claims:evidenceText
+              n3Store.addQuad(N3.DataFactory.quad(
+                mentionNode,
+                N3.DataFactory.namedNode(CLAIMS.evidenceText),
+                N3.DataFactory.literal(mention.text),
+                graphNode
+              ))
+
+              // claims:startOffset
+              n3Store.addQuad(N3.DataFactory.quad(
+                mentionNode,
+                N3.DataFactory.namedNode(CLAIMS.startOffset),
+                N3.DataFactory.literal(mention.startChar.toString(), N3.DataFactory.namedNode(XSD.integer)),
+                graphNode
+              ))
+
+              // claims:endOffset
+              n3Store.addQuad(N3.DataFactory.quad(
+                mentionNode,
+                N3.DataFactory.namedNode(CLAIMS.endOffset),
+                N3.DataFactory.literal(mention.endChar.toString(), N3.DataFactory.namedNode(XSD.integer)),
+                graphNode
+              ))
+
+              // claims:confidence (if provided)
+              if (mention.confidence !== undefined) {
+                n3Store.addQuad(N3.DataFactory.quad(
+                  mentionNode,
+                  N3.DataFactory.namedNode(CLAIMS.confidence),
+                  N3.DataFactory.literal(mention.confidence.toString(), N3.DataFactory.namedNode(XSD.decimal)),
+                  graphNode
+                ))
+              }
+
+              // core:mentions (mention → entity)
+              n3Store.addQuad(N3.DataFactory.quad(
+                mentionNode,
+                N3.DataFactory.namedNode(CORE.mentions),
+                entityNode,
+                graphNode
+              ))
+
+              // core:hasEvidentialMention (entity → mention)
+              n3Store.addQuad(N3.DataFactory.quad(
+                entityNode,
+                N3.DataFactory.namedNode(CORE.hasEvidentialMention),
+                mentionNode,
+                graphNode
+              ))
+
+              // claims:statedIn (source document reference)
+              if (options?.sourceUri) {
+                n3Store.addQuad(N3.DataFactory.quad(
+                  mentionNode,
+                  N3.DataFactory.namedNode(CLAIMS.statedIn),
+                  N3.DataFactory.namedNode(options.sourceUri),
+                  graphNode
+                ))
+              }
+
+              return mentionUri
+            },
+            catch: (error) =>
+              new RdfError({
+                message: `Failed to generate mention triples: ${error}`,
                 cause: error
               })
           }),
